@@ -166,3 +166,6 @@ config.ini
 config.json
 secrets.json
 credentials.json
+
+.env
+.venv/
