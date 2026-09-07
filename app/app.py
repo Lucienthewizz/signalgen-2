@@ -48,6 +48,8 @@ from .ws.broadcaster import SocketIOBroadcaster
 from .engines.scalping_engine import ScalpingEngine
 from .core.rule_engine import RuleEngine, RuleValidationError
 
+from app.auth.dependencies import get_current_user
+
 # Pydantic models for API requests/responses
 class RuleCreate(BaseModel):
     """Model for creating a new rule."""
@@ -485,6 +487,20 @@ class SignalGenApp:
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to get system status"
                 )
+
+        # Auth endpoints
+        @self.app.get("/api/auth/me")
+        def get_me(current_user=Depends(get_current_user)):
+            """Get current authenticated user information."""
+            return {
+                "id": current_user.id,
+                "email": current_user.email,
+                "full_name": (
+                    current_user.user_metadata.get("full_name")
+                    if current_user.user_metadata
+                    else None
+                ),
+            }
         
         # Rules endpoints
         @self.app.get("/api/rules", response_model=List[Dict])
