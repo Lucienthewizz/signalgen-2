@@ -28,6 +28,7 @@ Typical Usage:
 
 import asyncio
 import logging
+import os
 import threading
 import time
 from typing import Dict, List, Optional, Any
@@ -49,6 +50,7 @@ from .engines.scalping_engine import ScalpingEngine
 from .core.rule_engine import RuleEngine, RuleValidationError
 
 from app.auth.dependencies import get_current_user
+from app.db.supabase_client import supabase
 
 # Pydantic models for API requests/responses
 class RuleCreate(BaseModel):
@@ -147,6 +149,17 @@ class SettingsResponse(BaseModel):
 class SettingsUpdate(BaseModel):
     """Model for updating settings."""
     value: Any
+
+class AuthLogin(BaseModel):
+    """Credentials used to start a Supabase Auth session."""
+    email: str = Field(..., min_length=3, max_length=254)
+    password: str = Field(..., min_length=1, max_length=1024)
+
+class AuthRegister(BaseModel):
+    """Credentials used to create a Supabase Auth account."""
+    full_name: str = Field(..., min_length=2, max_length=100)
+    email: str = Field(..., min_length=3, max_length=254)
+    password: str = Field(..., min_length=6, max_length=1024)
 
 class BacktestRequest(BaseModel):
     """Model for backtest request."""
@@ -249,18 +262,19 @@ class SignalGenApp:
         Args:
             db_path: Path to SQLite database
         """
-        # Get the directory of this file to resolve paths
+        # Resolve the frontend independently from the Python backend package.
         import sys
         if getattr(sys, 'frozen', False):
             # Running in PyInstaller bundle
             base_dir = Path(sys._MEIPASS)
+            ui_dir = base_dir / "frontend" / "desktop" / "renderer"
         else:
-            # Running in normal Python environment
-            base_dir = Path(__file__).parent
-        
-        ui_dir = base_dir / "app" / "ui" if getattr(sys, 'frozen', False) else base_dir / "ui"
+            # backend/app/app.py -> repository root -> desktop renderer
+            repository_root = Path(__file__).resolve().parents[2]
+            ui_dir = repository_root / "frontend" / "desktop" / "renderer"
+
         static_dir = ui_dir / "static"
-        templates_dir = ui_dir / "templates"
+        templates_dir = ui_dir
         
         self.app = FastAPI(
             title="SignalGen API",
@@ -489,6 +503,85 @@ class SignalGenApp:
                 )
 
         # Auth endpoints
+        @self.app.post("/api/auth/register")
+        def register(credentials: AuthRegister):
+            """Create a user through Supabase Auth for the desktop UI."""
+            try:
+                response = supabase.auth.sign_up(
+                    {
+                        "email": credentials.email.strip(),
+                        "password": credentials.password,
+                        "options": {
+                            "data": {"full_name": credentials.full_name.strip()}
+                        },
+                    }
+                )
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Registration failed. Check your data and try again.",
+                )
+
+            if response.user is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Registration failed. Check your data and try again.",
+                )
+
+            return {
+                "message": (
+                    "Registration successful. Check your email to confirm your account."
+                    if response.session is None
+                    else "Registration successful."
+                ),
+                "requires_email_confirmation": response.session is None,
+                "access_token": (
+                    response.session.access_token if response.session else None
+                ),
+                "user": {
+                    "id": response.user.id,
+                    "email": response.user.email,
+                    "full_name": credentials.full_name.strip(),
+                },
+            }
+
+        @self.app.post("/api/auth/login")
+        def login(credentials: AuthLogin):
+            """Sign in through Supabase Auth for the desktop UI."""
+            try:
+                response = supabase.auth.sign_in_with_password(
+                    {
+                        "email": credentials.email.strip(),
+                        "password": credentials.password,
+                    }
+                )
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid email or password",
+                )
+
+            if response.user is None or response.session is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid email or password",
+                )
+
+            return {
+                "access_token": response.session.access_token,
+                "token_type": "bearer",
+                "expires_in": response.session.expires_in,
+                "user": {
+                    "id": response.user.id,
+                    "email": response.user.email,
+                    "full_name": (
+                        response.user.user_metadata.get("full_name")
+                        if response.user.user_metadata
+                        else None
+                    ),
+                },
+            }
+
         @self.app.get("/api/auth/me")
         def get_me(current_user=Depends(get_current_user)):
             """Get current authenticated user information."""
@@ -3193,5 +3286,7 @@ class SignalGenApp:
         return self.broadcaster.create_asgi_app()
 
 # Create global app instance
-signalgen_app = SignalGenApp()
+signalgen_app = SignalGenApp(
+    db_path=os.getenv("SIGNALGEN_DB_PATH", "signalgen.db")
+)
 app = signalgen_app.get_app()
