@@ -11,6 +11,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     />
+    <script src="/static/js/auth.js?v=20260907-auth-demo"></script>
     <script src="/static/js/app.js?v=20260711-modal-nobackdrop"></script>
     <script src="/static/js/websocket.js?v=20260711-modal-nobackdrop"></script>
     <script src="/static/js/api.js?v=20260711-modal-nobackdrop"></script>
@@ -23,7 +24,83 @@
     />
   </head>
   <body class="bg-slate-100 text-slate-800">
-    <div class="min-h-screen lg:flex">
+    <div id="auth-gate" class="auth-gate">
+      <div class="auth-frame">
+        <div class="auth-story">
+          <div class="auth-brand">
+            <span class="auth-mark"><i class="fas fa-chart-line"></i></span>
+            <span>SignalGen <strong>2.0</strong></span>
+          </div>
+          <div class="auth-intro">
+            <p class="auth-kicker">IDX TRADING WORKBENCH</p>
+            <h1 class="auth-title">Analisis pasar.<br />Satu tempat.</h1>
+            <p class="auth-copy">Screening saham, trading signal, dan realtime monitoring untuk pasar Indonesia.</p>
+          </div>
+          <small class="auth-stage-note">SignalGen 2.0 · Authentication demo</small>
+        </div>
+
+        <div class="auth-panel">
+          <div class="auth-panel-inner">
+            <div class="auth-switch" role="tablist" aria-label="Authentication">
+              <button id="auth-login-tab" class="active" type="button" role="tab">Masuk</button>
+              <button id="auth-register-tab" type="button" role="tab">Daftar</button>
+            </div>
+
+            <div id="auth-login-view">
+              <p class="auth-panel-kicker">SELAMAT DATANG</p>
+              <h2>Masuk ke SignalGen</h2>
+              <p class="auth-panel-copy">Gunakan akun yang sudah terdaftar.</p>
+              <form id="auth-login-form" class="auth-form">
+                <label class="auth-field">
+                  <span>Email</span>
+                  <input id="auth-email" type="email" autocomplete="email" placeholder="nama@email.com" required />
+                </label>
+                <label class="auth-field">
+                  <span>Password</span>
+                  <input id="auth-password" type="password" autocomplete="current-password" placeholder="Masukkan password" required />
+                </label>
+                <p id="auth-feedback" class="auth-feedback" aria-live="polite"></p>
+                <button id="auth-submit" class="auth-submit" type="submit">
+                  <span>Masuk ke SignalGen</span><i class="fas fa-arrow-right"></i>
+                </button>
+              </form>
+              <p class="auth-form-footer">Belum punya akun? <button id="auth-open-register" type="button">Daftar sekarang</button></p>
+            </div>
+
+            <div id="auth-register-view" class="hidden">
+              <p class="auth-panel-kicker">AKUN BARU</p>
+              <h2>Buat akun SignalGen</h2>
+              <p class="auth-panel-copy">Daftar menggunakan email aktif.</p>
+              <form id="auth-register-form" class="auth-form">
+                <label class="auth-field">
+                  <span>Nama lengkap</span>
+                  <input id="auth-register-name" type="text" autocomplete="name" placeholder="Nama lengkap" minlength="2" required />
+                </label>
+                <label class="auth-field">
+                  <span>Email</span>
+                  <input id="auth-register-email" type="email" autocomplete="email" placeholder="nama@email.com" required />
+                </label>
+                <label class="auth-field">
+                  <span>Password</span>
+                  <input id="auth-register-password" type="password" autocomplete="new-password" placeholder="Minimal 6 karakter" minlength="6" required />
+                </label>
+                <label class="auth-field">
+                  <span>Konfirmasi password</span>
+                  <input id="auth-register-confirm" type="password" autocomplete="new-password" placeholder="Ulangi password" minlength="6" required />
+                </label>
+                <p id="auth-register-feedback" class="auth-feedback" aria-live="polite"></p>
+                <button id="auth-register-submit" class="auth-submit" type="submit">
+                  <span>Buat akun</span><i class="fas fa-user-plus"></i>
+                </button>
+              </form>
+              <p class="auth-form-footer">Sudah punya akun? <button id="auth-open-login" type="button">Masuk</button></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="signalgen-shell" class="min-h-screen lg:flex hidden">
       <aside
         class="hidden lg:flex lg:w-64 lg:flex-col lg:sticky lg:top-0 lg:h-screen lg:self-start bg-slate-950 text-slate-200 border-r border-slate-800"
       >
@@ -135,16 +212,28 @@
                   Signals, screening, backtests, and rules
                 </div>
               </div>
-              <button
-                id="view-help-btn"
-                type="button"
-                onclick="openViewHelp()"
-                class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                title="Show menu guide"
-              >
-                <i class="fas fa-circle-info"></i>
-                <span class="hidden sm:inline">Help</span>
-              </button>
+              <div class="flex items-center gap-2">
+                <button
+                  id="view-help-btn"
+                  type="button"
+                  onclick="openViewHelp()"
+                  class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  title="Show menu guide"
+                >
+                  <i class="fas fa-circle-info"></i>
+                  <span class="hidden sm:inline">Help</span>
+                </button>
+                <div id="auth-user" class="auth-user">
+                  <span id="auth-user-initial" class="auth-user-initial">U</span>
+                  <span class="auth-user-copy">
+                    <strong id="auth-user-name">User</strong>
+                    <small id="auth-user-email"></small>
+                  </span>
+                  <button id="auth-logout" type="button" title="Keluar">
+                    <i class="fas fa-right-from-bracket"></i>
+                  </button>
+                </div>
+              </div>
             </div>
             <nav class="lg:hidden mt-3 flex gap-2 overflow-x-auto pb-1">
               <button
@@ -2269,9 +2358,18 @@
     ></div>
 
     <script>
-      // Initialize the application when DOM is ready
-      document.addEventListener("DOMContentLoaded", function () {
+      let signalGenAppStarted = false;
+
+      function startSignalGenApp() {
+        if (signalGenAppStarted) return;
+        signalGenAppStarted = true;
         App.init();
+      }
+
+      window.addEventListener("signalgen:authenticated", startSignalGenApp);
+      document.addEventListener("DOMContentLoaded", async function () {
+        const authenticated = await SignalGenAuth.init();
+        if (authenticated) startSignalGenApp();
       });
     </script>
   </body>

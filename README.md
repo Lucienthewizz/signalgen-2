@@ -1,5 +1,12 @@
 # SignalGen - Real-time Scalping Signal Generator
 
+> Konteks, cakupan fitur, dan arsitektur kanonis proyek tersedia di
+> [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md). Baca file tersebut sebelum membuat
+> perubahan besar pada backend, web, desktop, database, atau deployment.
+>
+> Kebutuhan produk, prioritas, acceptance criteria, dan batas scope tersedia di
+> [PRD.md](./PRD.md).
+
 SignalGen is a desktop application for real-time scalping signal generation with customizable rules, real-time data from IBKR, and WebSocket output for external execution systems.
 
 ## Features
@@ -58,14 +65,15 @@ SignalGen is a desktop application for real-time scalping signal generation with
    cd signalgen
    ```
 
-2. **Install dependencies**
+2. **Masuk ke backend dan install dependencies**
    ```bash
-   pip install -r requirements.txt
+   cd backend
+   ../.venv/bin/pip install -r requirements.txt
    ```
 
 3. **Run the application**
    ```bash
-   python -m app.main
+   ../.venv/bin/python -m app.main
    ```
 
 ### First Time Setup
@@ -178,27 +186,29 @@ Default settings are automatically created on first run:
 ## Project Structure
 
 ```
-signalgen/
-├── app/
-│   ├── ui/
-│   │   ├── templates/          # HTML templates
-│   │   └── static/             # CSS, JS, images
-│   ├── core/
-│   │   ├── rule_engine.py      # Rule evaluation logic
-│   │   ├── indicator_engine.py # Technical indicators
-│   │   └── state_machine.py    # Engine state management
-│   ├── engines/
-│   │   └── scalping_engine.py  # Main scalping engine
-│   ├── storage/
-│   │   └── sqlite_repo.py      # Database operations
-│   ├── ws/
-│   │   └── broadcaster.py      # WebSocket broadcasting
-│   ├── app.py                  # FastAPI application
-│   └── main.py                 # Application entry point
-├── requirements.txt               # Python dependencies
+signalgen-2/
+├── backend/                    # Python, FastAPI, database, engines
+│   ├── app/
+│   │   ├── core/               # Rule and indicator logic
+│   │   ├── engines/            # Scalping, screening, backtesting
+│   │   ├── storage/            # SQLite repository
+│   │   ├── ws/                 # WebSocket broadcasting
+│   │   ├── app.py              # FastAPI application
+│   │   └── main.py             # Backend/legacy desktop entry point
+│   ├── tests/
+│   ├── scripts/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── pytest.ini
+├── frontend/
+│   ├── web/                    # Landing, account, pricing, payment
+│   └── desktop/                # Electron and SignalGen renderer
+│       ├── electron/
+│       ├── renderer/
+│       └── public/
+├── docker-compose.yml
 ├── README.md                   # This file
-├── .gitignore                  # Git ignore file
-└── PROJECT_MVP.md             # Project specification
+└── .gitignore                  # Git ignore file
 ```
 
 ## MVP Limitations
@@ -220,11 +230,14 @@ These limitations are designed to keep the MVP focused and achievable within a o
 ### Running in Development Mode
 
 ```bash
-# Install development dependencies
-pip install -r requirements.txt
+# Enter the Python backend
+cd backend
+
+# Install development dependencies with the repository virtualenv
+../.venv/bin/pip install -r requirements.txt
 
 # Run the application
-python -m app.main
+../.venv/bin/python -m app.main
 ```
 
 ### Database Schema

@@ -7,14 +7,14 @@ import sys
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 
-# Get the project directory
+# Repository and backend directories
 project_dir = os.path.abspath(SPECPATH)
+backend_dir = os.path.join(project_dir, 'backend')
 
 # Collect all data files
 datas = [
-    (os.path.join(project_dir, 'app', 'ui', 'templates'), 'app/ui/templates'),
-    (os.path.join(project_dir, 'app', 'ui', 'static'), 'app/ui/static'),
-    (os.path.join(project_dir, 'static', 'favicon.ico'), 'static'),
+    (os.path.join(project_dir, 'frontend', 'desktop', 'renderer'), 'frontend/desktop/renderer'),
+    (os.path.join(project_dir, 'frontend', 'desktop', 'public', 'favicon.ico'), 'frontend/desktop/public'),
 ]
 
 binaries = []
@@ -65,8 +65,8 @@ for package_name in ('webview', 'pythonnet', 'clr_loader'):
         print(f"WARNING: Could not collect PyInstaller files for {package_name}: {exc}")
 
 a = Analysis(
-    [os.path.join(project_dir, 'app', 'main.py')],
-    pathex=[project_dir],
+    [os.path.join(backend_dir, 'app', 'main.py')],
+    pathex=[backend_dir],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
@@ -98,7 +98,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(project_dir, 'static', 'favicon.ico'),
+    icon=os.path.join(project_dir, 'frontend', 'desktop', 'public', 'favicon.ico'),
 )
 
 coll = COLLECT(

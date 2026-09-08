@@ -27,6 +27,8 @@ yfinance>=0.2.33
 
 # Database
 # sqlite3 is built-in with Python
+supabase==2.31.0
+python-dotenv==1.2.3
 
 # Additional utilities
 python-multipart>=0.0.6

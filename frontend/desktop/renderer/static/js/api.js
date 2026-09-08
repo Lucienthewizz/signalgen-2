@@ -21,8 +21,12 @@ class ApiClient {
    */
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
+    const accessToken = window.SignalGenAuth?.getAccessToken();
+    const authHeaders = accessToken
+      ? { Authorization: `Bearer ${accessToken}` }
+      : {};
     const config = {
-      headers: { ...this.defaultHeaders, ...options.headers },
+      headers: { ...this.defaultHeaders, ...authHeaders, ...options.headers },
       ...options,
     };
 

@@ -1,0 +1,30 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - backend/.env
+    environment:
+      SIGNALGEN_DB_PATH: /workspace/backend/runtime/signalgen.db
+    ports:
+      - "3456:3456"
+      - "8765:8765"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - signalgen-backend-data:/workspace/backend/runtime
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3456/api', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  signalgen-backend-data:

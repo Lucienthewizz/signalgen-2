@@ -15,21 +15,25 @@ This repo is also a TA (Tugas Akhir / thesis) project — `docs/` contains dated
 ## Commands
 
 ```bash
+# Run Python commands from backend/
+cd backend
+
 # Run the app (dev)
-python -m app.main
+../.venv/bin/python -m app.main
 
 # Run tests
-pytest                              # full suite (testpaths=tests)
-pytest tests/test_rule_engine.py    # single file
-pytest tests/test_rule_engine.py::TestClass::test_name  # single test
+../.venv/bin/python -m pytest                              # full suite
+../.venv/bin/python -m pytest tests/test_rule_engine.py    # single file
 
 # Build Windows .exe (PyInstaller)
-python build_exe.py                 # cleans build/dist, runs PyInstaller, verifies runtime DLLs
+cd ..
+.venv/bin/python build_exe.py
 # or manually:
 python -m PyInstaller --clean signalgen.spec
 ```
 
-- Coverage is gated **only** on `app/core/rule_engine.py` (`--cov=app/core/rule_engine --cov-fail-under=95`, set in `pytest.ini`). Other modules are tested but not coverage-enforced — when adding tests elsewhere, don't expect the coverage gate to reflect them.
+- The repository is split into `backend/` (Python/FastAPI) and `frontend/` (Electron/JavaScript workspace). Run backend commands from `backend/`.
+- Coverage is gated **only** on `app/core/rule_engine.py` (`--cov=app/core/rule_engine --cov-fail-under=95`, set in `backend/pytest.ini`). Other modules are tested but not coverage-enforced.
 - FastAPI serves on `http://127.0.0.1:3456` (REST + serves the UI + `/docs`), Socket.IO on `ws://127.0.0.1:8765`. Both are hardcoded defaults seeded into the `settings` table by `app/storage/init_db.py`.
 - `SIGNALGEN_WEBVIEW_DEBUG=1` env var forces PyWebView debug mode even in frozen/packaged builds.
 - No formal DB migration framework: schema changes in `sqlite_repo.py`/`init_db.py` are raw `CREATE TABLE IF NOT EXISTS` + ad hoc `PRAGMA table_info` checks and `ALTER TABLE` for new columns.
@@ -58,8 +62,8 @@ python -m PyInstaller --clean signalgen.spec
 ### WebSocket & notifications
 `app/ws/broadcaster.py` (`SocketIOBroadcaster`) runs a Socket.IO `AsyncServer` with rooms `signals, engine_status, rules, watchlists, ibkr_status, errors, prices`. Since IB callbacks fire off the main event loop, most broadcast methods have `_sync` variants that bridge via `run_coroutine_threadsafe`. `app/notifications/telegram_notifier.py` reads Telegram config from the `settings` table and is invoked alongside every signal broadcast.
 
-### UI (`app/ui/`)
-Single-page app — one `templates/index.html` with JS-driven tab switching (no server-rendered multi-page routing). Key JS files under `static/js/`: `api.js` (REST client), `websocket.js` (Socket.IO client), `app.js` (main controller/view routing), `backtesting.js`, `swing.js`, `telegram.js`.
+### Frontend (`frontend/`)
+Frontend has exactly two application folders: `frontend/web/` for the landing/account/payment site and `frontend/desktop/` for Electron. The existing renderer lives in `frontend/desktop/renderer/` and is temporarily served by FastAPI. Key JS files are under `frontend/desktop/renderer/static/js/`.
 
 ## Constraints to preserve
 
