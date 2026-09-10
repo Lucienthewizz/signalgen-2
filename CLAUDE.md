@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-SignalGen is a Windows desktop app (PyWebView + FastAPI + SQLite) for generating trading signals. It has three operating modes sharing the same rule-evaluation core:
+SignalGen is a desktop stock-signal application with a Python/FastAPI backend, SQLite storage, and an Electron frontend target. The legacy PyWebView entry point remains temporarily until Electron packaging replaces it. It has three operating modes sharing the same rule-evaluation core:
 
 - **Scalping** (live): connects to Interactive Brokers TWS/Gateway via `ib_insync`, streams real-time bars, evaluates rules tick-by-tick.
 - **Backtesting**: replays historical candles (IBKR or Yahoo) through the same `RuleEngine`/`IndicatorEngine` path as live trading, so backtest and live logic never diverge.
@@ -15,27 +15,20 @@ This repo is also a TA (Tugas Akhir / thesis) project — `docs/` contains dated
 ## Commands
 
 ```bash
-# Run Python commands from backend/
-cd backend
+# Run the headless backend (REST + Socket.IO)
+docker compose up --build backend
 
-# Run the app (dev)
-../.venv/bin/python -m app.main
+# Run the backend test suite
+docker compose run --rm backend-test
 
-# Run tests
-../.venv/bin/python -m pytest                              # full suite
-../.venv/bin/python -m pytest tests/test_rule_engine.py    # single file
-
-# Build Windows .exe (PyInstaller)
-cd ..
-.venv/bin/python build_exe.py
-# or manually:
-python -m PyInstaller --clean signalgen.spec
+# Stop backend services
+docker compose down
 ```
 
 - The repository is split into `backend/` (Python/FastAPI) and `frontend/` (Electron/JavaScript workspace). Run backend commands from `backend/`.
 - Coverage is gated **only** on `app/core/rule_engine.py` (`--cov=app/core/rule_engine --cov-fail-under=95`, set in `backend/pytest.ini`). Other modules are tested but not coverage-enforced.
 - FastAPI serves on `http://127.0.0.1:3456` (REST + serves the UI + `/docs`), Socket.IO on `ws://127.0.0.1:8765`. Both are hardcoded defaults seeded into the `settings` table by `app/storage/init_db.py`.
-- `SIGNALGEN_WEBVIEW_DEBUG=1` env var forces PyWebView debug mode even in frozen/packaged builds.
+- `backend/app/main.py`, `build_exe.py`, and the PyInstaller spec files are legacy fallback packaging. Preserve them until the Electron replacement can package and manage the Python backend.
 - No formal DB migration framework: schema changes in `sqlite_repo.py`/`init_db.py` are raw `CREATE TABLE IF NOT EXISTS` + ad hoc `PRAGMA table_info` checks and `ALTER TABLE` for new columns.
 
 ## Architecture
