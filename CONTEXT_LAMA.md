@@ -1,6 +1,8 @@
-# CLAUDE.md
+# Konteks Lama SignalGen
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Dokumen ini menyimpan konteks teknis aplikasi SignalGen lama sebagai referensi
+selama migrasi ke arsitektur SignalGen 2.0. Untuk keputusan yang masih berlaku,
+gunakan `PROJECT_CONTEXT.md` dan `PRD.md` sebagai sumber utama.
 
 ## What this is
 
