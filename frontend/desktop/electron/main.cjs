@@ -9,7 +9,7 @@ function createWindow() {
     height: 940,
     minWidth: 1100,
     minHeight: 720,
-    backgroundColor: "#07111f",
+    backgroundColor: "#08090b",
     title: "SignalGen 2.0",
     show: false,
     webPreferences: {

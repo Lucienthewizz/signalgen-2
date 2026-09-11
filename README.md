@@ -1,297 +1,134 @@
-# SignalGen - Real-time Scalping Signal Generator
+# SignalGen 2.0
 
-> Konteks, cakupan fitur, dan arsitektur kanonis proyek tersedia di
-> [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md). Baca file tersebut sebelum membuat
-> perubahan besar pada backend, web, desktop, database, atau deployment.
->
-> Kebutuhan produk, prioritas, acceptance criteria, dan batas scope tersedia di
-> [PRD.md](./PRD.md).
+SignalGen 2.0 is a desktop-first stock screening and trading-signal workspace for the Indonesian market. It helps users build indicator-based rules, screen ticker universes, evaluate strategies through backtesting, and monitor explainable signals without writing code.
 
-SignalGen is a desktop application for real-time scalping signal generation with customizable rules, real-time data from IBKR, and WebSocket output for external execution systems.
+> SignalGen is an analysis tool. A BUY, WATCH, HOLD, or SELL state indicates that configured rule conditions were met; it is not a guarantee of price movement or personalized investment advice.
 
-## Features
+## Product surfaces
 
-- **Real-time Signal Generation**: Generate trading signals based on customizable rules
-- **IBKR Integration**: Connect to Interactive Brokers TWS/Gateway for live market data
-- **Customizable Rules**: Create and manage trading rules with logical conditions
-- **WebSocket Broadcasting**: Real-time signal distribution to UI and external systems
-- **Desktop UI**: Native desktop application using PyWebView
-- **Local Storage**: SQLite database for rules, watchlists, and signal history
-- **Technical Analysis**: Built-in indicators using pandas, numpy, and TA-Lib
+| Surface | Responsibility | Stack |
+| --- | --- | --- |
+| Desktop | Primary analysis workspace, authentication, rule building, watchlists, screening, backtesting, and realtime monitoring | Electron, React, TypeScript, Vite |
+| Web | Public product information, account portal, pricing, subscription, payment, and desktop download | Planned frontend surface |
+| Backend | API, authentication verification, authorization, engines, storage, market-data integration, and realtime events | Python, FastAPI, Socket.IO, SQLite, Supabase Auth |
+
+Both frontends consume the same backend. Trading logic and service credentials remain outside the Electron renderer.
+
+## Current implementation
+
+- Secure Electron shell with context isolation, sandboxing, and a restricted preload bridge.
+- Login and registration flows backed by the FastAPI authentication endpoints.
+- Local session restoration with automatic handling for invalid or expired tokens.
+- Responsive desktop workspace with navigation for rules, watchlists, screening, backtesting, realtime signals, and settings.
+- Market-oriented dashboard with backend health, active-rule, watchlist, and signal summaries.
+- Centralized API client and Vite development proxies for REST and Socket.IO traffic.
+- Docker-based backend workflow compatible with Docker Desktop and OrbStack.
+
+The dashboard currently contains explicitly labeled interface data while the remaining feature screens are migrated incrementally from the legacy renderer.
 
 ## Architecture
 
-```
-┌──────────────────────────────┐
-│        PyWebView UI          │
-│   (Tailwind + JS + WS)       │
-└───────────────┬──────────────┘
-                │ REST / WS
-                ▼
-┌──────────────────────────────┐
-│       App Controller         │
-│     (FastAPI)              │
-│  - REST API                  │
-│  - WebSocket Server          │
-│  - Engine Orchestrator       │
-└───────────────┬──────────────┘
-                │
-        ┌───────┴────────┐
-        │                │
-        ▼                ▼
-┌──────────────┐  ┌─────────────────┐
-│ Rule Engine  │  │ Scalping Engine │
-│ (determin.) │  │  (ib_insync)    │
-└───────┬──────┘  └───────┬─────────┘
-        │                │
-        └───────┬────────┘
-                ▼
-          SQLite Storage
+```text
+                      User
+                        │
+          ┌─────────────┴─────────────┐
+          │                           │
+          ▼                           ▼
+  frontend/web/              frontend/desktop/
+  public + account           Electron + React
+          │                           │
+          └──────── REST / Socket.IO ─┘
+                        │
+                        ▼
+                    backend/
+                Python + FastAPI
+           auth, engines, storage, events
+                 │              │
+                 ▼              ▼
+          Supabase Auth      SQLite / data
 ```
 
-## Quick Start
+Canonical scope and architecture are documented in [PRD.md](./PRD.md) and [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md).
 
-### Prerequisites
+## Repository structure
 
-- Python 3.8 or higher
-- Interactive Brokers TWS or Gateway
-- IBKR market data subscriptions
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd signalgen
-   ```
-
-2. **Masuk ke backend dan install dependencies**
-   ```bash
-   cd backend
-   ../.venv/bin/pip install -r requirements.txt
-   ```
-
-3. **Run the application**
-   ```bash
-   ../.venv/bin/python -m app.main
-   ```
-
-### First Time Setup
-
-1. Launch Interactive Brokers TWS or Gateway
-2. Configure API connections in IBKR (enable API connections)
-3. Start SignalGen - it will automatically:
-   - Create the SQLite database
-   - Seed default rules and watchlist
-   - Start the web interface
-
-## Usage
-
-### Creating Rules
-
-Rules are defined using logical conditions with technical indicators:
-
-**Example Rule**: "PRICE > MA5 AND MA5 > MA10"
-
-**Supported Operands**:
-- `PRICE` - Current price
-- `MA5` - 5-period moving average
-- `MA10` - 10-period moving average
-- `MA20` - 20-period moving average
-
-**Supported Operators**:
-- `>` - Greater than
-- `<` - Less than
-- `>=` - Greater than or equal
-- `<=` - Less than or equal
-
-### Managing Watchlists
-
-- Maximum 5 symbols per watchlist (MVP limitation)
-- One active watchlist at a time
-- Cannot modify watchlist while engine is running
-
-### Engine Control
-
-1. **Start Engine**: Select watchlist and rule, then start
-2. **Monitor**: View real-time signals in the UI
-3. **Stop Engine**: Stop signal generation when needed
-
-## API Documentation
-
-Once running, the API is available at `http://localhost:3456/docs`
-
-### Key Endpoints
-
-- `GET /api/rules` - List all rules
-- `POST /api/rules` - Create new rule
-- `GET /api/watchlists` - List all watchlists
-- `POST /api/watchlists` - Create new watchlist
-- `POST /api/engine/start` - Start scalping engine
-- `POST /api/engine/stop` - Stop scalping engine
-- `GET /api/signals` - Get signal history
-
-## WebSocket Events
-
-Connect to `ws://localhost:8765` for real-time events:
-
-- `signal` - New trading signal generated
-- `engine_status` - Engine state changes
-- `watchlist_update` - Watchlist modifications
-- `rule_update` - Rule modifications
-
-## Configuration
-
-Default settings are automatically created on first run:
-
-```json
-{
-  "ib_host": "127.0.0.1",
-  "ib_port": 7497,
-  "ib_client_id": 1,
-  "max_watchlist_symbols": 5,
-  "default_cooldown": 60,
-  "bar_size": 5,
-  "ui_theme": "light"
-}
-```
-
-## Dependencies
-
-### Core Dependencies
-
-- **fastapi==0.104.1** - Web framework for REST API
-- **uvicorn[standard]==0.24.0** - ASGI server
-- **pywebview==4.4.1** - Desktop UI wrapper
-- **ib_insync==0.9.86** - IBKR API integration
-
-### WebSocket & Real-time
-
-- **python-socketio==5.10.0** - Socket.IO server
-- **python-engineio==4.7.1** - Socket.IO engine
-
-### Technical Analysis
-
-- **pandas==2.1.4** - Data manipulation
-- **numpy==1.25.2** - Numerical operations
-- **ta-lib==0.4.28** - Technical analysis functions
-- **talib-binary==0.4.24** - TA-Lib binary distribution
-
-### Utilities
-
-- **python-multipart==0.0.6** - Form data handling
-- **jinja2==3.1.2** - Template engine
-- **pydantic==2.5.0** - Data validation
-
-## Project Structure
-
-```
+```text
 signalgen-2/
-├── backend/                    # Python, FastAPI, database, engines
-│   ├── app/
-│   │   ├── core/               # Rule and indicator logic
-│   │   ├── engines/            # Scalping, screening, backtesting
-│   │   ├── storage/            # SQLite repository
-│   │   ├── ws/                 # WebSocket broadcasting
-│   │   ├── app.py              # FastAPI application
-│   │   └── main.py             # Backend/legacy desktop entry point
-│   ├── tests/
-│   ├── scripts/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── pytest.ini
+├── backend/                 FastAPI application and analysis engines
 ├── frontend/
-│   ├── web/                    # Landing, account, pricing, payment
-│   └── desktop/                # Electron and SignalGen renderer
-│       ├── electron/
-│       ├── renderer/
-│       └── public/
-├── docker-compose.yml
-├── README.md                   # This file
-└── .gitignore                  # Git ignore file
+│   ├── desktop/             Electron desktop application
+│   └── web/                 Public and account web application
+├── docker-compose.yml       Local backend orchestration
+├── PRD.md                   Product requirements and acceptance criteria
+└── PROJECT_CONTEXT.md       Canonical architecture and engineering boundaries
 ```
 
-## MVP Limitations
+## Quick start
 
-The current MVP version has these intentional limitations:
+### Requirements
 
-- ❌ Multi-rule active execution
-- ❌ Multi-timeframe support
-- ❌ Auto execution
-- ❌ Complex risk management
-- ❌ Backtesting capabilities
-- ❌ Maximum 5 symbols per watchlist
-- ❌ One active watchlist at a time
+- Docker Desktop or OrbStack with Docker compatibility
+- Node.js 20 or newer
+- npm
+- A configured `backend/.env` based on the project environment template
 
-These limitations are designed to keep the MVP focused and achievable within a one-week development timeframe.
+### 1. Start the backend
 
-## Development
-
-### Running in Development Mode
+From the repository root:
 
 ```bash
-# Enter the Python backend
-cd backend
-
-# Install development dependencies with the repository virtualenv
-../.venv/bin/pip install -r requirements.txt
-
-# Run the application
-../.venv/bin/python -m app.main
+docker compose up --build -d
+docker compose ps
 ```
 
-### Database Schema
+The backend exposes:
 
-The application uses SQLite with these tables:
+- REST API: `http://127.0.0.1:3456/api`
+- OpenAPI documentation: `http://127.0.0.1:3456/docs`
+- Socket.IO transport: `http://127.0.0.1:8765/socket.io`
 
-- `rules` - Trading rules with JSON definitions
-- `watchlists` - Symbol watchlists
-- `watchlist_items` - Individual symbols in watchlists
-- `signals` - Generated trading signals
-- `settings` - Application configuration
+Port `8765` is a realtime transport endpoint, not a website. Opening its root URL directly may return `Not Found`.
 
-## Troubleshooting
+### 2. Start the Electron application
 
-### Common Issues
+```bash
+cd frontend/desktop
+npm install
+npm run electron:dev
+```
 
-1. **IBKR Connection Failed**
-   - Ensure TWS/Gateway is running
-   - Check API connections are enabled in IBKR
-   - Verify port (7497 for TWS, 4002 for Gateway)
+For a renderer-only browser preview:
 
-2. **No Market Data**
-   - Verify market data subscriptions in IBKR
-   - Check symbol validity (e.g., AAPL, MSFT, GOOGL)
+```bash
+npm run dev
+```
 
-3. **Application Won't Start**
-   - Check Python version (3.8+ required)
-   - Verify all dependencies installed
-   - Check log file for errors
+Then open `http://127.0.0.1:5173`.
 
-### Logs
+### 3. Verify a production build
 
-Application logs are saved to `signalgen.log` in the application directory.
+```bash
+cd frontend/desktop
+npm run typecheck
+npm run build
+```
 
-## Contributing
+## Development principles
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+- Treat the backend OpenAPI contract as the source of truth for request and response shapes.
+- Keep API and Socket.IO base URLs in centralized runtime configuration.
+- Never place Supabase secret keys, service-role keys, passwords, or backend environment values in frontend code.
+- Handle loading, empty, success, error, offline, and unauthorized states explicitly.
+- Preserve the legacy renderer until the Electron replacement reaches feature parity.
+- Keep changes scoped and verify type checking and production builds before review.
 
-## License
+## Documentation
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+- [Desktop frontend guide](./frontend/desktop/README.md)
+- [Product requirements](./PRD.md)
+- [Architecture and project context](./PROJECT_CONTEXT.md)
+- OpenAPI after startup: `http://127.0.0.1:3456/docs`
 
-## Support
+## License and ownership
 
-For issues and questions:
-- Check the troubleshooting section
-- Review the API documentation at `/docs`
-- Check the application logs
-- Create an issue in the repository
-
----
-
-**SignalGen** - Real-time scalping signal generation for modern traders.
+This repository is maintained for the SignalGen 2.0 development project. Confirm licensing and distribution requirements with the project owner before publishing packaged builds.

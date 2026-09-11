@@ -26,3 +26,23 @@ These instructions apply to everything inside `frontend/`.
     Document any unavailable verification explicitly.
 11. Keep commits and pull requests small and scoped to one feature. Call out API
     contract changes clearly for backend review.
+12. For every frontend design, redesign, review, or polish task, invoke the
+    user-wide `impeccable` skill and apply the relevant workflow through its
+    finish checks. Do not force Impeccable onto backend-only work.
+
+## Visual Direction
+
+- Use [VASTARA](https://vastara.id) as a reference for layout discipline and
+  atmosphere, not as a source to copy. Preserve SignalGen's own product name,
+  content, assets, and interaction model.
+- Prefer a tinted near-black canvas, restrained grid texture, high-contrast
+  typography, compact market-data bands, decisive red accents, and generous
+  negative space.
+- Build a clear editorial hierarchy: one dominant message or task per view,
+  concise navigation, numbered or sequenced supporting sections, and real
+  product/data visuals instead of decorative card grids.
+- Motion should communicate live-market state or spatial continuity. Keep it
+  purposeful, respect reduced-motion preferences, and avoid gratuitous glow,
+  bounce, gradient text, or nested cards.
+- Treat accessibility, responsive behavior, loading, empty, error, and focus
+  states as part of the visual system, not as a later cleanup pass.

@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  ArrowUpRight,
   ArrowRight,
   BarChart3,
   Bell,
   BookOpen,
+  CandlestickChart,
   Check,
   ChevronRight,
   CircleDot,
@@ -18,7 +20,6 @@ import {
   Search,
   Settings,
   ShieldCheck,
-  Sparkles,
   Target,
   TrendingUp,
   UserRound,
@@ -154,8 +155,7 @@ function AuthScreen({ backendOnline, onAuthenticated, onPreview }: { backendOnli
       <section className="auth-story">
         <Logo />
         <div className="auth-story__content">
-          <span className="eyebrow"><Sparkles size={14} /> IDX intelligence workspace</span>
-          <h1>Temukan peluang.<br /><em>Pahami alasannya.</em></h1>
+          <h1>Pasar bergerak cepat.<br /><em>Keputusan Anda tidak harus.</em></h1>
           <p>Screening, strategi teknikal, dan trading signal dalam satu desktop workspace yang tenang dan terukur.</p>
           <div className="auth-proof">
             <div><ShieldCheck /><span><b>Data terisolasi</b><small>Strategi tetap milik Anda</small></span></div>
@@ -175,7 +175,6 @@ function AuthScreen({ backendOnline, onAuthenticated, onPreview }: { backendOnli
             </div>
           </div>
           <div className="auth-heading">
-            <span className="section-kicker">{mode === "login" ? "Selamat datang kembali" : "Mulai workspace Anda"}</span>
             <h2>{mode === "login" ? "Masuk ke SignalGen" : "Buat akun SignalGen"}</h2>
             <p>{mode === "login" ? "Gunakan akun yang sudah terdaftar untuk melanjutkan." : "Satu akun untuk desktop, web, dan seluruh strategi Anda."}</p>
           </div>
@@ -227,7 +226,7 @@ function Workbench({ user, preview, backendOnline, onExit }: { user: User | null
       <section className="workspace">
         <header className="topbar">
           <div><button className="menu-button" onClick={() => setSidebarOpen(true)}><Menu /></button><div><span className="breadcrumb">SignalGen / {current.label}</span><h1>{current.label}</h1></div></div>
-          <div className="topbar__actions"><button className="icon-button" aria-label="Notifikasi"><Bell size={18} /><i /></button><div className="user-chip"><span>{(user?.full_name || user?.email || "P").charAt(0).toUpperCase()}</span><div><b>{preview ? "Preview Mode" : user?.full_name || "SignalGen User"}</b><small>{preview ? "UI demonstration" : user?.email}</small></div></div><button className="icon-button" aria-label="Keluar" onClick={onExit}><LogOut size={18} /></button></div>
+          <div className="topbar__actions"><div className="market-session"><i /> IDX market <b>Open</b></div><button className="icon-button" aria-label="Notifikasi"><Bell size={18} /><i /></button><div className="user-chip"><span>{(user?.full_name || user?.email || "P").charAt(0).toUpperCase()}</span><div><b>{preview ? "Preview Mode" : user?.full_name || "SignalGen User"}</b><small>{preview ? "UI demonstration" : user?.email}</small></div></div><button className="icon-button" aria-label="Keluar" onClick={onExit}><LogOut size={18} /></button></div>
         </header>
         <div className="workspace__content">
           {preview && <div className="preview-banner"><CircleDot size={16} /> Anda melihat data contoh. Masuk dengan akun Supabase untuk memakai data sebenarnya.<button onClick={onExit}>Kembali ke login</button></div>}
@@ -239,8 +238,19 @@ function Workbench({ user, preview, backendOnline, onExit }: { user: User | null
 }
 
 function Dashboard({ backendOnline, onNavigate }: { backendOnline: boolean; onNavigate: (view: View) => void }) {
-  return <>
-    <section className="welcome-row"><div><span className="section-kicker">Market workspace</span><h2>Selamat datang di pusat analisis Anda.</h2><p>Pantau setup teknikal dan jalankan workflow dari satu tempat.</p></div><button className="primary-button compact" onClick={() => onNavigate("screening")}><Search size={17} /> Mulai screening</button></section>
+  return <div className="dashboard-shell">
+    <div className="market-tape"><span><i /> IDX OPEN</span><b>BBCA <em>+1.34%</em></b><b>BMRI <em>+0.82%</em></b><b>TLKM <em className="down">−0.31%</em></b><b>ASII <em>+0.47%</em></b><small>Snapshot interface</small></div>
+    <section className="market-hero">
+      <div className="market-hero__copy">
+        <h2>Keputusan dimulai dari sinyal yang bisa dijelaskan.</h2>
+        <p>Screening pasar, susun rule, dan telusuri alasan di balik setiap signal dalam satu alur kerja yang terukur.</p>
+        <div className="hero-actions"><button className="primary-button compact" onClick={() => onNavigate("screening")}><Search size={17} /> Mulai screening <ArrowUpRight size={15} /></button><button className="hero-secondary" onClick={() => onNavigate("rules")}><CandlestickChart size={17} /> Susun strategi</button></div>
+      </div>
+      <div className="market-hero__chart">
+        <div className="index-summary"><span>IDX Composite · contoh</span><strong>7,842.31</strong><small><TrendingUp size={14} /> +1.28% hari ini</small></div>
+        <MarketTrace />
+      </div>
+    </section>
     <section className="metrics-grid">
       <Metric label="Backend" value={backendOnline ? "Connected" : "Offline"} detail="FastAPI · port 3456" icon={ShieldCheck} accent="green" />
       <Metric label="Rule aktif" value="EMA Momentum" detail="4 kondisi · AND" icon={ListFilter} accent="blue" />
@@ -251,14 +261,23 @@ function Dashboard({ backendOnline, onNavigate }: { backendOnline: boolean; onNa
       <div className="panel market-panel"><PanelTitle title="Market watch" caption="Snapshot ticker dalam watchlist aktif" action="Buka watchlist" onAction={() => onNavigate("watchlists")} />
         <div className="market-table"><div className="market-table__head"><span>Emiten</span><span>Harga</span><span>Perubahan</span><span>Signal</span></div>{marketRows.map((row) => <div className="market-row" key={row.ticker}><div><b>{row.ticker}</b><small>{row.name}</small></div><strong>{row.price}</strong><span className={row.tone}>{row.move}</span><em className={row.signal.toLowerCase()}>{row.signal}</em></div>)}</div>
       </div>
-      <div className="panel signal-panel"><PanelTitle title="Signal overview" caption="Distribusi hasil engine hari ini" /><div className="donut"><div><strong>8</strong><span>Total</span></div></div><div className="legend"><span><i className="buy" />Buy <b>5</b></span><span><i className="watch" />Watch <b>2</b></span><span><i className="sell" />Sell <b>1</b></span></div><button className="soft-button" onClick={() => onNavigate("realtime")}>Buka realtime monitor <ArrowRight size={16} /></button></div>
+      <div className="panel signal-panel"><PanelTitle title="Signal overview" caption="Distribusi hasil engine hari ini" /><div className="signal-total"><strong>8</strong><span>signal terdeteksi</span></div><div className="signal-bars"><div><span>Buy <b>5</b></span><i><b style={{ width: "62.5%" }} /></i></div><div><span>Watch <b>2</b></span><i><b style={{ width: "25%" }} /></i></div><div><span>Sell <b>1</b></span><i><b style={{ width: "12.5%" }} /></i></div></div><button className="soft-button" onClick={() => onNavigate("realtime")}>Buka realtime monitor <ArrowRight size={16} /></button></div>
     </section>
-    <section className="panel workflow-panel"><PanelTitle title="Quick workflow" caption="Lanjutkan dari langkah yang paling relevan" /><div className="workflow-grid"><Workflow icon={ListFilter} title="Susun strategi" text="Bangun rule indikator tanpa menulis kode." onClick={() => onNavigate("rules")} /><Workflow icon={BarChart3} title="Uji historis" text="Evaluasi rule pada candle sebelumnya." onClick={() => onNavigate("backtest")} /><Workflow icon={Radio} title="Monitor realtime" text="Pantau signal yang muncul saat engine aktif." onClick={() => onNavigate("realtime")} /></div></section>
-  </>;
+    <section className="workflow-panel"><div className="workflow-heading"><h3>Dari ide menjadi signal.</h3><p>Tiga langkah yang menjaga strategi tetap bisa diuji dan dijelaskan.</p></div><div className="workflow-grid"><Workflow icon={ListFilter} title="Susun strategi" text="Bangun rule indikator tanpa menulis kode." onClick={() => onNavigate("rules")} /><Workflow icon={BarChart3} title="Uji historis" text="Evaluasi rule pada candle sebelumnya." onClick={() => onNavigate("backtest")} /><Workflow icon={Radio} title="Monitor realtime" text="Pantau signal saat engine aktif." onClick={() => onNavigate("realtime")} /></div></section>
+  </div>;
+}
+
+function MarketTrace() {
+  return <svg className="market-trace" viewBox="0 0 640 230" role="img" aria-label="Grafik contoh pergerakan IDX Composite">
+    <g className="chart-guides"><path d="M0 45H640M0 115H640M0 185H640" /><path d="M96 0V230M272 0V230M448 0V230" /></g>
+    <path className="chart-area" d="M0 178 C52 170 74 196 122 157 S196 136 230 151 S304 117 342 127 S408 73 454 98 S518 64 552 76 S602 40 640 51 V230 H0 Z" />
+    <path className="chart-line" d="M0 178 C52 170 74 196 122 157 S196 136 230 151 S304 117 342 127 S408 73 454 98 S518 64 552 76 S602 40 640 51" />
+    <circle cx="640" cy="51" r="5" />
+  </svg>;
 }
 
 function Metric({ label, value, detail, icon: Icon, accent }: { label: string; value: string; detail: string; icon: typeof Gauge; accent: string }) {
-  return <article className="metric"><span className={`metric__icon ${accent}`}><Icon size={19} /></span><div><small>{label}</small><strong>{value}</strong><p>{detail}</p></div></article>;
+  return <article className={`metric metric--${accent}`}><span className={`metric__icon ${accent}`}><Icon size={16} /></span><div><small>{label}</small><strong>{value}</strong><p>{detail}</p></div></article>;
 }
 
 function PanelTitle({ title, caption, action, onAction }: { title: string; caption: string; action?: string; onAction?: () => void }) {
@@ -266,11 +285,11 @@ function PanelTitle({ title, caption, action, onAction }: { title: string; capti
 }
 
 function Workflow({ icon: Icon, title, text, onClick }: { icon: typeof Gauge; title: string; text: string; onClick: () => void }) {
-  return <button className="workflow" onClick={onClick}><span><Icon /></span><div><b>{title}</b><p>{text}</p></div><ChevronRight /></button>;
+  return <button className="workflow" onClick={onClick}><span><Icon /></span><div><b>{title}</b><p>{text}</p></div><ArrowUpRight /></button>;
 }
 
 function FeaturePlaceholder({ view, icon: Icon }: { view: string; icon: typeof Gauge }) {
-  return <section className="feature-placeholder"><span><Icon /></span><div className="section-kicker">Frontend foundation</div><h2>{view}</h2><p>Shell, routing, API client, dan auth guard sudah siap. Fitur ini akan dimigrasikan sebagai vertical slice berikutnya menggunakan kontrak OpenAPI backend.</p><div><BookOpen size={17} /> Endpoint tidak akan dibuat berdasarkan asumsi frontend.</div></section>;
+  return <section className="feature-placeholder"><span><Icon /></span><h2>{view}</h2><p>Shell, routing, API client, dan auth guard sudah siap. Fitur ini akan dimigrasikan sebagai vertical slice berikutnya menggunakan kontrak OpenAPI backend.</p><div><BookOpen size={17} /> Endpoint tidak akan dibuat berdasarkan asumsi frontend.</div></section>;
 }
 
 export default App;
