@@ -1,29 +1,124 @@
 {
-  "schemaVersion": 1,
-  "name": "SignalGen Editorial Market Terminal",
-  "tokens": {
-    "colors": {
-      "canvas": "#090a0c",
-      "surface": "#0e0f12",
-      "surfaceHigh": "#141519",
-      "line": "#29292d",
-      "text": "#f2f0ee",
-      "muted": "#aaa6a3",
-      "signal": "#e43d43",
-      "signalBright": "#ff696e",
-      "positive": "#67ce98",
-      "caution": "#e1ae62"
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-13T14:23:30+08:00",
+  "title": "Design System: SignalGen 2.0",
+  "extensions": {
+    "colorMeta": {
+      "canvas": { "role": "neutral", "displayName": "Terminal Canvas", "canonical": "#090a0c", "tonalRamp": ["#090a0c", "#17181b", "#292a2e", "#414247", "#606166", "#85868b", "#b7b8bc", "#eeeef0"] },
+      "surface": { "role": "neutral", "displayName": "Working Surface", "canonical": "#0e0f12", "tonalRamp": ["#0e0f12", "#1a1b1f", "#2c2d32", "#44454b", "#62636a", "#87888e", "#b9babf", "#f0f0f2"] },
+      "surface-high": { "role": "neutral", "displayName": "High Surface", "canonical": "#141519", "tonalRamp": ["#141519", "#202125", "#313238", "#494a50", "#67686e", "#8b8c92", "#bdbec2", "#f2f2f3"] },
+      "line": { "role": "neutral", "displayName": "Structural Line", "canonical": "#29292d", "tonalRamp": ["#161619", "#29292d", "#3d3d42", "#55555b", "#717177", "#929298", "#bfbfc3", "#f1f1f2"] },
+      "line-soft": { "role": "neutral", "displayName": "Quiet Line", "canonical": "#1d1e22", "tonalRamp": ["#111216", "#1d1e22", "#313238", "#4a4b51", "#68696f", "#8c8d93", "#bebfc3", "#f2f2f3"] },
+      "text": { "role": "neutral", "displayName": "Primary Text", "canonical": "#f2f0ee", "tonalRamp": ["#292724", "#494642", "#6d6964", "#918c86", "#b4afa9", "#d2ceca", "#e7e4e1", "#f7f5f3"] },
+      "muted": { "role": "neutral", "displayName": "Muted Text", "canonical": "#aaa6a3", "tonalRamp": ["#292624", "#484440", "#68635f", "#87827d", "#aaa6a3", "#c5c1bd", "#dedbd8", "#f5f3f1"] },
+      "dim": { "role": "neutral", "displayName": "Dim Text", "canonical": "#777477", "tonalRamp": ["#242124", "#3c393c", "#565256", "#777477", "#989598", "#b9b6b9", "#d8d6d8", "#f4f3f4"] },
+      "signal": { "role": "primary", "displayName": "Signal Red", "canonical": "#e43d43", "tonalRamp": ["#3a0b10", "#64151c", "#8e2028", "#b92c34", "#e43d43", "#ef686c", "#f79a9d", "#ffd6d7"] },
+      "signal-bright": { "role": "primary", "displayName": "Signal Bright", "canonical": "#ff696e", "tonalRamp": ["#430d12", "#711a21", "#a02b33", "#cf434a", "#ff696e", "#ff8d91", "#ffb5b8", "#ffdedf"] },
+      "positive": { "role": "secondary", "displayName": "Positive Green", "canonical": "#67ce98", "tonalRamp": ["#0c3322", "#175238", "#287451", "#3e986d", "#67ce98", "#8bdbb0", "#b4e8cd", "#def6e9"] },
+      "caution": { "role": "secondary", "displayName": "Caution Amber", "canonical": "#e1ae62", "tonalRamp": ["#38270d", "#5c431a", "#806025", "#a67f36", "#e1ae62", "#ebc083", "#f2d5ab", "#faead4"] }
     },
-    "radii": {
-      "control": "10px",
-      "panel": "15px",
-      "status": "999px"
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "First-view product statements." },
+      "editorial-accent": { "displayName": "Editorial Accent", "purpose": "One italic phrase inside a major statement." },
+      "headline": { "displayName": "Headline", "purpose": "Major section statements." },
+      "body": { "displayName": "Body", "purpose": "Explanatory product copy." },
+      "label": { "displayName": "Operational Label", "purpose": "Controls, statuses, navigation, and compact market metadata." }
     },
-    "motion": {
-      "easeOut": "cubic-bezier(.16, 1, .3, 1)",
-      "feedback": "160ms",
-      "layout": "380ms",
-      "focal": "820ms"
+    "shadows": [
+      { "name": "focal-terminal", "value": "0 30px 90px rgba(0, 0, 0, .38)", "purpose": "Hero terminal preview only." },
+      { "name": "product-canvas", "value": "0 28px 75px rgba(0, 0, 0, .34)", "purpose": "Bounded workspace demonstration." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(.16, 1, .3, 1)", "purpose": "Default authored entrance and connection easing." },
+      { "name": "feedback", "value": "160ms", "purpose": "Hover, focus, and control feedback." },
+      { "name": "rule-sequence", "value": "420ms / 780ms / 1140ms", "purpose": "Staggered validation of the three rule checks." },
+      { "name": "trace-draw", "value": "1250ms after 1720ms delay", "purpose": "Market trace resolves after rule validation." }
+    ],
+    "breakpoints": [
+      { "name": "wide-stack", "value": "1160px" },
+      { "name": "tablet", "value": "920px" },
+      { "name": "mobile", "value": "600px" },
+      { "name": "minimum", "value": "320px" }
+    ],
+    "components": [
+      {
+        "name": "Primary Button",
+        "kind": "button",
+        "refersTo": "button-primary",
+        "description": "The principal account or workflow action.",
+        "html": "<button class=\"ds-button-primary\">MULAI SEKARANG →</button>",
+        "css": ".ds-button-primary { min-height: 49px; display: inline-flex; align-items: center; justify-content: center; padding: 0 19px; border: 1px solid #f05a60; border-radius: 10px; color: #fff; background: var(--red, #e43d43); font: 720 11px/1.4 \"Manrope Variable\", sans-serif; letter-spacing: .08em; transition: background .16s, transform .16s; } .ds-button-primary:hover { background: #f04b51; transform: translateY(-1px); } .ds-button-primary:active { transform: none; } .ds-button-primary:focus-visible { outline: 2px solid var(--red-bright, #ff696e); outline-offset: 3px; }"
+      },
+      {
+        "name": "Secondary Button",
+        "kind": "button",
+        "refersTo": "button-secondary",
+        "description": "A quieter explanatory or navigation action.",
+        "html": "<button class=\"ds-button-secondary\">LIHAT CARA KERJA</button>",
+        "css": ".ds-button-secondary { min-height: 49px; display: inline-flex; align-items: center; justify-content: center; padding: 0 19px; border: 1px solid #37363a; border-radius: 10px; color: #d3cfcc; background: #111216; font: 720 11px/1.4 \"Manrope Variable\", sans-serif; letter-spacing: .06em; transition: color .16s, border-color .16s, background .16s; } .ds-button-secondary:hover { color: #fff; border-color: #545055; background: #17181c; } .ds-button-secondary:focus-visible { outline: 2px solid var(--red-bright, #ff696e); outline-offset: 3px; }"
+      },
+      {
+        "name": "Text Field",
+        "kind": "input",
+        "refersTo": "input",
+        "description": "Authentication and account data entry with explicit label and focus state.",
+        "html": "<label class=\"ds-field\"><span>EMAIL</span><input type=\"email\" placeholder=\"nama@email.com\"></label>",
+        "css": ".ds-field { display: grid; gap: 8px; color: #c1bdba; font: 650 10px/1.4 \"Manrope Variable\", sans-serif; } .ds-field input { width: 100%; height: 48px; padding: 0 14px; border: 1px solid #333236; border-radius: 10px; outline: 0; color: #f5f2ef; background: #111216; caret-color: var(--red-bright, #ff696e); font: 400 14px/1.4 \"Manrope Variable\", sans-serif; transition: border-color .16s, background .16s; } .ds-field input::placeholder { color: #706d70; } .ds-field input:hover { background: #141519; } .ds-field input:focus { border-color: #c9474c; background: #151519; } .ds-field input:focus-visible { outline: 2px solid var(--red-bright, #ff696e); outline-offset: 3px; }"
+      },
+      {
+        "name": "Navigation Link",
+        "kind": "nav",
+        "description": "Compact public navigation with a restrained signal underline.",
+        "html": "<a class=\"ds-nav-link\" href=\"#\">CARA KERJA</a>",
+        "css": ".ds-nav-link { display: inline-block; position: relative; padding: 8px 0; color: #a29e9c; font: 600 12px/1.4 \"Manrope Variable\", sans-serif; text-decoration: none; } .ds-nav-link::after { content: \"\"; height: 1px; position: absolute; inset: auto 100% 0 0; background: var(--red-bright, #ff696e); transition: inset .22s cubic-bezier(.16, 1, .3, 1); } .ds-nav-link:hover { color: #f6f3f0; } .ds-nav-link:hover::after { inset-right: 0; } .ds-nav-link:focus-visible { outline: 2px solid var(--red-bright, #ff696e); outline-offset: 3px; }"
+      },
+      {
+        "name": "Connected Status",
+        "kind": "chip",
+        "description": "A compact machine-state chip with text-backed semantic color.",
+        "html": "<span class=\"ds-status\"><i></i> BACKEND CONNECTED</span>",
+        "css": ".ds-status { min-height: 30px; display: inline-flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid #29362f; border-radius: 999px; color: #8b8889; background: #101512; font: 700 9px/1.4 \"Manrope Variable\", sans-serif; letter-spacing: .08em; } .ds-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--green, #67ce98); }"
+      },
+      {
+        "name": "Terminal Panel",
+        "kind": "custom",
+        "refersTo": "panel",
+        "description": "The bounded product mechanism used to demonstrate readable rules and resolved signals.",
+        "html": "<section class=\"ds-terminal\"><header><span>SCREENING / BBCA</span><em>DATA ILUSTRATIF</em></header><div><b>EMA 20 &gt; EMA 50</b><small>✓ SIGNAL EXPLAINED</small></div></section>",
+        "css": ".ds-terminal { overflow: hidden; border: 1px solid #343338; border-radius: 15px; color: var(--text, #f2f0ee); background: #0d0e11; box-shadow: 0 30px 90px rgba(0,0,0,.38); font-family: \"Manrope Variable\", sans-serif; } .ds-terminal header { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 18px; border-bottom: 1px solid #2b2b2f; color: #a9a5a4; background: #101115; font-size: 10px; font-weight: 720; letter-spacing: .09em; } .ds-terminal header em { color: #d9898c; font-style: normal; } .ds-terminal div { min-height: 120px; display: grid; align-content: center; gap: 14px; padding: 24px; } .ds-terminal b { font-size: 16px; } .ds-terminal small { color: var(--green, #67ce98); font-size: 10px; font-weight: 720; letter-spacing: .08em; } .ds-terminal:hover { border-color: #4a484e; } .ds-terminal:focus-within { outline: 2px solid var(--red-bright, #ff696e); outline-offset: 3px; }"
+      }
+    ],
+    "narrative": {
+      "northStar": "The Editorial Market Terminal",
+      "overview": "SignalGen combines the composure of an editorial product with the precision and density of a market workstation. Its tinted near-black canvas, warm red signal color, fine structural lines, and exact data geometry support sustained analytical work without imitating a brokerage dashboard.\n\nThe public web surface extends the established desktop system rather than replacing it. Large statements explain the mechanism, bounded product demonstrations prove it, and compact operational details preserve the data-first character across landing, authentication, and account views.",
+      "keyCharacteristics": [
+        "Tinted near-black tonal layers separated primarily by fine borders and negative space.",
+        "Warm red used deliberately for signals, actions, focus, and authored motion.",
+        "Manrope-led operational typography with one restrained Newsreader italic accent.",
+        "Real rule, chart, table, and status geometry instead of decorative finance motifs.",
+        "Honest state language for illustrative data and unfinished commercial capabilities."
+      ],
+      "rules": [
+        { "name": "The Scarce Signal Rule", "body": "Red is a semantic cue, not ambient decoration; large areas stay neutral so actions and signals remain unmistakable.", "section": "colors" },
+        { "name": "The One Editorial Phrase Rule", "body": "Newsreader italic may emphasize one phrase in a major statement; it never replaces Manrope for controls, tables, or prose.", "section": "typography" },
+        { "name": "The Mechanism-First Rule", "body": "Product geometry must remain legible in the first viewport; responsive stacking may simplify density but may not remove the rule-to-signal explanation.", "section": "layout" },
+        { "name": "The Flat-by-Default Rule", "body": "Add shadow only when a bounded product mechanism must sit above the editorial page plane.", "section": "elevation" },
+        { "name": "The Bounded Object Rule", "body": "Rounded containers identify interactive or product-like objects, never ordinary page sections.", "section": "shapes" }
+      ],
+      "dos": [
+        "Do lead with readable rule logic, chart geometry, aligned market values, and explicit state labels.",
+        "Do use borders and negative space before introducing another rounded container.",
+        "Do keep numerical information tabular and compact operational copy at or above the established 10px floor.",
+        "Do label illustrative market data and disclose unavailable pricing, payment, entitlement, or download states.",
+        "Do preserve visible keyboard focus, text-backed status feedback, and a completed reduced-motion state."
+      ],
+      "donts": [
+        "Don't use gradients, decorative finance imagery, oversized stock photography, or repeated icon-card grids.",
+        "Don't turn red into a background wash or use green as an unlabeled promise of performance.",
+        "Don't use Newsreader for controls, tables, body copy, or more than one editorial phrase per major statement.",
+        "Don't fabricate prices, customer proof, performance claims, production downloads, or subscription availability.",
+        "Don't exceed 6rem display type in ordinary layouts outside the shipped wide-screen hero exception."
+      ]
     }
   }
 }
