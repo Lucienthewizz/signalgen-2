@@ -35,7 +35,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, status, Request, Query
+from fastapi import FastAPI, HTTPException, BackgroundTasks, status, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -47,39 +47,12 @@ from .storage.sqlite_repo import SQLiteRepository
 from .logging_utils import log_handler
 from .ws.broadcaster import SocketIOBroadcaster
 from .engines.scalping_engine import ScalpingEngine
-from .core.rule_engine import RuleEngine, RuleValidationError
-
-from app.auth.dependencies import get_current_user
-from app.db.supabase_client import supabase
+from .core.rule_engine import RuleEngine
+from .api.routes.auth import router as auth_router
+from .api.routes.rules import create_rules_router
+from .services.rule_service import RuleService
 
 # Pydantic models for API requests/responses
-class RuleCreate(BaseModel):
-    """Model for creating a new rule."""
-    name: str = Field(..., min_length=1, max_length=100)
-    definition: Dict[str, Any] = Field(...)
-    
-    @validator('definition')
-    def validate_definition(cls, v):
-        required_fields = ['logic', 'conditions']
-        for field in required_fields:
-            if field not in v:
-                raise ValueError(f"Missing required field in rule definition: {field}")
-        return v
-
-class RuleUpdate(BaseModel):
-    """Model for updating an existing rule."""
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    definition: Optional[Dict[str, Any]] = Field(None)
-    
-    @validator('definition')
-    def validate_definition(cls, v):
-        if v is not None:
-            required_fields = ['logic', 'conditions']
-            for field in required_fields:
-                if field not in v:
-                    raise ValueError(f"Missing required field in rule definition: {field}")
-        return v
-
 class WatchlistCreate(BaseModel):
     """Model for creating a new watchlist."""
     name: str = Field(..., min_length=1, max_length=100)
@@ -149,17 +122,6 @@ class SettingsResponse(BaseModel):
 class SettingsUpdate(BaseModel):
     """Model for updating settings."""
     value: Any
-
-class AuthLogin(BaseModel):
-    """Credentials used to start a Supabase Auth session."""
-    email: str = Field(..., min_length=3, max_length=254)
-    password: str = Field(..., min_length=1, max_length=1024)
-
-class AuthRegister(BaseModel):
-    """Credentials used to create a Supabase Auth account."""
-    full_name: str = Field(..., min_length=2, max_length=100)
-    email: str = Field(..., min_length=3, max_length=254)
-    password: str = Field(..., min_length=6, max_length=1024)
 
 class BacktestRequest(BaseModel):
     """Model for backtest request."""
@@ -313,6 +275,7 @@ class SignalGenApp:
         self._engine_lock = threading.Lock()
         self._engine_running = False
         self._engine_start_time = None
+        self.rule_service = RuleService(self.repository, self.rule_engine)
         
         # Set broadcaster reference in scalping engine
         self.scalping_engine.broadcaster = self.broadcaster
@@ -326,38 +289,19 @@ class SignalGenApp:
             allow_headers=["*"],
         )
         
-        # Register routes
+        # Register modular routes first, then the remaining legacy routes.
+        self.app.include_router(auth_router)
+        self.app.include_router(
+            create_rules_router(
+                self.rule_service,
+                engine_is_running=lambda: self._engine_running,
+            )
+        )
         self._register_routes()
         
         # Log startup
         self.logger.info("SignalGen application initialized")
 
-    def _normalize_rule_for_validation(
-        self,
-        name: str,
-        definition: Dict[str, Any],
-        rule_id: int = 0,
-        rule_type: str = "custom"
-    ) -> Dict[str, Any]:
-        """Build the full rule shape expected by RuleEngine validation."""
-        return {
-            "id": rule_id,
-            "name": name,
-            "type": rule_type,
-            **definition
-        }
-
-    def _validate_rule_definition(
-        self,
-        name: str,
-        definition: Dict[str, Any],
-        rule_id: int = 0,
-        rule_type: str = "custom"
-    ) -> None:
-        """Validate a stored rule definition before it reaches the database."""
-        rule = self._normalize_rule_for_validation(name, definition, rule_id, rule_type)
-        self.rule_engine.validate_rule(rule)
-    
     def _register_routes(self) -> None:
         """Register all API routes."""
         
@@ -502,347 +446,6 @@ class SignalGenApp:
                     detail="Failed to get system status"
                 )
 
-        # Auth endpoints
-        @self.app.post("/api/auth/register")
-        def register(credentials: AuthRegister):
-            """Create a user through Supabase Auth for the desktop UI."""
-            try:
-                response = supabase.auth.sign_up(
-                    {
-                        "email": credentials.email.strip(),
-                        "password": credentials.password,
-                        "options": {
-                            "data": {"full_name": credentials.full_name.strip()}
-                        },
-                    }
-                )
-            except Exception:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Registration failed. Check your data and try again.",
-                )
-
-            if response.user is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Registration failed. Check your data and try again.",
-                )
-
-            return {
-                "message": (
-                    "Registration successful. Check your email to confirm your account."
-                    if response.session is None
-                    else "Registration successful."
-                ),
-                "requires_email_confirmation": response.session is None,
-                "access_token": (
-                    response.session.access_token if response.session else None
-                ),
-                "user": {
-                    "id": response.user.id,
-                    "email": response.user.email,
-                    "full_name": credentials.full_name.strip(),
-                },
-            }
-
-        @self.app.post("/api/auth/login")
-        def login(credentials: AuthLogin):
-            """Sign in through Supabase Auth for the desktop UI."""
-            try:
-                response = supabase.auth.sign_in_with_password(
-                    {
-                        "email": credentials.email.strip(),
-                        "password": credentials.password,
-                    }
-                )
-            except Exception:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid email or password",
-                )
-
-            if response.user is None or response.session is None:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid email or password",
-                )
-
-            return {
-                "access_token": response.session.access_token,
-                "token_type": "bearer",
-                "expires_in": response.session.expires_in,
-                "user": {
-                    "id": response.user.id,
-                    "email": response.user.email,
-                    "full_name": (
-                        response.user.user_metadata.get("full_name")
-                        if response.user.user_metadata
-                        else None
-                    ),
-                },
-            }
-
-        @self.app.get("/api/auth/me")
-        def get_me(current_user=Depends(get_current_user)):
-            """Get current authenticated user information."""
-            return {
-                "id": current_user.id,
-                "email": current_user.email,
-                "full_name": (
-                    current_user.user_metadata.get("full_name")
-                    if current_user.user_metadata
-                    else None
-                ),
-            }
-        
-        # Rules endpoints
-        @self.app.get("/api/rules", response_model=List[Dict])
-        def get_all_rules():
-            """Get all trading rules."""
-            try:
-                rules = self.repository.get_all_rules()
-                return JSONResponse(content=rules)
-            except Exception as e:
-                self.logger.error(f"Error getting rules: {e}")
-                raise HTTPException(status_code=500, detail="Internal server error")
-
-        @self.app.get("/api/rules/schema", response_model=Dict)
-        def get_rule_schema():
-            """Get supported rule operands, operators, and logic values."""
-            try:
-                operand_groups = {
-                    "Price & Candle": [
-                        "PRICE", "OPEN", "HIGH", "LOW", "CLOSE",
-                        "PREV_CLOSE", "PREV_OPEN",
-                        "OPEN_PREV", "HIGH_PREV", "LOW_PREV", "CLOSE_PREV",
-                    ],
-                    "Simple Moving Averages": [
-                        "MA20", "MA50", "MA100", "MA200",
-                        "MA20_PREV", "MA50_PREV", "MA100_PREV", "MA200_PREV",
-                    ],
-                    "Exponential Moving Averages": [
-                        "EMA6", "EMA9", "EMA10", "EMA13", "EMA20", "EMA21", "EMA34", "EMA50",
-                        "EMA6_PREV", "EMA9_PREV", "EMA10_PREV", "EMA13_PREV",
-                        "EMA20_PREV", "EMA21_PREV", "EMA34_PREV", "EMA50_PREV",
-                    ],
-                    "MACD": [
-                        "MACD", "MACD_SIGNAL", "MACD_HIST",
-                        "MACD_PREV", "MACD_SIGNAL_PREV", "MACD_HIST_PREV",
-                    ],
-                    "RSI": ["RSI14", "RSI14_PREV"],
-                    "ADX": ["ADX5", "ADX5_PREV"],
-                    "Bollinger Bands": [
-                        "BB_UPPER", "BB_MIDDLE", "BB_LOWER", "BB_WIDTH",
-                        "BB_UPPER_PREV", "BB_MIDDLE_PREV", "BB_LOWER_PREV",
-                    ],
-                    "Stochastic Oscillator": [
-                        "STOCH_K", "STOCH_D", "STOCH_K_PREV", "STOCH_D_PREV",
-                    ],
-                    "Ichimoku Cloud": [
-                        "ICHIMOKU_CONVERSION", "ICHIMOKU_BASE", "ICHIMOKU_A", "ICHIMOKU_B",
-                        "ICHIMOKU_CONVERSION_PREV", "ICHIMOKU_BASE_PREV",
-                        "ICHIMOKU_A_PREV", "ICHIMOKU_B_PREV",
-                    ],
-                    "Volume": ["VOLUME", "SMA_VOLUME_20"],
-                    "Calculated Metrics": ["PRICE_EMA20_DIFF_PCT"],
-                    "Candle Pattern": list(self.rule_engine.CANDLE_PATTERN_DEFINITIONS.keys()),
-                }
-                supported = self.rule_engine.SUPPORTED_OPERANDS
-                filtered_groups = {
-                    group: [operand for operand in operands if operand in supported]
-                    for group, operands in operand_groups.items()
-                }
-                quick_operand_groups = {
-                    group: [
-                        operand for operand in operands
-                        if (
-                            operand
-                            and not operand.endswith("_PREV")
-                            and not operand.startswith("PREV_")
-                        )
-                    ]
-                    for group, operands in filtered_groups.items()
-                }
-                quick_operands = {
-                    operand
-                    for operands in quick_operand_groups.values()
-                    for operand in operands
-                }
-                return JSONResponse(content={
-                    "operand_groups": quick_operand_groups,
-                    "prev_n_base_operand_groups": quick_operand_groups,
-                    "operand_labels": {
-                        operand: definition["label"]
-                        for operand, definition in self.rule_engine.CANDLE_PATTERN_DEFINITIONS.items()
-                    },
-                    "candle_patterns": self.rule_engine.CANDLE_PATTERN_DEFINITIONS,
-                    "legacy_operands": sorted(supported - quick_operands),
-                    "operands": sorted(supported),
-                    "dynamic_operand_templates": [
-                        {
-                            "value": "PRICE_PREV_{n}",
-                            "label": "Historical Close Price (legacy)",
-                            "parameter": "n",
-                            "min": self.rule_engine.MIN_DYNAMIC_PERIOD,
-                            "max": self.rule_engine.MAX_DYNAMIC_PERIOD,
-                        },
-                        {
-                            "value": "{operand}_PREV_{n}",
-                            "label": "Previous Value for Any Indicator",
-                            "parameter": "n",
-                            "min": self.rule_engine.MIN_DYNAMIC_PERIOD,
-                            "max": self.rule_engine.MAX_DYNAMIC_PERIOD,
-                        },
-                        {
-                            "value": "MA{period}",
-                            "label": "Simple Moving Average",
-                            "parameter": "period",
-                            "min": self.rule_engine.MIN_DYNAMIC_PERIOD,
-                            "max": self.rule_engine.MAX_DYNAMIC_PERIOD,
-                        },
-                        {
-                            "value": "EMA{period}",
-                            "label": "Exponential Moving Average",
-                            "parameter": "period",
-                            "min": self.rule_engine.MIN_DYNAMIC_PERIOD,
-                            "max": self.rule_engine.MAX_DYNAMIC_PERIOD,
-                        },
-                        {
-                            "value": "RSI{period}",
-                            "label": "Relative Strength Index",
-                            "parameter": "period",
-                            "min": self.rule_engine.MIN_DYNAMIC_PERIOD,
-                            "max": self.rule_engine.MAX_DYNAMIC_PERIOD,
-                        },
-                        {
-                            "value": "ADX{period}",
-                            "label": "Average Directional Index",
-                            "parameter": "period",
-                            "min": self.rule_engine.MIN_DYNAMIC_PERIOD,
-                            "max": self.rule_engine.MAX_DYNAMIC_PERIOD,
-                        },
-                        {
-                            "value": "SMA_VOLUME_{period}",
-                            "label": "Volume SMA",
-                            "parameter": "period",
-                            "min": self.rule_engine.MIN_DYNAMIC_PERIOD,
-                            "max": self.rule_engine.MAX_DYNAMIC_PERIOD,
-                        },
-                    ],
-                    "dynamic_parameter_bounds": {
-                        "min": self.rule_engine.MIN_DYNAMIC_PERIOD,
-                        "max": self.rule_engine.MAX_DYNAMIC_PERIOD,
-                    },
-                    "operators": [
-                        operator for operator in [">", "<", ">=", "<=", "CROSS_UP", "CROSS_DOWN"]
-                        if operator in self.rule_engine.SUPPORTED_OPERATORS
-                    ],
-                    "logic": sorted(self.rule_engine.SUPPORTED_LOGIC),
-                    "cross_operators": ["CROSS_UP", "CROSS_DOWN"],
-                    "crossable_operands": self.rule_engine.get_crossable_operands(),
-                })
-            except Exception as e:
-                self.logger.error(f"Error getting rule schema: {e}")
-                raise HTTPException(status_code=500, detail="Internal server error")
-        
-        @self.app.get("/api/rules/{rule_id}", response_model=Dict)
-        def get_rule(rule_id: int):
-            """Get a specific rule by ID."""
-            try:
-                rule = self.repository.get_rule(rule_id)
-                if not rule:
-                    raise HTTPException(status_code=404, detail="Rule not found")
-                return JSONResponse(content=rule)
-            except HTTPException:
-                raise
-            except Exception as e:
-                self.logger.error(f"Error getting rule {rule_id}: {e}")
-                raise HTTPException(status_code=500, detail="Internal server error")
-        
-        @self.app.post("/api/rules", response_model=Dict)
-        def create_rule(rule: RuleCreate):
-            """Create a new trading rule."""
-            try:
-                self._validate_rule_definition(rule.name, rule.definition)
-                rule_id = self.repository.create_rule(
-                    name=rule.name,
-                    rule_type="custom",
-                    definition=rule.definition
-                )
-                
-                # Get created rule
-                created_rule = self.repository.get_rule(rule_id)
-                
-                # Broadcast update (fire and forget)
-                # asyncio.create_task(
-                #     self.broadcaster.broadcast_rule_update(created_rule)
-                # )
-                
-                return JSONResponse(content=created_rule, status_code=201)
-            except RuleValidationError as e:
-                raise HTTPException(status_code=422, detail=str(e))
-            except Exception as e:
-                self.logger.error(f"Error creating rule: {e}")
-                raise HTTPException(status_code=500, detail="Internal server error")
-        
-        @self.app.put("/api/rules/{rule_id}", response_model=Dict)
-        def update_rule(rule_id: int, rule: RuleUpdate):
-            """Update an existing rule."""
-            try:
-                existing_rule = self.repository.get_rule(rule_id)
-                if not existing_rule or existing_rule.get('is_system'):
-                    raise HTTPException(status_code=404, detail="Rule not found or is system rule")
-
-                next_name = rule.name if rule.name is not None else existing_rule['name']
-                next_definition = rule.definition if rule.definition is not None else existing_rule['definition']
-                self._validate_rule_definition(
-                    next_name,
-                    next_definition,
-                    rule_id=rule_id,
-                    rule_type=existing_rule.get('type', 'custom')
-                )
-
-                success = self.repository.update_rule(
-                    rule_id=rule_id,
-                    name=rule.name,
-                    definition=rule.definition
-                )
-                
-                if not success:
-                    raise HTTPException(status_code=404, detail="Rule not found or is system rule")
-                
-                # Get updated rule
-                updated_rule = self.repository.get_rule(rule_id)
-                
-                # Broadcast update (fire and forget)
-                # asyncio.create_task(
-                #     self.broadcaster.broadcast_rule_update(updated_rule)
-                # )
-                
-                return JSONResponse(content=updated_rule)
-            except HTTPException:
-                raise
-            except RuleValidationError as e:
-                raise HTTPException(status_code=422, detail=str(e))
-            except Exception as e:
-                self.logger.error(f"Error updating rule {rule_id}: {e}")
-                raise HTTPException(status_code=500, detail="Internal server error")
-        
-        @self.app.delete("/api/rules/{rule_id}")
-        def delete_rule(rule_id: int):
-            """Delete a custom rule."""
-            try:
-                success = self.repository.delete_rule(rule_id)
-                if not success:
-                    raise HTTPException(status_code=404, detail="Rule not found or is system rule")
-                
-                return {"message": "Rule deleted successfully"}
-            except HTTPException:
-                raise
-            except Exception as e:
-                self.logger.error(f"Error deleting rule {rule_id}: {e}")
-                raise HTTPException(status_code=500, detail="Internal server error")
-        
         # Watchlists endpoints
         @self.app.get("/api/watchlists", response_model=List[Dict])
         def get_all_watchlists():
@@ -970,36 +573,6 @@ class SignalGenApp:
                 raise
             except Exception as e:
                 self.logger.error(f"Error activating watchlist {watchlist_id}: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Internal server error"
-                )
-        
-        @self.app.put("/api/rules/{rule_id}/activate")
-        def activate_rule(rule_id: int):
-            """Activate a rule."""
-            try:
-                # Check if engine is running (MVP constraint)
-                if self._engine_running:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Cannot activate rule while engine is running"
-                    )
-                
-                rule = self.repository.get_rule(rule_id)
-                if not rule:
-                    raise HTTPException(status_code=404, detail="Rule not found")
-                
-                # Broadcast activation (fire and forget)
-                # asyncio.create_task(
-                #     self.broadcaster.broadcast_rule_activation(rule_id, True)
-                # )
-                
-                return {"message": "Rule activated successfully"}
-            except HTTPException:
-                raise
-            except Exception as e:
-                self.logger.error(f"Error activating rule {rule_id}: {e}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Internal server error"

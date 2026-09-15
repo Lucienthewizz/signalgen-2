@@ -68,10 +68,20 @@ class SQLiteRepository:
                     type TEXT CHECK(type IN ('system', 'custom')) NOT NULL,
                     definition TEXT NOT NULL,
                     is_system BOOLEAN DEFAULT FALSE,
+                    user_id TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+
+            # Databases created before multi-user authorization do not have an
+            # owner column yet. Keep those databases usable without assigning
+            # legacy custom rules to an arbitrary user.
+            cursor.execute("PRAGMA table_info(rules)")
+            rule_columns = [column[1] for column in cursor.fetchall()]
+            if 'user_id' not in rule_columns:
+                cursor.execute('ALTER TABLE rules ADD COLUMN user_id TEXT')
+                self.logger.info("Added user_id column to rules table")
             
             # Create watchlists table
             cursor.execute('''
@@ -129,6 +139,7 @@ class SQLiteRepository:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_signals_time ON signals(time)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_watchlist_items_watchlist_id ON watchlist_items(watchlist_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_rules_user_id ON rules(user_id)')
             
             # Create backtest_runs table
             cursor.execute('''
@@ -439,7 +450,14 @@ class SQLiteRepository:
         return len(rows)
     
     # Rules operations
-    def create_rule(self, name: str, rule_type: str, definition: Dict, is_system: bool = False) -> int:
+    def create_rule(
+        self,
+        name: str,
+        rule_type: str,
+        definition: Dict,
+        is_system: bool = False,
+        user_id: Optional[str] = None,
+    ) -> int:
         """
         Create a new trading rule.
         
@@ -448,18 +466,61 @@ class SQLiteRepository:
             rule_type: Rule type ('system' or 'custom')
             definition: Rule definition as dictionary
             is_system: Whether this is a system rule
+            user_id: Supabase user ID that owns a custom rule
             
         Returns:
             int: ID of created rule
         """
+        if not is_system and not user_id:
+            raise ValueError("Custom rules require a user_id")
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO rules (name, type, definition, is_system)
-                VALUES (?, ?, ?, ?)
-            ''', (name, rule_type, json.dumps(definition), is_system))
+                INSERT INTO rules (name, type, definition, is_system, user_id)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (name, rule_type, json.dumps(definition), is_system, user_id))
             conn.commit()
             return cursor.lastrowid
+
+    def get_rules_for_user(self, user_id: str) -> List[Dict]:
+        """Get shared system rules and custom rules owned by one user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM rules
+                WHERE is_system = TRUE
+                   OR (is_system = FALSE AND user_id = ?)
+                ORDER BY created_at
+            ''', (user_id,))
+            rows = cursor.fetchall()
+
+            rules = []
+            for row in rows:
+                rule = dict(row)
+                rule['definition'] = json.loads(rule['definition'])
+                rules.append(rule)
+            return rules
+
+    def get_rule_for_user(self, rule_id: int, user_id: str) -> Optional[Dict]:
+        """Get a system rule or a custom rule owned by one user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM rules
+                WHERE id = ?
+                  AND (
+                      is_system = TRUE
+                      OR (is_system = FALSE AND user_id = ?)
+                  )
+            ''', (rule_id, user_id))
+            row = cursor.fetchone()
+
+            if row:
+                rule = dict(row)
+                rule['definition'] = json.loads(rule['definition'])
+                return rule
+            return None
     
     def get_rule(self, rule_id: int) -> Optional[Dict]:
         """
@@ -539,6 +600,40 @@ class SQLiteRepository:
             ''', params)
             conn.commit()
             return cursor.rowcount > 0
+
+    def update_rule_for_user(
+        self,
+        rule_id: int,
+        user_id: str,
+        name: str = None,
+        definition: Dict = None,
+    ) -> bool:
+        """Update a custom rule only when it belongs to the supplied user."""
+        updates = []
+        params = []
+
+        if name is not None:
+            updates.append("name = ?")
+            params.append(name)
+
+        if definition is not None:
+            updates.append("definition = ?")
+            params.append(json.dumps(definition))
+
+        if not updates:
+            return False
+
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        params.extend((rule_id, user_id))
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f'''
+                UPDATE rules SET {', '.join(updates)}
+                WHERE id = ? AND is_system = FALSE AND user_id = ?
+            ''', params)
+            conn.commit()
+            return cursor.rowcount > 0
     
     def delete_rule(self, rule_id: int) -> bool:
         """
@@ -559,6 +654,25 @@ class SQLiteRepository:
             
             # Then delete the rule (only custom rules)
             cursor.execute('DELETE FROM rules WHERE id = ? AND is_system = FALSE', (rule_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_rule_for_user(self, rule_id: int, user_id: str) -> bool:
+        """Delete a custom rule only when it belongs to the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT 1 FROM rules
+                WHERE id = ? AND is_system = FALSE AND user_id = ?
+            ''', (rule_id, user_id))
+            if cursor.fetchone() is None:
+                return False
+
+            cursor.execute('UPDATE signals SET rule_id = NULL WHERE rule_id = ?', (rule_id,))
+            cursor.execute('''
+                DELETE FROM rules
+                WHERE id = ? AND is_system = FALSE AND user_id = ?
+            ''', (rule_id, user_id))
             conn.commit()
             return cursor.rowcount > 0
     

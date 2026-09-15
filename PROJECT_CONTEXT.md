@@ -95,15 +95,18 @@ dan harus diperbarui dalam dokumen ini melalui Pull Request tersendiri.
 signalgen-2/
 ├── backend/
 │   ├── app/
+│   │   ├── api/routes/       router HTTP per domain
 │   │   ├── auth/             authentication dependency
 │   │   ├── core/             rule dan indicator logic
 │   │   ├── data_sources/     IBKR, Yahoo, dan cache
 │   │   ├── db/               integrasi Supabase
 │   │   ├── engines/          scalping, swing, backtesting
 │   │   ├── notifications/    Telegram notification
+│   │   ├── schemas/          model request dan response API
+│   │   ├── services/         business logic dan authorization
 │   │   ├── storage/          repository dan SQLite
 │   │   ├── ws/               Socket.IO broadcaster
-│   │   ├── app.py            aplikasi dan route FastAPI saat ini
+│   │   ├── app.py            bootstrap aplikasi dan legacy routes
 │   │   └── main.py           entry point backend
 │   ├── scripts/
 │   ├── tests/
@@ -124,6 +127,11 @@ signalgen-2/
 Folder baru tingkat atas tidak dibuat tanpa alasan arsitektural yang disetujui
 bersama. Pemecahan internal menjadi router, service, repository, component, atau
 module diperbolehkan selama tidak mengubah tanggung jawab aplikasi.
+
+Route baru tidak ditambahkan langsung ke `app.py`. Gunakan `api/routes` untuk
+HTTP endpoint, `schemas` untuk bentuk data, `services` untuk business logic dan
+authorization, serta `storage` untuk query database. Route lama dipindahkan
+bertahap per domain agar perubahan tetap kecil dan dapat diuji.
 
 ## 6. Tanggung jawab setiap bagian
 
