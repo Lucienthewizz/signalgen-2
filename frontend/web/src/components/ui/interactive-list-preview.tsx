@@ -2,6 +2,7 @@
 // https://vault.hyperiux.com — GSAP clipping, row highlight and pointer smoothing.
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
+import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface InteractiveListItem {
@@ -34,6 +35,7 @@ export default function InteractiveListPreview({
   className,
 }: InteractiveListPreviewProps) {
   const [selected, setSelected] = useState(0);
+  const [active, setActive] = useState(false);
   const [reduced, setReduced] = useState(false);
   const surface = useRef<HTMLDivElement>(null);
   const highlight = useRef<HTMLDivElement>(null);
@@ -60,7 +62,7 @@ export default function InteractiveListPreview({
       gsap.to(highlight.current, {
         y: row.offsetTop,
         height: row.offsetHeight,
-        opacity: 1,
+        opacity: active ? 1 : 0,
         duration: reduced ? 0 : clamp(smoothness, 0.05, 1.5, 0.3),
         ease: "power3.out",
         overwrite: true,
@@ -69,15 +71,15 @@ export default function InteractiveListPreview({
         picture.current,
         { clipPath: reduced ? "inset(0%)" : "inset(8%)", opacity: 0.65 },
         {
-          clipPath: "inset(0%)",
-          opacity: 1,
+          clipPath: active ? "inset(0%)" : "inset(50%)",
+          opacity: active ? 1 : 0,
           duration: reduced ? 0 : clamp(duration, 0.1, 2, 0.45),
           ease: "power2.out",
         },
       );
     }, surface);
     return () => ctx.kill(false);
-  }, [index, items.length, reduced, duration, smoothness]);
+  }, [index, items.length, reduced, duration, smoothness, active]);
 
   // Run pointer-follow only while the user interacts, never as an idle loop.
   const stopFollow = useRef<(() => void) | null>(null);
@@ -118,16 +120,22 @@ export default function InteractiveListPreview({
         if (reduced) return;
         const rect = event.currentTarget.getBoundingClientRect();
         target.current = {
-          x: ((event.clientX - rect.left) / rect.width - 0.5) * 16,
-          y: ((event.clientY - rect.top) / rect.height - 0.5) * 12,
+          x: ((event.clientX - rect.left) / rect.width - 0.5) * 70,
+          y: ((event.clientY - rect.top) / rect.height - 0.5) * 50,
         };
       }}
       onPointerLeave={() => {
+        if (!surface.current?.contains(document.activeElement))
+          setActive(false);
         stopFollow.current?.();
         stopFollow.current = null;
         target.current = current.current = { x: 0, y: 0 };
         if (picture.current)
           gsap.to(picture.current, { x: 0, y: 0, duration: reduced ? 0 : 0.2 });
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget))
+          setActive(false);
       }}
     >
       <div
@@ -143,17 +151,30 @@ export default function InteractiveListPreview({
             ref={(element) => {
               rows.current[rowIndex] = element;
             }}
-            className={cn("preview-row", index === rowIndex && "is-selected")}
-            aria-pressed={index === rowIndex}
+            className={cn(
+              "preview-row",
+              active && index === rowIndex && "is-selected",
+            )}
+            aria-pressed={active && index === rowIndex}
             aria-controls="feature-preview"
-            onPointerEnter={() => setSelected(rowIndex)}
-            onFocus={() => setSelected(rowIndex)}
-            onClick={() => setSelected(rowIndex)}
+            onPointerEnter={() => {
+              setSelected(rowIndex);
+              setActive(true);
+            }}
+            onFocus={() => {
+              setSelected(rowIndex);
+              setActive(true);
+            }}
+            onClick={() => {
+              setSelected(rowIndex);
+              setActive(true);
+            }}
           >
             <span className="preview-row-title">{entry.client}</span>
+            <span className="preview-row-platform">{entry.platform}</span>
             <span className="preview-row-copy">{entry.services}</span>
             <span className="preview-row-action" aria-hidden="true">
-              ↗
+              <ArrowUpRight />
             </span>
           </button>
         ))}
@@ -174,7 +195,7 @@ export default function InteractiveListPreview({
           ) : (
             <img
               src={item.img}
-              alt={`Ilustrasi fitur ${item.client}`}
+              alt={`Screenshot desktop asli: ${item.platform}. Fitur masih dalam pengembangan.`}
               onError={() => setFailedImage(item.img)}
               loading="lazy"
             />
@@ -182,7 +203,7 @@ export default function InteractiveListPreview({
         </div>
         <div className="preview-caption">
           <span>{item.platform}</span>
-          <span>Ilustrasi produk</span>
+          <span>Preview desktop asli</span>
         </div>
       </div>
     </div>

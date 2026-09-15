@@ -1,5 +1,17 @@
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowRight, ArrowUpRight, Download, Menu, X } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Download,
+  Menu,
+  X,
+  Star,
+  Quote,
+  ChartNoAxesCombined,
+  ListFilter,
+  CircleHelp,
+  ShieldCheck,
+} from "lucide-react";
 import { api, session } from "./api/client";
 import { ApiError } from "./api/client";
 import { cn } from "@/lib/utils";
@@ -15,11 +27,22 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Skeleton as LoadingSkeleton } from "@/components/ui/skeleton";
 import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from "@/components/ui/accordion";
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  type CarouselApi,
+} from "@/components/ui/carousel";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import { MagneticLiquidButton } from "@/components/ui/magnetic-liquid-button";
 import InteractiveListPreview from "@/components/ui/interactive-list-preview";
 import type { User } from "./types";
 
@@ -148,9 +171,14 @@ function Landing() {
             ide Anda. Semua dimulai dari kondisi yang bisa dijelaskan.
           </p>
           <div className="hero-actions">
-            <a className="button primary" href="#register">
+            <MagneticLiquidButton
+              onClick={() => {
+                location.hash = "register";
+              }}
+              rightIcon={<ArrowRight />}
+            >
               Buat akun Signalgen
-            </a>
+            </MagneticLiquidButton>
             <a className="text-link" href="#download">
               Kenali aplikasi desktop <ArrowUpRight size={16} />
             </a>
@@ -218,31 +246,31 @@ function Landing() {
               client: "Susun rule",
               platform: "Rule builder",
               services: "Gabungkan indikator menjadi kondisi yang terbaca.",
-              img: "/rule-preview.svg",
+              img: "/desktop-rules.png",
             },
             {
               client: "Saring saham",
               platform: "Stock screening",
               services: "Persempit daftar IDX dengan rule Anda sendiri.",
-              img: "/desktop-overview.jpg",
+              img: "/desktop-screening.png",
             },
             {
               client: "Uji ide",
               platform: "Backtesting",
               services: "Periksa hipotesis pada data historis yang tersedia.",
-              img: "/backtest-preview.svg",
+              img: "/desktop-backtesting.png",
             },
             {
               client: "Pahami signal",
               platform: "Realtime monitoring",
               services: "Lihat kondisi mana yang terpenuhi dan alasannya.",
-              img: "/signal-preview.svg",
+              img: "/desktop-signals.png",
             },
           ]}
         />
         <p className="explorer-note">
-          Pilih fitur untuk melihat preview. Tampilan dan data bersifat
-          ilustratif.
+          Arahkan kursor atau pilih fitur untuk melihat tampilan desktop asli.
+          Fitur masih dalam pengembangan; data preview bersifat ilustratif.
         </p>
       </section>
       <Testimonials />
@@ -253,9 +281,14 @@ function Landing() {
           <br />
           Lanjutkan dengan bukti.
         </h2>
-        <a className="button primary" href="#register">
-          Buka akun Signalgen <ArrowRight size={16} />
-        </a>
+        <MagneticLiquidButton
+          onClick={() => {
+            location.hash = "register";
+          }}
+          rightIcon={<ArrowRight />}
+        >
+          Buka akun Signalgen
+        </MagneticLiquidButton>
         <a className="text-link" href="#download">
           Lihat ketersediaan desktop <ArrowUpRight size={15} />
         </a>
@@ -499,6 +532,15 @@ function Testimonials() {
       </div>
       <div className="quote-layout">
         <figure className="lead-quote">
+          <div
+            className="quote-rating"
+            aria-label="Contoh rating 5 dari 5 bintang"
+          >
+            {Array.from({ length: 5 }, (_, i) => (
+              <Star key={i} aria-hidden="true" />
+            ))}
+            <Quote className="quote-mark" aria-hidden="true" />
+          </div>
           <blockquote>
             “Saya ingin tahu kenapa sebuah saham masuk daftar. Bukan hanya
             melihat label Buy.”
@@ -511,8 +553,21 @@ function Testimonials() {
               Raka <small>Contoh persona · swing trader</small>
             </span>
           </figcaption>
+          <div className="quote-context">
+            <ChartNoAxesCombined aria-hidden="true" /> Screening yang bisa
+            dijelaskan
+          </div>
         </figure>
         <figure className="support-quote">
+          <div
+            className="quote-rating"
+            aria-label="Contoh rating 5 dari 5 bintang"
+          >
+            {Array.from({ length: 5 }, (_, i) => (
+              <Star key={i} aria-hidden="true" />
+            ))}
+            <Quote className="quote-mark" aria-hidden="true" />
+          </div>
           <blockquote>
             “Rule yang tersimpan membuat evaluasi saya lebih konsisten dari satu
             minggu ke minggu berikutnya.”
@@ -525,6 +580,9 @@ function Testimonials() {
               Nadia <small>Contoh persona · investor mandiri</small>
             </span>
           </figcaption>
+          <div className="quote-context">
+            <ListFilter aria-hidden="true" /> Rule sebagai dasar evaluasi
+          </div>
         </figure>
       </div>
     </section>
@@ -565,22 +623,90 @@ const questions = [
 ];
 
 function FAQ() {
+  const [carousel, setCarousel] = useState<CarouselApi>();
+  const [current, setCurrent] = useState(1);
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const media = matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduced(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    if (!carousel) return;
+    const update = () => setCurrent(carousel.selectedScrollSnap() + 1);
+    update();
+    carousel.on("select", update);
+    return () => {
+      carousel.off("select", update);
+    };
+  }, [carousel]);
   return (
     <section className="faq" aria-labelledby="faq-title">
-      <div>
+      <div className="section-heading">
         <h2 id="faq-title">Sebelum Anda mulai.</h2>
-        <p>Beberapa hal yang perlu diketahui tentang workspace Anda.</p>
+        <p>
+          Kenali workspace Anda. Geser kartu atau gunakan tombol kiri dan kanan.
+        </p>
       </div>
-      <Accordion defaultValue={["faq-0"]}>
-        {questions.map(({ question, answer }, index) => (
-          <AccordionItem key={question} value={`faq-${index}`}>
-            <AccordionTrigger>{question}</AccordionTrigger>
-            <AccordionContent>
-              <p>{answer}</p>
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
+      <Carousel
+        setApi={setCarousel}
+        opts={{ align: "start", loop: true, duration: reduced ? 0 : 25 }}
+        aria-label="Pertanyaan tentang Signalgen"
+        className="faq-carousel"
+      >
+        <CarouselContent>
+          {questions.map(({ question, answer }, index) => (
+            <CarouselItem
+              key={question}
+              className="md:basis-1/2"
+              aria-label={`Pertanyaan ${index + 1} dari ${questions.length}`}
+            >
+              <Card className="faq-card h-full">
+                <CardHeader>
+                  <CircleHelp aria-hidden="true" className="faq-icon" />
+                  <CardTitle>
+                    <h3>{question}</h3>
+                  </CardTitle>
+                  <CardDescription>
+                    {
+                      [
+                        "Tentang produk",
+                        "Rule builder",
+                        "Akun bersama",
+                        "Memahami signal",
+                        "Data preview",
+                        "Ketersediaan desktop",
+                      ][index]
+                    }
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p>{answer}</p>
+                </CardContent>
+                <CardFooter>
+                  <ShieldCheck aria-hidden="true" />
+                  <span>Signalgen Desktop</span>
+                </CardFooter>
+              </Card>
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+        <div className="carousel-controls">
+          <span aria-live="polite">
+            {current} / {questions.length}
+          </span>
+          <CarouselPrevious
+            aria-label="Pertanyaan sebelumnya"
+            className="static size-11"
+          />
+          <CarouselNext
+            aria-label="Pertanyaan berikutnya"
+            className="static size-11"
+          />
+        </div>
+      </Carousel>
     </section>
   );
 }
