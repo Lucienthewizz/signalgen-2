@@ -20,7 +20,7 @@ Key Features:
 
 Implementation Notes:
 - Single SQLite file (no client-server architecture)
-- One active watchlist at a time
+- One active watchlist per user
 
 Typical Usage:
     repo = SQLiteRepository()
@@ -89,10 +89,19 @@ class SQLiteRepository:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     is_active BOOLEAN DEFAULT FALSE,
+                    user_id TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+
+            # Preserve legacy databases without assigning old watchlists to an
+            # arbitrary account. Unowned legacy rows are hidden from user APIs.
+            cursor.execute("PRAGMA table_info(watchlists)")
+            watchlist_columns = [column[1] for column in cursor.fetchall()]
+            if 'user_id' not in watchlist_columns:
+                cursor.execute('ALTER TABLE watchlists ADD COLUMN user_id TEXT')
+                self.logger.info("Added user_id column to watchlists table")
             
             # Create watchlist_items table
             cursor.execute('''
@@ -140,6 +149,7 @@ class SQLiteRepository:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_watchlist_items_watchlist_id ON watchlist_items(watchlist_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_rules_user_id ON rules(user_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_watchlists_user_id ON watchlists(user_id)')
             
             # Create backtest_runs table
             cursor.execute('''
@@ -192,11 +202,85 @@ class SQLiteRepository:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS ticker_universes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,
                     tickers TEXT NOT NULL,
                     description TEXT,
+                    is_system BOOLEAN DEFAULT FALSE,
+                    user_id TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
+                )
+            ''')
+
+            cursor.execute("PRAGMA table_info(ticker_universes)")
+            universe_columns = [column[1] for column in cursor.fetchall()]
+            if 'is_system' not in universe_columns:
+                cursor.execute(
+                    'ALTER TABLE ticker_universes '
+                    'ADD COLUMN is_system BOOLEAN DEFAULT FALSE'
+                )
+                self.logger.info("Added is_system column to ticker_universes table")
+            if 'user_id' not in universe_columns:
+                cursor.execute(
+                    'ALTER TABLE ticker_universes ADD COLUMN user_id TEXT'
+                )
+                self.logger.info("Added user_id column to ticker_universes table")
+
+            # Older databases enforced a globally unique name. Rebuild that
+            # table so different users may use the same personal universe name.
+            cursor.execute('''
+                SELECT sql FROM sqlite_master
+                WHERE type = 'table' AND name = 'ticker_universes'
+            ''')
+            universe_table_sql = cursor.fetchone()[0]
+            normalized_universe_sql = ' '.join(universe_table_sql.upper().split())
+            if 'NAME TEXT NOT NULL UNIQUE' in normalized_universe_sql:
+                cursor.execute(
+                    'ALTER TABLE ticker_universes '
+                    'RENAME TO ticker_universes_legacy'
+                )
+                cursor.execute('''
+                    CREATE TABLE ticker_universes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        tickers TEXT NOT NULL,
+                        description TEXT,
+                        is_system BOOLEAN DEFAULT FALSE,
+                        user_id TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                ''')
+                cursor.execute('''
+                    INSERT INTO ticker_universes (
+                        id, name, tickers, description, is_system, user_id,
+                        created_at, updated_at
+                    )
+                    SELECT
+                        id, name, tickers, description, is_system, user_id,
+                        created_at, updated_at
+                    FROM ticker_universes_legacy
+                ''')
+                cursor.execute('DROP TABLE ticker_universes_legacy')
+                self.logger.info(
+                    "Rebuilt ticker_universes for per-user name uniqueness"
+                )
+
+            # These exact rows were seeded by older SignalGen versions and are
+            # reference data, so they remain readable by every authenticated user.
+            cursor.execute('''
+                UPDATE ticker_universes
+                SET is_system = TRUE
+                WHERE user_id IS NULL AND (
+                    (name = 'Tech Giants' AND description = 'Major technology stocks')
+                    OR (
+                        name = 'S&P 100 Top 20'
+                        AND description = 'Top 20 holdings in S&P 100 index'
+                    )
+                    OR (
+                        name = 'Popular Traders'
+                        AND description = 'Most actively traded stocks and ETFs'
+                    )
                 )
             ''')
 
@@ -232,6 +316,20 @@ class SQLiteRepository:
             cursor.execute('''
                 CREATE INDEX IF NOT EXISTS idx_price_candles_lookup
                 ON price_candles(data_source, symbol, timeframe, timestamp)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_ticker_universes_user_id
+                ON ticker_universes(user_id)
+            ''')
+            cursor.execute('''
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_ticker_universes_user_name
+                ON ticker_universes(user_id, name)
+                WHERE is_system = FALSE AND user_id IS NOT NULL
+            ''')
+            cursor.execute('''
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_ticker_universes_system_name
+                ON ticker_universes(name)
+                WHERE is_system = TRUE
             ''')
             
             conn.commit()
@@ -677,7 +775,12 @@ class SQLiteRepository:
             return cursor.rowcount > 0
     
     # Watchlist operations
-    def create_watchlist(self, name: str, symbols: List[str]) -> int:
+    def create_watchlist(
+        self,
+        name: str,
+        symbols: List[str],
+        user_id: Optional[str] = None,
+    ) -> int:
         """
         Create a new watchlist.
         
@@ -692,7 +795,10 @@ class SQLiteRepository:
             cursor = conn.cursor()
             
             # Create watchlist
-            cursor.execute('INSERT INTO watchlists (name) VALUES (?)', (name,))
+            cursor.execute(
+                'INSERT INTO watchlists (name, user_id) VALUES (?, ?)',
+                (name, user_id),
+            )
             watchlist_id = cursor.lastrowid
             
             # Add symbols
@@ -755,6 +861,164 @@ class SQLiteRepository:
                 watchlists.append(watchlist)
             
             return watchlists
+
+    def get_watchlist_for_user(
+        self,
+        watchlist_id: int,
+        user_id: str,
+    ) -> Optional[Dict]:
+        """Get a watchlist only when it belongs to the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT * FROM watchlists WHERE id = ? AND user_id = ?',
+                (watchlist_id, user_id),
+            )
+            watchlist_row = cursor.fetchone()
+            if watchlist_row is None:
+                return None
+
+            watchlist = dict(watchlist_row)
+            cursor.execute(
+                'SELECT symbol FROM watchlist_items WHERE watchlist_id = ?',
+                (watchlist_id,),
+            )
+            watchlist['symbols'] = [row['symbol'] for row in cursor.fetchall()]
+            return watchlist
+
+    def get_watchlists_for_user(self, user_id: str) -> List[Dict]:
+        """List only watchlists owned by the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                SELECT * FROM watchlists
+                WHERE user_id = ?
+                ORDER BY created_at
+                ''',
+                (user_id,),
+            )
+
+            watchlists = []
+            for watchlist_row in cursor.fetchall():
+                watchlist = dict(watchlist_row)
+                cursor.execute(
+                    'SELECT symbol FROM watchlist_items WHERE watchlist_id = ?',
+                    (watchlist['id'],),
+                )
+                watchlist['symbols'] = [row['symbol'] for row in cursor.fetchall()]
+                watchlists.append(watchlist)
+            return watchlists
+
+    def update_watchlist_for_user(
+        self,
+        watchlist_id: int,
+        user_id: str,
+        update_data: Dict[str, Any],
+    ) -> bool:
+        """Update a watchlist only when it belongs to the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT 1 FROM watchlists WHERE id = ? AND user_id = ?',
+                (watchlist_id, user_id),
+            )
+            if cursor.fetchone() is None:
+                return False
+
+            if 'name' in update_data:
+                cursor.execute(
+                    '''
+                    UPDATE watchlists
+                    SET name = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_id = ?
+                    ''',
+                    (update_data['name'], watchlist_id, user_id),
+                )
+
+            if 'symbols' in update_data:
+                cursor.execute(
+                    'DELETE FROM watchlist_items WHERE watchlist_id = ?',
+                    (watchlist_id,),
+                )
+                cursor.executemany(
+                    '''
+                    INSERT INTO watchlist_items (watchlist_id, symbol)
+                    VALUES (?, ?)
+                    ''',
+                    [
+                        (watchlist_id, symbol)
+                        for symbol in update_data['symbols']
+                    ],
+                )
+                cursor.execute(
+                    '''
+                    UPDATE watchlists
+                    SET updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_id = ?
+                    ''',
+                    (watchlist_id, user_id),
+                )
+
+            conn.commit()
+            return True
+
+    def delete_watchlist_for_user(self, watchlist_id: int, user_id: str) -> bool:
+        """Delete a watchlist only when it belongs to the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'DELETE FROM watchlists WHERE id = ? AND user_id = ?',
+                (watchlist_id, user_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def set_active_watchlist_for_user(
+        self,
+        watchlist_id: int,
+        user_id: str,
+    ) -> bool:
+        """Activate one owned watchlist without changing another user's state."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT 1 FROM watchlists WHERE id = ? AND user_id = ?',
+                (watchlist_id, user_id),
+            )
+            if cursor.fetchone() is None:
+                return False
+
+            cursor.execute(
+                'UPDATE watchlists SET is_active = FALSE WHERE user_id = ?',
+                (user_id,),
+            )
+            cursor.execute(
+                '''
+                UPDATE watchlists
+                SET is_active = TRUE, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+                ''',
+                (watchlist_id, user_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_active_watchlist_for_user(self, user_id: str) -> Optional[Dict]:
+        """Get the active watchlist for one user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                SELECT id FROM watchlists
+                WHERE user_id = ? AND is_active = TRUE
+                ''',
+                (user_id,),
+            )
+            watchlist_row = cursor.fetchone()
+            if watchlist_row is None:
+                return None
+            return self.get_watchlist_for_user(watchlist_row['id'], user_id)
     
     def update_watchlist(self, watchlist_id: int, update_data: Dict[str, Any]) -> bool:
         """
@@ -1493,7 +1757,9 @@ class SQLiteRepository:
         self,
         name: str,
         tickers: List[str],
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        user_id: Optional[str] = None,
+        is_system: bool = False,
     ) -> int:
         """
         Create a new ticker universe.
@@ -1510,9 +1776,20 @@ class SQLiteRepository:
             cursor = conn.cursor()
             now = datetime.now().isoformat()
             cursor.execute('''
-                INSERT INTO ticker_universes (name, tickers, description, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (name, json.dumps(tickers), description, now, now))
+                INSERT INTO ticker_universes (
+                    name, tickers, description, is_system, user_id,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                name,
+                json.dumps(tickers),
+                description,
+                is_system,
+                user_id,
+                now,
+                now,
+            ))
             conn.commit()
             return cursor.lastrowid
     
@@ -1556,6 +1833,99 @@ class SQLiteRepository:
                 universes.append(universe)
             
             return universes
+
+    def get_ticker_universe_for_user(
+        self,
+        universe_id: int,
+        user_id: str,
+    ) -> Optional[Dict]:
+        """Get a shared system universe or one owned by the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM ticker_universes
+                WHERE id = ? AND (is_system = TRUE OR user_id = ?)
+            ''', (universe_id, user_id))
+            row = cursor.fetchone()
+            if row is None:
+                return None
+
+            universe = dict(row)
+            universe['tickers'] = json.loads(universe['tickers'])
+            return universe
+
+    def get_ticker_universes_for_user(self, user_id: str) -> List[Dict]:
+        """List shared system universes and personal universes for one user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM ticker_universes
+                WHERE is_system = TRUE OR user_id = ?
+                ORDER BY is_system DESC, name
+            ''', (user_id,))
+
+            universes = []
+            for row in cursor.fetchall():
+                universe = dict(row)
+                universe['tickers'] = json.loads(universe['tickers'])
+                universes.append(universe)
+            return universes
+
+    def update_ticker_universe_for_user(
+        self,
+        universe_id: int,
+        user_id: str,
+        name: Optional[str] = None,
+        tickers: Optional[List[str]] = None,
+        description: Optional[str] = None,
+    ) -> bool:
+        """Update only a personal universe owned by the supplied user."""
+        updates = []
+        params = []
+
+        if name is not None:
+            updates.append("name = ?")
+            params.append(name)
+        if tickers is not None:
+            updates.append("tickers = ?")
+            params.append(json.dumps(tickers))
+        if description is not None:
+            updates.append("description = ?")
+            params.append(description)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if not updates:
+                cursor.execute('''
+                    SELECT 1 FROM ticker_universes
+                    WHERE id = ? AND user_id = ? AND is_system = FALSE
+                ''', (universe_id, user_id))
+                return cursor.fetchone() is not None
+
+            updates.append("updated_at = ?")
+            params.append(datetime.now().isoformat())
+            params.extend([universe_id, user_id])
+            cursor.execute(f'''
+                UPDATE ticker_universes SET {', '.join(updates)}
+                WHERE id = ? AND user_id = ? AND is_system = FALSE
+            ''', params)
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_ticker_universe_for_user(
+        self,
+        universe_id: int,
+        user_id: str,
+    ) -> bool:
+        """Delete only a personal universe owned by the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM ticker_universes
+                WHERE id = ? AND user_id = ? AND is_system = FALSE
+            ''', (universe_id, user_id))
+            conn.commit()
+            return cursor.rowcount > 0
     
     def update_ticker_universe(
         self,

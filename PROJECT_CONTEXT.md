@@ -213,8 +213,12 @@ Kondisi saat dokumen dibuat:
 
 - Register, login, dan pemeriksaan current user sudah tersedia.
 - Authorization seluruh data bisnis belum lengkap.
-- Rules, watchlists, signals, settings, backtest, dan data pribadi lain belum
-  boleh dianggap terisolasi per-user sampai backend menyelesaikannya.
+- Custom rules, watchlists, dan personal ticker universe sudah memakai ownership
+  berdasarkan Supabase `user_id` pada backend.
+- Swing screening dan Yahoo cache backfill sudah memvalidasi ownership rule dan
+  ticker universe sebelum proses dijalankan.
+- Signals, settings, backtest, Telegram configuration, engine, dan data pribadi
+  lain belum boleh dianggap terisolasi per-user sampai backend menyelesaikannya.
 - Refresh token, logout server-side, reset-password aplikasi, role, dan permission
   perlu diselesaikan sebagai pekerjaan lanjutan.
 

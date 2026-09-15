@@ -40,7 +40,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 from pathlib import Path
 
 from .storage.sqlite_repo import SQLiteRepository
@@ -50,36 +50,14 @@ from .engines.scalping_engine import ScalpingEngine
 from .core.rule_engine import RuleEngine
 from .api.routes.auth import router as auth_router
 from .api.routes.rules import create_rules_router
+from .api.routes.swing import create_swing_router
+from .api.routes.universes import create_universes_router
+from .api.routes.watchlists import create_watchlists_router
 from .services.rule_service import RuleService
+from .services.universe_service import UniverseService
+from .services.watchlist_service import WatchlistService
 
 # Pydantic models for API requests/responses
-class WatchlistCreate(BaseModel):
-    """Model for creating a new watchlist."""
-    name: str = Field(..., min_length=1, max_length=100)
-    symbols: List[str] = Field(..., min_items=1)
-    
-    @validator('symbols')
-    def validate_symbols(cls, v):
-        # Ensure symbols are uppercase and unique
-        symbols = [s.upper().strip() for s in v if s.strip()]
-        if len(set(symbols)) != len(symbols):
-            raise ValueError("Duplicate symbols are not allowed")
-        return symbols
-
-class WatchlistUpdate(BaseModel):
-    """Model for updating an existing watchlist."""
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    symbols: Optional[List[str]] = Field(None, min_items=1)
-    
-    @validator('symbols')
-    def validate_symbols(cls, v):
-        if v is not None:
-            symbols = [s.upper().strip() for s in v if s.strip()]
-            if len(set(symbols)) != len(symbols):
-                raise ValueError("Duplicate symbols are not allowed")
-            return symbols
-        return v
-
 class EngineStart(BaseModel):
     """Model for starting the engine."""
     watchlist_id: int = Field(..., gt=0)
@@ -167,34 +145,6 @@ class BacktestScreenRequest(BaseModel):
     take_profit_pct: Optional[float] = Field(None, gt=0, le=1000)   # for target_stop
     stop_loss_pct: Optional[float] = Field(None, gt=0, le=100)      # for target_stop
 
-class SwingScreenRequest(BaseModel):
-    """Model for swing screening request."""
-    rule_id: int = Field(..., gt=0)
-    ticker_universe_id: int = Field(..., gt=0)
-    timeframe: str = Field(default='1d', pattern='^(1h|4h|1d)$')
-    lookback_days: int = Field(default=30, ge=1, le=365)
-    start_date: Optional[str] = Field(None)  # ISO date/datetime string
-    end_date: Optional[str] = Field(None)    # ISO date/datetime string
-
-class YahooBackfillRequest(BaseModel):
-    """Model for warming Yahoo OHLCV cache for a ticker universe."""
-    ticker_universe_id: int = Field(..., gt=0)
-    timeframes: List[str] = Field(default_factory=lambda: ['1d'], max_items=6)
-    start_date: Optional[str] = Field(None)
-    end_date: Optional[str] = Field(None)
-
-class UniverseCreate(BaseModel):
-    """Model for creating ticker universe."""
-    name: str = Field(..., min_length=1, max_length=100)
-    tickers: List[str] = Field(..., min_items=0, max_items=200)
-    description: Optional[str] = Field(None, max_length=500)
-
-class UniverseUpdate(BaseModel):
-    """Model for updating ticker universe."""
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    tickers: Optional[List[str]] = Field(None, min_items=0, max_items=200)
-    description: Optional[str] = Field(None, max_length=500)
-
 class ModeChange(BaseModel):
     """Model for changing operational mode."""
     mode: str = Field(..., pattern='^(scalping|backtesting|swing|swing_backtest)$')
@@ -276,6 +226,8 @@ class SignalGenApp:
         self._engine_running = False
         self._engine_start_time = None
         self.rule_service = RuleService(self.repository, self.rule_engine)
+        self.universe_service = UniverseService(self.repository)
+        self.watchlist_service = WatchlistService(self.repository)
         
         # Set broadcaster reference in scalping engine
         self.scalping_engine.broadcaster = self.broadcaster
@@ -295,6 +247,22 @@ class SignalGenApp:
             create_rules_router(
                 self.rule_service,
                 engine_is_running=lambda: self._engine_running,
+            )
+        )
+        self.app.include_router(
+            create_watchlists_router(
+                self.watchlist_service,
+                engine_is_running=lambda: self._engine_running,
+            )
+        )
+        self.app.include_router(
+            create_universes_router(self.universe_service)
+        )
+        self.app.include_router(
+            create_swing_router(
+                repository=self.repository,
+                rule_service=self.rule_service,
+                universe_service=self.universe_service,
             )
         )
         self._register_routes()
@@ -446,138 +414,6 @@ class SignalGenApp:
                     detail="Failed to get system status"
                 )
 
-        # Watchlists endpoints
-        @self.app.get("/api/watchlists", response_model=List[Dict])
-        def get_all_watchlists():
-            """Get all watchlists."""
-            try:
-                watchlists = self.repository.get_all_watchlists()
-                return JSONResponse(content=watchlists)
-            except Exception as e:
-                self.logger.error(f"Error getting watchlists: {e}")
-                raise HTTPException(status_code=500, detail="Internal server error")
-        
-        @self.app.post("/api/watchlists", response_model=Dict)
-        def create_watchlist(watchlist: WatchlistCreate):
-            """Create a new watchlist."""
-            try:
-                watchlist_id = self.repository.create_watchlist(
-                    name=watchlist.name,
-                    symbols=watchlist.symbols
-                )
-                
-                # Get created watchlist
-                created_watchlist = self.repository.get_watchlist(watchlist_id)
-                
-                # Broadcast update (fire and forget)
-                # asyncio.create_task(
-                #     self.broadcaster.broadcast_watchlist_update(created_watchlist)
-                # )
-                
-                return JSONResponse(content=created_watchlist, status_code=201)
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=str(e)
-                )
-            except Exception as e:
-                self.logger.error(f"Error creating watchlist: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Internal server error"
-                )
-        
-        @self.app.put("/api/watchlists/{watchlist_id}", response_model=Dict)
-        def update_watchlist(watchlist_id: int, watchlist: WatchlistUpdate):
-            """Update an existing watchlist."""
-            try:
-                # Check if engine is running (MVP constraint)
-                if self._engine_running:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Cannot modify watchlist while engine is running"
-                    )
-                
-                success = self.repository.update_watchlist(watchlist_id, watchlist.dict(exclude_unset=True))
-                if not success:
-                    raise HTTPException(status_code=404, detail="Watchlist not found")
-                
-                # Get updated watchlist
-                updated_watchlist = self.repository.get_watchlist(watchlist_id)
-                
-                # Broadcast update (fire and forget)
-                # asyncio.create_task(
-                #     self.broadcaster.broadcast_watchlist_update(updated_watchlist)
-                # )
-                
-                return JSONResponse(content=updated_watchlist)
-            except HTTPException:
-                raise
-            except Exception as e:
-                self.logger.error(f"Error updating watchlist {watchlist_id}: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Internal server error"
-                )
-        
-        @self.app.delete("/api/watchlists/{watchlist_id}")
-        def delete_watchlist(watchlist_id: int):
-            """Delete a watchlist."""
-            try:
-                # Check if engine is running (MVP constraint)
-                if self._engine_running:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Cannot delete watchlist while engine is running"
-                    )
-                
-                success = self.repository.delete_watchlist(watchlist_id)
-                if not success:
-                    raise HTTPException(status_code=404, detail="Watchlist not found")
-                
-                return {"message": "Watchlist deleted successfully"}
-            except HTTPException:
-                raise
-            except Exception as e:
-                self.logger.error(f"Error deleting watchlist {watchlist_id}: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Internal server error"
-                )
-        
-        @self.app.put("/api/watchlists/{watchlist_id}/activate")
-        def activate_watchlist(watchlist_id: int):
-            """Set a watchlist as active."""
-            try:
-                # Check if engine is running (MVP constraint)
-                if self._engine_running:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Cannot activate watchlist while engine is running"
-                    )
-                
-                success = self.repository.set_active_watchlist(watchlist_id)
-                if not success:
-                    raise HTTPException(status_code=404, detail="Watchlist not found")
-                
-                # Get active watchlist
-                active_watchlist = self.repository.get_active_watchlist()
-                
-                # Broadcast update (fire and forget)
-                # asyncio.create_task(
-                #     self.broadcaster.broadcast_watchlist_update(active_watchlist)
-                # )
-                
-                return {"message": "Watchlist activated successfully"}
-            except HTTPException:
-                raise
-            except Exception as e:
-                self.logger.error(f"Error activating watchlist {watchlist_id}: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Internal server error"
-                )
-        
         # Engine endpoints
         @self.app.get("/api/engine/status", response_model=EngineStatus)
         def get_engine_status():
@@ -2287,264 +2123,6 @@ class SignalGenApp:
                     detail=f"Swing chart failed: {str(e)}"
                 )
 
-        @self.app.post("/api/swing/screen")
-        async def screen_swing_signals(request: SwingScreenRequest):
-            """
-            Run swing trading screening on a ticker universe.
-            
-            Request body:
-                rule_id: Rule ID to use
-                ticker_universe_id: Ticker universe ID
-                timeframe: Candle timeframe (default: '1d')
-                lookback_days: Days of historical data (default: 30)
-            """
-            try:
-                from .engines.swing_screening_engine import SwingScreeningEngine
-                request_id = str(uuid4())
-                start_time = time.perf_counter()
-
-                def _parse_screen_date(value: Optional[str], field_name: str) -> Optional[datetime]:
-                    if not value:
-                        return None
-                    try:
-                        parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
-                    except Exception as ex:
-                        raise ValueError(f"Invalid {field_name}: {value}") from ex
-
-                    if parsed.tzinfo is not None:
-                        parsed = parsed.astimezone().replace(tzinfo=None)
-                    return parsed
-
-                start_date = _parse_screen_date(request.start_date, "start_date")
-                end_date = _parse_screen_date(request.end_date, "end_date")
-
-                if bool(start_date) != bool(end_date):
-                    raise ValueError("start_date and end_date must be provided together")
-
-                if start_date and end_date:
-                    if end_date <= start_date:
-                        raise ValueError("end_date must be later than start_date")
-                
-                # Create screening engine
-                engine = SwingScreeningEngine(timeframe=request.timeframe)
-                
-                # Run screening
-                self.logger.info(f"Starting swing screening on universe {request.ticker_universe_id}")
-                results = await engine.screen_universe(
-                    universe_id=request.ticker_universe_id,
-                    rule_id=request.rule_id,
-                    lookback_days=request.lookback_days,
-                    start_date=start_date,
-                    end_date=end_date
-                )
-                
-                # Filter out errors for summary
-                successful = [r for r in results if r['status'] == 'success']
-                signals_found = [r for r in successful if r['signal'] is not None]
-                no_data = [
-                    r for r in results
-                    if 'no data available' in (r.get('error_message') or '').lower()
-                ]
-                duration_ms = int((time.perf_counter() - start_time) * 1000)
-                return {
-                    "message": "Screening completed successfully",
-                    "request_id": request_id,
-                    "results": results,
-                    "summary": {
-                        "total_tickers": len(results),
-                        "successful": len(successful),
-                        "signals_found": len(signals_found),
-                        "errors": len(results) - len(successful),
-                        "no_data": len(no_data),
-                        "duration_ms": duration_ms,
-                        "screening_start": start_date.isoformat() if start_date else None,
-                        "screening_end": end_date.isoformat() if end_date else None,
-                        "lookback_days": request.lookback_days if not start_date else None
-                    }
-                }
-                
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=str(e)
-                )
-            except Exception as e:
-                request_id = str(uuid4())
-                self.logger.exception(f"Screening error (request_id={request_id}): {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Screening failed due to an internal error. request_id={request_id}"
-                )
-
-        @self.app.post("/api/swing/backfill-yahoo-cache")
-        async def backfill_yahoo_cache(request: YahooBackfillRequest):
-            """Backfill Yahoo OHLCV cache for all tickers in a universe."""
-            try:
-                from .data_sources import CachedDataSource, YahooDataSource
-
-                supported_timeframes = {"1m", "5m", "15m", "1h", "4h", "1d"}
-                timeframes = []
-                for timeframe in request.timeframes or ["1d"]:
-                    if timeframe not in supported_timeframes:
-                        raise ValueError(f"Unsupported timeframe: {timeframe}")
-                    if timeframe not in timeframes:
-                        timeframes.append(timeframe)
-
-                universe = self.repository.get_ticker_universe(request.ticker_universe_id)
-                if not universe:
-                    raise ValueError(f"Ticker universe {request.ticker_universe_id} not found")
-
-                def _parse_optional_datetime(value: Optional[str], field_name: str) -> Optional[datetime]:
-                    if not value:
-                        return None
-                    try:
-                        parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
-                    except Exception as ex:
-                        raise ValueError(f"Invalid {field_name}: {value}") from ex
-                    if parsed.tzinfo is not None:
-                        parsed = parsed.astimezone().replace(tzinfo=None)
-                    return parsed
-
-                start_date = _parse_optional_datetime(request.start_date, "start_date")
-                end_date = _parse_optional_datetime(request.end_date, "end_date")
-                if start_date and end_date and start_date >= end_date:
-                    raise ValueError("start_date must be before end_date")
-
-                data_source = CachedDataSource(
-                    YahooDataSource(),
-                    self.repository,
-                    data_source_name='yahoo'
-                )
-                summary = await data_source.backfill_symbols(
-                    symbols=universe.get('tickers', []),
-                    timeframes=timeframes,
-                    start_date=start_date,
-                    end_date=end_date,
-                )
-                summary["universe_id"] = request.ticker_universe_id
-                summary["universe_name"] = universe.get("name")
-                return summary
-
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=str(e)
-                )
-            except Exception as e:
-                request_id = str(uuid4())
-                self.logger.exception(f"Yahoo cache backfill error (request_id={request_id}): {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Yahoo cache backfill failed due to an internal error. request_id={request_id}"
-                )
-        
-        @self.app.get("/api/swing/universes")
-        def get_ticker_universes():
-            """Get all ticker universes."""
-            try:
-                universes = self.repository.get_all_ticker_universes()
-                return {"universes": universes}
-            except Exception as e:
-                self.logger.error(f"Error getting ticker universes: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Internal server error"
-                )
-        
-        @self.app.get("/api/swing/universes/{universe_id}")
-        def get_ticker_universe(universe_id: int):
-            """Get specific ticker universe."""
-            try:
-                universe = self.repository.get_ticker_universe(universe_id)
-                if not universe:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Ticker universe {universe_id} not found"
-                    )
-                return universe
-            except HTTPException:
-                raise
-            except Exception as e:
-                self.logger.error(f"Error getting ticker universe {universe_id}: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Internal server error"
-                )
-        
-        @self.app.post("/api/swing/universes")
-        def create_ticker_universe(request: UniverseCreate):
-            """Create new ticker universe."""
-            try:
-                universe_id = self.repository.create_ticker_universe(
-                    name=request.name,
-                    tickers=request.tickers,
-                    description=request.description
-                )
-                
-                return {
-                    "message": "Ticker universe created successfully",
-                    "universe_id": universe_id
-                }
-            except Exception as e:
-                self.logger.error(f"Error creating ticker universe: {e}")
-                if "UNIQUE constraint failed" in str(e):
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Universe with name '{request.name}' already exists"
-                    )
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Internal server error"
-                )
-        
-        @self.app.put("/api/swing/universes/{universe_id}")
-        def update_ticker_universe(universe_id: int, request: UniverseUpdate):
-            """Update ticker universe."""
-            try:
-                success = self.repository.update_ticker_universe(
-                    universe_id=universe_id,
-                    name=request.name,
-                    tickers=request.tickers,
-                    description=request.description
-                )
-                
-                if not success:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Ticker universe {universe_id} not found"
-                    )
-                
-                return {"message": "Ticker universe updated successfully"}
-            except HTTPException:
-                raise
-            except Exception as e:
-                self.logger.error(f"Error updating ticker universe {universe_id}: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Internal server error"
-                )
-        
-        @self.app.delete("/api/swing/universes/{universe_id}")
-        def delete_ticker_universe(universe_id: int):
-            """Delete ticker universe."""
-            try:
-                success = self.repository.delete_ticker_universe(universe_id)
-                if not success:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Ticker universe {universe_id} not found"
-                    )
-                
-                return {"message": "Ticker universe deleted successfully"}
-            except HTTPException:
-                raise
-            except Exception as e:
-                self.logger.error(f"Error deleting ticker universe {universe_id}: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Internal server error"
-                )
-        
         # ============================================================
         # MODE MANAGEMENT API ENDPOINTS
         # ============================================================
