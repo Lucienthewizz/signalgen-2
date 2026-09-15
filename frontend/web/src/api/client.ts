@@ -1,42 +1,51 @@
-import type { ApiStatus, LoginResponse, RegisterResponse, User } from "../types";
+import type {
+  ApiStatus,
+  LoginResponse,
+  RegisterResponse,
+  User,
+} from "../types";
 
-const TOKEN_KEY = "signalgen.web.access-token";
-const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+const TOKEN_KEY = "signalgen.access-token";
+const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN ?? "").replace(/\/$/, "");
 
 export class ApiError extends Error {
-  constructor(message: string, public readonly status: number) {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
     super(message);
   }
 }
 
 export const session = {
-  getToken: () => localStorage.getItem(TOKEN_KEY),
-  setToken: (token: string) => localStorage.setItem(TOKEN_KEY, token),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
+  getToken: () => sessionStorage.getItem(TOKEN_KEY),
+  setToken: (token: string) => sessionStorage.setItem(TOKEN_KEY, token),
+  clear: () => sessionStorage.removeItem(TOKEN_KEY),
 };
 
-function errorMessage(status: number, detail: unknown) {
-  const normalized = typeof detail === "string" ? detail.toLowerCase() : "";
-  if (status === 401) return "Email atau password tidak cocok. Periksa kembali lalu coba masuk lagi.";
-  if (normalized.includes("already") || normalized.includes("registered")) return "Email ini sudah terdaftar. Gunakan menu Masuk atau email lain.";
-  if (normalized.includes("password")) return "Password belum memenuhi ketentuan. Gunakan minimal 6 karakter dan coba lagi.";
-  if (status === 422) return "Data akun belum valid. Periksa nama, format email, dan password.";
-  if (status >= 500) return "Server sedang mengalami kendala. Tunggu sebentar lalu coba lagi.";
-  return "Permintaan belum berhasil. Periksa data Anda lalu coba lagi.";
-}
-
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
   const token = session.getToken();
+  const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   if (init.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   let response: Response;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
   try {
-    response = await fetch(`${API_ORIGIN}${path}`, { ...init, headers });
+    response = await fetch(`${API_ORIGIN}${path}`, {
+      ...init,
+      headers,
+      signal: controller.signal,
+    });
   } catch {
-    throw new ApiError("Server SignalGen belum dapat dijangkau. Coba lagi setelah backend aktif.", 0);
+    throw new ApiError(
+      "Layanan belum dapat dijangkau. Coba kembali beberapa saat lagi.",
+      0,
+    );
+  } finally {
+    clearTimeout(timeout);
   }
 
   const payload = await response.json().catch(() => ({}));
@@ -45,10 +54,26 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       session.clear();
       window.dispatchEvent(new Event("signalgen:unauthorized"));
     }
-    throw new ApiError(errorMessage(response.status, payload.detail), response.status);
+    throw new ApiError(
+      errorDetail(payload.detail, response.status),
+      response.status,
+    );
   }
-
   return payload as T;
+}
+
+function errorDetail(detail: unknown, status: number): string {
+  if (Array.isArray(detail)) {
+    return "Periksa email, nama, dan panjang password Anda, lalu coba kembali.";
+  }
+  if (detail === "Invalid email or password")
+    return "Email atau password belum sesuai. Periksa kembali.";
+  if (typeof detail === "string" && detail.startsWith("Registration failed"))
+    return "Pendaftaran belum berhasil. Periksa data Anda, lalu coba kembali.";
+  if (typeof detail === "string") return detail;
+  if (status >= 500)
+    return "Layanan sedang bermasalah. Coba kembali beberapa saat lagi.";
+  return "Permintaan gagal diproses. Coba kembali.";
 }
 
 export const api = {

@@ -2,6 +2,13 @@ export type User = {
   id: string;
   email: string;
   full_name?: string | null;
+  role?: "user" | "admin";
+  status?: "active" | "suspended";
+  entitlement?: {
+    plan_code: string;
+    status: string;
+    valid_until?: string | null;
+  } | null;
 };
 
 export type LoginResponse = {

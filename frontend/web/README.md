@@ -1,70 +1,36 @@
-# SignalGen Web
+# Signalgen Web
 
-Public product website and account portal for SignalGen 2.0. The web application shares the FastAPI and Supabase Auth identity layer used by the Electron desktop client, so an account created here can be used to sign in on desktop.
+React + TypeScript + Vite landing and account portal, sharing the existing FastAPI backend with Electron Desktop.
 
-## Current scope
-
-- Responsive product landing page for the SignalGen workflow.
-- Backend connectivity status.
-- Registration with name, email, password, and confirmation.
-- Login, session restoration, unauthorized-session cleanup, and logout.
-- Account page explaining desktop access and current product status.
-- Honest placeholders for commercial capabilities whose backend contracts are not final.
-
-Pricing, checkout, subscription entitlement, password recovery, and production desktop downloads are intentionally not simulated. They remain pending until their backend contracts and product configuration are approved.
-
-## Technology
-
-- React 18
-- TypeScript 5
-- Vite 6
-- Lucide icons
-- Self-hosted variable fonts through Fontsource
-- CSS-native motion with a reduced-motion alternative
-
-## Development
-
-Requirements:
-
-- Node.js 20 or newer
-- npm
-- SignalGen backend running on `http://127.0.0.1:3456`
-
-From the repository root, start the backend:
-
-```bash
-docker compose up --build -d
-```
-
-Then start the web application:
-
-```bash
-cd frontend/web
-npm install
+```sh
+npm ci
 npm run dev
-```
-
-The local website is available at `http://127.0.0.1:5174`.
-
-## API configuration
-
-During development, Vite proxies `/api` to the backend on port `3456`. In deployment, set `VITE_API_BASE_URL` when the API is hosted on a different origin. Keep this value public; never place Supabase secrets, service-role keys, passwords, or tokens in a frontend environment variable.
-
-Authentication uses:
-
-| Endpoint | Purpose |
-| --- | --- |
-| `POST /api/auth/register` | Create a Supabase-backed SignalGen account |
-| `POST /api/auth/login` | Create a session and return an access token |
-| `GET /api/auth/me` | Restore and validate the active session |
-
-The browser stores only the current access token. A `401` response clears that token and returns the user to authentication.
-
-## Verification
-
-```bash
-npm run typecheck
 npm run build
+npm test
 ```
 
-See the repository [PRD](../../PRD.md) and [project context](../../PROJECT_CONTEXT.md) for the canonical product and architecture constraints.
+Local preview: http://127.0.0.1:5174. Development proxies `/api` to the backend at port 3456. Production uses same-origin `/api`, or configure `VITE_API_ORIGIN` at build time.
+
+Includes the supplied Signalgen logo and an actual desktop overview preview screenshot, sentence-case UI, navigation skeletons, image loading/error states, login/register/current-user, and local-session cleanup on 401. Desktop release, pricing, payment, and entitlement availability are explicitly pending backend/product decisions. No invented release or admin endpoints are called.
+
+Backend API remains the source of truth. Successful authentication needs the backend and Supabase configuration. Current screenshot uses illustrative market values.
+
+## Website UI
+
+Tailwind v4 is wired through `@tailwindcss/vite`. The official shadcn Base UI primitives live in `src/components/ui`, with the `@/` alias pointing to `src/`. Theme tokens and the restrained blue/lavender gradient live in `src/styles.css`.
+
+The supplied Hyperiux Vault interactive-list component is adapted for Signalgen feature previews, with typed refs, keyboard and touch selection, reduced-motion support, and no idle pointer-follow loop. Its illustrations are local product assets rather than unrelated portfolio images. Attribution is retained in the component.
+
+The landing entrance animates only the opening copy and desktop preview. FAQ uses the official shadcn Accordion. Testimonials are clearly marked as temporary fictional examples and must be replaced with approved real reviews before production marketing.
+
+## Authorization contract
+
+Verified against GitHub `feature/backend-authorization` at `7ea4f91b70296fb834edd81039c6663e221779b7`:
+
+- `POST /api/auth/login`: JSON `{ email, password }`, returns token and public user fields.
+- `POST /api/auth/register`: JSON `{ full_name, email, password }`, supports a nullable token and email confirmation.
+- `GET /api/auth/me`: bearer access token, returns public profile fields.
+
+The web client does not import backend secrets or merge backend code. Run that backend branch separately on port 3456 for live development. For another API host, set `VITE_API_ORIGIN` at build time (for example `https://api.example.com`); that backend must allow the website's origin through CORS.
+
+`npm test` verifies request bodies, token headers, confirmation responses, validation failures, and session handling using a mocked transport. Real successful sign-in requires a configured running Supabase-backed backend.

@@ -1,33 +1,28 @@
-# SignalGen Web Surface Contract
+# Signalgen website design
 
-## THESIS
+## Purpose
 
-SignalGen is presented as an editorial market terminal whose first job is to demonstrate how a readable rule becomes a screened, explained signal.
+Introduce the desktop analysis workspace to Indonesian independent investors, demonstrate explainable rule-based analysis, and provide a shared-account entry point.
 
-## OWN-WORLD
+## Tokens and direction
 
-The surface inherits the approved Electron world: tinted near-black working canvas, warm red as a deliberate signal color, restrained borders, generous negative space, tabular data, and a Manrope/Newsreader typographic contrast. VASTARA and source-owned component catalogs are references for discipline, not copied identities.
+Manrope carries both product headlines and body copy. Content is left aligned with a 1200px maximum container; split layouts collapse to one column at 760px.
 
-## STORY
+- Canvas: `#08090d`
+- Foreground: `#eff0f6`
+- Product surface: `#11131c`
+- Primary action: `#c9d3ff`
+- Supporting copy: `#a4a9bd`
+- Dividers: `#2a2d3c`
 
-The visitor first sees the Rule → Screening → explained Signal mechanism, then learns the three-stage workflow, sees the desktop workspace at work, and finally reaches the shared-account proposition. Commercial capabilities with unfinished backend contracts are disclosed instead of simulated.
+Following the requested Linear reference, blue/lavender atmospheric gradients are concentrated around the desktop preview. The product image and feature exploration carry the page identity; supporting sections remain quiet.
 
-## FIRST VIEWPORT
+## Page and interactions
 
-Desktop pairs the product statement with a live-rule terminal showing ticker context, chart geometry, conditions, and final explained state. Mobile adds a compact Rule → Screen → Result proof before the CTA so the mechanism remains legible before the larger terminal continues below.
+The first viewport presents the analysis proposition, account creation, and a real desktop screenshot. An adapted Hyperiux interactive feature list lets visitors inspect rule-building, screening, backtesting, and explained signals. Touch, pointer, and keyboard users share the same information.
 
-## FORM
+The entrance is one short copy/preview sequence rather than animation on every section. Pointer smoothing runs only during interaction. Reduced motion removes spatial animation. FAQ uses the official shadcn Base UI Accordion; forms use FieldGroup, Field, Input, Tabs, Button, and Alert.
 
-Code-led, brief-pinned extension of an established visual system. The form is an editorial market-terminal landing page with a dedicated split authentication surface and an account-status view. A concept-seed key is not applicable: the user explicitly required visual continuity with the existing desktop application, so no new-world or open-direction roll was performed.
+## Content boundaries
 
-## SIGNATURE INTERACTION
-
-Three rule checks resolve in sequence, the market trace draws after validation, and only then do the explanatory tag and final signal state appear. Connection lines and backend status provide quiet supporting continuity. Reduced motion shows the completed state without spatial choreography.
-
-## QUALITY BAR
-
-- A first-time visitor understands what SignalGen is, why explainability matters, and what action to take within the first viewport.
-- The interface uses real product geometry rather than generic icon-card scaffolds.
-- Illustrative data and incomplete commercial capabilities are visibly labeled.
-- Auth states are localized, recoverable, keyboard accessible, and connected to the same backend contract as desktop.
-- Desktop and 390px layouts retain hierarchy without overflow or inaccessible controls.
+Product previews are illustrative. Temporary testimonials are identified as fictional examples. Installer, price, and payment availability remain pending. Authentication follows `feature/backend-authorization` and supports email confirmation, validation, expired sessions, and recoverable transport failures.
