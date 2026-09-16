@@ -127,6 +127,72 @@ def test_auth_login_rejects_invalid_credentials(monkeypatch):
     assert response.json() == {"detail": "Invalid email or password"}
 
 
+def test_password_reset_request_uses_configured_redirect(monkeypatch):
+    reset_password_for_email = Mock()
+    monkeypatch.setattr(
+        dependencies.supabase.auth,
+        "reset_password_for_email",
+        reset_password_for_email,
+    )
+
+    response = client.post(
+        "/api/auth/password/reset-request",
+        json={"email": " demo@example.com "},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "message": "If the account exists, password reset instructions have been sent."
+    }
+    reset_password_for_email.assert_called_once()
+    assert reset_password_for_email.call_args.args[0] == "demo@example.com"
+    assert "redirect_to" in reset_password_for_email.call_args.args[1]
+
+
+def test_password_reset_request_reports_provider_failure(monkeypatch):
+    reset_password_for_email = Mock(side_effect=Exception("provider unavailable"))
+    monkeypatch.setattr(
+        dependencies.supabase.auth,
+        "reset_password_for_email",
+        reset_password_for_email,
+    )
+
+    response = client.post(
+        "/api/auth/password/reset-request",
+        json={"email": "demo@example.com"},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Password recovery is temporarily unavailable."
+    }
+
+
+def test_password_reset_confirms_recovery_session(monkeypatch):
+    auth = SimpleNamespace(
+        set_session=Mock(),
+        update_user=Mock(return_value=SimpleNamespace(user=SimpleNamespace(id="user-1"))),
+    )
+    monkeypatch.setattr(
+        "app.app.create_auth_client",
+        Mock(return_value=SimpleNamespace(auth=auth)),
+    )
+
+    response = client.post(
+        "/api/auth/password/reset",
+        json={
+            "access_token": "recovery-access",
+            "refresh_token": "recovery-refresh",
+            "password": "new-secret-123",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"message": "Password updated successfully."}
+    auth.set_session.assert_called_once_with("recovery-access", "recovery-refresh")
+    auth.update_user.assert_called_once_with({"password": "new-secret-123"})
+
+
 def test_auth_me_rejects_request_without_bearer_token():
     response = client.get("/api/auth/me")
 

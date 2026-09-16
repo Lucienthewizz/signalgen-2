@@ -50,7 +50,8 @@ from .engines.scalping_engine import ScalpingEngine
 from .core.rule_engine import RuleEngine, RuleValidationError
 
 from app.auth.dependencies import get_current_user
-from app.db.supabase_client import supabase
+from app.core.config import CORS_ALLOWED_ORIGINS, PASSWORD_RESET_REDIRECT_URL
+from app.db.supabase_client import create_auth_client, supabase
 
 # Pydantic models for API requests/responses
 class RuleCreate(BaseModel):
@@ -160,6 +161,18 @@ class AuthRegister(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100)
     email: str = Field(..., min_length=3, max_length=254)
     password: str = Field(..., min_length=6, max_length=1024)
+
+
+class AuthPasswordResetRequest(BaseModel):
+    """Email address that should receive a Supabase recovery link."""
+    email: str = Field(..., min_length=3, max_length=254)
+
+
+class AuthPasswordResetConfirm(BaseModel):
+    """Recovery session tokens and the replacement password."""
+    access_token: str = Field(..., min_length=1, max_length=4096)
+    refresh_token: str = Field(..., min_length=1, max_length=4096)
+    password: str = Field(..., min_length=8, max_length=1024)
 
 class BacktestRequest(BaseModel):
     """Model for backtest request."""
@@ -320,7 +333,7 @@ class SignalGenApp:
         # Configure CORS with specific origins for security
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["http://localhost:3456", "http://127.0.0.1:3456", "file://"],
+            allow_origins=CORS_ALLOWED_ORIGINS,
             allow_credentials=True,
             allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             allow_headers=["*"],
@@ -581,6 +594,53 @@ class SignalGenApp:
                     ),
                 },
             }
+
+        @self.app.post("/api/auth/password/reset-request")
+        def request_password_reset(payload: AuthPasswordResetRequest):
+            """Send a recovery link without revealing whether an account exists."""
+            try:
+                supabase.auth.reset_password_for_email(
+                    payload.email.strip(),
+                    {"redirect_to": PASSWORD_RESET_REDIRECT_URL},
+                )
+            except Exception as exc:
+                self.logger.warning("Password recovery request was not accepted: %s", exc)
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Password recovery is temporarily unavailable.",
+                )
+
+            return {
+                "message": (
+                    "If the account exists, password reset instructions have been sent."
+                )
+            }
+
+        @self.app.post("/api/auth/password/reset")
+        def reset_password(payload: AuthPasswordResetConfirm):
+            """Replace a password using Supabase recovery-session tokens."""
+            recovery_client = create_auth_client()
+            try:
+                recovery_client.auth.set_session(
+                    payload.access_token,
+                    payload.refresh_token,
+                )
+                response = recovery_client.auth.update_user(
+                    {"password": payload.password}
+                )
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Recovery link is invalid or has expired.",
+                )
+
+            if response.user is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Recovery link is invalid or has expired.",
+                )
+
+            return {"message": "Password updated successfully."}
 
         @self.app.get("/api/auth/me")
         def get_me(current_user=Depends(get_current_user)):

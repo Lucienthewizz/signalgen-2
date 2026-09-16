@@ -25,6 +25,13 @@ cd backend
 Konfigurasi rahasia backend disimpan pada `backend/.env` dan tidak boleh
 dimasukkan ke Git atau ke bundle frontend.
 
+Set `PASSWORD_RESET_REDIRECT_URL` ke URL halaman reset web yang sudah masuk
+allowlist Redirect URLs di Supabase. Nilai development bawaan adalah
+`http://127.0.0.1:5174/?view=reset-password`.
+Untuk deployment dengan origin web terpisah, isi daftar origin eksplisit pada
+`CORS_ALLOWED_ORIGINS` (dipisahkan koma); jangan gunakan wildcard bersama
+credential.
+
 ## Menjalankan dengan Docker
 
 Dari folder repository:

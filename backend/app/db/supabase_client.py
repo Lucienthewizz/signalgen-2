@@ -10,3 +10,8 @@ supabase: Client = create_client(
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY,
 )
+
+
+def create_auth_client() -> Client:
+    """Create an isolated auth client for one recovery session."""
+    return create_client(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
