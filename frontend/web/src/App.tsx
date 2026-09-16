@@ -1,17 +1,30 @@
 import { useEffect, useState } from "react";
 import { api, session } from "@/api/client";
 import { Brand } from "@/components/brand";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AccountPage } from "@/pages/account-page";
 import { AuthPage, type AuthView } from "@/pages/auth-page";
+import { DemoWorkspace, type DemoView } from "@/pages/demo-workspace";
 import { PublicWorkspace } from "@/pages/public-workspace";
 import type { User } from "@/types";
 
-type Route = "home" | "account" | AuthView;
+type Route = "home" | "account" | AuthView | `app/${DemoView}`;
 
 function currentRoute(): Route {
   const queryView = new URLSearchParams(location.search).get("view");
   if (queryView === "reset-password") return "reset-password";
   const route = location.hash.slice(1).split("&")[0];
+  if (
+    [
+      "app/overview",
+      "app/analysis",
+      "app/rules",
+      "app/journal",
+      "app/access",
+    ].includes(route)
+  ) {
+    return route as Route;
+  }
   return [
     "account",
     "login",
@@ -78,9 +91,19 @@ export default function App() {
   if (booting) {
     return (
       <main className="splash" role="status">
-        <Brand />
-        <span className="loader" />
-        <p>Preparing secure workspace…</p>
+        <div className="splash__brand">
+          <Brand />
+        </div>
+        <div className="splash__signal" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+        <div className="splash__skeleton" aria-hidden="true">
+          <Skeleton />
+          <Skeleton />
+        </div>
+        <p>Menyiapkan workspace…</p>
       </main>
     );
   }
@@ -94,6 +117,14 @@ export default function App() {
         onAuthenticated={authenticated}
       />
     );
+  if (route.startsWith("app/")) {
+    return (
+      <DemoWorkspace
+        view={route.replace("app/", "") as DemoView}
+        backendOnline={backendOnline}
+      />
+    );
+  }
   if (
     route === "login" ||
     route === "register" ||

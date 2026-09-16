@@ -1,13 +1,10 @@
-import markUrl from "../../public/signalgen-mark-web.png";
+import logoLockup from "@/assets/signalgen-logo-lockup.png";
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <span className={`brand ${compact ? "brand--compact" : ""}`}>
-      <span className="brand__mark" aria-hidden="true">
-        <img src={markUrl} alt="" />
-      </span>
-      <span>
-        Signalgen <b>2.0</b>
+      <span className="brand__viewport">
+        <img src={logoLockup} alt="Signalgen" className="brand__lockup" />
       </span>
     </span>
   );
