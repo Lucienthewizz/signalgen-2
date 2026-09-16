@@ -217,8 +217,39 @@ Kondisi saat dokumen dibuat:
   berdasarkan Supabase `user_id` pada backend.
 - Swing screening dan Yahoo cache backfill sudah memvalidasi ownership rule dan
   ticker universe sebelum proses dijalankan.
-- Signals, settings, backtest, Telegram configuration, engine, dan data pribadi
-  lain belum boleh dianggap terisolasi per-user sampai backend menyelesaikannya.
+- Endpoint engine `status`, `start`, dan `stop` membutuhkan login. Saat start,
+  backend memvalidasi watchlist dan rule milik current user. Karena MVP hanya
+  menjalankan satu engine, session engine diikat ke user yang memulainya; user
+  lain tidak boleh melihat detail atau menghentikannya.
+- Endpoint `/api/status` juga membutuhkan login dan mengikuti ownership engine.
+  Health check publik hanya menampilkan apakah engine berjalan, tanpa membuka
+  watchlist, rule, atau konfigurasi koneksi pengguna.
+- Signal yang dihasilkan engine sudah menyimpan Supabase `user_id`. Endpoint
+  history dan delete signal membutuhkan login serta hanya mengakses signal milik
+  current user. Signal lama tanpa owner tetap dipertahankan tetapi disembunyikan
+  dari API pengguna.
+- Koneksi Socket.IO wajib mengirim access token Supabase melalui payload `auth`.
+  Setelah token diverifikasi, server menempatkan client pada room internal milik
+  user. Signal, price update, status engine, status IBKR, dan error engine hanya
+  dikirim kepada pemilik session engine.
+- Settings aplikasi dan konfigurasi Telegram sudah membutuhkan login dan disimpan
+  terpisah per Supabase `user_id` pada tabel `user_settings`. Token bot tidak
+  dikembalikan secara utuh oleh API. Timeframe pilihan user diterapkan ketika
+  user tersebut memulai engine.
+- Riwayat backtest biasa dan backtest screen sudah menyimpan `user_id` serta
+  membatasi list, detail, dan delete ke current user. Rule entry/exit yang dipakai
+  untuk backtest juga divalidasi sebagai system rule atau milik current user.
+  Backtest lama tanpa owner dipertahankan tetapi disembunyikan dari API pengguna.
+- Endpoint `/api/logs` membutuhkan login. Hanya log aktivitas yang secara
+  eksplisit diberi `user_id` yang masuk ke buffer dan room Socket.IO milik user
+  tersebut. Log internal server tetap hanya untuk diagnosis lokal, dan pola
+  credential umum disensor sebelum log disimpan atau dikirim.
+- Endpoint chart swing memvalidasi bahwa rule merupakan system rule atau milik
+  current user. Mode operasional disimpan sebagai preferensi per-user. Ringkasan
+  cache data dan export CSV juga hanya tersedia setelah login, sedangkan health
+  check publik hanya mengembalikan status runtime minimum.
+- Endpoint legacy dan data pribadi lain tetap harus diaudit sebelum authorization
+  backend dinyatakan selesai seluruhnya.
 - Refresh token, logout server-side, reset-password aplikasi, role, dan permission
   perlu diselesaikan sebagai pekerjaan lanjutan.
 
@@ -275,6 +306,18 @@ Realtime menggunakan Socket.IO di:
 ```text
 http://127.0.0.1:8765
 ```
+
+Handshake Socket.IO wajib membawa token:
+
+```javascript
+io("http://127.0.0.1:8765", {
+  auth: { token: accessToken }
+})
+```
+
+Nama room per-user merupakan detail internal backend. Frontend tetap meminta
+nama kontrak seperti `signals`, `prices`, dan `engine_status`; backend yang
+memetakan permintaan tersebut ke room milik current user.
 
 Event yang tersedia antara lain `signal`, `price_update`, `engine_status`,
 `watchlist_update`, `rule_update`, `ibkr_status`, `log_entry`, dan `error`.

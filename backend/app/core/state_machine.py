@@ -54,7 +54,9 @@ class StateMachine:
         self._state = EngineState.WAIT
         self._cooldown_end_time = 0
         self._default_cooldown = default_cooldown
-        self._lock = threading.Lock()
+        # Status helpers call one another while holding the same lock, so the
+        # lock must be reentrant to avoid deadlocking `/api/status`.
+        self._lock = threading.RLock()
     
     @property
     def current_state(self) -> EngineState:

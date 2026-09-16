@@ -90,9 +90,13 @@ tersebut sudah diabaikan Git.
 - Telegram notification.
 - SQLite operational storage.
 
-Authorization dan ownership data per-user adalah milestone backend berikutnya.
-Login sudah tersedia, tetapi endpoint bisnis belum seluruhnya terisolasi untuk
-setiap user.
+Authorization per-user sudah diterapkan pada custom rules, watchlists, personal
+ticker universe, engine session, signals, settings, Telegram, Socket.IO, dan
+riwayat backtest. Log aktivitas user juga dilindungi login, dipisahkan per user,
+dan dikirim melalui private Socket.IO room setelah credential umum disensor.
+Chart swing, mode operasional, ringkasan cache, dan export backtest juga sudah
+berada di balik autentikasi; rule chart serta mode divalidasi atau disimpan
+berdasarkan current user. Health check publik hanya membuka status minimum.
 
 ## Development workflow
 

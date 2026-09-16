@@ -13,6 +13,7 @@ from app.data_sources import CachedDataSource, YahooDataSource
 from app.engines.swing_screening_engine import SwingScreeningEngine
 from app.schemas.swing import SwingScreenRequest, YahooBackfillRequest
 from app.services.rule_service import RuleNotFoundError, RuleService
+from app.services.swing_chart_service import SwingChartService
 from app.services.universe_service import UniverseNotFoundError, UniverseService
 from app.storage.sqlite_repo import SQLiteRepository
 
@@ -39,9 +40,57 @@ def create_swing_router(
     repository: SQLiteRepository,
     rule_service: RuleService,
     universe_service: UniverseService,
+    chart_service: SwingChartService,
 ) -> APIRouter:
     """Build swing routes with ownership-aware application dependencies."""
     router = APIRouter(prefix="/api/swing", tags=["swing"])
+
+    @router.get("/chart")
+    async def get_swing_chart(
+        symbol: str,
+        timeframe: str,
+        timestamp: str,
+        rule_id: int,
+        before: int = 80,
+        after: int = 40,
+        current_user=Depends(get_current_user),
+    ):
+        request_id = str(uuid4())
+        try:
+            return await chart_service.build(
+                symbol=symbol,
+                timeframe=timeframe,
+                timestamp=timestamp,
+                rule_id=rule_id,
+                user_id=str(current_user.id),
+                before=before,
+                after=after,
+            )
+        except RuleNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Rule not found",
+            )
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(error),
+            )
+        except HTTPException:
+            raise
+        except Exception as error:
+            logger.exception(
+                "Swing chart error (request_id=%s): %s",
+                request_id,
+                error,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=(
+                    "Swing chart failed due to an internal error. "
+                    f"request_id={request_id}"
+                ),
+            )
 
     @router.post("/screen")
     async def screen_swing_signals(

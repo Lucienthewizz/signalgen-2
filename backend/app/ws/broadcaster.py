@@ -31,10 +31,12 @@ Typical Usage:
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 import socketio
 from socketio import AsyncServer
 import json
+
+from app.auth.dependencies import authenticate_access_token
 
 
 class SocketIOBroadcaster:
@@ -46,13 +48,19 @@ class SocketIOBroadcaster:
     types of events and provides comprehensive error handling.
     """
     
-    def __init__(self, cors_origins: List[str] = None, repository=None):
+    def __init__(
+        self,
+        cors_origins: List[str] = None,
+        repository=None,
+        token_authenticator: Optional[Callable[[str], Any]] = None,
+    ):
         """
         Initialize the Socket.IO broadcaster.
         
         Args:
             cors_origins: List of allowed CORS origins
             repository: SQLite repository instance for Telegram notifier
+            token_authenticator: Function that resolves a user from a token
         """
         self.logger = logging.getLogger(__name__)
         
@@ -89,6 +97,10 @@ class SocketIOBroadcaster:
         # Telegram notifier (optional)
         self.telegram_notifier = None
         self.repository = repository
+        self.token_authenticator = (
+            token_authenticator or authenticate_access_token
+        )
+        self.active_user_id: Optional[str] = None
         
         # Register event handlers
         self._register_handlers()
@@ -99,9 +111,9 @@ class SocketIOBroadcaster:
         """Register Socket.IO event handlers."""
         
         @self.sio.event
-        async def connect(sid, environ):
+        async def connect(sid, environ, auth=None):
             """Handle new client connections."""
-            await self.handle_client_connect(sid, environ)
+            return await self.handle_client_connect(sid, environ, auth)
         
         @self.sio.event
         async def disconnect(sid):
@@ -113,9 +125,20 @@ class SocketIOBroadcaster:
             """Handle client room subscription."""
             try:
                 room = data.get('room')
-                if room in self.ROOMS.values():
-                    await self.sio.enter_room(sid, room)
-                    self.logger.info(f"Client {sid} joined room {room}")
+                client_info = self.connected_clients.get(sid)
+                if room in self.ROOMS.values() and client_info:
+                    subscription_room = self.subscription_room(
+                        client_info['user_id'],
+                        room,
+                    )
+                    await self.sio.enter_room(sid, subscription_room)
+                    if subscription_room not in client_info['rooms']:
+                        client_info['rooms'].append(subscription_room)
+                    self.logger.info(
+                        "Client %s joined subscription room %s",
+                        sid,
+                        subscription_room,
+                    )
                     await self.sio.emit('room_joined', {'room': room}, room=sid)
                 else:
                     await self.sio.emit('error', {'message': f'Invalid room: {room}'}, room=sid)
@@ -128,9 +151,20 @@ class SocketIOBroadcaster:
             """Handle client room unsubscription."""
             try:
                 room = data.get('room')
-                if room in self.ROOMS.values():
-                    await self.sio.leave_room(sid, room)
-                    self.logger.info(f"Client {sid} left room {room}")
+                client_info = self.connected_clients.get(sid)
+                if room in self.ROOMS.values() and client_info:
+                    subscription_room = self.subscription_room(
+                        client_info['user_id'],
+                        room,
+                    )
+                    await self.sio.leave_room(sid, subscription_room)
+                    if subscription_room in client_info['rooms']:
+                        client_info['rooms'].remove(subscription_room)
+                    self.logger.info(
+                        "Client %s left subscription room %s",
+                        sid,
+                        subscription_room,
+                    )
                     await self.sio.emit('room_left', {'room': room}, room=sid)
             except Exception as e:
                 self.logger.error(f"Error leaving room: {e}")
@@ -150,15 +184,37 @@ class SocketIOBroadcaster:
                 self.logger.error(f"Error getting status: {e}")
                 await self.sio.emit('error', {'message': 'Failed to get status'}, room=sid)
     
-    async def handle_client_connect(self, sid: str, environ: Dict[str, Any]) -> None:
+    async def handle_client_connect(
+        self,
+        sid: str,
+        environ: Dict[str, Any],
+        auth: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """
         Handle new client connections.
         
         Args:
             sid: Session ID of the connected client
             environ: Connection environment information
+            auth: Socket.IO auth payload containing a Supabase access token
         """
         try:
+            token = auth.get('token') if isinstance(auth, dict) else None
+            if not isinstance(token, str) or not token.strip():
+                self.logger.warning("Rejected unauthenticated WebSocket client")
+                return False
+
+            try:
+                user = await asyncio.to_thread(
+                    self.token_authenticator,
+                    token,
+                )
+            except Exception:
+                self.logger.warning("Rejected WebSocket client with invalid token")
+                return False
+
+            user_id = str(user.id)
+
             # Capture the running event loop used by the Socket.IO server
             try:
                 self._loop = asyncio.get_running_loop()
@@ -173,32 +229,63 @@ class SocketIOBroadcaster:
                 'connected_at': datetime.utcnow().isoformat(),
                 'ip_address': environ.get('REMOTE_ADDR', 'unknown'),
                 'user_agent': environ.get('HTTP_USER_AGENT', 'unknown'),
+                'user_id': user_id,
                 'rooms': []
             }
             
             # Store client information
             self.connected_clients[sid] = client_info
             
-            # Add client to default rooms
-            await self.sio.enter_room(sid, self.ROOMS['signals'])
-            await self.sio.enter_room(sid, self.ROOMS['engine'])
-            client_info['rooms'].extend([self.ROOMS['signals'], self.ROOMS['engine']])
+            # Default subscriptions are private to the authenticated user.
+            for room in (self.ROOMS['signals'], self.ROOMS['engine']):
+                private_room = self.user_room(user_id, room)
+                await self.sio.enter_room(sid, private_room)
+                client_info['rooms'].append(private_room)
             
             # Send welcome message
             welcome_data = {
                 'message': 'Connected to SignalGen WebSocket',
                 'sid': sid,
                 'available_rooms': list(self.ROOMS.values()),
+                'user_id': user_id,
                 'timestamp': datetime.utcnow().isoformat()
             }
             
             await self.sio.emit('connected', welcome_data, room=sid)
             
             self.logger.info(f"Client connected: {sid} from {client_info['ip_address']}")
+            return True
             
         except Exception as e:
             self.logger.error(f"Error handling client connect: {e}")
-            await self.sio.emit('error', {'message': 'Connection failed'}, room=sid)
+            self.connected_clients.pop(sid, None)
+            return False
+
+    @staticmethod
+    def user_room(user_id: str, room: str) -> str:
+        """Return the private Socket.IO room for one user and event group."""
+        return f"{room}:user:{user_id}"
+
+    def subscription_room(self, user_id: str, room: str) -> str:
+        """Map engine-related subscriptions to a private user room."""
+        private_rooms = {
+            self.ROOMS['signals'],
+            self.ROOMS['engine'],
+            self.ROOMS['prices'],
+            self.ROOMS['ibkr'],
+            self.ROOMS['errors'],
+            self.ROOMS['logs'],
+        }
+        if room in private_rooms:
+            return self.user_room(user_id, room)
+        return room
+
+    def active_room(self, room: str, user_id: Optional[str] = None) -> Optional[str]:
+        """Resolve the current engine owner's private event room."""
+        target_user_id = self.active_user_id if user_id is None else user_id
+        if not target_user_id:
+            return None
+        return self.user_room(target_user_id, room)
     
     async def handle_client_disconnect(self, sid: str) -> None:
         """
@@ -259,8 +346,13 @@ class SocketIOBroadcaster:
                 "timestamp": signal_data.get('timestamp', datetime.utcnow().isoformat())
             }
             
-            # Broadcast to signals room (WebSocket)
-            await self.sio.emit('signal', signal_event, room=self.ROOMS['signals'])
+            room = self.active_room(
+                self.ROOMS['signals'],
+                str(signal_data.get('user_id') or ''),
+            )
+            if not room:
+                raise ValueError("Signal owner is required for realtime delivery")
+            await self.sio.emit('signal', signal_event, room=room)
             
             # Send to Telegram if configured
             if self.telegram_notifier:
@@ -276,8 +368,7 @@ class SocketIOBroadcaster:
             await self.broadcast_error({
                 'type': 'broadcast_error',
                 'message': f'Failed to broadcast signal: {str(e)}',
-                'data': signal_data
-            })
+            }, user_id=signal_data.get('user_id'))
     
     async def broadcast_price_update(self, symbol: str, price: float, timestamp: float) -> None:
         """
@@ -300,8 +391,10 @@ class SocketIOBroadcaster:
                 "timestamp": datetime.fromtimestamp(timestamp).isoformat()
             }
             
-            # Broadcast to prices room
-            await self.sio.emit('price_update', price_event, room=self.ROOMS['prices'])
+            room = self.active_room(self.ROOMS['prices'])
+            if not room:
+                return
+            await self.sio.emit('price_update', price_event, room=room)
             
             self.logger.debug(f"Price update broadcasted: {symbol} @ {price}")
             
@@ -371,7 +464,7 @@ class SocketIOBroadcaster:
         except Exception as e:
             self.logger.error(f"Error in sync price broadcast: {e}")
     
-    async def broadcast_log_entry(self, line: str) -> None:
+    async def broadcast_log_entry(self, line: str, user_id: str) -> None:
         """
         Broadcast a single formatted log line to clients viewing the logs modal.
 
@@ -381,13 +474,17 @@ class SocketIOBroadcaster:
         try:
             if not self.connected_clients:
                 return
-            await self.sio.emit('log_entry', {'line': line}, room=self.ROOMS['logs'])
+            await self.sio.emit(
+                'log_entry',
+                {'line': line},
+                room=self.user_room(user_id, self.ROOMS['logs']),
+            )
         except Exception:
             # Deliberately silent: this is invoked from the logging pipeline
             # itself, so logging the failure here risks re-entrant recursion.
             pass
 
-    def broadcast_log_entry_sync(self, line: str) -> None:
+    def broadcast_log_entry_sync(self, line: str, user_id: str) -> None:
         """
         Thread-safe fire-and-forget broadcast of a log line.
 
@@ -400,11 +497,18 @@ class SocketIOBroadcaster:
         """
         try:
             if self._loop and self._loop.is_running():
-                asyncio.run_coroutine_threadsafe(self.broadcast_log_entry(line), self._loop)
+                asyncio.run_coroutine_threadsafe(
+                    self.broadcast_log_entry(line, user_id),
+                    self._loop,
+                )
         except Exception:
             pass
 
-    async def broadcast_engine_status(self, status: Dict[str, Any]) -> None:
+    async def broadcast_engine_status(
+        self,
+        status: Dict[str, Any],
+        user_id: Optional[str] = None,
+    ) -> None:
         """
         Broadcast engine status updates to all connected clients.
         
@@ -419,8 +523,10 @@ class SocketIOBroadcaster:
                 'timestamp': datetime.utcnow().isoformat()
             }
             
-            # Broadcast to engine room
-            await self.sio.emit('engine_status', status_event, room=self.ROOMS['engine'])
+            room = self.active_room(self.ROOMS['engine'], user_id)
+            if not room:
+                return
+            await self.sio.emit('engine_status', status_event, room=room)
             
             self.logger.info(f"Engine status broadcasted: {status.get('state', 'unknown')}")
             
@@ -430,9 +536,13 @@ class SocketIOBroadcaster:
                 'type': 'broadcast_error',
                 'message': f'Failed to broadcast engine status: {str(e)}',
                 'data': status
-            })
+            }, user_id=user_id)
     
-    def broadcast_engine_status_sync(self, status: Dict[str, Any]) -> None:
+    def broadcast_engine_status_sync(
+        self,
+        status: Dict[str, Any],
+        user_id: Optional[str] = None,
+    ) -> None:
         """
         Thread-safe synchronous version of broadcast_engine_status.
         Can be called from any thread.
@@ -441,6 +551,9 @@ class SocketIOBroadcaster:
             status: Engine status data
         """
         try:
+            target_user_id = user_id or self.active_user_id
+            if not target_user_id:
+                return
             self.logger.info(f"broadcast_engine_status_sync called with: {status.get('is_running', 'N/A')}")
             
             # Use threading to call emit in a thread-safe way
@@ -453,7 +566,7 @@ class SocketIOBroadcaster:
                         loop = asyncio.get_event_loop()
                         if loop.is_running():
                             asyncio.run_coroutine_threadsafe(
-                                self._emit_engine_status(status),
+                                self._emit_engine_status(status, target_user_id),
                                 loop
                             )
                             self.logger.info("Scheduled emit in running loop")
@@ -461,14 +574,18 @@ class SocketIOBroadcaster:
                             # Create a new loop and run the coroutine
                             loop = asyncio.new_event_loop()
                             asyncio.set_event_loop(loop)
-                            loop.run_until_complete(self._emit_engine_status(status))
+                            loop.run_until_complete(
+                                self._emit_engine_status(status, target_user_id)
+                            )
                             loop.close()
                             self.logger.info("Emitted in new loop")
                     except RuntimeError:
                         # No event loop in current thread, create one
                         loop = asyncio.new_event_loop()
                         asyncio.set_event_loop(loop)
-                        loop.run_until_complete(self._emit_engine_status(status))
+                        loop.run_until_complete(
+                            self._emit_engine_status(status, target_user_id)
+                        )
                         loop.close()
                         self.logger.info("Emitted in new loop (no existing loop)")
                 except Exception as e:
@@ -479,10 +596,15 @@ class SocketIOBroadcaster:
         except Exception as e:
             self.logger.error(f"Error in sync broadcast: {e}", exc_info=True)
     
-    async def _emit_engine_status(self, status: Dict[str, Any]) -> None:
+    async def _emit_engine_status(
+        self,
+        status: Dict[str, Any],
+        user_id: str,
+    ) -> None:
         """Helper to emit engine status."""
-        self.logger.info(f"_emit_engine_status called, emitting to room: {self.ROOMS['engine']}")
-        await self.sio.emit('engine_status', status, room=self.ROOMS['engine'])
+        room = self.user_room(user_id, self.ROOMS['engine'])
+        self.logger.info("Emitting engine status to private room %s", room)
+        await self.sio.emit('engine_status', status, room=room)
         self.logger.info("Engine status emitted successfully")
     
     async def broadcast_watchlist_update(self, watchlist: Dict[str, Any]) -> None:
@@ -556,8 +678,10 @@ class SocketIOBroadcaster:
                 'timestamp': datetime.utcnow().isoformat()
             }
             
-            # Broadcast to IBKR room
-            await self.sio.emit('ibkr_status', ibkr_event, room=self.ROOMS['ibkr'])
+            room = self.active_room(self.ROOMS['ibkr'])
+            if not room:
+                return
+            await self.sio.emit('ibkr_status', ibkr_event, room=room)
             
             self.logger.info(f"IBKR status broadcasted: {status.get('connected', 'unknown')}")
             
@@ -569,7 +693,11 @@ class SocketIOBroadcaster:
                 'data': status
             })
     
-    async def broadcast_error(self, error_data: Dict[str, Any]) -> None:
+    async def broadcast_error(
+        self,
+        error_data: Dict[str, Any],
+        user_id: Optional[str] = None,
+    ) -> None:
         """
         Broadcast error notifications to all connected clients.
         
@@ -584,8 +712,10 @@ class SocketIOBroadcaster:
                 'timestamp': datetime.utcnow().isoformat()
             }
             
-            # Broadcast to errors room
-            await self.sio.emit('error', error_event, room=self.ROOMS['errors'])
+            room = self.active_room(self.ROOMS['errors'], user_id)
+            if not room:
+                return
+            await self.sio.emit('error', error_event, room=room)
             
             self.logger.warning(f"Error broadcasted: {error_data.get('type', 'unknown')}")
             
@@ -603,7 +733,7 @@ class SocketIOBroadcaster:
             bool: True if valid, False otherwise
         """
         try:
-            required_fields = ['symbol', 'price', 'rule_id']
+            required_fields = ['symbol', 'price', 'rule_id', 'user_id']
             
             for field in required_fields:
                 if field not in signal_data:
@@ -621,6 +751,13 @@ class SocketIOBroadcaster:
             
             if not isinstance(signal_data['rule_id'], int):
                 self.logger.error("Rule ID must be an integer")
+                return False
+
+            if (
+                not isinstance(signal_data['user_id'], str)
+                or not signal_data['user_id'].strip()
+            ):
+                self.logger.error("Signal user_id must be a non-empty string")
                 return False
             
             return True
@@ -685,7 +822,6 @@ class SocketIOBroadcaster:
             try:
                 from ..notifications.telegram_notifier import TelegramNotifier
                 self.telegram_notifier = TelegramNotifier(self.repository)
-                await self.telegram_notifier.initialize()
                 self.logger.info("Telegram notifier integration initialized")
             except Exception as e:
                 self.logger.warning(f"Failed to initialize Telegram notifier: {e}")

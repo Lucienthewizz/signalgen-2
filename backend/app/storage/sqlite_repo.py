@@ -122,6 +122,7 @@ class SQLiteRepository:
                     symbol TEXT NOT NULL,
                     price REAL NOT NULL,
                     rule_id INTEGER,
+                    user_id TEXT,
                     indicators TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (rule_id) REFERENCES rules(id) ON DELETE SET NULL
@@ -134,6 +135,9 @@ class SQLiteRepository:
             if 'indicators' not in columns:
                 cursor.execute('ALTER TABLE signals ADD COLUMN indicators TEXT')
                 self.logger.info("Added indicators column to signals table")
+            if 'user_id' not in columns:
+                cursor.execute('ALTER TABLE signals ADD COLUMN user_id TEXT')
+                self.logger.info("Added user_id column to signals table")
             
             # Create settings table
             cursor.execute('''
@@ -143,18 +147,34 @@ class SQLiteRepository:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+
+            # User-owned preferences are intentionally separate from legacy
+            # application settings. The composite key prevents one account's
+            # value from overwriting another account's value.
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_settings (
+                    user_id TEXT NOT NULL,
+                    key TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, key)
+                )
+            ''')
             
             # Create indexes for performance
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_signals_time ON signals(time)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_signals_user_id ON signals(user_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_watchlist_items_watchlist_id ON watchlist_items(watchlist_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_rules_user_id ON rules(user_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_watchlists_user_id ON watchlists(user_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id)')
             
             # Create backtest_runs table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS backtest_runs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT,
                     name TEXT NOT NULL,
                     mode TEXT CHECK(mode IN ('scalping', 'swing')) NOT NULL,
                     rule_id INTEGER NOT NULL,
@@ -169,6 +189,11 @@ class SQLiteRepository:
                     FOREIGN KEY (rule_id) REFERENCES rules(id) ON DELETE CASCADE
                 )
             ''')
+            cursor.execute("PRAGMA table_info(backtest_runs)")
+            backtest_run_columns = [column[1] for column in cursor.fetchall()]
+            if 'user_id' not in backtest_run_columns:
+                cursor.execute('ALTER TABLE backtest_runs ADD COLUMN user_id TEXT')
+                self.logger.info("Added user_id column to backtest_runs table")
             
             # Create backtest_signals table
             cursor.execute('''
@@ -188,6 +213,7 @@ class SQLiteRepository:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS backtest_screen_runs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT,
                     created_at TEXT NOT NULL,
                     mode TEXT NOT NULL,
                     timeframe TEXT NOT NULL,
@@ -197,6 +223,14 @@ class SQLiteRepository:
                     summary TEXT
                 )
             ''')
+            cursor.execute("PRAGMA table_info(backtest_screen_runs)")
+            screen_run_columns = [column[1] for column in cursor.fetchall()]
+            if 'user_id' not in screen_run_columns:
+                cursor.execute('ALTER TABLE backtest_screen_runs ADD COLUMN user_id TEXT')
+                self.logger.info("Added user_id column to backtest_screen_runs table")
+
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_backtest_runs_user_id ON backtest_runs(user_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_backtest_screen_runs_user_id ON backtest_screen_runs(user_id)')
 
             # Create ticker_universes table
             cursor.execute('''
@@ -1132,6 +1166,10 @@ class SQLiteRepository:
         Returns:
             int: ID of saved signal
         """
+        user_id = signal_data.get('user_id')
+        if not isinstance(user_id, str) or not user_id.strip():
+            raise ValueError("Signal user_id is required")
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             
@@ -1141,25 +1179,34 @@ class SQLiteRepository:
                 indicators_json = json.dumps(signal_data['indicators'])
             
             cursor.execute('''
-                INSERT INTO signals (time, symbol, price, rule_id, indicators)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO signals (
+                    time, symbol, price, rule_id, user_id, indicators
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', (
                 signal_data['timestamp'],
                 signal_data['symbol'],
                 signal_data['price'],
                 signal_data.get('rule_id'),
+                user_id,
                 indicators_json
             ))
             conn.commit()
             return cursor.lastrowid
     
-    def get_signals(self, limit: int = 100, symbol: str = None) -> List[Dict]:
+    def get_signals_for_user(
+        self,
+        user_id: str,
+        limit: int = 100,
+        symbol: str = None,
+    ) -> List[Dict]:
         """
         Get recent signals.
         
         Args:
             limit: Maximum number of signals to return
             symbol: Filter by symbol (optional)
+            user_id: Supabase ID of the signal owner
             
         Returns:
             List[Dict]: List of signals with parsed indicators
@@ -1170,16 +1217,17 @@ class SQLiteRepository:
             if symbol:
                 cursor.execute('''
                     SELECT * FROM signals 
-                    WHERE symbol = ? 
+                    WHERE user_id = ? AND symbol = ?
                     ORDER BY time DESC 
                     LIMIT ?
-                ''', (symbol, limit))
+                ''', (user_id, symbol, limit))
             else:
                 cursor.execute('''
-                    SELECT * FROM signals 
+                    SELECT * FROM signals
+                    WHERE user_id = ?
                     ORDER BY time DESC 
                     LIMIT ?
-                ''', (limit,))
+                ''', (user_id, limit))
             
             rows = cursor.fetchall()
             signals = []
@@ -1194,23 +1242,27 @@ class SQLiteRepository:
                 signals.append(signal)
             return signals
     
-    def delete_signal(self, signal_id: int) -> bool:
+    def delete_signal_for_user(self, signal_id: int, user_id: str) -> bool:
         """
         Delete a signal.
         
         Args:
             signal_id: Signal ID
+            user_id: Supabase ID of the signal owner
             
         Returns:
             bool: True if deletion successful, False otherwise
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM signals WHERE id = ?', (signal_id,))
+            cursor.execute(
+                'DELETE FROM signals WHERE id = ? AND user_id = ?',
+                (signal_id, user_id),
+            )
             conn.commit()
             return cursor.rowcount > 0
 
-    def delete_all_signals(self) -> int:
+    def delete_all_signals_for_user(self, user_id: str) -> int:
         """
         Delete all live signals.
 
@@ -1219,7 +1271,10 @@ class SQLiteRepository:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM signals')
+            cursor.execute(
+                'DELETE FROM signals WHERE user_id = ?',
+                (user_id,),
+            )
             conn.commit()
             return cursor.rowcount
 
@@ -1269,6 +1324,61 @@ class SQLiteRepository:
                 VALUES (?, ?)
             ''', (key, value_str))
             conn.commit()
+
+    def get_user_setting(
+        self,
+        user_id: str,
+        key: str,
+        default: Any = None,
+    ) -> Any:
+        """Get one setting owned by a specific authenticated user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT value FROM user_settings WHERE user_id = ? AND key = ?',
+                (user_id, key),
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            return default
+        try:
+            return json.loads(row['value'])
+        except json.JSONDecodeError:
+            return row['value']
+
+    def set_user_setting(self, user_id: str, key: str, value: Any) -> None:
+        """Create or replace one setting within a user's ownership scope."""
+        value_str = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                INSERT INTO user_settings (user_id, key, value)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id, key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = CURRENT_TIMESTAMP
+                ''',
+                (user_id, key, value_str),
+            )
+            conn.commit()
+
+    def get_user_settings(self, user_id: str) -> Dict[str, Any]:
+        """Return all settings owned by one authenticated user."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                'SELECT key, value FROM user_settings WHERE user_id = ?',
+                (user_id,),
+            ).fetchall()
+
+        settings: Dict[str, Any] = {}
+        for row in rows:
+            try:
+                settings[row['key']] = json.loads(row['value'])
+            except json.JSONDecodeError:
+                settings[row['key']] = row['value']
+        return settings
     
     # MVP-specific methods
     def get_system_rules(self) -> List[Dict]:
@@ -1509,6 +1619,7 @@ class SQLiteRepository:
     # Backtesting operations
     def create_backtest_run(
         self,
+        user_id: str,
         name: str,
         mode: str,
         rule_id: int,
@@ -1542,10 +1653,11 @@ class SQLiteRepository:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO backtest_runs 
-                (name, mode, rule_id, symbols, timeframe, start_date, end_date, 
+                (user_id, name, mode, rule_id, symbols, timeframe, start_date, end_date,
                  data_source, created_at, total_signals, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
+                user_id,
                 name,
                 mode,
                 rule_id,
@@ -1586,7 +1698,7 @@ class SQLiteRepository:
                 ))
             conn.commit()
     
-    def get_backtest_run(self, run_id: int) -> Optional[Dict]:
+    def get_backtest_run(self, run_id: int, user_id: str) -> Optional[Dict]:
         """
         Get backtest run by ID.
         
@@ -1598,7 +1710,10 @@ class SQLiteRepository:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM backtest_runs WHERE id = ?', (run_id,))
+            cursor.execute(
+                'SELECT * FROM backtest_runs WHERE id = ? AND user_id = ?',
+                (run_id, user_id),
+            )
             row = cursor.fetchone()
             
             if row:
@@ -1608,7 +1723,7 @@ class SQLiteRepository:
                 return run
             return None
     
-    def get_all_backtest_runs(self) -> List[Dict]:
+    def get_all_backtest_runs(self, user_id: str) -> List[Dict]:
         """
         Get all backtest runs.
         
@@ -1617,7 +1732,10 @@ class SQLiteRepository:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM backtest_runs ORDER BY created_at DESC')
+            cursor.execute(
+                'SELECT * FROM backtest_runs WHERE user_id = ? ORDER BY created_at DESC',
+                (user_id,),
+            )
             rows = cursor.fetchall()
             
             runs = []
@@ -1629,7 +1747,7 @@ class SQLiteRepository:
             
             return runs
     
-    def get_backtest_signals(self, run_id: int) -> List[Dict]:
+    def get_backtest_signals(self, run_id: int, user_id: str) -> List[Dict]:
         """
         Get all signals for a backtest run.
         
@@ -1642,10 +1760,11 @@ class SQLiteRepository:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT * FROM backtest_signals 
-                WHERE backtest_run_id = ? 
+                SELECT signals.* FROM backtest_signals AS signals
+                JOIN backtest_runs AS runs ON runs.id = signals.backtest_run_id
+                WHERE signals.backtest_run_id = ? AND runs.user_id = ?
                 ORDER BY timestamp
-            ''', (run_id,))
+            ''', (run_id, user_id))
             rows = cursor.fetchall()
             
             signals = []
@@ -1656,7 +1775,7 @@ class SQLiteRepository:
             
             return signals
     
-    def delete_backtest_run(self, run_id: int) -> bool:
+    def delete_backtest_run(self, run_id: int, user_id: str) -> bool:
         """
         Delete a backtest run and its signals.
 
@@ -1668,7 +1787,10 @@ class SQLiteRepository:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM backtest_runs WHERE id = ?', (run_id,))
+            cursor.execute(
+                'DELETE FROM backtest_runs WHERE id = ? AND user_id = ?',
+                (run_id, user_id),
+            )
             conn.commit()
             return cursor.rowcount > 0
 
@@ -1677,6 +1799,7 @@ class SQLiteRepository:
     # ------------------------------------------------------------------
     def create_backtest_screen_run(
         self,
+        user_id: str,
         mode: str,
         timeframe: str,
         exit_strategy: str,
@@ -1693,9 +1816,10 @@ class SQLiteRepository:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO backtest_screen_runs
-                (created_at, mode, timeframe, exit_strategy, row_count, config, summary)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, created_at, mode, timeframe, exit_strategy, row_count, config, summary)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
+                user_id,
                 datetime.now().isoformat(),
                 mode,
                 timeframe,
@@ -1707,13 +1831,13 @@ class SQLiteRepository:
             conn.commit()
             return cursor.lastrowid
 
-    def get_backtest_screen_runs(self, limit: int = 50) -> List[Dict]:
+    def get_backtest_screen_runs(self, user_id: str, limit: int = 50) -> List[Dict]:
         """Return recent backtest screen runs (newest first), config/summary parsed."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT * FROM backtest_screen_runs ORDER BY created_at DESC LIMIT ?',
-                (int(limit),)
+                'SELECT * FROM backtest_screen_runs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
+                (user_id, int(limit))
             )
             runs = []
             for row in cursor.fetchall():
@@ -1723,11 +1847,14 @@ class SQLiteRepository:
                 runs.append(run)
             return runs
 
-    def get_backtest_screen_run(self, run_id: int) -> Optional[Dict]:
+    def get_backtest_screen_run(self, run_id: int, user_id: str) -> Optional[Dict]:
         """Return a single backtest screen run by ID with config/summary parsed."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM backtest_screen_runs WHERE id = ?', (run_id,))
+            cursor.execute(
+                'SELECT * FROM backtest_screen_runs WHERE id = ? AND user_id = ?',
+                (run_id, user_id),
+            )
             row = cursor.fetchone()
             if not row:
                 return None
@@ -1736,19 +1863,25 @@ class SQLiteRepository:
             run['summary'] = json.loads(run['summary']) if run['summary'] else {}
             return run
 
-    def delete_backtest_screen_run(self, run_id: int) -> bool:
+    def delete_backtest_screen_run(self, run_id: int, user_id: str) -> bool:
         """Delete a backtest screen run. Returns True if a row was removed."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM backtest_screen_runs WHERE id = ?', (run_id,))
+            cursor.execute(
+                'DELETE FROM backtest_screen_runs WHERE id = ? AND user_id = ?',
+                (run_id, user_id),
+            )
             conn.commit()
             return cursor.rowcount > 0
 
-    def delete_all_backtest_screen_runs(self) -> int:
+    def delete_all_backtest_screen_runs(self, user_id: str) -> int:
         """Delete all backtest screen runs. Returns the number of rows removed."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM backtest_screen_runs')
+            cursor.execute(
+                'DELETE FROM backtest_screen_runs WHERE user_id = ?',
+                (user_id,),
+            )
             conn.commit()
             return cursor.rowcount
 

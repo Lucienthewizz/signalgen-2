@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -50,23 +51,36 @@ def _create_user_resources(signalgen, user_id="user-a"):
 
 
 @pytest.mark.parametrize(
-    ("path", "body"),
+    ("method", "path", "body"),
     [
         (
+            "post",
             "/api/swing/screen",
             {"rule_id": 1, "ticker_universe_id": 1},
         ),
         (
+            "post",
             "/api/swing/backfill-yahoo-cache",
             {"ticker_universe_id": 1},
         ),
+        (
+            "get",
+            "/api/swing/chart?symbol=BBCA&timeframe=1d&"
+            "timestamp=2026-09-15T10%3A00%3A00&rule_id=1",
+            None,
+        ),
     ],
 )
-def test_swing_operations_require_authentication(tmp_path, path, body):
+def test_swing_operations_require_authentication(
+    tmp_path,
+    method,
+    path,
+    body,
+):
     signalgen = SignalGenApp(str(tmp_path / "unauthorized-swing.db"))
 
     with TestClient(signalgen.app) as client:
-        response = client.post(path, json=body)
+        response = client.request(method, path, json=body)
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Authentication required"}
@@ -88,6 +102,110 @@ def test_other_users_resources_cannot_be_screened_or_backfilled(authorized_app):
 
     assert screen_response.status_code == 404
     assert backfill_response.status_code == 404
+
+
+def test_other_users_rule_cannot_be_used_for_swing_chart(authorized_app):
+    signalgen, client, identity = authorized_app
+    rule_id, _ = _create_user_resources(signalgen)
+    identity["id"] = "user-b"
+
+    response = client.get(
+        "/api/swing/chart",
+        params={
+            "symbol": "BBCA",
+            "timeframe": "1d",
+            "timestamp": "2026-09-15T10:00:00",
+            "rule_id": rule_id,
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Rule not found"}
+
+
+def test_swing_chart_route_passes_current_user_to_service(authorized_app):
+    signalgen, client, _ = authorized_app
+    captured = {}
+
+    async def fake_build(**kwargs):
+        captured.update(kwargs)
+        return {
+            "symbol": kwargs["symbol"],
+            "rule_id": kwargs["rule_id"],
+            "candles": [],
+            "indicators": [],
+        }
+
+    signalgen.swing_chart_service.build = fake_build
+    response = client.get(
+        "/api/swing/chart",
+        params={
+            "symbol": "BBCA",
+            "timeframe": "1d",
+            "timestamp": "2026-09-15T10:00:00",
+            "rule_id": 1,
+            "before": 50,
+            "after": 20,
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "symbol": "BBCA",
+        "timeframe": "1d",
+        "timestamp": "2026-09-15T10:00:00",
+        "rule_id": 1,
+        "user_id": "user-a",
+        "before": 50,
+        "after": 20,
+    }
+
+
+def test_swing_chart_service_preserves_chart_response(
+    authorized_app,
+    monkeypatch,
+):
+    signalgen, client, _ = authorized_app
+    rule_id, _ = _create_user_resources(signalgen)
+    first_day = datetime(2026, 1, 1)
+
+    async def fake_fetch(*args, **kwargs):
+        return [
+            {
+                "timestamp": first_day + timedelta(days=index),
+                "open": 100 + index,
+                "high": 102 + index,
+                "low": 99 + index,
+                "close": 101 + index,
+                "volume": 1000 + index,
+            }
+            for index in range(120)
+        ]
+
+    monkeypatch.setattr(
+        "app.data_sources.cached_data_source."
+        "CachedDataSource.fetch_historical_data",
+        fake_fetch,
+    )
+    response = client.get(
+        "/api/swing/chart",
+        params={
+            "symbol": "bbca",
+            "timeframe": "1d",
+            "timestamp": "2026-03-01T00:00:00",
+            "rule_id": rule_id,
+            "before": 20,
+            "after": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["symbol"] == "BBCA"
+    assert payload["rule_id"] == rule_id
+    assert payload["rule"]["conditions"] == RULE_DEFINITION["conditions"]
+    assert len(payload["candles"]) == 31
+    assert [series["id"] for series in payload["indicators"]] == ["EMA20"]
 
 
 def test_screening_receives_only_authorized_rule_and_universe(

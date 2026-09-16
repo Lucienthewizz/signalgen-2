@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.app import BacktestScreenRequest, ManualBacktestEntry
+from app.schemas.backtests import BacktestScreenRequest, ManualBacktestEntry
 
 
 def _manual_entry():

@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.app import BacktestScreenRequest, ManualBacktestEntry
+from app.schemas.backtests import BacktestScreenRequest, ManualBacktestEntry
 
 
 def test_backtest_screen_request_accepts_entry_and_exit_price_basis():
@@ -40,4 +40,3 @@ def test_backtest_screen_request_rejects_invalid_price_basis():
                 {"symbol": "AAPL", "entry_time": "2026-05-01T09:35", "signal_type": "BUY"}
             ],
         )
-

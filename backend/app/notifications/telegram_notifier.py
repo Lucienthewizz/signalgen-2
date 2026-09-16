@@ -59,7 +59,7 @@ class TelegramNotifier:
             return value.strip().lower() in {"1", "true", "yes", "on"}
         return bool(value)
         
-    async def initialize(self) -> bool:
+    async def initialize(self, user_id: Optional[str] = None) -> bool:
         """
         Initialize notifier by loading settings from repository.
         
@@ -67,13 +67,24 @@ class TelegramNotifier:
             bool: True if successfully initialized and enabled
         """
         try:
-            # Load bot token from settings
-            bot_token = self.repository.get_setting('telegram_bot_token')
+            if not user_id:
+                self.bot_token = None
+                self.chat_ids = []
+                self.enabled = False
+                return False
+
+            # Telegram credentials belong to one authenticated user. Legacy
+            # global values are deliberately not used as a fallback.
+            bot_token = self.repository.get_user_setting(
+                user_id, 'telegram_bot_token'
+            )
             self.bot_token = str(bot_token).strip() if bot_token else None
             self.chat_ids = []
             
             # Load chat IDs from settings
-            chat_ids_str = self.repository.get_setting('telegram_chat_ids', '')
+            chat_ids_str = self.repository.get_user_setting(
+                user_id, 'telegram_chat_ids', ''
+            )
             if chat_ids_str:
                 self.chat_ids = [
                     chat_id.strip() 
@@ -82,7 +93,11 @@ class TelegramNotifier:
                 ]
             
             # Check if enabled
-            self.enabled = self._as_bool(self.repository.get_setting('telegram_enabled', False))
+            self.enabled = self._as_bool(
+                self.repository.get_user_setting(
+                    user_id, 'telegram_enabled', False
+                )
+            )
             
             if self.enabled and self.bot_token and self.chat_ids:
                 self.logger.info(
@@ -114,11 +129,21 @@ class TelegramNotifier:
         Returns:
             bool: True if sent successfully to at least one chat
         """
+        user_id = str(signal_data.get('user_id') or '')
+        if not user_id:
+            self.logger.warning("Signal has no owner; skipping Telegram notification")
+            return False
+
+        await self.initialize(user_id)
+
+        bot_token = self.bot_token
+        chat_ids = list(self.chat_ids)
+
         if not self.enabled:
             self.logger.debug("Telegram notifier is disabled, skipping notification")
             return False
         
-        if not self.bot_token or not self.chat_ids:
+        if not bot_token or not chat_ids:
             self.logger.warning("Telegram not properly configured, skipping notification")
             return False
         
@@ -128,8 +153,8 @@ class TelegramNotifier:
             
             # Send to all configured chat IDs
             tasks = [
-                self._send_message(chat_id, message) 
-                for chat_id in self.chat_ids
+                self._send_message(chat_id, message, bot_token)
+                for chat_id in chat_ids
             ]
             
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -139,7 +164,7 @@ class TelegramNotifier:
             
             if success_count > 0:
                 self.logger.info(
-                    f"Telegram notification sent successfully to {success_count}/{len(self.chat_ids)} chats"
+                    f"Telegram notification sent successfully to {success_count}/{len(chat_ids)} chats"
                 )
                 return True
             else:
@@ -227,7 +252,12 @@ class TelegramNotifier:
         except:
             return str(timestamp)
     
-    async def _send_message(self, chat_id: str, message: str) -> bool:
+    async def _send_message(
+        self,
+        chat_id: str,
+        message: str,
+        bot_token: Optional[str] = None,
+    ) -> bool:
         """
         Send message to specific Telegram chat.
         
@@ -238,10 +268,11 @@ class TelegramNotifier:
         Returns:
             bool: True if sent successfully
         """
-        if not self.bot_token:
+        active_token = bot_token or self.bot_token
+        if not active_token:
             return False
         
-        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        url = f"https://api.telegram.org/bot{active_token}/sendMessage"
         
         payload = {
             'chat_id': chat_id,
