@@ -1,5 +1,6 @@
 """Authorization, isolation, and secret-redaction tests for user logs."""
 
+import secrets
 import logging
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -79,10 +80,11 @@ def test_secrets_are_redacted_before_storage_and_broadcast():
     handler.setFormatter(logging.Formatter("%(message)s"))
     handler.broadcaster = Mock()
     logger = _isolated_logger(handler)
+    test_password = secrets.token_urlsafe(24)
     secret_jwt = "abcdefgh.ijklmnop.qrstuvwx"
 
     logger.info(
-        "Authorization: Bearer access-secret password=hunter2 "
+        f"Authorization: Bearer access-secret password={test_password} "
         "https://api.telegram.org/bot123456:bot-secret/sendMessage "
         "jwt=%s",
         secret_jwt,
@@ -91,7 +93,7 @@ def test_secrets_are_redacted_before_storage_and_broadcast():
 
     stored = handler.get_buffer_text(user_id="user-a")
     assert "access-secret" not in stored
-    assert "hunter2" not in stored
+    assert test_password not in stored
     assert "bot-secret" not in stored
     assert secret_jwt not in stored
     assert "[REDACTED]" in stored

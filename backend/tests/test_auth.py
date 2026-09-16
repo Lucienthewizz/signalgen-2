@@ -1,3 +1,5 @@
+import secrets
+
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -8,6 +10,9 @@ from app.auth import dependencies
 
 
 client = TestClient(app)
+
+# Generated locally; no reusable test password is stored in the repository.
+TEST_PASSWORD = secrets.token_urlsafe(24)
 
 
 def test_auth_register_returns_session_when_confirmation_is_disabled(monkeypatch):
@@ -21,7 +26,7 @@ def test_auth_register_returns_session_when_confirmation_is_disabled(monkeypatch
         json={
             "full_name": " New User ",
             "email": " new@example.com ",
-            "password": "secret123",
+            "password": TEST_PASSWORD,
         },
     )
 
@@ -39,7 +44,7 @@ def test_auth_register_returns_session_when_confirmation_is_disabled(monkeypatch
     sign_up.assert_called_once_with(
         {
             "email": "new@example.com",
-            "password": "secret123",
+            "password": TEST_PASSWORD,
             "options": {"data": {"full_name": "New User"}},
         }
     )
@@ -55,7 +60,7 @@ def test_auth_register_requests_confirmation_when_session_is_missing(monkeypatch
         json={
             "full_name": "Confirm User",
             "email": "confirm@example.com",
-            "password": "secret123",
+            "password": TEST_PASSWORD,
         },
     )
 
@@ -73,7 +78,7 @@ def test_auth_register_rejects_failed_signup(monkeypatch):
         json={
             "full_name": "New User",
             "email": "new@example.com",
-            "password": "secret123",
+            "password": TEST_PASSWORD,
         },
     )
 
@@ -95,7 +100,7 @@ def test_auth_login_returns_access_token(monkeypatch):
 
     response = client.post(
         "/api/auth/login",
-        json={"email": " lucien@example.com ", "password": "secret"},
+        json={"email": " lucien@example.com ", "password": TEST_PASSWORD},
     )
 
     assert response.status_code == 200
@@ -110,7 +115,7 @@ def test_auth_login_returns_access_token(monkeypatch):
         },
     }
     sign_in.assert_called_once_with(
-        {"email": "lucien@example.com", "password": "secret"}
+        {"email": "lucien@example.com", "password": TEST_PASSWORD}
     )
 
 
@@ -120,7 +125,7 @@ def test_auth_login_rejects_invalid_credentials(monkeypatch):
 
     response = client.post(
         "/api/auth/login",
-        json={"email": "lucien@example.com", "password": "wrong"},
+        json={"email": "lucien@example.com", "password": TEST_PASSWORD},
     )
 
     assert response.status_code == 401

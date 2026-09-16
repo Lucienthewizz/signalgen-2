@@ -172,3 +172,7 @@ credentials.json
 
 .env
 .venv/
+
+# Keep local environment variants out of version control.
+.env.*
+!.env.example
