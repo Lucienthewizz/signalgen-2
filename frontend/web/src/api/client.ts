@@ -2,6 +2,7 @@ import type {
   ApiStatus,
   LoginResponse,
   RegisterResponse,
+  MessageResponse,
   User,
 } from "../types";
 
@@ -87,6 +88,24 @@ export const api = {
     request<RegisterResponse>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({ full_name: fullName, email, password }),
+    }),
+  requestPasswordReset: (email: string) =>
+    request<MessageResponse>("/api/auth/password/reset-request", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (
+    accessToken: string,
+    refreshToken: string,
+    password: string,
+  ) =>
+    request<MessageResponse>("/api/auth/password/reset", {
+      method: "POST",
+      body: JSON.stringify({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        password,
+      }),
     }),
   me: () => request<User>("/api/auth/me"),
 };

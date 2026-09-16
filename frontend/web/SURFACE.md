@@ -1,30 +1,24 @@
-# Signalgen website design
+# Signalgen Web Surface
 
-## Purpose
+The web UI deliberately shares the desktop application's visual grammar:
+Manrope, `#070a08` canvas, green verification accents, flat ledger dividers,
+compact controls, and a fixed workspace sidebar on wide screens.
 
-Introduce the desktop analysis workspace to Indonesian independent investors, demonstrate explainable rule-based analysis, and provide a shared-account entry point.
+## Routes
 
-## Tokens and direction
+- `#home` — public workspace overview with clearly labelled demonstration data.
+- `#login` and `#register` — backend-authorized account entry.
+- `#forgot-password` — neutral password recovery request.
+- `?view=reset-password` — Supabase recovery callback and new-password form.
+- `#account` — authenticated identity summary.
 
-Manrope carries both product headlines and body copy. Content is left aligned with a 1200px maximum container; split layouts collapse to one column at 760px.
+## Interaction rules
 
-- Canvas: `#070a08`
-- Foreground: `#f5f7f5`
-- Product surface: `#0d110e`
-- Primary action: `#7af5bd`
-- Supporting copy: `#a4ada7`
-- Dividers: `#252b27`
+Motion is limited to the loading indicator, backend verification rail, and final
+point on the market trace. `prefers-reduced-motion` removes these animations.
+The sidebar becomes an explicit drawer below 860px; auth becomes a single-column
+form and all primary actions remain visible at 390px.
 
-Following the requested Linear reference, white atmospheric gradients are concentrated around the desktop preview. The product image and feature exploration carry the page identity; supporting sections remain quiet.
-
-## Page and interactions
-
-The first viewport presents the analysis proposition, account creation, and a real desktop screenshot. An adapted Hyperiux interactive feature list lets visitors inspect rule-building, screening, backtesting, and explained signals. Touch, pointer, and keyboard users share the same information.
-
-The entrance is one short copy/preview sequence rather than animation on every section. Pointer smoothing runs only during interaction. Reduced motion removes spatial animation. FAQ uses the official shadcn Carousel and Card; forms use FieldGroup, Field, Input, Tabs, Button, and Alert.
-
-## Content boundaries
-
-Product previews are illustrative. Temporary testimonials are identified as fictional examples. Installer, price, and payment availability remain pending. Authentication follows `feature/backend-authorization` and supports email confirmation, validation, expired sessions, and recoverable transport failures.
-
-Magnetic Liquid Button from the supplied prompt is integrated into both account CTAs. Springs, tilt, white spotlight, liquid border and click ripples follow the green/black/white Signalgen palette. Reduced motion and touch do not use magnetic movement. FAQ supports arrows, keyboard and swipe; temporary testimonials include stars, quote icons and workflow context. Desktop source files are not changed by this website revision.
+The UI uses project-owned shadcn Base UI primitives for buttons, inputs, fields,
+labels, and alerts. Decorative marketing carousels, magnetic buttons, fictional
+testimonials, and unused animation runtimes are intentionally excluded.

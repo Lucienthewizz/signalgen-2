@@ -32,3 +32,7 @@ export type ApiStatus = {
   docs: string;
   status: string;
 };
+
+export type MessageResponse = {
+  message: string;
+};

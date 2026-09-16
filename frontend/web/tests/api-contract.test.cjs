@@ -66,3 +66,21 @@ test("invalid login has a useful error without profile reset", async () => {
   await assert.rejects(c.api.login("demo@example.test", "wrong"), (error) => error.message.includes("Email atau password"));
   assert.deepEqual(c.events, []);
 });
+
+test("password reset request uses the backend authorization contract", async () => {
+  const c = client(() => response({ message: "sent" }));
+  await c.api.requestPasswordReset("demo@example.test");
+  assert.equal(c.calls[0].url, "https://api.example.test/api/auth/password/reset-request");
+  assert.deepEqual(JSON.parse(c.calls[0].init.body), { email: "demo@example.test" });
+});
+
+test("password reset confirmation forwards recovery tokens only to backend", async () => {
+  const c = client(() => response({ message: "updated" }));
+  await c.api.resetPassword("access", "refresh", "new-secret-123");
+  assert.equal(c.calls[0].url, "https://api.example.test/api/auth/password/reset");
+  assert.deepEqual(JSON.parse(c.calls[0].init.body), {
+    access_token: "access",
+    refresh_token: "refresh",
+    password: "new-secret-123",
+  });
+});
