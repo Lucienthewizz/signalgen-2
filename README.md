@@ -1,133 +1,135 @@
 # SignalGen 2.0
 
-SignalGen 2.0 adalah aplikasi screening saham, backtesting, dan pembangkit
-trading signal berbasis rule teknikal. Aplikasi utama ditargetkan sebagai desktop
-Electron, dengan satu backend Python/FastAPI yang juga digunakan oleh web.
+SignalGen 2.0 is moving to a web-first stock-analysis workspace for the Indonesian market. The revised MVP uses React + TypeScript + Vite, a portable Go core compiled to WebAssembly for client-side historical screening/backtesting, and a Go API target for identity-bound access, data delivery, rules, sessions, entitlements, and the private journal. Electron and Python/FastAPI remain legacy references during incremental migration.
 
-Trading signal menunjukkan kondisi strategi terpenuhi. Signal bukan jaminan
-keuntungan atau kepastian prediksi harga.
+> SignalGen is an analysis tool. A BUY, WATCH, HOLD, or SELL state indicates that configured rule conditions were met; it is not a guarantee of price movement or personalized investment advice.
 
-## Dokumen utama
+## Product surfaces
 
-- [PRD.md](./PRD.md) — kebutuhan, prioritas, acceptance criteria, dan batas fitur.
-- [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md) — konteks dan arsitektur kanonis.
-- [backend/README.md](./backend/README.md) — cara menjalankan backend dan test.
-- [frontend/README.md](./frontend/README.md) — pembagian frontend web dan desktop.
+| Surface | Responsibility | Stack |
+| --- | --- | --- |
+| Web | Primary analysis workspace plus public/account surfaces | React, TypeScript, Vite, Go/WASM Web Worker |
+| Target API | Auth/session verification, authorization, feature grants, rules, historical data, journal/portfolio, audit | Go, SQLite, Supabase Auth |
+| Legacy desktop | Reference/rollback UI; installer is not an MVP deliverable | Electron, React, TypeScript, Vite |
+| Legacy backend | Baseline/bridge while portable core and target API are verified | Python, FastAPI, Socket.IO, SQLite |
 
-Baca PRD dan project context sebelum mengubah fitur atau arsitektur utama.
+The target keeps one API boundary. Historical computation moves to the browser worker; credentials, feature decisions, ownership, and journal authority remain on the server. Go/WASM is not absolute code protection.
 
-## Struktur
+## Current implementation (legacy/baseline, not revised-MVP completion)
+
+- Secure Electron shell with context isolation, sandboxing, and a restricted preload bridge.
+- Login and registration flows backed by the FastAPI authentication endpoints.
+- Local session restoration with automatic handling for invalid or expired tokens.
+- Responsive desktop workspace with navigation for rules, watchlists, screening, backtesting, realtime signals, and settings.
+- Market-oriented dashboard with backend health, active-rule, watchlist, and signal summaries.
+- Centralized API client and Vite development proxies for REST and Socket.IO traffic.
+- Docker-based backend workflow compatible with Docker Desktop and OrbStack.
+
+The dashboard currently contains explicitly labeled interface data while feature screens are migrated incrementally. This does not prove the target Go API, WASM core, entitlement/device controls, or journal are complete.
+
+## Target architecture
+
+```text
+                      User
+                        │
+                        ▼
+                 frontend/web/
+          React UI + Go/WASM worker
+                  │ REST/HTTPS
+                  ▼
+              Go API target
+       auth/access/data/rules/journal
+              │             │
+              ▼             ▼
+       Supabase Auth       SQLite
+
+ Legacy: Electron + Python/FastAPI kept for baseline and rollback
+```
+
+Canonical scope and architecture are documented in [PRD.md](./PRD.md) and [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md).
+
+## Repository structure
 
 ```text
 signalgen-2/
-├── backend/                    Python, FastAPI, SQLite, Supabase Auth, engines
-│   ├── app/
-│   ├── tests/
-│   ├── scripts/
-│   ├── Dockerfile
-│   └── requirements.txt
+├── backend/                 FastAPI application and analysis engines
 ├── frontend/
-│   ├── web/                    landing, account, pricing, payment, download
-│   └── desktop/                Electron dan renderer SignalGen
-├── docker-compose.yml
-├── PRD.md
-└── PROJECT_CONTEXT.md
+│   ├── desktop/             Electron desktop application
+│   └── web/                 Public and account web application
+├── docker-compose.yml       Local backend orchestration
+├── PRD.md                   Product requirements and acceptance criteria
+└── PROJECT_CONTEXT.md       Canonical architecture and engineering boundaries
 ```
-
-Frontend web dan desktop menggunakan backend yang sama. Docker digunakan untuk
-backend; frontend akan dijalankan dengan toolchain Node.js masing-masing.
 
 ## Quick start
 
-Prasyarat:
+### Requirements
 
-- Git.
-- Docker Desktop atau OrbStack.
-- Konfigurasi project Supabase development.
+- Docker Desktop or OrbStack with Docker compatibility
+- Node.js 20 or newer
+- npm
+- A configured `backend/.env` based on the project environment template
 
-Setelah clone:
+### 1. Start the backend
 
-```bash
-cp backend/.env.example backend/.env
-```
-
-Isi `SUPABASE_URL` dan `SUPABASE_PUBLISHABLE_KEY` pada `backend/.env`, lalu:
+From the repository root:
 
 ```bash
-docker compose up --build backend
+docker compose up --build -d
+docker compose ps
 ```
 
-Layanan development:
+The backend exposes:
 
-- UI transisi: `http://127.0.0.1:3456`
 - REST API: `http://127.0.0.1:3456/api`
-- Swagger/OpenAPI: `http://127.0.0.1:3456/docs`
-- Socket.IO: `http://127.0.0.1:8765`
+- OpenAPI documentation: `http://127.0.0.1:3456/docs`
+- Socket.IO transport: `http://127.0.0.1:8765/socket.io`
 
-Docker menjalankan backend secara headless dan tidak otomatis membuka browser
-atau window Electron.
+Port `8765` is a realtime transport endpoint, not a website. Opening its root URL directly may return `Not Found`.
 
-## Menjalankan test
+### 2. Start the current legacy Electron application
 
 ```bash
-docker compose run --rm backend-test
+cd frontend/desktop
+npm install
+npm run electron:dev
 ```
 
-Test berjalan di container sehingga `.venv` tidak diwajibkan. Developer tetap
-boleh membuat virtual environment sendiri untuk kebutuhan debugging lokal; folder
-tersebut sudah diabaikan Git.
+For a renderer-only browser preview:
 
-## Fitur backend saat ini
-
-- Supabase register, login, dan current-user validation.
-- Rule builder dan rule evaluation.
-- Watchlist dan ticker universe.
-- Scalping engine dengan IBKR dan demo mode.
-- Swing screening dengan Yahoo data/cache.
-- Backtesting dan riwayat hasil.
-- Signal history.
-- Socket.IO realtime events.
-- Telegram notification.
-- SQLite operational storage.
-
-Authorization per-user sudah diterapkan pada custom rules, watchlists, personal
-ticker universe, engine session, signals, settings, Telegram, Socket.IO, dan
-riwayat backtest. Log aktivitas user juga dilindungi login, dipisahkan per user,
-dan dikirim melalui private Socket.IO room setelah credential umum disensor.
-Chart swing, mode operasional, ringkasan cache, dan export backtest juga sudah
-berada di balik autentikasi; rule chart serta mode divalidasi atau disimpan
-berdasarkan current user. Health check publik hanya membuka status minimum.
-
-## Development workflow
-
-Branch utama:
-
-- `main` — release/demo stabil.
-- `dev` — integration branch.
-- `feature/...` atau `refactor/...` — satu pekerjaan dengan scope kecil.
-
-Alur perubahan:
-
-```text
-feature/refactor branch -> Pull Request -> dev -> test -> Pull Request -> main
+```bash
+npm run dev
 ```
 
-Jangan commit:
+Then open `http://127.0.0.1:5173`.
 
-- `.env` dan credential.
-- Access/refresh token.
-- `.venv`.
-- `node_modules`.
-- `__pycache__` atau `.pytest_cache`.
-- Database dan log runtime.
+### 3. Verify a production build
 
-## Legacy transition
+```bash
+cd frontend/desktop
+npm run typecheck
+npm run build
+```
 
-`backend/app/main.py`, `build_exe.py`, `signalgen.spec`, dan
-`signalgen_debug.spec` adalah fallback PyWebView/PyInstaller lama. File tersebut
-dipertahankan sampai Electron mampu menjalankan dan mem-package backend Python
-secara terverifikasi. Jangan memperluas implementasi PyWebView dengan fitur baru.
+## Development principles
 
-UI lama berada di `frontend/desktop/renderer/` sebagai UI transisi dan referensi
-fitur. UI tersebut baru dihapus setelah pengganti Electron mencapai feature
-parity dan lolos review.
+- Treat the backend OpenAPI contract as the source of truth for request and response shapes.
+- Keep API and Socket.IO base URLs in centralized runtime configuration.
+- Never place Supabase secret keys, service-role keys, passwords, or backend environment values in frontend code.
+- Handle loading, empty, success, error, offline, and unauthorized states explicitly.
+- Preserve the legacy renderer until the Electron replacement reaches feature parity.
+- Keep changes scoped and verify type checking and production builds before review.
+
+## Documentation
+
+- [Desktop frontend guide](./frontend/desktop/README.md)
+- [Product requirements](./PRD.md)
+- [Frontend MVP PRD](./frontend/FRONTEND_MVP_PRD.md)
+- [Backend MVP PRD](./backend/BACKEND_MVP_PRD.md)
+- [Target API and worker contract](./backend/MVP_API_CONTRACT.md)
+- [Architecture and project context](./PROJECT_CONTEXT.md)
+- OpenAPI after startup: `http://127.0.0.1:3456/docs`
+
+## License and ownership
+
+This repository is maintained for the SignalGen 2.0 development project. Confirm licensing and distribution requirements with the project owner before publishing packaged builds.

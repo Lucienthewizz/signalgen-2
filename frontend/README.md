@@ -1,18 +1,22 @@
 # SignalGen Frontend
 
-Frontend dibagi menjadi tepat dua aplikasi:
+Frontend saat ini memiliki dua aplikasi yang dipertahankan selama migrasi:
 
-- `web/`: landing page, pricing, akun, dan pembayaran.
-- `desktop/`: Electron renderer dan desktop shell untuk fitur SignalGen.
+- `web/`: target aplikasi utama — public/account, screening, Go/WASM backtesting,
+  hasil, sesi/perangkat, dan jurnal.
+- `desktop/`: legacy Electron renderer/shell untuk baseline dan rollback; bukan
+  deliverable installer MVP terbaru.
 
-Keduanya menggunakan backend API yang sama. Jangan menyimpan secret Supabase,
-service-role key, atau isi `backend/.env` di dalam frontend.
+Gunakan satu API boundary. Target API adalah Go dan FastAPI merupakan legacy
+bridge/reference selama migrasi. Jangan menyimpan secret Supabase, service-role
+key, provider key, signing key, atau isi `backend/.env` di frontend/WASM.
 
 ## Mulai dari sini
 
 Sebelum mengembangkan frontend, baca
-[`../PROJECT_CONTEXT.md`](../PROJECT_CONTEXT.md). Dokumen tersebut adalah satu
-sumber kebenaran konteks, arsitektur, fitur, integrasi, dan aturan kerja proyek.
+[`../PROJECT_CONTEXT.md`](../PROJECT_CONTEXT.md), [`../PRD.md`](../PRD.md), dan
+[`FRONTEND_MVP_PRD.md`](FRONTEND_MVP_PRD.md). Dokumen tersebut menetapkan target;
+kode/OpenAPI runtime menetapkan apa yang sudah tersedia.
 
-Backend dijalankan dengan Docker dari root repository. Frontend web dan Electron
-tetap dijalankan dengan toolchain JavaScript masing-masing selama development.
+Backend Docker saat ini adalah legacy sampai Go API diimplementasikan. Frontend
+web dan Electron tetap memakai toolchain JavaScript masing-masing saat development.
