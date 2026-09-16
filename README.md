@@ -1,6 +1,6 @@
 # SignalGen 2.0
 
-SignalGen 2.0 is a desktop-first stock screening and trading-signal workspace for the Indonesian market. It helps users build indicator-based rules, screen ticker universes, evaluate strategies through backtesting, and monitor explainable signals without writing code.
+SignalGen 2.0 is moving to a web-first stock-analysis workspace for the Indonesian market. The revised MVP uses React + TypeScript + Vite, a portable Go core compiled to WebAssembly for client-side historical screening/backtesting, and a Go API target for identity-bound access, data delivery, rules, sessions, entitlements, and the private journal. Electron and Python/FastAPI remain legacy references during incremental migration.
 
 > SignalGen is an analysis tool. A BUY, WATCH, HOLD, or SELL state indicates that configured rule conditions were met; it is not a guarantee of price movement or personalized investment advice.
 
@@ -8,13 +8,14 @@ SignalGen 2.0 is a desktop-first stock screening and trading-signal workspace fo
 
 | Surface | Responsibility | Stack |
 | --- | --- | --- |
-| Desktop | Primary analysis workspace, authentication, rule building, watchlists, screening, backtesting, and realtime monitoring | Electron, React, TypeScript, Vite |
-| Web | Public product information, account portal, pricing, subscription, payment, and desktop download | Planned frontend surface |
-| Backend | API, authentication verification, authorization, engines, storage, market-data integration, and realtime events | Python, FastAPI, Socket.IO, SQLite, Supabase Auth |
+| Web | Primary analysis workspace plus public/account surfaces | React, TypeScript, Vite, Go/WASM Web Worker |
+| Target API | Auth/session verification, authorization, feature grants, rules, historical data, journal/portfolio, audit | Go, SQLite, Supabase Auth |
+| Legacy desktop | Reference/rollback UI; installer is not an MVP deliverable | Electron, React, TypeScript, Vite |
+| Legacy backend | Baseline/bridge while portable core and target API are verified | Python, FastAPI, Socket.IO, SQLite |
 
-Both frontends consume the same backend. Trading logic and service credentials remain outside the Electron renderer.
+The target keeps one API boundary. Historical computation moves to the browser worker; credentials, feature decisions, ownership, and journal authority remain on the server. Go/WASM is not absolute code protection.
 
-## Current implementation
+## Current implementation (legacy/baseline, not revised-MVP completion)
 
 - Secure Electron shell with context isolation, sandboxing, and a restricted preload bridge.
 - Login and registration flows backed by the FastAPI authentication endpoints.
@@ -24,28 +25,25 @@ Both frontends consume the same backend. Trading logic and service credentials r
 - Centralized API client and Vite development proxies for REST and Socket.IO traffic.
 - Docker-based backend workflow compatible with Docker Desktop and OrbStack.
 
-The dashboard currently contains explicitly labeled interface data while the remaining feature screens are migrated incrementally from the legacy renderer.
+The dashboard currently contains explicitly labeled interface data while feature screens are migrated incrementally. This does not prove the target Go API, WASM core, entitlement/device controls, or journal are complete.
 
-## Architecture
+## Target architecture
 
 ```text
                       User
                         │
-          ┌─────────────┴─────────────┐
-          │                           │
-          ▼                           ▼
-  frontend/web/              frontend/desktop/
-  public + account           Electron + React
-          │                           │
-          └──────── REST / Socket.IO ─┘
-                        │
                         ▼
-                    backend/
-                Python + FastAPI
-           auth, engines, storage, events
-                 │              │
-                 ▼              ▼
-          Supabase Auth      SQLite / data
+                 frontend/web/
+          React UI + Go/WASM worker
+                  │ REST/HTTPS
+                  ▼
+              Go API target
+       auth/access/data/rules/journal
+              │             │
+              ▼             ▼
+       Supabase Auth       SQLite
+
+ Legacy: Electron + Python/FastAPI kept for baseline and rollback
 ```
 
 Canonical scope and architecture are documented in [PRD.md](./PRD.md) and [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md).
@@ -89,7 +87,7 @@ The backend exposes:
 
 Port `8765` is a realtime transport endpoint, not a website. Opening its root URL directly may return `Not Found`.
 
-### 2. Start the Electron application
+### 2. Start the current legacy Electron application
 
 ```bash
 cd frontend/desktop
@@ -126,6 +124,9 @@ npm run build
 
 - [Desktop frontend guide](./frontend/desktop/README.md)
 - [Product requirements](./PRD.md)
+- [Frontend MVP PRD](./frontend/FRONTEND_MVP_PRD.md)
+- [Backend MVP PRD](./backend/BACKEND_MVP_PRD.md)
+- [Target API and worker contract](./backend/MVP_API_CONTRACT.md)
 - [Architecture and project context](./PROJECT_CONTEXT.md)
 - OpenAPI after startup: `http://127.0.0.1:3456/docs`
 

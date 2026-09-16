@@ -1,6 +1,11 @@
 # SignalGen Desktop
 
-The SignalGen desktop client is the primary product surface for stock screening, rule construction, backtesting, and realtime signal monitoring. It is implemented as a secure Electron shell around a React and TypeScript renderer.
+The SignalGen desktop client is the legacy/reference product surface for stock
+screening, rule construction, backtesting, and realtime signal monitoring. It is
+implemented as a secure Electron shell around a React and TypeScript renderer.
+Under the 16 September 2026 MVP revision, `frontend/web/` becomes the primary
+target and desktop installer parity is not an MVP gate. Preserve this client for
+baseline comparison and rollback during incremental migration.
 
 ## Technology
 
