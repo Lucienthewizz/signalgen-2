@@ -15,7 +15,8 @@ RUN go test ./...
 
 FROM source AS api-build
 
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/signalgen-api ./cmd/api
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/signalgen-api ./cmd/api \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/signalgen-admin ./cmd/admin
 
 
 FROM debian:bookworm-slim AS api-runtime
@@ -28,6 +29,7 @@ RUN apt-get update \
     && chown signalgen:signalgen /data
 
 COPY --from=api-build /out/signalgen-api /usr/local/bin/signalgen-api
+COPY --from=api-build /out/signalgen-admin /usr/local/bin/signalgen-admin
 
 USER signalgen
 EXPOSE 8080

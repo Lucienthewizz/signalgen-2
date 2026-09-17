@@ -65,3 +65,19 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 
 Token sesi hanya dikembalikan saat dibuat. SQLite menyimpan hash token, bukan
 nilai token mentah. Endpoint bisnis lain tetap belum diimplementasikan.
+
+Setelah pengguna login dan membuat sesi pertamanya, developer dapat memberikan
+akses demo secara lokal tanpa endpoint admin publik:
+
+```bash
+docker compose --profile go-target run --rm go-api \
+  signalgen-admin grant \
+  --user USER_ID_SUPABASE \
+  --feature screener \
+  --until 2026-10-17T00:00:00Z \
+  --reason "demo pembimbing"
+```
+
+Cabut akses dengan perintah yang sama menggunakan subcommand `revoke` dan flag
+`--user` serta `--feature`. Tool ini adalah seed/operator lokal sementara;
+endpoint operator publik dan audit lengkap belum tersedia.
