@@ -76,6 +76,11 @@ nilai token mentah. Daftar sesi hanya mengembalikan metadata aman, status, dan
 penanda sesi aktif; ID milik pengguna lain tidak dapat dibaca atau dicabut.
 Endpoint bisnis lain tetap belum diimplementasikan.
 
+Go API memakai satu koneksi SQLite bersama untuk profile, entitlement, sesi,
+dan compute grant. Koneksi mengaktifkan foreign keys, WAL, serta busy timeout
+5 detik; container tetap menyimpan file tersebut pada volume
+`signalgen-go-data`.
+
 Frontend web hanya dapat memanggil Go API dari origin yang dicantumkan secara
 eksplisit pada `SIGNALGEN_CORS_ORIGINS` (dipisahkan koma). Contoh development:
 

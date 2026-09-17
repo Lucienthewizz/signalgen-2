@@ -18,6 +18,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/storage"
 )
 
 func main() {
@@ -33,25 +34,36 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	sessions, err := session.OpenSQLite(databasePath, session.WithMaxActiveSessions(maxActiveSessions))
+	database, err := storage.OpenSQLite(databasePath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer sessions.Close()
-	accessStore, err := access.OpenSQLite(databasePath)
+	defer database.Close()
+	sessions, err := session.NewStore(database, session.WithMaxActiveSessions(maxActiveSessions))
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer accessStore.Close()
+	if err := sessions.Migrate(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+	accessStore, err := access.NewStore(database)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := accessStore.Migrate(context.Background()); err != nil {
+		log.Fatal(err)
+	}
 	datasets, err := dataset.NewFixtureStore(fixturePath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	computeStore, err := compute.OpenSQLite(databasePath)
+	computeStore, err := compute.NewStore(database)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer computeStore.Close()
+	if err := computeStore.Migrate(context.Background()); err != nil {
+		log.Fatal(err)
+	}
 	handler, err := apihttp.NewServer(
 		identity, sessions, accessStore, datasets, computeStore,
 		apihttp.WithCORSOrigins(allowedOrigins),
