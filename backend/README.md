@@ -61,6 +61,9 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `POST /api/v1/sessions` — membuat sesi aplikasi, membutuhkan bearer Supabase;
 - `GET /api/v1/account/me` — profil/status/feature grant server-side;
 - `GET /api/v1/capabilities` — membutuhkan bearer dan `X-App-Session`;
+- `POST /api/v1/datasets/prepare` — menyiapkan manifest fixture sesuai entitlement;
+- `GET /api/v1/datasets/{id}/manifest` — metadata/checksum dataset;
+- `GET /api/v1/datasets/{id}/content` — konten OHLCV sintetis terproteksi;
 - `DELETE /api/v1/sessions/current` — revoke sesi aktif.
 
 Token sesi hanya dikembalikan saat dibuat. SQLite menyimpan hash token, bukan
@@ -81,3 +84,8 @@ docker compose --profile go-target run --rm go-api \
 Cabut akses dengan perintah yang sama menggunakan subcommand `revoke` dan flag
 `--user` serta `--feature`. Tool ini adalah seed/operator lokal sementara;
 endpoint operator publik dan audit lengkap belum tersedia.
+
+Dataset P0 yang tersedia saat ini hanya fixture sintetis `BBCA.JK`, market
+`IDX`, timeframe `1d`, dan purpose `screen`. Endpoint menolak simbol/rentang
+lain serta akun tanpa grant `screener`; ini belum merupakan integrasi provider
+historis production.

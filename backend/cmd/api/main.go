@@ -13,6 +13,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	apihttp "github.com/Lucienthewizz/signalgen-2/backend/internal/api"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
 
@@ -20,6 +21,7 @@ func main() {
 	projectURL := requiredEnvironment("SUPABASE_URL")
 	publishableKey := requiredEnvironment("SUPABASE_PUBLISHABLE_KEY")
 	databasePath := environment("SIGNALGEN_GO_DB_PATH", "/data/signalgen-go.db")
+	fixturePath := environment("SIGNALGEN_FIXTURE_PATH", "/usr/share/signalgen/fixtures/default_scalping_v1.json")
 	address := environment("SIGNALGEN_GO_API_ADDR", ":8080")
 
 	identity, err := auth.NewSupabaseVerifier(projectURL, publishableKey, nil)
@@ -36,7 +38,11 @@ func main() {
 		log.Fatal(err)
 	}
 	defer accessStore.Close()
-	handler, err := apihttp.NewServer(identity, sessions, accessStore)
+	datasets, err := dataset.NewFixtureStore(fixturePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	handler, err := apihttp.NewServer(identity, sessions, accessStore, datasets)
 	if err != nil {
 		log.Fatal(err)
 	}

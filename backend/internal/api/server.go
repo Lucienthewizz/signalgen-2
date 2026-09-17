@@ -14,6 +14,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/core"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
 
@@ -33,26 +34,37 @@ type AccessStore interface {
 	EnsureProfile(ctx context.Context, userID, email string) (access.Account, error)
 	RequireActive(ctx context.Context, userID string) (access.Account, error)
 	Features(ctx context.Context, userID string) ([]string, error)
+	RequireFeature(ctx context.Context, userID, feature string) error
+}
+
+type DatasetStore interface {
+	Prepare(request dataset.PrepareRequest) (dataset.Manifest, error)
+	Manifest(id string) (dataset.Manifest, error)
+	Content(id string) ([]byte, dataset.Manifest, error)
 }
 
 type Server struct {
 	identity IdentityVerifier
 	sessions SessionStore
 	access   AccessStore
+	datasets DatasetStore
 	handler  http.Handler
 }
 
-func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore AccessStore) (*Server, error) {
-	if identity == nil || sessions == nil || accessStore == nil {
-		return nil, fmt.Errorf("identity verifier, session store, and access store are required")
+func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore AccessStore, datasets DatasetStore) (*Server, error) {
+	if identity == nil || sessions == nil || accessStore == nil || datasets == nil {
+		return nil, fmt.Errorf("identity verifier, session store, access store, and dataset store are required")
 	}
-	server := &Server{identity: identity, sessions: sessions, access: accessStore}
+	server := &Server{identity: identity, sessions: sessions, access: accessStore, datasets: datasets}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", server.health)
 	mux.HandleFunc("POST /api/v1/sessions", server.createSession)
 	mux.HandleFunc("DELETE /api/v1/sessions/current", server.revokeCurrentSession)
 	mux.HandleFunc("GET /api/v1/account/me", server.accountMe)
 	mux.HandleFunc("GET /api/v1/capabilities", server.capabilities)
+	mux.HandleFunc("POST /api/v1/datasets/prepare", server.prepareDataset)
+	mux.HandleFunc("GET /api/v1/datasets/{id}/manifest", server.datasetManifest)
+	mux.HandleFunc("GET /api/v1/datasets/{id}/content", server.datasetContent)
 	server.handler = requestContext(mux)
 	return server, nil
 }
@@ -138,6 +150,104 @@ func (server *Server) accountMe(writer http.ResponseWriter, request *http.Reques
 		},
 		"capabilities_version": core.CapabilitiesVersion,
 	})
+}
+
+func (server *Server) prepareDataset(writer http.ResponseWriter, request *http.Request) {
+	principal, _, _, ok := server.requireAppSession(writer, request)
+	if !ok {
+		return
+	}
+	var input dataset.PrepareRequest
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Permintaan dataset tidak valid.")
+		return
+	}
+	feature, ok := featureForPurpose(input.Purpose)
+	if !ok {
+		writeError(writer, request, http.StatusUnprocessableEntity, "UNSUPPORTED_CAPABILITY", "Purpose dataset belum didukung.")
+		return
+	}
+	if err := server.access.RequireFeature(request.Context(), principal.ID, feature); err != nil {
+		writeAccessError(writer, request, err)
+		return
+	}
+	manifest, err := server.datasets.Prepare(input)
+	if errors.Is(err, dataset.ErrInvalidRequest) {
+		writeError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "Market, simbol, timeframe, atau rentang dataset tidak didukung.")
+		return
+	}
+	if err != nil {
+		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Dataset belum dapat disiapkan.")
+		return
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(writer, http.StatusOK, manifest)
+}
+
+func (server *Server) datasetManifest(writer http.ResponseWriter, request *http.Request) {
+	principal, _, _, ok := server.requireAppSession(writer, request)
+	if !ok {
+		return
+	}
+	manifest, err := server.datasets.Manifest(request.PathValue("id"))
+	if errors.Is(err, dataset.ErrNotFound) {
+		writeError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Dataset tidak ditemukan.")
+		return
+	}
+	if err != nil {
+		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Manifest dataset belum dapat dibaca.")
+		return
+	}
+	if err := server.requireDatasetFeature(request, principal.ID, manifest); err != nil {
+		writeAccessError(writer, request, err)
+		return
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(writer, http.StatusOK, manifest)
+}
+
+func (server *Server) datasetContent(writer http.ResponseWriter, request *http.Request) {
+	principal, _, _, ok := server.requireAppSession(writer, request)
+	if !ok {
+		return
+	}
+	content, manifest, err := server.datasets.Content(request.PathValue("id"))
+	if errors.Is(err, dataset.ErrNotFound) {
+		writeError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Dataset tidak ditemukan.")
+		return
+	}
+	if err != nil {
+		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Konten dataset belum dapat dibaca.")
+		return
+	}
+	if err := server.requireDatasetFeature(request, principal.ID, manifest); err != nil {
+		writeAccessError(writer, request, err)
+		return
+	}
+	writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writer.Header().Set("ETag", `"`+manifest.Checksum+`"`)
+	writer.WriteHeader(http.StatusOK)
+	_, _ = writer.Write(content)
+}
+
+func (server *Server) requireDatasetFeature(request *http.Request, userID string, manifest dataset.Manifest) error {
+	feature, ok := featureForPurpose(manifest.Purpose)
+	if !ok {
+		return access.ErrEntitlementMissing
+	}
+	return server.access.RequireFeature(request.Context(), userID, feature)
+}
+
+func featureForPurpose(purpose string) (string, bool) {
+	switch purpose {
+	case "screen":
+		return access.FeatureScreener, true
+	case "backtest":
+		return access.FeatureBacktest, true
+	default:
+		return "", false
+	}
 }
 
 func (server *Server) revokeCurrentSession(writer http.ResponseWriter, request *http.Request) {

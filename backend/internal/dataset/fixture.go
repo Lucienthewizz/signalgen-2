@@ -141,7 +141,7 @@ func NewFixtureStore(path string) (*FixtureStore, error) {
 			SchemaVersion: "ohlcv-1", Provider: "fixture", Purpose: fixture.Request.Purpose,
 			Market: fixture.Market, Currency: fixture.Currency, Symbols: []string{fixture.Request.Symbol},
 			Timeframe: fixture.Timeframe, Timezone: fixture.Timezone, Adjustment: fixture.Adjustment,
-			AvailableRange: Range{From: first, To: last}, WarmupCandles: 20,
+			RequestedRange: Range{From: first, To: last}, AvailableRange: Range{From: first, To: last}, WarmupCandles: 20,
 			CandleCount: len(typedCandles), DecodedBytes: len(content),
 			Checksum: "sha256:" + hex.EncodeToString(contentHash[:]),
 			Quality:  Quality{Status: "complete", Warnings: []string{"synthetic fixture; not live market data"}},

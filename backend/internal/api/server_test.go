@@ -8,11 +8,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
 
@@ -42,6 +44,36 @@ type fakeAccess struct {
 	err           error
 	ensuredUserID string
 	ensuredEmail  string
+}
+
+func (fake *fakeAccess) RequireFeature(_ context.Context, _ string, feature string) error {
+	if fake.err != nil {
+		return fake.err
+	}
+	for _, granted := range fake.features {
+		if granted == feature {
+			return nil
+		}
+	}
+	return access.ErrEntitlementMissing
+}
+
+type fakeDatasets struct {
+	manifest dataset.Manifest
+	content  []byte
+	err      error
+}
+
+func (fake *fakeDatasets) Prepare(_ dataset.PrepareRequest) (dataset.Manifest, error) {
+	return fake.manifest, fake.err
+}
+
+func (fake *fakeDatasets) Manifest(_ string) (dataset.Manifest, error) {
+	return fake.manifest, fake.err
+}
+
+func (fake *fakeDatasets) Content(_ string) ([]byte, dataset.Manifest, error) {
+	return fake.content, fake.manifest, fake.err
 }
 
 func (fake *fakeAccess) EnsureProfile(_ context.Context, userID, email string) (access.Account, error) {
@@ -96,7 +128,7 @@ func (fake *fakeSessions) Revoke(_ context.Context, userID, token string) error 
 
 func testServer(t *testing.T, identity fakeIdentity, sessions *fakeSessions) *Server {
 	t.Helper()
-	server, err := NewServer(identity, sessions, &fakeAccess{})
+	server, err := NewServer(identity, sessions, &fakeAccess{}, &fakeDatasets{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +151,7 @@ func TestCreateSessionUsesBearerPrincipal(t *testing.T) {
 	}}
 	identity := fakeIdentity{principal: auth.Principal{ID: "user-a", Email: "user@example.com"}}
 	accountStore := &fakeAccess{}
-	server, err := NewServer(identity, sessions, accountStore)
+	server, err := NewServer(identity, sessions, accountStore, &fakeDatasets{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,6 +219,7 @@ func TestPrivateRouteRejectsSuspendedAccount(t *testing.T) {
 		fakeIdentity{principal: auth.Principal{ID: "user-a"}},
 		sessions,
 		&fakeAccess{err: access.ErrAccountSuspended},
+		&fakeDatasets{},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -208,7 +241,7 @@ func TestAccountMeReturnsServerSideAccessState(t *testing.T) {
 		account:  access.Account{UserID: "user-a", Email: "user@example.com", Role: access.RoleUser, Status: access.StatusActive},
 		features: []string{access.FeatureScreener},
 	}
-	server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accountStore)
+	server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accountStore, &fakeDatasets{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,6 +267,50 @@ func TestAccountMeReturnsServerSideAccessState(t *testing.T) {
 	}
 	if payload.User.Role != access.RoleUser || len(payload.Features) != 1 || payload.Device.InstallationID != "install-a" {
 		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestPrepareDatasetRequiresFeatureEntitlement(t *testing.T) {
+	sessions := &fakeSessions{}
+	datasets := &fakeDatasets{manifest: dataset.Manifest{DatasetID: "fixture-1", Purpose: "screen"}}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, &fakeAccess{}, datasets,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := bytes.NewBufferString(`{"purpose":"screen","market":"IDX","symbols":["BBCA.JK"],"timeframe":"1d","date_from":"2026-01-01","date_to":"2026-02-09"}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/datasets/prepare", body)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusForbidden, "ENTITLEMENT_REQUIRED")
+}
+
+func TestDatasetContentUsesPrivateCacheAndChecksum(t *testing.T) {
+	sessions := &fakeSessions{}
+	datasets := &fakeDatasets{
+		manifest: dataset.Manifest{DatasetID: "fixture-1", Purpose: "screen", Checksum: "sha256:abc"},
+		content:  []byte(`{"candles":[]}`),
+	}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions,
+		&fakeAccess{features: []string{access.FeatureScreener}}, datasets,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/datasets/fixture-1/content", nil)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != `{"candles":[]}` {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if response.Header().Get("ETag") != `"sha256:abc"` || response.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("headers = %+v", response.Header())
 	}
 }
 
@@ -286,7 +363,11 @@ func TestSessionLifecycleWithSQLite(t *testing.T) {
 	if err := accessStore.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accessStore)
+	datasets, err := dataset.NewFixtureStore(filepath.Join("..", "..", "core", "testdata", "default_scalping_v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accessStore, datasets)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,6 +395,32 @@ func TestSessionLifecycleWithSQLite(t *testing.T) {
 	}
 	if response := callCapabilities(); response.Code != http.StatusOK {
 		t.Fatalf("capabilities status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if err := accessStore.GrantFeature(
+		context.Background(), "user-a", access.FeatureScreener, time.Now().UTC().Add(time.Hour), "integration test",
+	); err != nil {
+		t.Fatal(err)
+	}
+	prepareRequest := httptest.NewRequest(http.MethodPost, "/api/v1/datasets/prepare",
+		bytes.NewBufferString(`{"purpose":"screen","market":"IDX","symbols":["BBCA.JK"],"timeframe":"1d","date_from":"2026-01-01","date_to":"2026-02-09"}`))
+	prepareRequest.Header.Set("Authorization", "Bearer user-token")
+	prepareRequest.Header.Set("X-App-Session", created.Token)
+	prepareResponse := httptest.NewRecorder()
+	server.ServeHTTP(prepareResponse, prepareRequest)
+	if prepareResponse.Code != http.StatusOK {
+		t.Fatalf("prepare status = %d, body = %s", prepareResponse.Code, prepareResponse.Body.String())
+	}
+	var manifest dataset.Manifest
+	if err := json.Unmarshal(prepareResponse.Body.Bytes(), &manifest); err != nil {
+		t.Fatal(err)
+	}
+	contentRequest := httptest.NewRequest(http.MethodGet, "/api/v1/datasets/"+manifest.DatasetID+"/content", nil)
+	contentRequest.Header.Set("Authorization", "Bearer user-token")
+	contentRequest.Header.Set("X-App-Session", created.Token)
+	contentResponse := httptest.NewRecorder()
+	server.ServeHTTP(contentResponse, contentRequest)
+	if contentResponse.Code != http.StatusOK || contentResponse.Header().Get("ETag") == "" {
+		t.Fatalf("content status = %d, headers = %+v", contentResponse.Code, contentResponse.Header())
 	}
 
 	revokeRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/sessions/current", nil)

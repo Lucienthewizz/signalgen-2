@@ -30,6 +30,7 @@ RUN apt-get update \
 
 COPY --from=api-build /out/signalgen-api /usr/local/bin/signalgen-api
 COPY --from=api-build /out/signalgen-admin /usr/local/bin/signalgen-admin
+COPY backend/core/testdata/default_scalping_v1.json /usr/share/signalgen/fixtures/default_scalping_v1.json
 
 USER signalgen
 EXPOSE 8080
