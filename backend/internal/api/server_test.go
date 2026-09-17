@@ -40,6 +40,7 @@ type fakeSessions struct {
 	revokedToken   string
 	listed         []session.Session
 	revokedID      string
+	createError    error
 }
 
 type fakeAccess struct {
@@ -123,11 +124,16 @@ func (fake *fakeAccess) accountFor(userID, email string) access.Account {
 
 func (fake *fakeSessions) Create(_ context.Context, userID, installationID, label string) (session.Created, error) {
 	fake.createdUserID = userID
+	if fake.createError != nil {
+		return session.Created{}, fake.createError
+	}
 	if installationID == "" || label == "" {
 		return session.Created{}, session.ErrInvalidRequest
 	}
 	return fake.created, nil
 }
+
+func (fake *fakeSessions) ActiveLimit() int { return 3 }
 
 func (fake *fakeSessions) Verify(_ context.Context, userID, token string) (session.Session, error) {
 	fake.verifiedUserID = userID
@@ -250,6 +256,17 @@ func TestCreateSessionUsesBearerPrincipal(t *testing.T) {
 	if response.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatalf("cache control = %q", response.Header().Get("Cache-Control"))
 	}
+}
+
+func TestCreateSessionReturnsStableLimitError(t *testing.T) {
+	sessions := &fakeSessions{createError: session.ErrSessionLimit}
+	server := testServer(t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions)
+	body := bytes.NewBufferString(`{"installation_id":"install-c","label":"Safari"}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/sessions", body)
+	request.Header.Set("Authorization", "Bearer user-token")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusConflict, "DEVICE_LIMIT_REACHED")
 }
 
 func TestCapabilitiesRequiresBearerAndMatchingAppSession(t *testing.T) {

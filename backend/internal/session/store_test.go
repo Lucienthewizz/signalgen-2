@@ -144,3 +144,44 @@ func TestRevokeByIDIsOwnerScopedAndIdempotent(t *testing.T) {
 		t.Fatalf("verify error = %v, want ErrRevoked", err)
 	}
 }
+
+func TestCreateEnforcesActiveSessionLimit(t *testing.T) {
+	now := time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	store.maxActiveSessions = 2
+	if _, err := store.Create(context.Background(), "user-a", "install-a", "Chrome"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Create(context.Background(), "user-a", "install-b", "Firefox"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Create(context.Background(), "user-a", "install-c", "Safari"); !errors.Is(err, ErrSessionLimit) {
+		t.Fatalf("error = %v, want ErrSessionLimit", err)
+	}
+	if _, err := store.Create(context.Background(), "user-b", "install-c", "Safari"); err != nil {
+		t.Fatalf("other user should have an independent limit: %v", err)
+	}
+}
+
+func TestCreateReplacesSessionForSameInstallation(t *testing.T) {
+	now := time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	store.maxActiveSessions = 1
+	first, err := store.Create(context.Background(), "user-a", "install-a", "Chrome")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.Create(context.Background(), "user-a", "install-a", "Chrome renamed")
+	if err != nil {
+		t.Fatalf("replacement error = %v", err)
+	}
+	if first.Session.ID == second.Session.ID {
+		t.Fatal("replacement reused the old session id")
+	}
+	if _, err := store.Verify(context.Background(), "user-a", first.Token); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("old session error = %v, want ErrRevoked", err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", second.Token); err != nil {
+		t.Fatalf("new session error = %v", err)
+	}
+}

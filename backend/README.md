@@ -80,11 +80,17 @@ eksplisit pada `SIGNALGEN_CORS_ORIGINS` (dipisahkan koma). Contoh development:
 
 ```env
 SIGNALGEN_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+SIGNALGEN_MAX_ACTIVE_SESSIONS=3
 ```
 
 Konfigurasi ini tidak menerima wildcard. Request browser yang diizinkan dapat
 mengirim header `Authorization`, `Content-Type`, dan `X-App-Session`. Client
 Electron/server-side yang tidak mengirim header `Origin` tidak terpengaruh.
+
+Batas sesi aktif berlaku per pengguna. Pembuatan sesi pada `installation_id`
+yang sama mengganti dan mencabut sesi lama secara atomik. Pembuatan sesi dari
+instalasi baru setelah batas tercapai menghasilkan `409 DEVICE_LIMIT_REACHED`;
+pengguna dapat mencabut sesi lama melalui endpoint daftar sesi.
 
 Setelah pengguna login dan membuat sesi pertamanya, developer dapat memberikan
 akses demo secara lokal tanpa endpoint admin publik:

@@ -33,6 +33,7 @@ type SessionStore interface {
 	Revoke(ctx context.Context, userID, token string) error
 	List(ctx context.Context, userID string) ([]session.Session, error)
 	RevokeByID(ctx context.Context, userID, sessionID string) error
+	ActiveLimit() int
 }
 
 type AccessStore interface {
@@ -150,6 +151,10 @@ func (server *Server) createSession(writer http.ResponseWriter, request *http.Re
 		writeError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "Installation ID dan label wajib diisi.")
 		return
 	}
+	if errors.Is(err, session.ErrSessionLimit) {
+		writeError(writer, request, http.StatusConflict, "DEVICE_LIMIT_REACHED", "Batas sesi aktif sudah tercapai.")
+		return
+	}
 	if err != nil {
 		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Sesi belum dapat dibuat.")
 		return
@@ -231,7 +236,9 @@ func (server *Server) accountSessions(writer http.ResponseWriter, request *http.
 		})
 	}
 	writer.Header().Set("Cache-Control", "private, no-store")
-	writeJSON(writer, http.StatusOK, map[string]interface{}{"items": items, "limit": 100})
+	writeJSON(writer, http.StatusOK, map[string]interface{}{
+		"items": items, "max_items": 100, "active_session_limit": server.sessions.ActiveLimit(),
+	})
 }
 
 func (server *Server) revokeAccountSession(writer http.ResponseWriter, request *http.Request) {

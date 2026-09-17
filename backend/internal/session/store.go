@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	defaultTTL = 24 * time.Hour
-	maxLabel   = 100
+	defaultTTL               = 24 * time.Hour
+	maxLabel                 = 100
+	defaultMaxActiveSessions = 3
 )
 
 var (
@@ -26,6 +27,7 @@ var (
 	ErrRevoked        = errors.New("app session is revoked")
 	ErrInvalidRequest = errors.New("invalid session request")
 	ErrNotFound       = errors.New("app session was not found")
+	ErrSessionLimit   = errors.New("active session limit reached")
 )
 
 type Session struct {
@@ -45,10 +47,11 @@ type Created struct {
 }
 
 type Store struct {
-	db     *sql.DB
-	now    func() time.Time
-	random io.Reader
-	ttl    time.Duration
+	db                *sql.DB
+	now               func() time.Time
+	random            io.Reader
+	ttl               time.Duration
+	maxActiveSessions int
 }
 
 type Option func(*Store)
@@ -65,18 +68,26 @@ func WithRandom(reader io.Reader) Option {
 	return func(store *Store) { store.random = reader }
 }
 
+func WithMaxActiveSessions(limit int) Option {
+	return func(store *Store) { store.maxActiveSessions = limit }
+}
+
 func NewStore(db *sql.DB, options ...Option) (*Store, error) {
 	if db == nil {
 		return nil, fmt.Errorf("session database is required")
 	}
-	store := &Store{db: db, now: time.Now, random: rand.Reader, ttl: defaultTTL}
+	store := &Store{db: db, now: time.Now, random: rand.Reader, ttl: defaultTTL, maxActiveSessions: defaultMaxActiveSessions}
 	for _, option := range options {
 		option(store)
 	}
-	if store.now == nil || store.random == nil || store.ttl <= 0 {
+	if store.now == nil || store.random == nil || store.ttl <= 0 || store.maxActiveSessions <= 0 {
 		return nil, fmt.Errorf("invalid session store configuration")
 	}
 	return store, nil
+}
+
+func (store *Store) ActiveLimit() int {
+	return store.maxActiveSessions
 }
 
 func OpenSQLite(path string, options ...Option) (*Store, error) {
@@ -153,7 +164,29 @@ func (store *Store) Create(ctx context.Context, userID, installationID, label st
 		LastSeenAt:     now,
 	}
 	hash := tokenHash(token)
-	_, err = store.db.ExecContext(ctx, `
+	transaction, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Created{}, fmt.Errorf("begin app session creation: %w", err)
+	}
+	defer transaction.Rollback()
+	if _, err := transaction.ExecContext(ctx, `
+UPDATE app_sessions
+SET revoked_at = ?
+WHERE user_id = ? AND installation_id = ? AND revoked_at IS NULL AND expires_at > ?`,
+		now.Unix(), userID, installationID, now.Unix(),
+	); err != nil {
+		return Created{}, fmt.Errorf("replace installation session: %w", err)
+	}
+	var activeCount int
+	if err := transaction.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM app_sessions
+WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?`, userID, now.Unix()).Scan(&activeCount); err != nil {
+		return Created{}, fmt.Errorf("count active app sessions: %w", err)
+	}
+	if activeCount >= store.maxActiveSessions {
+		return Created{}, ErrSessionLimit
+	}
+	_, err = transaction.ExecContext(ctx, `
 INSERT INTO app_sessions (
     id, user_id, installation_id, label, token_hash,
     created_at, expires_at, last_seen_at, revoked_at
@@ -163,6 +196,9 @@ INSERT INTO app_sessions (
 	)
 	if err != nil {
 		return Created{}, fmt.Errorf("create app session: %w", err)
+	}
+	if err := transaction.Commit(); err != nil {
+		return Created{}, fmt.Errorf("commit app session creation: %w", err)
 	}
 	return Created{Session: session, Token: token}, nil
 }

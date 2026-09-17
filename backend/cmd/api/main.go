@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -26,12 +27,13 @@ func main() {
 	fixturePath := environment("SIGNALGEN_FIXTURE_PATH", "/usr/share/signalgen/fixtures/default_scalping_v1.json")
 	address := environment("SIGNALGEN_GO_API_ADDR", ":8080")
 	allowedOrigins := commaSeparatedEnvironment("SIGNALGEN_CORS_ORIGINS")
+	maxActiveSessions := positiveIntegerEnvironment("SIGNALGEN_MAX_ACTIVE_SESSIONS", 3)
 
 	identity, err := auth.NewSupabaseVerifier(projectURL, publishableKey, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	sessions, err := session.OpenSQLite(databasePath)
+	sessions, err := session.OpenSQLite(databasePath, session.WithMaxActiveSessions(maxActiveSessions))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -102,4 +104,16 @@ func commaSeparatedEnvironment(name string) []string {
 		}
 	}
 	return values
+}
+
+func positiveIntegerEnvironment(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		log.Fatalf("%s must be a positive integer", name)
+	}
+	return value
 }
