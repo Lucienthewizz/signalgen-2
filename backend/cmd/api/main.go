@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	apihttp "github.com/Lucienthewizz/signalgen-2/backend/internal/api"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
@@ -30,7 +31,12 @@ func main() {
 		log.Fatal(err)
 	}
 	defer sessions.Close()
-	handler, err := apihttp.NewServer(identity, sessions)
+	accessStore, err := access.OpenSQLite(databasePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer accessStore.Close()
+	handler, err := apihttp.NewServer(identity, sessions, accessStore)
 	if err != nil {
 		log.Fatal(err)
 	}

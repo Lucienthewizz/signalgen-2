@@ -59,6 +59,7 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 
 - `GET /health` — public health check;
 - `POST /api/v1/sessions` — membuat sesi aplikasi, membutuhkan bearer Supabase;
+- `GET /api/v1/account/me` — profil/status/feature grant server-side;
 - `GET /api/v1/capabilities` — membutuhkan bearer dan `X-App-Session`;
 - `DELETE /api/v1/sessions/current` — revoke sesi aktif.
 

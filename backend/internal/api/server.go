@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/core"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
@@ -28,21 +29,29 @@ type SessionStore interface {
 	Revoke(ctx context.Context, userID, token string) error
 }
 
+type AccessStore interface {
+	EnsureProfile(ctx context.Context, userID, email string) (access.Account, error)
+	RequireActive(ctx context.Context, userID string) (access.Account, error)
+	Features(ctx context.Context, userID string) ([]string, error)
+}
+
 type Server struct {
 	identity IdentityVerifier
 	sessions SessionStore
+	access   AccessStore
 	handler  http.Handler
 }
 
-func NewServer(identity IdentityVerifier, sessions SessionStore) (*Server, error) {
-	if identity == nil || sessions == nil {
-		return nil, fmt.Errorf("identity verifier and session store are required")
+func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore AccessStore) (*Server, error) {
+	if identity == nil || sessions == nil || accessStore == nil {
+		return nil, fmt.Errorf("identity verifier, session store, and access store are required")
 	}
-	server := &Server{identity: identity, sessions: sessions}
+	server := &Server{identity: identity, sessions: sessions, access: accessStore}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", server.health)
 	mux.HandleFunc("POST /api/v1/sessions", server.createSession)
 	mux.HandleFunc("DELETE /api/v1/sessions/current", server.revokeCurrentSession)
+	mux.HandleFunc("GET /api/v1/account/me", server.accountMe)
 	mux.HandleFunc("GET /api/v1/capabilities", server.capabilities)
 	server.handler = requestContext(mux)
 	return server, nil
@@ -73,6 +82,10 @@ func (server *Server) createSession(writer http.ResponseWriter, request *http.Re
 		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Body sesi tidak valid.")
 		return
 	}
+	if _, err := server.access.EnsureProfile(request.Context(), principal.ID, principal.Email); err != nil {
+		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Profil akun belum dapat disiapkan.")
+		return
+	}
 	created, err := server.sessions.Create(request.Context(), principal.ID, input.InstallationID, input.Label)
 	if errors.Is(err, session.ErrInvalidRequest) {
 		writeError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "Installation ID dan label wajib diisi.")
@@ -87,7 +100,7 @@ func (server *Server) createSession(writer http.ResponseWriter, request *http.Re
 }
 
 func (server *Server) capabilities(writer http.ResponseWriter, request *http.Request) {
-	_, _, ok := server.requireAppSession(writer, request)
+	_, _, _, ok := server.requireAppSession(writer, request)
 	if !ok {
 		return
 	}
@@ -96,8 +109,39 @@ func (server *Server) capabilities(writer http.ResponseWriter, request *http.Req
 	writeJSON(writer, http.StatusOK, capabilities)
 }
 
+func (server *Server) accountMe(writer http.ResponseWriter, request *http.Request) {
+	principal, appSession, _, ok := server.requireAppSession(writer, request)
+	if !ok {
+		return
+	}
+	account, err := server.access.RequireActive(request.Context(), principal.ID)
+	if err != nil {
+		writeAccessError(writer, request, err)
+		return
+	}
+	features, err := server.access.Features(request.Context(), principal.ID)
+	if err != nil {
+		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Fitur akun belum dapat dibaca.")
+		return
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(writer, http.StatusOK, map[string]interface{}{
+		"user": map[string]string{
+			"id": account.UserID, "email": account.Email, "role": account.Role, "status": account.Status,
+		},
+		"features": features,
+		"session": map[string]interface{}{
+			"id": appSession.ID, "expires_at": appSession.ExpiresAt,
+		},
+		"device": map[string]interface{}{
+			"installation_id": appSession.InstallationID, "label": appSession.Label, "current": true,
+		},
+		"capabilities_version": core.CapabilitiesVersion,
+	})
+}
+
 func (server *Server) revokeCurrentSession(writer http.ResponseWriter, request *http.Request) {
-	principal, token, ok := server.requireAppSession(writer, request)
+	principal, _, token, ok := server.requireAppSession(writer, request)
 	if !ok {
 		return
 	}
@@ -127,21 +171,37 @@ func (server *Server) requirePrincipal(writer http.ResponseWriter, request *http
 	return auth.Principal{}, false
 }
 
-func (server *Server) requireAppSession(writer http.ResponseWriter, request *http.Request) (auth.Principal, string, bool) {
+func (server *Server) requireAppSession(writer http.ResponseWriter, request *http.Request) (auth.Principal, session.Session, string, bool) {
 	principal, ok := server.requirePrincipal(writer, request)
 	if !ok {
-		return auth.Principal{}, "", false
+		return auth.Principal{}, session.Session{}, "", false
 	}
 	token := strings.TrimSpace(request.Header.Get("X-App-Session"))
 	if token == "" {
 		writeError(writer, request, http.StatusUnauthorized, "AUTH_REQUIRED", "Sesi aplikasi diperlukan.")
-		return auth.Principal{}, "", false
+		return auth.Principal{}, session.Session{}, "", false
 	}
-	if _, err := server.sessions.Verify(request.Context(), principal.ID, token); err != nil {
+	appSession, err := server.sessions.Verify(request.Context(), principal.ID, token)
+	if err != nil {
 		writeSessionError(writer, request, err)
-		return auth.Principal{}, "", false
+		return auth.Principal{}, session.Session{}, "", false
 	}
-	return principal, token, true
+	if _, err := server.access.RequireActive(request.Context(), principal.ID); err != nil {
+		writeAccessError(writer, request, err)
+		return auth.Principal{}, session.Session{}, "", false
+	}
+	return principal, appSession, token, true
+}
+
+func writeAccessError(writer http.ResponseWriter, request *http.Request, err error) {
+	switch {
+	case errors.Is(err, access.ErrAccountSuspended), errors.Is(err, access.ErrAccountNotFound):
+		writeError(writer, request, http.StatusForbidden, "ACCOUNT_SUSPENDED", "Akun tidak aktif.")
+	case errors.Is(err, access.ErrEntitlementMissing):
+		writeError(writer, request, http.StatusForbidden, "ENTITLEMENT_REQUIRED", "Fitur belum aktif untuk akun ini.")
+	default:
+		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Status akun belum dapat diverifikasi.")
+	}
 }
 
 func writeSessionError(writer http.ResponseWriter, request *http.Request, err error) {

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
@@ -35,6 +36,44 @@ type fakeSessions struct {
 	revokedToken   string
 }
 
+type fakeAccess struct {
+	account       access.Account
+	features      []string
+	err           error
+	ensuredUserID string
+	ensuredEmail  string
+}
+
+func (fake *fakeAccess) EnsureProfile(_ context.Context, userID, email string) (access.Account, error) {
+	fake.ensuredUserID = userID
+	fake.ensuredEmail = email
+	if fake.err != nil {
+		return access.Account{}, fake.err
+	}
+	return fake.accountFor(userID, email), nil
+}
+
+func (fake *fakeAccess) RequireActive(_ context.Context, userID string) (access.Account, error) {
+	if fake.err != nil {
+		return access.Account{}, fake.err
+	}
+	return fake.accountFor(userID, ""), nil
+}
+
+func (fake *fakeAccess) Features(_ context.Context, _ string) ([]string, error) {
+	if fake.err != nil {
+		return nil, fake.err
+	}
+	return fake.features, nil
+}
+
+func (fake *fakeAccess) accountFor(userID, email string) access.Account {
+	if fake.account.UserID != "" {
+		return fake.account
+	}
+	return access.Account{UserID: userID, Email: email, Role: access.RoleUser, Status: access.StatusActive}
+}
+
 func (fake *fakeSessions) Create(_ context.Context, userID, installationID, label string) (session.Created, error) {
 	fake.createdUserID = userID
 	if installationID == "" || label == "" {
@@ -57,7 +96,7 @@ func (fake *fakeSessions) Revoke(_ context.Context, userID, token string) error 
 
 func testServer(t *testing.T, identity fakeIdentity, sessions *fakeSessions) *Server {
 	t.Helper()
-	server, err := NewServer(identity, sessions)
+	server, err := NewServer(identity, sessions, &fakeAccess{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +117,12 @@ func TestCreateSessionUsesBearerPrincipal(t *testing.T) {
 		Session: session.Session{ID: "ses_1", ExpiresAt: time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC)},
 		Token:   "sgs_once",
 	}}
-	server := testServer(t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions)
+	identity := fakeIdentity{principal: auth.Principal{ID: "user-a", Email: "user@example.com"}}
+	accountStore := &fakeAccess{}
+	server, err := NewServer(identity, sessions, accountStore)
+	if err != nil {
+		t.Fatal(err)
+	}
 	body := bytes.NewBufferString(`{"installation_id":"install-a","label":"Chrome","client":{"app_version":"web-0.1","user_agent_family":"Chrome"}}`)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/sessions", body)
 	request.Header.Set("Authorization", "Bearer user-token")
@@ -89,6 +133,9 @@ func TestCreateSessionUsesBearerPrincipal(t *testing.T) {
 	}
 	if sessions.createdUserID != "user-a" {
 		t.Fatalf("created user = %q", sessions.createdUserID)
+	}
+	if accountStore.ensuredUserID != "user-a" || accountStore.ensuredEmail != "user@example.com" {
+		t.Fatalf("ensured profile = user %q email %q", accountStore.ensuredUserID, accountStore.ensuredEmail)
 	}
 	if response.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatalf("cache control = %q", response.Header().Get("Cache-Control"))
@@ -134,6 +181,62 @@ func TestCapabilitiesRejectsExpiredSession(t *testing.T) {
 	assertErrorCode(t, response, http.StatusForbidden, "SESSION_EXPIRED")
 }
 
+func TestPrivateRouteRejectsSuspendedAccount(t *testing.T) {
+	sessions := &fakeSessions{}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}},
+		sessions,
+		&fakeAccess{err: access.ErrAccountSuspended},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/capabilities", nil)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusForbidden, "ACCOUNT_SUSPENDED")
+}
+
+func TestAccountMeReturnsServerSideAccessState(t *testing.T) {
+	sessions := &fakeSessions{verified: session.Session{
+		ID: "ses_1", InstallationID: "install-a", Label: "Chrome",
+		ExpiresAt: time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC),
+	}}
+	accountStore := &fakeAccess{
+		account:  access.Account{UserID: "user-a", Email: "user@example.com", Role: access.RoleUser, Status: access.StatusActive},
+		features: []string{access.FeatureScreener},
+	}
+	server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accountStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/account/me", nil)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		User struct {
+			Role string `json:"role"`
+		} `json:"user"`
+		Features []string `json:"features"`
+		Device   struct {
+			InstallationID string `json:"installation_id"`
+		} `json:"device"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.User.Role != access.RoleUser || len(payload.Features) != 1 || payload.Device.InstallationID != "install-a" {
+		t.Fatalf("payload = %+v", payload)
+	}
+}
+
 func TestIdentityProviderFailureIsSanitized(t *testing.T) {
 	server := testServer(t, fakeIdentity{err: errors.New("upstream leaked detail")}, &fakeSessions{})
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/sessions", bytes.NewBufferString(`{}`))
@@ -176,7 +279,14 @@ func TestSessionLifecycleWithSQLite(t *testing.T) {
 	if err := sessions.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions)
+	accessStore, err := access.NewStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accessStore.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accessStore)
 	if err != nil {
 		t.Fatal(err)
 	}

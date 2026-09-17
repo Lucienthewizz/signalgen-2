@@ -4,7 +4,9 @@ Versi desain 0.1 · 16 September 2026 · **Proposed contract, not implemented AP
 
 Implementation checkpoint 17 September 2026: Go API currently implements
 `GET /health`, `POST /api/v1/sessions`, `GET /api/v1/capabilities`, and
-`DELETE /api/v1/sessions/current`. This checkpoint is a subset, not a claim
+`DELETE /api/v1/sessions/current`. `GET /api/v1/account/me` is also available
+with the currently implemented profile, feature, session, and device fields.
+This checkpoint is a subset, not a claim
 that the remaining proposed routes are available.
 
 ## 1. Conventions
