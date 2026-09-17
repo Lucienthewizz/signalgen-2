@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,6 +25,7 @@ func main() {
 	databasePath := environment("SIGNALGEN_GO_DB_PATH", "/data/signalgen-go.db")
 	fixturePath := environment("SIGNALGEN_FIXTURE_PATH", "/usr/share/signalgen/fixtures/default_scalping_v1.json")
 	address := environment("SIGNALGEN_GO_API_ADDR", ":8080")
+	allowedOrigins := commaSeparatedEnvironment("SIGNALGEN_CORS_ORIGINS")
 
 	identity, err := auth.NewSupabaseVerifier(projectURL, publishableKey, nil)
 	if err != nil {
@@ -48,7 +50,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer computeStore.Close()
-	handler, err := apihttp.NewServer(identity, sessions, accessStore, datasets, computeStore)
+	handler, err := apihttp.NewServer(identity, sessions, accessStore, datasets, computeStore, apihttp.WithCORSOrigins(allowedOrigins))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -90,4 +92,14 @@ func environment(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func commaSeparatedEnvironment(name string) []string {
+	var values []string
+	for _, value := range strings.Split(os.Getenv(name), ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }

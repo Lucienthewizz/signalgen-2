@@ -157,6 +157,58 @@ func TestHealthIsPublic(t *testing.T) {
 	}
 }
 
+func TestCORSAllowsConfiguredBrowserOrigin(t *testing.T) {
+	server, err := NewServer(
+		fakeIdentity{}, &fakeSessions{}, &fakeAccess{}, &fakeDatasets{}, &fakeCompute{},
+		WithCORSOrigins([]string{"http://localhost:5173"}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodOptions, "/api/v1/sessions", nil)
+	request.Header.Set("Origin", "http://localhost:5173")
+	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Access-Control-Allow-Origin") != "http://localhost:5173" {
+		t.Fatalf("allow origin = %q", response.Header().Get("Access-Control-Allow-Origin"))
+	}
+	if response.Header().Get("Access-Control-Allow-Headers") != "Authorization, Content-Type, X-App-Session" {
+		t.Fatalf("allow headers = %q", response.Header().Get("Access-Control-Allow-Headers"))
+	}
+}
+
+func TestCORSRejectsUnlistedPreflightOrigin(t *testing.T) {
+	server, err := NewServer(
+		fakeIdentity{}, &fakeSessions{}, &fakeAccess{}, &fakeDatasets{}, &fakeCompute{},
+		WithCORSOrigins([]string{"https://app.signalgen.example"}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodOptions, "/api/v1/sessions", nil)
+	request.Header.Set("Origin", "https://evil.example")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusForbidden, "ORIGIN_NOT_ALLOWED")
+	if response.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Fatalf("unexpected allow origin = %q", response.Header().Get("Access-Control-Allow-Origin"))
+	}
+}
+
+func TestCORSRejectsInvalidConfiguration(t *testing.T) {
+	_, err := NewServer(
+		fakeIdentity{}, &fakeSessions{}, &fakeAccess{}, &fakeDatasets{}, &fakeCompute{},
+		WithCORSOrigins([]string{"*"}),
+	)
+	if err == nil {
+		t.Fatal("expected invalid CORS origin error")
+	}
+}
+
 func TestCreateSessionUsesBearerPrincipal(t *testing.T) {
 	sessions := &fakeSessions{created: session.Created{
 		Session: session.Session{ID: "ses_1", ExpiresAt: time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC)},

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/core"
@@ -57,9 +58,43 @@ type Server struct {
 	handler  http.Handler
 }
 
-func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore AccessStore, datasets DatasetStore, computeStore ComputeStore) (*Server, error) {
+type serverConfig struct {
+	allowedOrigins map[string]struct{}
+}
+
+type ServerOption func(*serverConfig) error
+
+// WithCORSOrigins enables browser access only for the exact HTTP(S) origins provided.
+// An empty list keeps cross-origin browser access disabled.
+func WithCORSOrigins(origins []string) ServerOption {
+	return func(config *serverConfig) error {
+		for _, rawOrigin := range origins {
+			origin := strings.TrimSpace(rawOrigin)
+			if origin == "" {
+				continue
+			}
+			parsed, err := url.Parse(origin)
+			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+				return fmt.Errorf("invalid CORS origin %q", rawOrigin)
+			}
+			config.allowedOrigins[origin] = struct{}{}
+		}
+		return nil
+	}
+}
+
+func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore AccessStore, datasets DatasetStore, computeStore ComputeStore, options ...ServerOption) (*Server, error) {
 	if identity == nil || sessions == nil || accessStore == nil || datasets == nil || computeStore == nil {
 		return nil, fmt.Errorf("identity verifier, session store, access store, dataset store, and compute store are required")
+	}
+	config := serverConfig{allowedOrigins: make(map[string]struct{})}
+	for _, option := range options {
+		if option == nil {
+			continue
+		}
+		if err := option(&config); err != nil {
+			return nil, err
+		}
 	}
 	server := &Server{identity: identity, sessions: sessions, access: accessStore, datasets: datasets, compute: computeStore}
 	mux := http.NewServeMux()
@@ -72,7 +107,7 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	mux.HandleFunc("GET /api/v1/datasets/{id}/manifest", server.datasetManifest)
 	mux.HandleFunc("GET /api/v1/datasets/{id}/content", server.datasetContent)
 	mux.HandleFunc("POST /api/v1/compute-grants", server.createComputeGrant)
-	server.handler = requestContext(mux)
+	server.handler = requestContext(corsAllowlist(mux, config.allowedOrigins))
 	return server, nil
 }
 
@@ -430,6 +465,35 @@ func requestContext(next http.Handler) http.Handler {
 		requestID := newRequestID()
 		writer.Header().Set("X-Request-ID", requestID)
 		next.ServeHTTP(writer, request.WithContext(context.WithValue(request.Context(), requestIDKey{}, requestID)))
+	})
+}
+
+func corsAllowlist(next http.Handler, allowedOrigins map[string]struct{}) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		origin := request.Header.Get("Origin")
+		if origin == "" {
+			next.ServeHTTP(writer, request)
+			return
+		}
+		writer.Header().Add("Vary", "Origin")
+		if _, allowed := allowedOrigins[origin]; !allowed {
+			if request.Method == http.MethodOptions {
+				writeError(writer, request, http.StatusForbidden, "ORIGIN_NOT_ALLOWED", "Origin browser tidak diizinkan.")
+				return
+			}
+			next.ServeHTTP(writer, request)
+			return
+		}
+
+		writer.Header().Set("Access-Control-Allow-Origin", origin)
+		if request.Method != http.MethodOptions {
+			next.ServeHTTP(writer, request)
+			return
+		}
+		writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-App-Session")
+		writer.Header().Set("Access-Control-Max-Age", "600")
+		writer.WriteHeader(http.StatusNoContent)
 	})
 }
 

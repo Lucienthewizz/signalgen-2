@@ -1,8 +1,8 @@
 # SignalGen MVP — Target API & Worker Contract
 
-Versi desain 0.1 · 16 September 2026 · **Proposed contract, not implemented API.** Backend publishes OpenAPI/generated types after implementation; runtime OpenAPI wins for what exists. Changes require FE+BE review and versioning.
+Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** Backend publishes OpenAPI/generated types after implementation; runtime OpenAPI wins for what exists. Changes require FE+BE review and versioning.
 
-Implementation checkpoint 17 September 2026: Go API currently implements
+Implementation checkpoint 18 September 2026: Go API currently implements
 `GET /health`, `POST /api/v1/sessions`, `GET /api/v1/capabilities`, and
 `DELETE /api/v1/sessions/current`. `GET /api/v1/account/me` is also available
 with the currently implemented profile, feature, session, and device fields.
@@ -10,6 +10,8 @@ Dataset routes currently serve only the checksum-verified synthetic
 `BBCA.JK` screening fixture to accounts with an active `screener` grant.
 `POST /api/v1/compute-grants` is implemented for the frozen screening baseline
 and rejects mismatched dataset, rule, engine, or schema versions.
+Browser integration supports an exact-origin CORS allowlist configured through
+`SIGNALGEN_CORS_ORIGINS`; wildcard origins are rejected.
 This checkpoint is a subset, not a claim
 that the remaining proposed routes are available.
 
@@ -42,6 +44,7 @@ Stable HTTP/code minimum:
 | HTTP | Codes |
 | --- | --- |
 | 400/422 | `INVALID_REQUEST`, `INVALID_RULE`, `INVALID_RANGE`, `UNSUPPORTED_CAPABILITY` |
+| 403 (preflight) | `ORIGIN_NOT_ALLOWED` |
 | 401 | `AUTH_REQUIRED`, `AUTH_INVALID`, `AUTH_EXPIRED` |
 | 403 | `ACCOUNT_SUSPENDED`, `SESSION_REVOKED`, `SESSION_EXPIRED`, `ENTITLEMENT_REQUIRED`, `ROLE_REQUIRED` |
 | 404 | `RESOURCE_NOT_FOUND` (consistent for non-owner/private missing) |

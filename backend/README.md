@@ -71,6 +71,17 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 Token sesi hanya dikembalikan saat dibuat. SQLite menyimpan hash token, bukan
 nilai token mentah. Endpoint bisnis lain tetap belum diimplementasikan.
 
+Frontend web hanya dapat memanggil Go API dari origin yang dicantumkan secara
+eksplisit pada `SIGNALGEN_CORS_ORIGINS` (dipisahkan koma). Contoh development:
+
+```env
+SIGNALGEN_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+Konfigurasi ini tidak menerima wildcard. Request browser yang diizinkan dapat
+mengirim header `Authorization`, `Content-Type`, dan `X-App-Session`. Client
+Electron/server-side yang tidak mengirim header `Origin` tidak terpengaruh.
+
 Setelah pengguna login dan membuat sesi pertamanya, developer dapat memberikan
 akses demo secara lokal tanpa endpoint admin publik:
 
