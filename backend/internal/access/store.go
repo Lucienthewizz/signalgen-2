@@ -90,6 +90,13 @@ func OpenSQLite(path string, options ...Option) (*Store, error) {
 
 func (store *Store) Close() error { return store.db.Close() }
 
+func (store *Store) Ready(ctx context.Context) error {
+	if err := store.db.PingContext(ctx); err != nil {
+		return fmt.Errorf("access storage readiness: %w", err)
+	}
+	return nil
+}
+
 func (store *Store) Migrate(ctx context.Context) error {
 	const schema = `
 CREATE TABLE IF NOT EXISTS account_profiles (

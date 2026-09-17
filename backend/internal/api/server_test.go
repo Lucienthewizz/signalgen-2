@@ -75,6 +75,10 @@ type fakeCompute struct {
 	err     error
 }
 
+type fakeReadiness struct{ err error }
+
+func (fake fakeReadiness) Ready(_ context.Context) error { return fake.err }
+
 func (fake *fakeCompute) Create(_ context.Context, request compute.CreateRequest) (compute.Grant, error) {
 	fake.created = request
 	return fake.grant, fake.err
@@ -173,6 +177,35 @@ func TestHealthIsPublic(t *testing.T) {
 	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d", response.Code)
+	}
+}
+
+func TestReadinessChecksDependenciesWithoutLeakingDetails(t *testing.T) {
+	server, err := NewServer(
+		fakeIdentity{}, &fakeSessions{}, &fakeAccess{}, &fakeDatasets{}, &fakeCompute{},
+		WithReadinessChecks(fakeReadiness{}, fakeReadiness{err: errors.New("database path secret")}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	assertErrorCode(t, response, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE")
+	if bytes.Contains(response.Body.Bytes(), []byte("database path secret")) {
+		t.Fatal("readiness response leaked dependency details")
+	}
+
+	readyServer, err := NewServer(
+		fakeIdentity{}, &fakeSessions{}, &fakeAccess{}, &fakeDatasets{}, &fakeCompute{},
+		WithReadinessChecks(fakeReadiness{}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readyResponse := httptest.NewRecorder()
+	readyServer.ServeHTTP(readyResponse, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	if readyResponse.Code != http.StatusOK || !bytes.Contains(readyResponse.Body.Bytes(), []byte(`"status":"ready"`)) {
+		t.Fatalf("status = %d, body = %s", readyResponse.Code, readyResponse.Body.String())
 	}
 }
 

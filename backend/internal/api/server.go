@@ -53,6 +53,10 @@ type ComputeStore interface {
 	Create(ctx context.Context, request compute.CreateRequest) (compute.Grant, error)
 }
 
+type ReadinessChecker interface {
+	Ready(ctx context.Context) error
+}
+
 type Server struct {
 	identity IdentityVerifier
 	sessions SessionStore
@@ -63,7 +67,20 @@ type Server struct {
 }
 
 type serverConfig struct {
-	allowedOrigins map[string]struct{}
+	allowedOrigins  map[string]struct{}
+	readinessChecks []ReadinessChecker
+}
+
+func WithReadinessChecks(checkers ...ReadinessChecker) ServerOption {
+	return func(config *serverConfig) error {
+		for _, checker := range checkers {
+			if checker == nil {
+				return fmt.Errorf("readiness checker is required")
+			}
+			config.readinessChecks = append(config.readinessChecks, checker)
+		}
+		return nil
+	}
 }
 
 type ServerOption func(*serverConfig) error
@@ -103,6 +120,7 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	server := &Server{identity: identity, sessions: sessions, access: accessStore, datasets: datasets, compute: computeStore}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", server.health)
+	mux.HandleFunc("GET /ready", server.ready(config.readinessChecks))
 	mux.HandleFunc("POST /api/v1/sessions", server.createSession)
 	mux.HandleFunc("DELETE /api/v1/sessions/current", server.revokeCurrentSession)
 	mux.HandleFunc("GET /api/v1/account/me", server.accountMe)
@@ -123,6 +141,20 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 
 func (server *Server) health(writer http.ResponseWriter, _ *http.Request) {
 	writeJSON(writer, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (server *Server) ready(checkers []ReadinessChecker) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
+		defer cancel()
+		for _, checker := range checkers {
+			if err := checker.Ready(ctx); err != nil {
+				writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Service belum siap.")
+				return
+			}
+		}
+		writeJSON(writer, http.StatusOK, map[string]string{"status": "ready"})
+	}
 }
 
 func (server *Server) createSession(writer http.ResponseWriter, request *http.Request) {

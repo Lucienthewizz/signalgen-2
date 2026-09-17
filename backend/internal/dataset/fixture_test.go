@@ -1,6 +1,7 @@
 package dataset
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -8,6 +9,20 @@ import (
 	"path/filepath"
 	"testing"
 )
+
+func TestFixtureReadinessDetectsContentCorruption(t *testing.T) {
+	store, err := NewFixtureStore(fixturePath(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Ready(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	store.content[0] ^= 0xff
+	if err := store.Ready(context.Background()); !errors.Is(err, ErrIntegrity) {
+		t.Fatalf("error = %v, want ErrIntegrity", err)
+	}
+}
 
 func fixturePath(t *testing.T) string {
 	t.Helper()

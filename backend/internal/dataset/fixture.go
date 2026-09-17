@@ -1,6 +1,7 @@
 package dataset
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -187,6 +188,19 @@ func (store *FixtureStore) Content(id string) ([]byte, Manifest, error) {
 		return nil, Manifest{}, err
 	}
 	return append([]byte(nil), store.content...), manifest, nil
+}
+
+func (store *FixtureStore) Ready(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	hash := sha256.Sum256(store.content)
+	if "sha256:"+hex.EncodeToString(hash[:]) != store.manifest.Checksum {
+		return ErrIntegrity
+	}
+	return nil
 }
 
 func parseDate(value string) (time.Time, error) {

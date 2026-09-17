@@ -52,7 +52,11 @@ func main() {
 		log.Fatal(err)
 	}
 	defer computeStore.Close()
-	handler, err := apihttp.NewServer(identity, sessions, accessStore, datasets, computeStore, apihttp.WithCORSOrigins(allowedOrigins))
+	handler, err := apihttp.NewServer(
+		identity, sessions, accessStore, datasets, computeStore,
+		apihttp.WithCORSOrigins(allowedOrigins),
+		apihttp.WithReadinessChecks(sessions, accessStore, datasets, computeStore),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}

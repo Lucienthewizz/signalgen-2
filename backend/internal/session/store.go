@@ -90,6 +90,13 @@ func (store *Store) ActiveLimit() int {
 	return store.maxActiveSessions
 }
 
+func (store *Store) Ready(ctx context.Context) error {
+	if err := store.db.PingContext(ctx); err != nil {
+		return fmt.Errorf("session storage readiness: %w", err)
+	}
+	return nil
+}
+
 func OpenSQLite(path string, options ...Option) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, fmt.Errorf("session database path is required")

@@ -3,7 +3,7 @@
 Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** Backend publishes OpenAPI/generated types after implementation; runtime OpenAPI wins for what exists. Changes require FE+BE review and versioning.
 
 Implementation checkpoint 18 September 2026: Go API currently implements
-`GET /health`, `POST /api/v1/sessions`, `GET /api/v1/capabilities`, and
+`GET /health`, `GET /ready`, `POST /api/v1/sessions`, `GET /api/v1/capabilities`, and
 `DELETE /api/v1/sessions/current`. `GET /api/v1/account/me` is also available
 with the currently implemented profile, feature, session, and device fields.
 `GET /api/v1/account/sessions` and `DELETE /api/v1/account/sessions/{id}`
