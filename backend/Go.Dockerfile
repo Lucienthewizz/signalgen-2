@@ -2,7 +2,7 @@ FROM golang:1.26.0-bookworm AS source
 
 WORKDIR /workspace/backend
 
-COPY backend/go.mod ./go.mod
+COPY backend/go.mod backend/go.sum ./
 COPY backend/core ./core
 COPY backend/cmd ./cmd
 COPY backend/internal ./internal
