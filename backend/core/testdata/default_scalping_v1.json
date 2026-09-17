@@ -8,6 +8,7 @@
   "adjustment": "none",
   "candles_sha256": "db2cd30ef88ed5ed1af7fea79bb601c247b9854f3515de1532599161b2e54fcc",
   "request": {
+    "purpose": "screen",
     "symbol": "BBCA.JK",
     "rule": {
       "id": 1,

@@ -11,10 +11,15 @@ Current scope:
 - golden signal parity against the Python `ta` and `RuleEngine` baseline;
 - strict rejection of unsupported operands and malformed candle ordering;
 - a minimal `js/wasm` adapter.
+- versioned capabilities exposed as `signalgenCapabilities()`.
 
 It intentionally does **not** define trade fills, exits, P&L, provider data,
 HTTP, persistence, authentication, or entitlement yet. Those policies must be
 frozen separately before they are implemented.
+
+The only accepted purpose is currently `screen`. A request with
+`purpose: "backtest"` fails explicitly until the trade-entry, exit, sizing,
+fee, and slippage policies have a reviewed M0 fixture.
 
 Run the Go tests through Docker from the repository root:
 

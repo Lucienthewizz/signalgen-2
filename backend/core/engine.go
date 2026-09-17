@@ -21,6 +21,22 @@ var supportedOperators = map[string]bool{
 	"<=": true,
 }
 
+// GetCapabilities returns a fresh value so callers cannot mutate shared
+// slices and accidentally change the advertised contract.
+func GetCapabilities() Capabilities {
+	return Capabilities{
+		CapabilitiesVersion: CapabilitiesVersion,
+		EngineVersion:       EngineVersion,
+		SchemaVersion:       SchemaVersion,
+		WorkerProtocol:      WorkerProtocol,
+		Purposes:            []string{"screen"},
+		Indicators:          []string{"PRICE", "EMA9", "EMA20", "RSI14"},
+		Operators:           []string{"<", "<=", ">", ">="},
+		RuleLogic:           []string{"AND"},
+		MaxCandlesPerRun:    MaxCandlesPerRun,
+	}
+}
+
 // RunSignals executes the frozen M0 subset. It intentionally produces signals
 // only; trade fills and P&L remain outside this baseline until their policy is
 // selected and frozen separately.
@@ -93,6 +109,9 @@ func RunSignals(request RunRequest) (RunResult, error) {
 }
 
 func validateRequest(request RunRequest) error {
+	if request.Purpose != "screen" {
+		return fmt.Errorf("unsupported purpose %q; supported purposes: screen", request.Purpose)
+	}
 	if request.Symbol == "" {
 		return fmt.Errorf("symbol is required")
 	}
@@ -107,6 +126,9 @@ func validateRequest(request RunRequest) error {
 	}
 	if len(request.Candles) < 20 {
 		return fmt.Errorf("at least 20 completed candles are required")
+	}
+	if len(request.Candles) > MaxCandlesPerRun {
+		return fmt.Errorf("candle count exceeds limit of %d", MaxCandlesPerRun)
 	}
 
 	var previous time.Time

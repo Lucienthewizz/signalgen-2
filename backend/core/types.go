@@ -1,9 +1,27 @@
 package core
 
 const (
-	EngineVersion = "core-0.1.0"
-	SchemaVersion = "signal-baseline-1"
+	EngineVersion       = "core-0.2.0"
+	SchemaVersion       = "signal-baseline-1"
+	CapabilitiesVersion = "capabilities-1"
+	WorkerProtocol      = "worker-1"
+	MaxCandlesPerRun    = 100000
 )
+
+// Capabilities is the versioned feature contract exposed to clients. Keeping
+// this list in the core prevents the API and WASM adapter from advertising
+// calculations that are not implemented yet.
+type Capabilities struct {
+	CapabilitiesVersion string   `json:"capabilities_version"`
+	EngineVersion       string   `json:"engine_version"`
+	SchemaVersion       string   `json:"schema_version"`
+	WorkerProtocol      string   `json:"worker_protocol"`
+	Purposes            []string `json:"purposes"`
+	Indicators          []string `json:"indicators"`
+	Operators           []string `json:"operators"`
+	RuleLogic           []string `json:"rule_logic"`
+	MaxCandlesPerRun    int      `json:"max_candles_per_run"`
+}
 
 // Candle is a completed OHLCV candle. Timestamps must be RFC3339 UTC values
 // ordered from oldest to newest.
@@ -31,6 +49,7 @@ type RuleSnapshot struct {
 }
 
 type RunRequest struct {
+	Purpose string       `json:"purpose"`
 	Symbol  string       `json:"symbol"`
 	Candles []Candle     `json:"candles"`
 	Rule    RuleSnapshot `json:"rule"`

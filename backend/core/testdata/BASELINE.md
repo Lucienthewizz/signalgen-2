@@ -13,6 +13,7 @@ or P&L backtest baseline.
 - Evaluation: each input row is already a completed candle and is evaluated at
   its close after indicator warmup.
 - Output: BUY signal timestamps, close prices, and indicator values.
+- Supported request purpose: `screen`. `backtest` is deliberately rejected.
 - Numeric tolerance: absolute error `1e-9` for this synthetic fixture.
 
 ## Dataset

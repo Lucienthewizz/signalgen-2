@@ -25,6 +25,11 @@ func runSignals(_ js.Value, args []js.Value) interface{} {
 	return marshalResponse(result, "")
 }
 
+func capabilities(_ js.Value, _ []js.Value) interface{} {
+	encoded, _ := json.Marshal(core.GetCapabilities())
+	return string(encoded)
+}
+
 func marshalResponse(result interface{}, message string) string {
 	payload := map[string]interface{}{"ok": message == ""}
 	if message != "" {
@@ -38,5 +43,6 @@ func marshalResponse(result interface{}, message string) string {
 
 func main() {
 	js.Global().Set("signalgenRunSignals", js.FuncOf(runSignals))
+	js.Global().Set("signalgenCapabilities", js.FuncOf(capabilities))
 	select {}
 }

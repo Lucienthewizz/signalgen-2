@@ -50,6 +50,19 @@ func TestDefaultScalpingGoldenSignals(t *testing.T) {
 	}
 }
 
+func TestCapabilitiesDescribeImplementedSubset(t *testing.T) {
+	capabilities := GetCapabilities()
+	if capabilities.EngineVersion != EngineVersion {
+		t.Fatalf("engine version = %q, want %q", capabilities.EngineVersion, EngineVersion)
+	}
+	if len(capabilities.Purposes) != 1 || capabilities.Purposes[0] != "screen" {
+		t.Fatalf("purposes = %v, want [screen]", capabilities.Purposes)
+	}
+	if capabilities.MaxCandlesPerRun != 100000 {
+		t.Fatalf("max candles = %d, want 100000", capabilities.MaxCandlesPerRun)
+	}
+}
+
 func assertClose(t *testing.T, name string, got, want float64) {
 	t.Helper()
 	if math.Abs(got-want) > 1e-9 {
@@ -62,6 +75,14 @@ func TestRunSignalsRejectsUnsupportedOperand(t *testing.T) {
 	fixture.Request.Rule.Conditions[0].Left = "MACD"
 	if _, err := RunSignals(fixture.Request); err == nil {
 		t.Fatal("expected unsupported operand error")
+	}
+}
+
+func TestRunSignalsRejectsBacktestUntilTradePolicyExists(t *testing.T) {
+	fixture := loadFixture(t)
+	fixture.Request.Purpose = "backtest"
+	if _, err := RunSignals(fixture.Request); err == nil {
+		t.Fatal("expected unsupported backtest purpose error")
 	}
 }
 
