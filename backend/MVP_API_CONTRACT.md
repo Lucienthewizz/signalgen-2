@@ -8,6 +8,8 @@ Implementation checkpoint 17 September 2026: Go API currently implements
 with the currently implemented profile, feature, session, and device fields.
 Dataset routes currently serve only the checksum-verified synthetic
 `BBCA.JK` screening fixture to accounts with an active `screener` grant.
+`POST /api/v1/compute-grants` is implemented for the frozen screening baseline
+and rejects mismatched dataset, rule, engine, or schema versions.
 This checkpoint is a subset, not a claim
 that the remaining proposed routes are available.
 

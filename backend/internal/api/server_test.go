@@ -12,8 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Lucienthewizz/signalgen-2/backend/core"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
@@ -62,6 +64,17 @@ type fakeDatasets struct {
 	manifest dataset.Manifest
 	content  []byte
 	err      error
+}
+
+type fakeCompute struct {
+	created compute.CreateRequest
+	grant   compute.Grant
+	err     error
+}
+
+func (fake *fakeCompute) Create(_ context.Context, request compute.CreateRequest) (compute.Grant, error) {
+	fake.created = request
+	return fake.grant, fake.err
 }
 
 func (fake *fakeDatasets) Prepare(_ dataset.PrepareRequest) (dataset.Manifest, error) {
@@ -128,7 +141,7 @@ func (fake *fakeSessions) Revoke(_ context.Context, userID, token string) error 
 
 func testServer(t *testing.T, identity fakeIdentity, sessions *fakeSessions) *Server {
 	t.Helper()
-	server, err := NewServer(identity, sessions, &fakeAccess{}, &fakeDatasets{})
+	server, err := NewServer(identity, sessions, &fakeAccess{}, &fakeDatasets{}, &fakeCompute{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +164,7 @@ func TestCreateSessionUsesBearerPrincipal(t *testing.T) {
 	}}
 	identity := fakeIdentity{principal: auth.Principal{ID: "user-a", Email: "user@example.com"}}
 	accountStore := &fakeAccess{}
-	server, err := NewServer(identity, sessions, accountStore, &fakeDatasets{})
+	server, err := NewServer(identity, sessions, accountStore, &fakeDatasets{}, &fakeCompute{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,6 +233,7 @@ func TestPrivateRouteRejectsSuspendedAccount(t *testing.T) {
 		sessions,
 		&fakeAccess{err: access.ErrAccountSuspended},
 		&fakeDatasets{},
+		&fakeCompute{},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -241,7 +255,7 @@ func TestAccountMeReturnsServerSideAccessState(t *testing.T) {
 		account:  access.Account{UserID: "user-a", Email: "user@example.com", Role: access.RoleUser, Status: access.StatusActive},
 		features: []string{access.FeatureScreener},
 	}
-	server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accountStore, &fakeDatasets{})
+	server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accountStore, &fakeDatasets{}, &fakeCompute{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +288,7 @@ func TestPrepareDatasetRequiresFeatureEntitlement(t *testing.T) {
 	sessions := &fakeSessions{}
 	datasets := &fakeDatasets{manifest: dataset.Manifest{DatasetID: "fixture-1", Purpose: "screen"}}
 	server, err := NewServer(
-		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, &fakeAccess{}, datasets,
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, &fakeAccess{}, datasets, &fakeCompute{},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -296,7 +310,7 @@ func TestDatasetContentUsesPrivateCacheAndChecksum(t *testing.T) {
 	}
 	server, err := NewServer(
 		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions,
-		&fakeAccess{features: []string{access.FeatureScreener}}, datasets,
+		&fakeAccess{features: []string{access.FeatureScreener}}, datasets, &fakeCompute{},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -311,6 +325,58 @@ func TestDatasetContentUsesPrivateCacheAndChecksum(t *testing.T) {
 	}
 	if response.Header().Get("ETag") != `"sha256:abc"` || response.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatalf("headers = %+v", response.Header())
+	}
+}
+
+func TestCreateComputeGrantBindsVerifiedVersions(t *testing.T) {
+	sessions := &fakeSessions{verified: session.Session{ID: "ses-1"}}
+	manifest := dataset.Manifest{
+		DatasetID: "fixture-1", Version: "fixture-v1", Purpose: "screen", Checksum: "sha256:data",
+	}
+	computeStore := &fakeCompute{grant: compute.Grant{ID: "cgr-1"}}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions,
+		&fakeAccess{features: []string{access.FeatureScreener}},
+		&fakeDatasets{manifest: manifest}, computeStore,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"fixture-v1","dataset_checksum":"sha256:data","rule_id":"default-scalping-v1","definition_hash":"sha256:74cb82c5bf9cf8fc06ce6eab0c054734110ad6775b0ab57a203836d588d1f52a","engine_version":"core-0.2.0","schema_version":"signal-baseline-1"}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/compute-grants", body)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if computeStore.created.UserID != "user-a" || computeStore.created.SessionID != "ses-1" || computeStore.created.DatasetChecksum != "sha256:data" {
+		t.Fatalf("compute binding = %+v", computeStore.created)
+	}
+}
+
+func TestCreateComputeGrantRejectsVersionMismatch(t *testing.T) {
+	sessions := &fakeSessions{verified: session.Session{ID: "ses-1"}}
+	manifest := dataset.Manifest{DatasetID: "fixture-1", Version: "fixture-v1", Purpose: "screen", Checksum: "sha256:data"}
+	computeStore := &fakeCompute{}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions,
+		&fakeAccess{features: []string{access.FeatureScreener}},
+		&fakeDatasets{manifest: manifest}, computeStore,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"wrong","dataset_checksum":"sha256:data","rule_id":"default-scalping-v1","definition_hash":"sha256:74cb82c5bf9cf8fc06ce6eab0c054734110ad6775b0ab57a203836d588d1f52a","engine_version":"core-0.2.0","schema_version":"signal-baseline-1"}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/compute-grants", body)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusUnprocessableEntity, "UNSUPPORTED_CAPABILITY")
+	if computeStore.created.UserID != "" {
+		t.Fatal("compute store was called for a mismatched version")
 	}
 }
 
@@ -367,7 +433,14 @@ func TestSessionLifecycleWithSQLite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accessStore, datasets)
+	computeStore, err := compute.NewStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := computeStore.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accessStore, datasets, computeStore)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,6 +494,20 @@ func TestSessionLifecycleWithSQLite(t *testing.T) {
 	server.ServeHTTP(contentResponse, contentRequest)
 	if contentResponse.Code != http.StatusOK || contentResponse.Header().Get("ETag") == "" {
 		t.Fatalf("content status = %d, headers = %+v", contentResponse.Code, contentResponse.Header())
+	}
+	computeBody, _ := json.Marshal(map[string]string{
+		"purpose": "screen", "dataset_id": manifest.DatasetID, "dataset_version": manifest.Version,
+		"dataset_checksum": manifest.Checksum, "rule_id": core.BaselineRuleID,
+		"definition_hash": core.BaselineRuleHash, "engine_version": core.EngineVersion,
+		"schema_version": core.SchemaVersion,
+	})
+	computeRequest := httptest.NewRequest(http.MethodPost, "/api/v1/compute-grants", bytes.NewReader(computeBody))
+	computeRequest.Header.Set("Authorization", "Bearer user-token")
+	computeRequest.Header.Set("X-App-Session", created.Token)
+	computeResponse := httptest.NewRecorder()
+	server.ServeHTTP(computeResponse, computeRequest)
+	if computeResponse.Code != http.StatusCreated {
+		t.Fatalf("compute grant status = %d, body = %s", computeResponse.Code, computeResponse.Body.String())
 	}
 
 	revokeRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/sessions/current", nil)

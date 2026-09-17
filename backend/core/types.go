@@ -6,6 +6,8 @@ const (
 	CapabilitiesVersion = "capabilities-1"
 	WorkerProtocol      = "worker-1"
 	MaxCandlesPerRun    = 100000
+	BaselineRuleID      = "default-scalping-v1"
+	BaselineRuleHash    = "sha256:74cb82c5bf9cf8fc06ce6eab0c054734110ad6775b0ab57a203836d588d1f52a"
 )
 
 // Capabilities is the versioned feature contract exposed to clients. Keeping

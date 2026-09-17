@@ -13,6 +13,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	apihttp "github.com/Lucienthewizz/signalgen-2/backend/internal/api"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
@@ -42,7 +43,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	handler, err := apihttp.NewServer(identity, sessions, accessStore, datasets)
+	computeStore, err := compute.OpenSQLite(databasePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer computeStore.Close()
+	handler, err := apihttp.NewServer(identity, sessions, accessStore, datasets, computeStore)
 	if err != nil {
 		log.Fatal(err)
 	}

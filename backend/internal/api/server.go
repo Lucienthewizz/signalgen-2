@@ -14,6 +14,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/core"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
@@ -43,19 +44,24 @@ type DatasetStore interface {
 	Content(id string) ([]byte, dataset.Manifest, error)
 }
 
+type ComputeStore interface {
+	Create(ctx context.Context, request compute.CreateRequest) (compute.Grant, error)
+}
+
 type Server struct {
 	identity IdentityVerifier
 	sessions SessionStore
 	access   AccessStore
 	datasets DatasetStore
+	compute  ComputeStore
 	handler  http.Handler
 }
 
-func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore AccessStore, datasets DatasetStore) (*Server, error) {
-	if identity == nil || sessions == nil || accessStore == nil || datasets == nil {
-		return nil, fmt.Errorf("identity verifier, session store, access store, and dataset store are required")
+func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore AccessStore, datasets DatasetStore, computeStore ComputeStore) (*Server, error) {
+	if identity == nil || sessions == nil || accessStore == nil || datasets == nil || computeStore == nil {
+		return nil, fmt.Errorf("identity verifier, session store, access store, dataset store, and compute store are required")
 	}
-	server := &Server{identity: identity, sessions: sessions, access: accessStore, datasets: datasets}
+	server := &Server{identity: identity, sessions: sessions, access: accessStore, datasets: datasets, compute: computeStore}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", server.health)
 	mux.HandleFunc("POST /api/v1/sessions", server.createSession)
@@ -65,6 +71,7 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	mux.HandleFunc("POST /api/v1/datasets/prepare", server.prepareDataset)
 	mux.HandleFunc("GET /api/v1/datasets/{id}/manifest", server.datasetManifest)
 	mux.HandleFunc("GET /api/v1/datasets/{id}/content", server.datasetContent)
+	mux.HandleFunc("POST /api/v1/compute-grants", server.createComputeGrant)
 	server.handler = requestContext(mux)
 	return server, nil
 }
@@ -229,6 +236,68 @@ func (server *Server) datasetContent(writer http.ResponseWriter, request *http.R
 	writer.Header().Set("ETag", `"`+manifest.Checksum+`"`)
 	writer.WriteHeader(http.StatusOK)
 	_, _ = writer.Write(content)
+}
+
+func (server *Server) createComputeGrant(writer http.ResponseWriter, request *http.Request) {
+	principal, appSession, _, ok := server.requireAppSession(writer, request)
+	if !ok {
+		return
+	}
+	var input struct {
+		Purpose         string `json:"purpose"`
+		DatasetID       string `json:"dataset_id"`
+		DatasetVersion  string `json:"dataset_version"`
+		DatasetChecksum string `json:"dataset_checksum"`
+		RuleID          string `json:"rule_id"`
+		DefinitionHash  string `json:"definition_hash"`
+		EngineVersion   string `json:"engine_version"`
+		SchemaVersion   string `json:"schema_version"`
+	}
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Permintaan compute grant tidak valid.")
+		return
+	}
+	feature, supported := featureForPurpose(input.Purpose)
+	if !supported {
+		writeError(writer, request, http.StatusUnprocessableEntity, "UNSUPPORTED_CAPABILITY", "Purpose compute belum didukung.")
+		return
+	}
+	if err := server.access.RequireFeature(request.Context(), principal.ID, feature); err != nil {
+		writeAccessError(writer, request, err)
+		return
+	}
+	manifest, err := server.datasets.Manifest(input.DatasetID)
+	if errors.Is(err, dataset.ErrNotFound) {
+		writeError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Dataset tidak ditemukan.")
+		return
+	}
+	if err != nil {
+		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Dataset belum dapat diverifikasi.")
+		return
+	}
+	if input.Purpose != manifest.Purpose || input.DatasetVersion != manifest.Version ||
+		input.DatasetChecksum != manifest.Checksum || input.RuleID != core.BaselineRuleID ||
+		input.DefinitionHash != core.BaselineRuleHash || input.EngineVersion != core.EngineVersion ||
+		input.SchemaVersion != core.SchemaVersion {
+		writeError(writer, request, http.StatusUnprocessableEntity, "UNSUPPORTED_CAPABILITY", "Versi dataset, rule, atau engine tidak cocok.")
+		return
+	}
+	grant, err := server.compute.Create(request.Context(), compute.CreateRequest{
+		UserID: principal.ID, SessionID: appSession.ID, Purpose: input.Purpose,
+		DatasetID: input.DatasetID, DatasetVersion: input.DatasetVersion, DatasetChecksum: input.DatasetChecksum,
+		RuleID: input.RuleID, DefinitionHash: input.DefinitionHash,
+		EngineVersion: input.EngineVersion, SchemaVersion: input.SchemaVersion,
+	})
+	if errors.Is(err, compute.ErrInvalid) {
+		writeError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "Binding compute grant tidak valid.")
+		return
+	}
+	if err != nil {
+		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Compute grant belum dapat dibuat.")
+		return
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(writer, http.StatusCreated, grant)
 }
 
 func (server *Server) requireDatasetFeature(request *http.Request, userID string, manifest dataset.Manifest) error {
