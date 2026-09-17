@@ -1,6 +1,8 @@
 # SignalGen Backend
 
-Backend SignalGen menggunakan Python, FastAPI, Supabase Auth, dan SQLite.
+Backend legacy SignalGen menggunakan Python, FastAPI, Supabase Auth, dan
+SQLite. Migrasi target Go dikembangkan bertahap di `core`, `cmd`, dan
+`internal`; backend Python tetap menjadi baseline dan jalur rollback.
 
 ## Menjalankan backend
 
@@ -32,3 +34,17 @@ menjalankan REST API dan Socket.IO tanpa membuka window PyWebView lama.
 Virtual environment Python tidak diperlukan untuk workflow standar. Developer
 boleh membuat `.venv` sendiri untuk debugging lokal, tetapi folder tersebut tidak
 boleh masuk Git.
+
+## Target Go
+
+Core Go/WASM dapat diuji tanpa memasang Go lokal:
+
+```bash
+docker build -f backend/Go.Dockerfile --target test .
+```
+
+`internal/auth` memverifikasi bearer ke Supabase Auth menggunakan publishable
+key. Package tersebut hanya menghasilkan principal (`id` dan `email`); role,
+status akun, sesi aplikasi, dan entitlement tetap harus dibaca dari storage
+server SignalGen. Endpoint bisnis Go belum boleh dibuka hanya berdasarkan
+metadata user Supabase.

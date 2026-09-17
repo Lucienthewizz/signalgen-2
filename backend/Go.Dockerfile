@@ -5,6 +5,7 @@ WORKDIR /workspace/backend
 COPY backend/go.mod ./go.mod
 COPY backend/core ./core
 COPY backend/cmd ./cmd
+COPY backend/internal ./internal
 
 
 FROM source AS test
