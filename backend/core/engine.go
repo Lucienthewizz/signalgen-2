@@ -30,10 +30,13 @@ func GetCapabilities() Capabilities {
 		SchemaVersion:       SchemaVersion,
 		WorkerProtocol:      WorkerProtocol,
 		Purposes:            []string{"screen"},
+		Markets:             []string{"IDX"},
+		Timeframes:          []string{"1d"},
 		Indicators:          []string{"PRICE", "EMA9", "EMA20", "RSI14"},
 		Operators:           []string{"<", "<=", ">", ">="},
 		RuleLogic:           []string{"AND"},
 		MaxCandlesPerRun:    MaxCandlesPerRun,
+		MaxSymbolsPerRun:    1,
 	}
 }
 

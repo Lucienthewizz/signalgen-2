@@ -61,6 +61,12 @@ func TestCapabilitiesDescribeImplementedSubset(t *testing.T) {
 	if capabilities.MaxCandlesPerRun != 100000 {
 		t.Fatalf("max candles = %d, want 100000", capabilities.MaxCandlesPerRun)
 	}
+	if len(capabilities.Markets) != 1 || capabilities.Markets[0] != "IDX" {
+		t.Fatalf("markets = %v, want [IDX]", capabilities.Markets)
+	}
+	if len(capabilities.Timeframes) != 1 || capabilities.Timeframes[0] != "1d" {
+		t.Fatalf("timeframes = %v, want [1d]", capabilities.Timeframes)
+	}
 }
 
 func assertClose(t *testing.T, name string, got, want float64) {

@@ -2,6 +2,11 @@
 
 Versi desain 0.1 · 16 September 2026 · **Proposed contract, not implemented API.** Backend publishes OpenAPI/generated types after implementation; runtime OpenAPI wins for what exists. Changes require FE+BE review and versioning.
 
+Implementation checkpoint 17 September 2026: Go API currently implements
+`GET /health`, `POST /api/v1/sessions`, `GET /api/v1/capabilities`, and
+`DELETE /api/v1/sessions/current`. This checkpoint is a subset, not a claim
+that the remaining proposed routes are available.
+
 ## 1. Conventions
 
 - Base target: `/api/v1`; JSON UTF-8; HTTPS production; UTC RFC 3339 timestamps.

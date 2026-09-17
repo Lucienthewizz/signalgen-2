@@ -17,10 +17,13 @@ type Capabilities struct {
 	SchemaVersion       string   `json:"schema_version"`
 	WorkerProtocol      string   `json:"worker_protocol"`
 	Purposes            []string `json:"purposes"`
+	Markets             []string `json:"markets"`
+	Timeframes          []string `json:"timeframes"`
 	Indicators          []string `json:"indicators"`
 	Operators           []string `json:"operators"`
 	RuleLogic           []string `json:"rule_logic"`
 	MaxCandlesPerRun    int      `json:"max_candles_per_run"`
+	MaxSymbolsPerRun    int      `json:"max_symbols_per_run"`
 }
 
 // Candle is a completed OHLCV candle. Timestamps must be RFC3339 UTC values

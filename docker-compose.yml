@@ -39,5 +39,24 @@ services:
     environment:
       SIGNALGEN_DB_PATH: /tmp/signalgen-test.db
 
+  go-api:
+    profiles:
+      - go-target
+    build:
+      context: .
+      dockerfile: backend/Go.Dockerfile
+      target: api-runtime
+    env_file:
+      - backend/.env
+    environment:
+      SIGNALGEN_GO_API_ADDR: :8080
+      SIGNALGEN_GO_DB_PATH: /data/signalgen-go.db
+    ports:
+      - "8080:8080"
+    volumes:
+      - signalgen-go-data:/data
+    restart: unless-stopped
+
 volumes:
   signalgen-backend-data:
+  signalgen-go-data:

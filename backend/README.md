@@ -48,3 +48,19 @@ key. Package tersebut hanya menghasilkan principal (`id` dan `email`); role,
 status akun, sesi aplikasi, dan entitlement tetap harus dibaca dari storage
 server SignalGen. Endpoint bisnis Go belum boleh dibuka hanya berdasarkan
 metadata user Supabase.
+
+Menjalankan target Go API secara terpisah dari FastAPI legacy:
+
+```bash
+docker compose --profile go-target up --build go-api
+```
+
+Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
+
+- `GET /health` — public health check;
+- `POST /api/v1/sessions` — membuat sesi aplikasi, membutuhkan bearer Supabase;
+- `GET /api/v1/capabilities` — membutuhkan bearer dan `X-App-Session`;
+- `DELETE /api/v1/sessions/current` — revoke sesi aktif.
+
+Token sesi hanya dikembalikan saat dibuat. SQLite menyimpan hash token, bukan
+nilai token mentah. Endpoint bisnis lain tetap belum diimplementasikan.
