@@ -38,6 +38,8 @@ type fakeSessions struct {
 	verifiedToken  string
 	revokedUserID  string
 	revokedToken   string
+	listed         []session.Session
+	revokedID      string
 }
 
 type fakeAccess struct {
@@ -136,6 +138,17 @@ func (fake *fakeSessions) Verify(_ context.Context, userID, token string) (sessi
 func (fake *fakeSessions) Revoke(_ context.Context, userID, token string) error {
 	fake.revokedUserID = userID
 	fake.revokedToken = token
+	return nil
+}
+
+func (fake *fakeSessions) List(_ context.Context, userID string) ([]session.Session, error) {
+	fake.verifiedUserID = userID
+	return fake.listed, nil
+}
+
+func (fake *fakeSessions) RevokeByID(_ context.Context, userID, sessionID string) error {
+	fake.revokedUserID = userID
+	fake.revokedID = sessionID
 	return nil
 }
 
@@ -333,6 +346,61 @@ func TestAccountMeReturnsServerSideAccessState(t *testing.T) {
 	}
 	if payload.User.Role != access.RoleUser || len(payload.Features) != 1 || payload.Device.InstallationID != "install-a" {
 		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestAccountSessionsListsOnlySafeOwnerMetadata(t *testing.T) {
+	now := time.Now().UTC()
+	sessions := &fakeSessions{
+		verified: session.Session{ID: "ses_current"},
+		listed: []session.Session{
+			{ID: "ses_current", UserID: "user-a", InstallationID: "install-a", Label: "Chrome", CreatedAt: now, ExpiresAt: now.Add(time.Hour), LastSeenAt: now},
+			{ID: "ses_old", UserID: "user-a", InstallationID: "install-b", Label: "Firefox", CreatedAt: now.Add(-time.Hour), ExpiresAt: now.Add(-time.Minute), LastSeenAt: now.Add(-time.Minute)},
+		},
+	}
+	server := testServer(t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/account/sessions", nil)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if bytes.Contains(response.Body.Bytes(), []byte("session_token")) || bytes.Contains(response.Body.Bytes(), []byte("token_hash")) {
+		t.Fatal("session secret material leaked")
+	}
+	var payload struct {
+		Items []struct {
+			ID      string `json:"id"`
+			Status  string `json:"status"`
+			Current bool   `json:"current"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Items) != 2 || !payload.Items[0].Current || payload.Items[1].Status != "expired" {
+		t.Fatalf("payload = %+v", payload)
+	}
+	if sessions.verifiedUserID != "user-a" {
+		t.Fatalf("listed user = %q", sessions.verifiedUserID)
+	}
+}
+
+func TestRevokeAccountSessionUsesAuthenticatedOwner(t *testing.T) {
+	sessions := &fakeSessions{verified: session.Session{ID: "ses_current"}}
+	server := testServer(t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions)
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/account/sessions/ses_other", nil)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if sessions.revokedUserID != "user-a" || sessions.revokedID != "ses_other" {
+		t.Fatalf("revocation = user %q id %q", sessions.revokedUserID, sessions.revokedID)
 	}
 }
 

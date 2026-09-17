@@ -25,6 +25,7 @@ var (
 	ErrExpired        = errors.New("app session is expired")
 	ErrRevoked        = errors.New("app session is revoked")
 	ErrInvalidRequest = errors.New("invalid session request")
+	ErrNotFound       = errors.New("app session was not found")
 )
 
 type Session struct {
@@ -216,21 +217,95 @@ func (store *Store) Revoke(ctx context.Context, userID, token string) error {
 	return nil
 }
 
-func (store *Store) findByHash(ctx context.Context, hash []byte) (Session, error) {
-	var session Session
-	var createdAt, expiresAt, lastSeenAt int64
-	var revokedAt sql.NullInt64
-	err := store.db.QueryRowContext(ctx, `
+func (store *Store) List(ctx context.Context, userID string) ([]Session, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, ErrInvalidRequest
+	}
+	rows, err := store.db.QueryContext(ctx, `
 SELECT id, user_id, installation_id, label, created_at, expires_at, last_seen_at, revoked_at
-FROM app_sessions WHERE token_hash = ?`, hash).Scan(
-		&session.ID, &session.UserID, &session.InstallationID, &session.Label,
-		&createdAt, &expiresAt, &lastSeenAt, &revokedAt,
-	)
+FROM app_sessions
+WHERE user_id = ?
+ORDER BY created_at DESC, id DESC
+LIMIT 100`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list app sessions: %w", err)
+	}
+	defer rows.Close()
+
+	sessions := make([]Session, 0)
+	for rows.Next() {
+		session, err := scanSession(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan app session: %w", err)
+		}
+		sessions = append(sessions, session)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list app sessions: %w", err)
+	}
+	return sessions, nil
+}
+
+func (store *Store) RevokeByID(ctx context.Context, userID, sessionID string) error {
+	userID = strings.TrimSpace(userID)
+	sessionID = strings.TrimSpace(sessionID)
+	if userID == "" || sessionID == "" {
+		return ErrInvalidRequest
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	result, err := store.db.ExecContext(ctx, `
+UPDATE app_sessions
+SET revoked_at = ?
+WHERE id = ? AND user_id = ? AND revoked_at IS NULL`, now.Unix(), sessionID, userID)
+	if err != nil {
+		return fmt.Errorf("revoke app session by id: %w", err)
+	}
+	changed, _ := result.RowsAffected()
+	if changed == 1 {
+		return nil
+	}
+
+	var exists int
+	err = store.db.QueryRowContext(ctx,
+		"SELECT 1 FROM app_sessions WHERE id = ? AND user_id = ?", sessionID, userID,
+	).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read app session owner: %w", err)
+	}
+	return nil
+}
+
+func (store *Store) findByHash(ctx context.Context, hash []byte) (Session, error) {
+	row := store.db.QueryRowContext(ctx, `
+SELECT id, user_id, installation_id, label, created_at, expires_at, last_seen_at, revoked_at
+FROM app_sessions WHERE token_hash = ?`, hash)
+	session, err := scanSession(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Session{}, ErrInvalid
 	}
 	if err != nil {
 		return Session{}, fmt.Errorf("read app session: %w", err)
+	}
+	return session, nil
+}
+
+type sessionScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func scanSession(scanner sessionScanner) (Session, error) {
+	var session Session
+	var createdAt, expiresAt, lastSeenAt int64
+	var revokedAt sql.NullInt64
+	if err := scanner.Scan(
+		&session.ID, &session.UserID, &session.InstallationID, &session.Label,
+		&createdAt, &expiresAt, &lastSeenAt, &revokedAt,
+	); err != nil {
+		return Session{}, err
 	}
 	session.CreatedAt = time.Unix(createdAt, 0).UTC()
 	session.ExpiresAt = time.Unix(expiresAt, 0).UTC()

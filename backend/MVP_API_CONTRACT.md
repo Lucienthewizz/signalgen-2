@@ -6,6 +6,9 @@ Implementation checkpoint 18 September 2026: Go API currently implements
 `GET /health`, `POST /api/v1/sessions`, `GET /api/v1/capabilities`, and
 `DELETE /api/v1/sessions/current`. `GET /api/v1/account/me` is also available
 with the currently implemented profile, feature, session, and device fields.
+`GET /api/v1/account/sessions` and `DELETE /api/v1/account/sessions/{id}`
+provide an owner-scoped session list and idempotent revoke; cursor pagination
+and configurable device limits remain future work.
 Dataset routes currently serve only the checksum-verified synthetic
 `BBCA.JK` screening fixture to accounts with an active `screener` grant.
 `POST /api/v1/compute-grants` is implemented for the frozen screening baseline

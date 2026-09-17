@@ -60,6 +60,8 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `GET /health` — public health check;
 - `POST /api/v1/sessions` — membuat sesi aplikasi, membutuhkan bearer Supabase;
 - `GET /api/v1/account/me` — profil/status/feature grant server-side;
+- `GET /api/v1/account/sessions` — daftar maksimal 100 sesi milik pengguna;
+- `DELETE /api/v1/account/sessions/{id}` — mencabut sesi milik pengguna;
 - `GET /api/v1/capabilities` — membutuhkan bearer dan `X-App-Session`;
 - `POST /api/v1/datasets/prepare` — menyiapkan manifest fixture sesuai entitlement;
 - `GET /api/v1/datasets/{id}/manifest` — metadata/checksum dataset;
@@ -69,7 +71,9 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `DELETE /api/v1/sessions/current` — revoke sesi aktif.
 
 Token sesi hanya dikembalikan saat dibuat. SQLite menyimpan hash token, bukan
-nilai token mentah. Endpoint bisnis lain tetap belum diimplementasikan.
+nilai token mentah. Daftar sesi hanya mengembalikan metadata aman, status, dan
+penanda sesi aktif; ID milik pengguna lain tidak dapat dibaca atau dicabut.
+Endpoint bisnis lain tetap belum diimplementasikan.
 
 Frontend web hanya dapat memanggil Go API dari origin yang dicantumkan secara
 eksplisit pada `SIGNALGEN_CORS_ORIGINS` (dipisahkan koma). Contoh development:

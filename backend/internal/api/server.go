@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/core"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
@@ -30,6 +31,8 @@ type SessionStore interface {
 	Create(ctx context.Context, userID, installationID, label string) (session.Created, error)
 	Verify(ctx context.Context, userID, token string) (session.Session, error)
 	Revoke(ctx context.Context, userID, token string) error
+	List(ctx context.Context, userID string) ([]session.Session, error)
+	RevokeByID(ctx context.Context, userID, sessionID string) error
 }
 
 type AccessStore interface {
@@ -102,6 +105,8 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	mux.HandleFunc("POST /api/v1/sessions", server.createSession)
 	mux.HandleFunc("DELETE /api/v1/sessions/current", server.revokeCurrentSession)
 	mux.HandleFunc("GET /api/v1/account/me", server.accountMe)
+	mux.HandleFunc("GET /api/v1/account/sessions", server.accountSessions)
+	mux.HandleFunc("DELETE /api/v1/account/sessions/{id}", server.revokeAccountSession)
 	mux.HandleFunc("GET /api/v1/capabilities", server.capabilities)
 	mux.HandleFunc("POST /api/v1/datasets/prepare", server.prepareDataset)
 	mux.HandleFunc("GET /api/v1/datasets/{id}/manifest", server.datasetManifest)
@@ -192,6 +197,60 @@ func (server *Server) accountMe(writer http.ResponseWriter, request *http.Reques
 		},
 		"capabilities_version": core.CapabilitiesVersion,
 	})
+}
+
+func (server *Server) accountSessions(writer http.ResponseWriter, request *http.Request) {
+	principal, currentSession, _, ok := server.requireAppSession(writer, request)
+	if !ok {
+		return
+	}
+	sessions, err := server.sessions.List(request.Context(), principal.ID)
+	if err != nil {
+		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Daftar sesi belum dapat dibaca.")
+		return
+	}
+	now := time.Now().UTC()
+	items := make([]map[string]interface{}, 0, len(sessions))
+	for _, item := range sessions {
+		status := "active"
+		if item.RevokedAt != nil {
+			status = "revoked"
+		} else if !now.Before(item.ExpiresAt) {
+			status = "expired"
+		}
+		items = append(items, map[string]interface{}{
+			"id":              item.ID,
+			"installation_id": item.InstallationID,
+			"label":           item.Label,
+			"created_at":      item.CreatedAt,
+			"expires_at":      item.ExpiresAt,
+			"last_seen_at":    item.LastSeenAt,
+			"revoked_at":      item.RevokedAt,
+			"status":          status,
+			"current":         item.ID == currentSession.ID,
+		})
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(writer, http.StatusOK, map[string]interface{}{"items": items, "limit": 100})
+}
+
+func (server *Server) revokeAccountSession(writer http.ResponseWriter, request *http.Request) {
+	principal, _, _, ok := server.requireAppSession(writer, request)
+	if !ok {
+		return
+	}
+	if err := server.sessions.RevokeByID(request.Context(), principal.ID, request.PathValue("id")); err != nil {
+		switch {
+		case errors.Is(err, session.ErrNotFound):
+			writeError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Sesi tidak ditemukan.")
+		case errors.Is(err, session.ErrInvalidRequest):
+			writeError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "ID sesi tidak valid.")
+		default:
+			writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Sesi belum dapat dicabut.")
+		}
+		return
+	}
+	writer.WriteHeader(http.StatusNoContent)
 }
 
 func (server *Server) prepareDataset(writer http.ResponseWriter, request *http.Request) {
