@@ -139,5 +139,5 @@ export default function App() {
       />
     );
   }
-  return <PublicWorkspace backendOnline={backendOnline} />;
+  return <PublicWorkspace backendOnline={backendOnline} user={user} />;
 }

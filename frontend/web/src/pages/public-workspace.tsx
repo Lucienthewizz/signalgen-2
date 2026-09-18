@@ -1,19 +1,14 @@
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
-  BarChart3,
-  BookOpenCheck,
-  Braces,
   Check,
-  ChevronRight,
-  CircleCheckBig,
-  Gauge,
-  Menu,
+  LayoutDashboard,
+  LogIn,
   ShieldCheck,
   Star,
-  X,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { FeatureFigure } from "@/components/feature-figure";
 import { MarketTrace } from "@/components/market-trace";
 import {
   Accordion,
@@ -32,6 +27,7 @@ import {
 } from "@/components/ui/carousel";
 import { faqItems, sampleRatings } from "@/data/demo";
 import { cn } from "@/lib/utils";
+import type { User } from "@/types";
 import overviewImage from "@/assets/feature-overview.png";
 import analysisImage from "@/assets/feature-analysis.png";
 import rulesImage from "@/assets/feature-rules.png";
@@ -72,8 +68,39 @@ const productViews = [
   },
 ] as const;
 
-export function PublicWorkspace({ backendOnline }: { backendOnline: boolean }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+const capabilityViews = [
+  {
+    id: "analysis",
+    title: "Screening & backtest",
+    description:
+      "Konfigurasi, progress, cancel, result metrics, dan alasan per signal.",
+  },
+  {
+    id: "rules",
+    title: "Rule management",
+    description:
+      "System rule read-only dan CRUD rule privat untuk menguji builder.",
+  },
+  {
+    id: "journal",
+    title: "Journal & position",
+    description:
+      "Draft dari hasil, transaksi manual, posisi, dan ringkasan P&L.",
+  },
+  {
+    id: "access",
+    title: "Entitlement & devices",
+    description: "Status akses, sesi perangkat, revoke, dan clear cache.",
+  },
+] as const;
+
+export function PublicWorkspace({
+  backendOnline,
+  user,
+}: {
+  backendOnline: boolean;
+  user: User | null;
+}) {
   const [ratingApi, setRatingApi] = useState<CarouselApi>();
   const [ratingIndex, setRatingIndex] = useState(0);
   const [selectedView, setSelectedView] = useState(0);
@@ -90,88 +117,29 @@ export function PublicWorkspace({ backendOnline }: { backendOnline: boolean }) {
 
   return (
     <main className="workbench landing-shell">
-      <aside className={`sidebar landing-sidebar ${menuOpen ? "is-open" : ""}`}>
-        <div className="sidebar__brand">
-          <a href="#home" aria-label="Signalgen home">
-            <Brand compact />
-          </a>
-          <button onClick={() => setMenuOpen(false)} aria-label="Tutup menu">
-            <X />
-          </button>
-        </div>
-        <div className="surface-label">
-          <span>Web workspace</span>
-          <i className="status-dot is-online" />
-        </div>
-        <nav aria-label="Navigasi utama">
-          <div className="nav-group">
-            <span>EXPLORE</span>
-            <a className="active" href="#home">
-              <i />
-              <Gauge /> Overview
-            </a>
-            <a href="#capabilities">
-              <Braces /> Fitur MVP
-            </a>
-            <a href="#reviews">
-              <Star /> Rating preview
-            </a>
-            <a href="#faq">
-              <BookOpenCheck /> FAQ
-            </a>
-          </div>
-          <div className="nav-group">
-            <span>WORKSPACE</span>
-            <a href="#app/overview">
-              <BarChart3 /> Buka demo interaktif
-            </a>
-          </div>
-        </nav>
-        <div className="sidebar__footer">
-          <div className="live-card">
-            <span>Backend API</span>
-            <b>
-              <i className={backendOnline ? "online" : ""} />
-              {backendOnline ? "Reachable" : "Not connected"}
-            </b>
-          </div>
-          <small>Signalgen web · MVP interface</small>
-        </div>
-      </aside>
-      {menuOpen && (
-        <button
-          className="backdrop"
-          onClick={() => setMenuOpen(false)}
-          aria-label="Tutup menu"
-        />
-      )}
-      <section className="workspace">
-        <header className="topbar">
-          <div className="topbar__title">
-            <button
-              className="menu-button"
-              onClick={() => setMenuOpen(true)}
-              aria-label="Buka menu"
+      <section className="workspace landing-workspace">
+        <header className="landing-header">
+          <div className="landing-header__inner">
+            <a
+              className="landing-header__brand"
+              href="#home"
+              aria-label="Signalgen home"
             >
-              <Menu />
-            </button>
-            <div>
-              <span className="breadcrumb">Signalgen / Web</span>
-              <h1>Market workspace</h1>
-            </div>
-          </div>
-          <div className="topbar__actions">
-            <a className="topbar-link" href="#app/overview">
-              Coba demo
+              <Brand compact />
             </a>
-            <Button
-              className="ui-button ui-button--primary"
-              onClick={() => {
-                location.hash = "login";
-              }}
-            >
-              Masuk <ArrowRight />
-            </Button>
+            <nav className="landing-header__nav" aria-label="Navigasi utama">
+              <a href="#capabilities">Fitur</a>
+              <a href="#product-tour">Preview</a>
+              <a href="#reviews">Rating</a>
+              <a href="#faq">FAQ</a>
+              <a href="#app/overview">Demo</a>
+              <a
+                className="landing-header__session"
+                href={user ? "#app/overview" : "#login"}
+              >
+                {user ? "Dashboard" : "Masuk"}
+              </a>
+            </nav>
           </div>
         </header>
         <div className="workspace__content landing-content">
@@ -188,6 +156,37 @@ export function PublicWorkspace({ backendOnline }: { backendOnline: boolean }) {
             <small>Tidak ada data live</small>
           </div>
           <section className="market-hero">
+            <div className="market-hero__chart" aria-hidden="true">
+              <MarketTrace />
+            </div>
+            <svg
+              className="market-hero__divider"
+              viewBox="0 0 120 640"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <defs>
+                <linearGradient
+                  id="hero-divider-gradient"
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop offset="0" stopColor="#214a34" stopOpacity="0" />
+                  <stop offset="0.2" stopColor="#3b8a5c" stopOpacity="0.58" />
+                  <stop offset="0.76" stopColor="#285f40" stopOpacity="0.42" />
+                  <stop offset="1" stopColor="#173322" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M78 0C88 118 30 182 40 306C49 418 90 432 73 640"
+                fill="none"
+                stroke="url(#hero-divider-gradient)"
+                strokeWidth="1.2"
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
             <div className="market-hero__copy">
               <h2>
                 Read the market.
@@ -224,22 +223,30 @@ export function PublicWorkspace({ backendOnline }: { backendOnline: boolean }) {
                 </span>
               </div>
             </div>
-            <MarketTrace />
-          </section>
-          <section className="ledger-metrics" aria-label="Prinsip produk">
-            {[
-              ["Rule first", "Kondisi eksplisit"],
-              ["State aware", "Konteks terbaca"],
-              ["Signal trace", "Alasan tersimpan"],
-              ["User boundary", "Data terisolasi"],
-            ].map(([label, copy]) => (
-              <div className="ledger-metric" key={label}>
-                <strong>{label}</strong>
-                <small>
-                  <CircleCheckBig /> {copy}
-                </small>
-              </div>
-            ))}
+            <aside className="hero-dashboard-cta" aria-label="Akses workspace">
+              <span className="hero-dashboard-cta__status">
+                <i /> {user ? "Sesi Anda aktif" : "Siap untuk digunakan"}
+              </span>
+              <a
+                className="liquid-glass-button"
+                href={user ? "#app/overview" : "#login"}
+              >
+                <span className="liquid-glass-button__icon">
+                  {user ? <LayoutDashboard /> : <LogIn />}
+                </span>
+                <span>
+                  <strong>
+                    {user ? "Buka dashboard" : "Masuk ke Signalgen"}
+                  </strong>
+                  <small>
+                    {user
+                      ? "Lanjutkan ke workspace Anda"
+                      : "Login untuk membuka workspace"}
+                  </small>
+                </span>
+                <ArrowRight className="liquid-glass-button__arrow" />
+              </a>
+            </aside>
           </section>
           <section className="capability-section" id="capabilities">
             <div className="section-heading split-heading">
@@ -254,48 +261,25 @@ export function PublicWorkspace({ backendOnline }: { backendOnline: boolean }) {
                 Buka workspace <ArrowRight />
               </a>
             </div>
-            <div className="capability-ledger">
-              <a href="#app/analysis">
-                <BarChart3 />
-                <div>
-                  <strong>Screening & backtest</strong>
-                  <p>
-                    Konfigurasi, progress, cancel, result metrics, dan alasan
-                    per signal.
-                  </p>
-                </div>
-                <ChevronRight />
-              </a>
-              <a href="#app/rules">
-                <Braces />
-                <div>
-                  <strong>Rule management</strong>
-                  <p>
-                    System rule read-only dan CRUD rule privat untuk menguji
-                    builder.
-                  </p>
-                </div>
-                <ChevronRight />
-              </a>
-              <a href="#app/journal">
-                <BookOpenCheck />
-                <div>
-                  <strong>Journal & position</strong>
-                  <p>
-                    Draft dari hasil, transaksi manual, posisi, dan ringkasan
-                    P&amp;L.
-                  </p>
-                </div>
-                <ChevronRight />
-              </a>
-              <a href="#app/access">
-                <ShieldCheck />
-                <div>
-                  <strong>Entitlement & devices</strong>
-                  <p>Status akses, sesi perangkat, revoke, dan clear cache.</p>
-                </div>
-                <ChevronRight />
-              </a>
+            <div className="feature-gallery">
+              {capabilityViews.map((feature) => (
+                <a
+                  className="feature-gallery__item"
+                  href={`#app/${feature.id}`}
+                  key={feature.id}
+                >
+                  <div className="feature-gallery__figure">
+                    <FeatureFigure kind={feature.id} />
+                  </div>
+                  <div className="feature-gallery__copy">
+                    <strong>{feature.title}</strong>
+                    <p>{feature.description}</p>
+                    <span>
+                      Buka fitur <ArrowRight />
+                    </span>
+                  </div>
+                </a>
+              ))}
             </div>
           </section>
           <section className="product-tour" id="product-tour">
