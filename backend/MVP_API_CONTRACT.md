@@ -177,7 +177,12 @@ Missing quote uses null price/P&L and warning, not zero.
 
 ## 5. Restricted operator contract (P1)
 
-CLI/local operator tooling is sufficient for P0 seed. P1 may expose protected `/operator/grants` list/create/revoke only after role guard, bootstrap, audit and last-operator safety are implemented. Creation requires user, feature allowlist, valid_until and reason. Actor/request ID/before/after stored atomically. Operator cannot read private rule/journal bodies solely by role.
+CLI/local operator tooling is sufficient for P0 seed. Local grant/revoke now
+requires actor, reason, and expiry where applicable; actor/request ID/before/after
+are stored atomically in an append-only audit table. P1 may expose protected
+`/operator/grants` list/create/revoke only after role guard, bootstrap, and
+last-operator safety are implemented. Operator cannot read private rule/journal
+bodies solely by role.
 
 Payment status is not part of manual grant. Full admin user management, billing webhooks, release management and metrics dashboard are P2 per revised priorities.
 

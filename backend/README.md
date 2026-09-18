@@ -109,12 +109,16 @@ docker compose --profile go-target run --rm go-api \
   --user USER_ID_SUPABASE \
   --feature screener \
   --until 2026-10-17T00:00:00Z \
-  --reason "demo pembimbing"
+  --reason "demo pembimbing" \
+  --actor "operator-lokal"
 ```
 
-Cabut akses dengan perintah yang sama menggunakan subcommand `revoke` dan flag
-`--user` serta `--feature`. Tool ini adalah seed/operator lokal sementara;
-endpoint operator publik dan audit lengkap belum tersedia.
+Cabut akses dengan subcommand `revoke` dan flag `--user`, `--feature`,
+`--reason`, serta `--actor`. Setiap grant/revoke lokal disimpan bersama actor,
+request ID, alasan, dan kondisi sebelum/sesudah dalam transaksi yang sama.
+Catatan audit bersifat append-only: database menolak update dan delete. Tool ini
+tetap merupakan operator lokal sementara; endpoint operator publik dan role
+guard belum tersedia.
 
 Dataset P0 yang tersedia saat ini hanya fixture sintetis `BBCA.JK`, market
 `IDX`, timeframe `1d`, dan purpose `screen`. Endpoint menolak simbol/rentang

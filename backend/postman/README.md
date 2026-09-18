@@ -56,7 +56,8 @@ docker compose --profile go-target exec go-api \
   --user USER_ID \
   --feature screener \
   --until 2026-10-18T00:00:00Z \
-  --reason "postman local test"
+  --reason "postman local test" \
+  --actor "postman-local"
 ```
 
 Kemudian jalankan:

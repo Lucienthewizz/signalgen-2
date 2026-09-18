@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -50,6 +52,7 @@ func grant(ctx context.Context, store *access.Store, args []string, stdout, stde
 	feature := flags.String("feature", "", "screener or backtest")
 	untilRaw := flags.String("until", "", "RFC3339 expiry time")
 	reason := flags.String("reason", "", "grant reason")
+	actor := flags.String("actor", "", "operator identifier recorded in audit")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -58,11 +61,16 @@ func grant(ctx context.Context, store *access.Store, args []string, stdout, stde
 		fmt.Fprintln(stderr, "--until must be an RFC3339 timestamp")
 		return 2
 	}
-	if err := store.GrantFeature(ctx, *userID, *feature, until, *reason); err != nil {
+	requestID, err := newCLIRequestID()
+	if err != nil {
+		fmt.Fprintln(stderr, "create audit request id:", err)
+		return 1
+	}
+	if err := store.GrantFeatureAudited(ctx, *actor, requestID, *userID, *feature, until, *reason); err != nil {
 		fmt.Fprintln(stderr, "grant failed:", err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "granted %s to %s until %s\n", *feature, *userID, until.UTC().Format(time.RFC3339))
+	fmt.Fprintf(stdout, "granted %s to %s until %s (audit %s)\n", *feature, *userID, until.UTC().Format(time.RFC3339), requestID)
 	return 0
 }
 
@@ -71,15 +79,30 @@ func revoke(ctx context.Context, store *access.Store, args []string, stdout, std
 	flags.SetOutput(stderr)
 	userID := flags.String("user", "", "Supabase user id")
 	feature := flags.String("feature", "", "screener or backtest")
+	reason := flags.String("reason", "", "revoke reason")
+	actor := flags.String("actor", "", "operator identifier recorded in audit")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
-	if err := store.RevokeFeature(ctx, *userID, *feature); err != nil {
+	requestID, err := newCLIRequestID()
+	if err != nil {
+		fmt.Fprintln(stderr, "create audit request id:", err)
+		return 1
+	}
+	if err := store.RevokeFeatureAudited(ctx, *actor, requestID, *userID, *feature, *reason); err != nil {
 		fmt.Fprintln(stderr, "revoke failed:", err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "revoked %s from %s\n", *feature, *userID)
+	fmt.Fprintf(stdout, "revoked %s from %s (audit %s)\n", *feature, *userID, requestID)
 	return 0
+}
+
+func newCLIRequestID() (string, error) {
+	raw := make([]byte, 12)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return "cli_" + hex.EncodeToString(raw), nil
 }
 
 func printUsage(writer io.Writer) {

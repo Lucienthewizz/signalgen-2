@@ -29,7 +29,7 @@ func TestGrantAndRevokeCommands(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 	until := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
-	code := run([]string{"grant", "--user", "user-a", "--feature", "screener", "--until", until, "--reason", "demo"}, getenv, &stdout, &stderr)
+	code := run([]string{"grant", "--user", "user-a", "--feature", "screener", "--until", until, "--reason", "demo", "--actor", "operator-a"}, getenv, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("grant exit = %d, stderr = %s", code, stderr.String())
 	}
@@ -41,13 +41,32 @@ func TestGrantAndRevokeCommands(t *testing.T) {
 	if err := store.RequireFeature(context.Background(), "user-a", access.FeatureScreener); err != nil {
 		t.Fatal(err)
 	}
+	events, err := store.AuditEvents(context.Background(), "user-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Actor != "operator-a" || events[0].Action != "feature.grant" || events[0].RequestID == "" {
+		t.Fatalf("grant audit events = %+v", events)
+	}
 	store.Close()
 
 	stdout.Reset()
 	stderr.Reset()
-	code = run([]string{"revoke", "--user", "user-a", "--feature", "screener"}, getenv, &stdout, &stderr)
+	code = run([]string{"revoke", "--user", "user-a", "--feature", "screener", "--reason", "demo complete", "--actor", "operator-a"}, getenv, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("revoke exit = %d, stderr = %s", code, stderr.String())
+	}
+	store, err = access.OpenSQLite(databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	events, err = store.AuditEvents(context.Background(), "user-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || events[1].Action != "feature.revoke" || events[1].Reason != "demo complete" {
+		t.Fatalf("all audit events = %+v", events)
 	}
 }
 
