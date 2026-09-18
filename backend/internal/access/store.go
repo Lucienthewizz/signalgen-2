@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ var (
 	ErrAccountNotFound    = errors.New("account not found")
 	ErrAccountSuspended   = errors.New("account is suspended")
 	ErrRoleRequired       = errors.New("required account role is missing")
+	ErrBootstrapClosed    = errors.New("operator bootstrap is already closed")
 	ErrEntitlementMissing = errors.New("feature entitlement is missing or expired")
 	ErrInvalidValue       = errors.New("invalid access value")
 )
@@ -53,16 +55,22 @@ type GrantState struct {
 }
 
 type AuditEvent struct {
-	ID           int64       `json:"id"`
-	Actor        string      `json:"actor"`
-	Action       string      `json:"action"`
-	TargetUserID string      `json:"target_user_id"`
-	Feature      string      `json:"feature"`
-	Reason       string      `json:"reason"`
-	RequestID    string      `json:"request_id"`
-	Before       *GrantState `json:"before,omitempty"`
-	After        *GrantState `json:"after,omitempty"`
-	CreatedAt    time.Time   `json:"created_at"`
+	ID           int64           `json:"id"`
+	Actor        string          `json:"actor"`
+	Action       string          `json:"action"`
+	TargetUserID string          `json:"target_user_id"`
+	Feature      string          `json:"feature,omitempty"`
+	Reason       string          `json:"reason"`
+	RequestID    string          `json:"request_id"`
+	Before       json.RawMessage `json:"before,omitempty"`
+	After        json.RawMessage `json:"after,omitempty"`
+	CreatedAt    time.Time       `json:"created_at"`
+}
+
+type AccountRoleState struct {
+	Role      string    `json:"role"`
+	Status    string    `json:"status"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Store struct {
@@ -142,12 +150,19 @@ CREATE TABLE IF NOT EXISTS feature_grants (
 );
 CREATE INDEX IF NOT EXISTS idx_feature_grants_active
 ON feature_grants(user_id, valid_until, revoked_at);
+CREATE TABLE IF NOT EXISTS operator_bootstrap_state (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    operator_user_id TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    bootstrapped_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS audit_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     actor TEXT NOT NULL,
-    action TEXT NOT NULL CHECK (action IN ('feature.grant', 'feature.revoke')),
+    action TEXT NOT NULL CHECK (action IN ('feature.grant', 'feature.revoke', 'account.bootstrap_operator')),
     target_user_id TEXT NOT NULL,
-    feature TEXT NOT NULL CHECK (feature IN ('screener', 'backtest')),
+    feature TEXT CHECK (feature IS NULL OR feature IN ('screener', 'backtest')),
     reason TEXT NOT NULL,
     request_id TEXT NOT NULL,
     before_json TEXT,
@@ -172,6 +187,83 @@ END;
 	}
 	if _, err := store.db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("migrate access storage: %w", err)
+	}
+	if err := store.migrateAuditEvents(ctx); err != nil {
+		return err
+	}
+	if _, err := store.db.ExecContext(ctx, `
+INSERT OR IGNORE INTO operator_bootstrap_state (
+    singleton, operator_user_id, actor, request_id, bootstrapped_at
+)
+SELECT 1, user_id, 'system:migration', 'migration_existing_operator', updated_at
+FROM account_profiles
+WHERE role = ?
+ORDER BY created_at, user_id
+LIMIT 1`, RoleOperator); err != nil {
+		return fmt.Errorf("seal existing operator bootstrap: %w", err)
+	}
+	return nil
+}
+
+// migrateAuditEvents upgrades databases created before account role events were
+// supported. SQLite cannot alter CHECK constraints in place, so the table is
+// rebuilt transactionally while preserving existing feature audit rows.
+func (store *Store) migrateAuditEvents(ctx context.Context) error {
+	var definition string
+	if err := store.db.QueryRowContext(ctx, `
+SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'audit_events'`).Scan(&definition); err != nil {
+		return fmt.Errorf("read audit schema: %w", err)
+	}
+	if strings.Contains(definition, "account.bootstrap_operator") {
+		return nil
+	}
+	transaction, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin audit schema migration: %w", err)
+	}
+	defer transaction.Rollback()
+	const migration = `
+DROP TRIGGER IF EXISTS audit_events_no_update;
+DROP TRIGGER IF EXISTS audit_events_no_delete;
+CREATE TABLE audit_events_next (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('feature.grant', 'feature.revoke', 'account.bootstrap_operator')),
+    target_user_id TEXT NOT NULL,
+    feature TEXT CHECK (feature IS NULL OR feature IN ('screener', 'backtest')),
+    reason TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    before_json TEXT,
+    after_json TEXT,
+    created_at INTEGER NOT NULL
+);
+INSERT INTO audit_events_next (
+    id, actor, action, target_user_id, feature, reason, request_id,
+    before_json, after_json, created_at
+)
+SELECT id, actor, action, target_user_id, feature, reason, request_id,
+       before_json, after_json, created_at
+FROM audit_events;
+DROP TABLE audit_events;
+ALTER TABLE audit_events_next RENAME TO audit_events;
+CREATE INDEX idx_audit_events_target
+ON audit_events(target_user_id, created_at, id);
+CREATE TRIGGER audit_events_no_update
+BEFORE UPDATE ON audit_events
+BEGIN
+    SELECT RAISE(ABORT, 'audit events are immutable');
+END;
+CREATE TRIGGER audit_events_no_delete
+BEFORE DELETE ON audit_events
+BEGIN
+    SELECT RAISE(ABORT, 'audit events are immutable');
+END;
+`
+	if _, err := transaction.ExecContext(ctx, migration); err != nil {
+		return fmt.Errorf("upgrade audit schema: %w", err)
+	}
+	if err := transaction.Commit(); err != nil {
+		return fmt.Errorf("commit audit schema migration: %w", err)
 	}
 	return nil
 }
@@ -239,6 +331,76 @@ func (store *Store) RequireOperator(ctx context.Context, userID string) (Account
 		return Account{}, ErrRoleRequired
 	}
 	return account, nil
+}
+
+// BootstrapOperator promotes the first operator through local trusted tooling.
+// A successful bootstrap is permanently recorded; existing operator databases
+// are sealed during migration. Later role management must use a separately
+// protected operator workflow.
+func (store *Store) BootstrapOperator(ctx context.Context, actor, requestID, userID, reason string) error {
+	actor = strings.TrimSpace(actor)
+	requestID = strings.TrimSpace(requestID)
+	userID = strings.TrimSpace(userID)
+	reason = strings.TrimSpace(reason)
+	if actor == "" || requestID == "" || userID == "" || reason == "" {
+		return ErrInvalidValue
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	transaction, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin operator bootstrap: %w", err)
+	}
+	defer transaction.Rollback()
+	before, err := accountRoleState(ctx, transaction, userID)
+	if err != nil {
+		return err
+	}
+	if before.Status != StatusActive {
+		return ErrAccountSuspended
+	}
+	result, err := transaction.ExecContext(ctx, `
+INSERT INTO operator_bootstrap_state (
+    singleton, operator_user_id, actor, request_id, bootstrapped_at
+)
+SELECT 1, ?, ?, ?, ?
+WHERE NOT EXISTS (SELECT 1 FROM operator_bootstrap_state WHERE singleton = 1)
+  AND NOT EXISTS (SELECT 1 FROM account_profiles WHERE role = ?)`,
+		userID, actor, requestID, now.Unix(), RoleOperator,
+	)
+	if err != nil {
+		return fmt.Errorf("record operator bootstrap: %w", err)
+	}
+	reserved, _ := result.RowsAffected()
+	if reserved != 1 {
+		return ErrBootstrapClosed
+	}
+	result, err = transaction.ExecContext(ctx, `
+UPDATE account_profiles
+SET role = ?, updated_at = ?
+WHERE user_id = ? AND role = ? AND status = ?`,
+		RoleOperator, now.Unix(), userID, RoleUser, StatusActive,
+	)
+	if err != nil {
+		return fmt.Errorf("bootstrap operator: %w", err)
+	}
+	changed, _ := result.RowsAffected()
+	if changed != 1 {
+		return ErrBootstrapClosed
+	}
+	after, err := accountRoleState(ctx, transaction, userID)
+	if err != nil {
+		return err
+	}
+	if err := insertAuditEvent(
+		ctx, transaction, actor, "account.bootstrap_operator", userID, "", reason,
+		requestID, before, after, now,
+	); err != nil {
+		return err
+	}
+	if err := transaction.Commit(); err != nil {
+		return fmt.Errorf("commit operator bootstrap: %w", err)
+	}
+	return nil
 }
 
 func (store *Store) Features(ctx context.Context, userID string) ([]string, error) {
@@ -385,6 +547,23 @@ type rowQuerier interface {
 	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
 }
 
+func accountRoleState(ctx context.Context, querier rowQuerier, userID string) (*AccountRoleState, error) {
+	var state AccountRoleState
+	var updatedAt int64
+	err := querier.QueryRowContext(ctx, `
+SELECT role, status, updated_at FROM account_profiles WHERE user_id = ?`, userID).Scan(
+		&state.Role, &state.Status, &updatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrAccountNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read account role state: %w", err)
+	}
+	state.UpdatedAt = time.Unix(updatedAt, 0).UTC()
+	return &state, nil
+}
+
 func grantState(ctx context.Context, querier rowQuerier, userID, feature string) (*GrantState, error) {
 	var state GrantState
 	var validUntil, updatedAt int64
@@ -409,32 +588,40 @@ FROM feature_grants WHERE user_id = ? AND feature = ?`, userID, feature).Scan(
 	return &state, nil
 }
 
-func insertAuditEvent(ctx context.Context, transaction *sql.Tx, actor, action, userID, feature, reason, requestID string, before, after *GrantState, createdAt time.Time) error {
-	var beforeJSON, afterJSON interface{}
-	if before != nil {
-		encoded, err := json.Marshal(before)
-		if err != nil {
-			return fmt.Errorf("encode audit before state: %w", err)
-		}
-		beforeJSON = string(encoded)
+func insertAuditEvent(ctx context.Context, transaction *sql.Tx, actor, action, userID, feature, reason, requestID string, before, after interface{}, createdAt time.Time) error {
+	beforeJSON, err := encodeAuditState(before)
+	if err != nil {
+		return fmt.Errorf("encode audit before state: %w", err)
 	}
-	if after != nil {
-		encoded, err := json.Marshal(after)
-		if err != nil {
-			return fmt.Errorf("encode audit after state: %w", err)
-		}
-		afterJSON = string(encoded)
+	afterJSON, err := encodeAuditState(after)
+	if err != nil {
+		return fmt.Errorf("encode audit after state: %w", err)
 	}
 	if _, err := transaction.ExecContext(ctx, `
 INSERT INTO audit_events (
     actor, action, target_user_id, feature, reason, request_id,
     before_json, after_json, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+) VALUES (?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?)`,
 		actor, action, userID, feature, reason, requestID, beforeJSON, afterJSON, createdAt.Unix(),
 	); err != nil {
 		return fmt.Errorf("insert audit event: %w", err)
 	}
 	return nil
+}
+
+func encodeAuditState(value interface{}) (interface{}, error) {
+	if value == nil {
+		return nil, nil
+	}
+	reflected := reflect.ValueOf(value)
+	if reflected.Kind() == reflect.Ptr && reflected.IsNil() {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	return string(encoded), nil
 }
 
 func (store *Store) AuditEvents(ctx context.Context, userID string) ([]AuditEvent, error) {
@@ -451,26 +638,29 @@ ORDER BY created_at, id`, strings.TrimSpace(userID))
 	events := make([]AuditEvent, 0)
 	for rows.Next() {
 		var event AuditEvent
-		var beforeJSON, afterJSON sql.NullString
+		var feature, beforeJSON, afterJSON sql.NullString
 		var createdAt int64
 		if err := rows.Scan(
-			&event.ID, &event.Actor, &event.Action, &event.TargetUserID, &event.Feature,
+			&event.ID, &event.Actor, &event.Action, &event.TargetUserID, &feature,
 			&event.Reason, &event.RequestID, &beforeJSON, &afterJSON, &createdAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan audit event: %w", err)
 		}
+		if feature.Valid {
+			event.Feature = feature.String
+		}
 		event.CreatedAt = time.Unix(createdAt, 0).UTC()
 		if beforeJSON.Valid {
-			event.Before = &GrantState{}
-			if err := json.Unmarshal([]byte(beforeJSON.String), event.Before); err != nil {
-				return nil, fmt.Errorf("decode audit before state: %w", err)
+			if !json.Valid([]byte(beforeJSON.String)) {
+				return nil, fmt.Errorf("decode audit before state: invalid JSON")
 			}
+			event.Before = json.RawMessage(beforeJSON.String)
 		}
 		if afterJSON.Valid {
-			event.After = &GrantState{}
-			if err := json.Unmarshal([]byte(afterJSON.String), event.After); err != nil {
-				return nil, fmt.Errorf("decode audit after state: %w", err)
+			if !json.Valid([]byte(afterJSON.String)) {
+				return nil, fmt.Errorf("decode audit after state: invalid JSON")
 			}
+			event.After = json.RawMessage(afterJSON.String)
 		}
 		events = append(events, event)
 	}

@@ -22,7 +22,9 @@ Browser integration supports an exact-origin CORS allowlist configured through
 `SIGNALGEN_CORS_ORIGINS`; wildcard origins are rejected.
 The server-side operator role guard is implemented and composes bearer,
 app-session, active-account, and database-role checks. No public operator route
-is registered yet.
+is registered yet. The first active operator can be bootstrapped exactly once
+through local CLI tooling; the role change and its actor/reason/before/after
+state are recorded atomically in the append-only audit table.
 This checkpoint is a subset, not a claim
 that the remaining proposed routes are available.
 

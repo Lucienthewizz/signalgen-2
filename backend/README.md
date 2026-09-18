@@ -103,6 +103,23 @@ pengguna dapat mencabut sesi lama melalui endpoint daftar sesi.
 Setelah pengguna login dan membuat sesi pertamanya, developer dapat memberikan
 akses demo secara lokal tanpa endpoint admin publik:
 
+Untuk instalasi baru, bootstrap operator pertama hanya dapat dijalankan satu
+kali dan target harus akun aktif yang sudah pernah membuat sesi:
+
+```bash
+docker compose --profile go-target run --rm go-api \
+  signalgen-admin bootstrap-operator \
+  --user USER_ID_SUPABASE \
+  --actor "local:nama-developer" \
+  --reason "initial project operator"
+```
+
+Setelah operator pertama ada, perintah bootstrap selalu ditolak. Menambah atau
+menghapus operator berikutnya belum tersedia dan tidak boleh dilakukan melalui
+payload frontend maupun metadata user Supabase.
+
+Grant demo lokal tetap dijalankan dengan:
+
 ```bash
 docker compose --profile go-target run --rm go-api \
   signalgen-admin grant \
