@@ -232,6 +232,73 @@ func TestMigrateSealsDatabaseWithExistingOperator(t *testing.T) {
 	}
 }
 
+func TestSetRoleAuditedProtectsLastActiveOperator(t *testing.T) {
+	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
+	store := testStore(t, func() time.Time { return now })
+	_, _ = store.EnsureProfile(context.Background(), "operator-a", "a@example.com")
+	_, _ = store.EnsureProfile(context.Background(), "operator-b", "b@example.com")
+	if err := store.BootstrapOperator(
+		context.Background(), "local:test", "req_bootstrap", "operator-a", "initial operator",
+	); err != nil {
+		t.Fatal(err)
+	}
+	promoted, err := store.SetRoleAudited(
+		context.Background(), "operator-a", "req_promote", "operator-b", RoleOperator, "backup operator",
+	)
+	if err != nil || promoted.Role != RoleOperator {
+		t.Fatalf("promoted = %+v, error = %v", promoted, err)
+	}
+	demoted, err := store.SetRoleAudited(
+		context.Background(), "operator-b", "req_demote_a", "operator-a", RoleUser, "rotate operator",
+	)
+	if err != nil || demoted.Role != RoleUser {
+		t.Fatalf("demoted = %+v, error = %v", demoted, err)
+	}
+	if _, err := store.SetRoleAudited(
+		context.Background(), "operator-b", "req_demote_b", "operator-b", RoleUser, "remove final operator",
+	); !errors.Is(err, ErrLastOperator) {
+		t.Fatalf("last operator error = %v, want ErrLastOperator", err)
+	}
+	remaining, err := store.RequireOperator(context.Background(), "operator-b")
+	if err != nil || remaining.Role != RoleOperator {
+		t.Fatalf("remaining operator = %+v, error = %v", remaining, err)
+	}
+	events, err := store.AuditEvents(context.Background(), "operator-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Action != "account.role_changed" || events[0].Actor != "operator-a" {
+		t.Fatalf("role audit events = %+v", events)
+	}
+	var before, after AccountRoleState
+	if err := json.Unmarshal(events[0].Before, &before); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(events[0].After, &after); err != nil {
+		t.Fatal(err)
+	}
+	if before.Role != RoleUser || after.Role != RoleOperator {
+		t.Fatalf("role audit before=%+v after=%+v", before, after)
+	}
+}
+
+func TestSetRoleAuditedRejectsInvalidInputAndMissingAccount(t *testing.T) {
+	store := testStore(t, time.Now)
+	if _, err := store.SetRoleAudited(
+		context.Background(), "operator-a", "req_1", "missing", RoleOperator, "promote",
+	); !errors.Is(err, ErrAccountNotFound) {
+		t.Fatalf("missing account error = %v", err)
+	}
+	_, _ = store.EnsureProfile(context.Background(), "user-a", "user@example.com")
+	for _, role := range []string{"", "admin", "owner"} {
+		if _, err := store.SetRoleAudited(
+			context.Background(), "operator-a", "req_1", "user-a", role, "invalid role",
+		); !errors.Is(err, ErrInvalidValue) {
+			t.Fatalf("role=%q error=%v", role, err)
+		}
+	}
+}
+
 func TestUnknownFeatureIsRejected(t *testing.T) {
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 	store := testStore(t, func() time.Time { return now })
@@ -383,7 +450,7 @@ INSERT INTO audit_events (
 	).Scan(&definition); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(definition, "account.bootstrap_operator") {
+	if !strings.Contains(definition, "account.bootstrap_operator") || !strings.Contains(definition, "account.role_changed") {
 		t.Fatalf("audit schema was not upgraded: %s", definition)
 	}
 }

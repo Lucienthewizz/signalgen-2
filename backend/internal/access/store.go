@@ -28,6 +28,7 @@ var (
 	ErrAccountSuspended   = errors.New("account is suspended")
 	ErrRoleRequired       = errors.New("required account role is missing")
 	ErrBootstrapClosed    = errors.New("operator bootstrap is already closed")
+	ErrLastOperator       = errors.New("last active operator cannot be demoted")
 	ErrEntitlementMissing = errors.New("feature entitlement is missing or expired")
 	ErrInvalidValue       = errors.New("invalid access value")
 )
@@ -78,6 +79,13 @@ type AuditEvent struct {
 }
 
 type AccountRoleState struct {
+	Role      string    `json:"role"`
+	Status    string    `json:"status"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type AccountRole struct {
+	UserID    string    `json:"user_id"`
 	Role      string    `json:"role"`
 	Status    string    `json:"status"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -170,7 +178,7 @@ CREATE TABLE IF NOT EXISTS operator_bootstrap_state (
 CREATE TABLE IF NOT EXISTS audit_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     actor TEXT NOT NULL,
-    action TEXT NOT NULL CHECK (action IN ('feature.grant', 'feature.revoke', 'account.bootstrap_operator')),
+    action TEXT NOT NULL CHECK (action IN ('feature.grant', 'feature.revoke', 'account.bootstrap_operator', 'account.role_changed')),
     target_user_id TEXT NOT NULL,
     feature TEXT CHECK (feature IS NULL OR feature IN ('screener', 'backtest')),
     reason TEXT NOT NULL,
@@ -215,16 +223,16 @@ LIMIT 1`, RoleOperator); err != nil {
 	return nil
 }
 
-// migrateAuditEvents upgrades databases created before account role events were
-// supported. SQLite cannot alter CHECK constraints in place, so the table is
-// rebuilt transactionally while preserving existing feature audit rows.
+// migrateAuditEvents upgrades databases created before current account events
+// were supported. SQLite cannot alter CHECK constraints in place, so the table
+// is rebuilt transactionally while preserving existing audit rows.
 func (store *Store) migrateAuditEvents(ctx context.Context) error {
 	var definition string
 	if err := store.db.QueryRowContext(ctx, `
 SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'audit_events'`).Scan(&definition); err != nil {
 		return fmt.Errorf("read audit schema: %w", err)
 	}
-	if strings.Contains(definition, "account.bootstrap_operator") {
+	if strings.Contains(definition, "account.role_changed") {
 		return nil
 	}
 	transaction, err := store.db.BeginTx(ctx, nil)
@@ -238,7 +246,7 @@ DROP TRIGGER IF EXISTS audit_events_no_delete;
 CREATE TABLE audit_events_next (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     actor TEXT NOT NULL,
-    action TEXT NOT NULL CHECK (action IN ('feature.grant', 'feature.revoke', 'account.bootstrap_operator')),
+    action TEXT NOT NULL CHECK (action IN ('feature.grant', 'feature.revoke', 'account.bootstrap_operator', 'account.role_changed')),
     target_user_id TEXT NOT NULL,
     feature TEXT CHECK (feature IS NULL OR feature IN ('screener', 'backtest')),
     reason TEXT NOT NULL,
@@ -411,6 +419,76 @@ WHERE user_id = ? AND role = ? AND status = ?`,
 		return fmt.Errorf("commit operator bootstrap: %w", err)
 	}
 	return nil
+}
+
+// SetRoleAudited changes an application role through a trusted operator path.
+// Demoting an operator requires another active operator to remain available.
+func (store *Store) SetRoleAudited(ctx context.Context, actor, requestID, userID, role, reason string) (AccountRole, error) {
+	actor = strings.TrimSpace(actor)
+	requestID = strings.TrimSpace(requestID)
+	userID = strings.TrimSpace(userID)
+	role = strings.TrimSpace(role)
+	reason = strings.TrimSpace(reason)
+	if actor == "" || requestID == "" || userID == "" || reason == "" ||
+		(role != RoleUser && role != RoleOperator) {
+		return AccountRole{}, ErrInvalidValue
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	transaction, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return AccountRole{}, fmt.Errorf("begin account role change: %w", err)
+	}
+	defer transaction.Rollback()
+	before, err := accountRoleState(ctx, transaction, userID)
+	if err != nil {
+		return AccountRole{}, err
+	}
+	if before.Role == role {
+		return AccountRole{
+			UserID: userID, Role: before.Role, Status: before.Status, UpdatedAt: before.UpdatedAt,
+		}, nil
+	}
+	var result sql.Result
+	if before.Role == RoleOperator && role == RoleUser {
+		result, err = transaction.ExecContext(ctx, `
+UPDATE account_profiles
+SET role = ?, updated_at = ?
+WHERE user_id = ? AND role = ?
+  AND EXISTS (
+      SELECT 1 FROM account_profiles
+      WHERE role = ? AND status = ? AND user_id <> ?
+  )`, RoleUser, now.Unix(), userID, RoleOperator, RoleOperator, StatusActive, userID)
+	} else {
+		result, err = transaction.ExecContext(ctx, `
+UPDATE account_profiles SET role = ?, updated_at = ?
+WHERE user_id = ? AND role = ?`, role, now.Unix(), userID, before.Role)
+	}
+	if err != nil {
+		return AccountRole{}, fmt.Errorf("change account role: %w", err)
+	}
+	changed, _ := result.RowsAffected()
+	if changed != 1 {
+		if before.Role == RoleOperator && role == RoleUser {
+			return AccountRole{}, ErrLastOperator
+		}
+		return AccountRole{}, ErrInvalidValue
+	}
+	after, err := accountRoleState(ctx, transaction, userID)
+	if err != nil {
+		return AccountRole{}, err
+	}
+	if err := insertAuditEvent(
+		ctx, transaction, actor, "account.role_changed", userID, "", reason,
+		requestID, before, after, now,
+	); err != nil {
+		return AccountRole{}, err
+	}
+	if err := transaction.Commit(); err != nil {
+		return AccountRole{}, fmt.Errorf("commit account role change: %w", err)
+	}
+	return AccountRole{
+		UserID: userID, Role: after.Role, Status: after.Status, UpdatedAt: after.UpdatedAt,
+	}, nil
 }
 
 func (store *Store) Features(ctx context.Context, userID string) ([]string, error) {

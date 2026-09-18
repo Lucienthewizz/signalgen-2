@@ -63,6 +63,12 @@ type fakeAccess struct {
 	revokeUserID  string
 	revokeFeature string
 	revokeReason  string
+	roleActor     string
+	roleRequest   string
+	roleUserID    string
+	roleValue     string
+	roleReason    string
+	roleError     error
 }
 
 func (fake *fakeAccess) RequireFeature(_ context.Context, _ string, feature string) error {
@@ -179,6 +185,20 @@ func (fake *fakeAccess) RevokeFeatureAudited(_ context.Context, actor, requestID
 	return nil
 }
 
+func (fake *fakeAccess) SetRoleAudited(_ context.Context, actor, requestID, userID, role, reason string) (access.AccountRole, error) {
+	if fake.err != nil {
+		return access.AccountRole{}, fake.err
+	}
+	if fake.roleError != nil {
+		return access.AccountRole{}, fake.roleError
+	}
+	fake.roleActor, fake.roleRequest = actor, requestID
+	fake.roleUserID, fake.roleValue, fake.roleReason = userID, role, reason
+	return access.AccountRole{
+		UserID: userID, Role: role, Status: access.StatusActive, UpdatedAt: time.Now().UTC(),
+	}, nil
+}
+
 func (fake *fakeAccess) accountFor(userID, email string) access.Account {
 	if fake.account.UserID != "" {
 		return fake.account
@@ -290,6 +310,9 @@ func TestCORSAllowsConfiguredBrowserOrigin(t *testing.T) {
 	}
 	if response.Header().Get("Access-Control-Allow-Headers") != "Authorization, Content-Type, X-App-Session" {
 		t.Fatalf("allow headers = %q", response.Header().Get("Access-Control-Allow-Headers"))
+	}
+	if !strings.Contains(response.Header().Get("Access-Control-Allow-Methods"), http.MethodPatch) {
+		t.Fatalf("allow methods = %q", response.Header().Get("Access-Control-Allow-Methods"))
 	}
 }
 
@@ -664,6 +687,58 @@ func TestOperatorGrantRejectsClientSuppliedAuditActor(t *testing.T) {
 	if operatorStore.grantActor != "" {
 		t.Fatalf("grant unexpectedly executed as %q", operatorStore.grantActor)
 	}
+}
+
+func TestOperatorRoleRouteUsesAuthenticatedActor(t *testing.T) {
+	operatorStore := &fakeAccess{account: access.Account{
+		UserID: "operator-a", Role: access.RoleOperator, Status: access.StatusActive,
+	}}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "operator-a"}}, &fakeSessions{},
+		operatorStore, &fakeDatasets{}, &fakeCompute{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(
+		http.MethodPatch, "/api/v1/operator/accounts/user-target/role",
+		bytes.NewBufferString(`{"role":"operator","reason":"backup operator"}`),
+	)
+	request.Header.Set("Authorization", "Bearer operator-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("role status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if operatorStore.roleActor != "operator-a" || !strings.HasPrefix(operatorStore.roleRequest, "req_") ||
+		operatorStore.roleUserID != "user-target" || operatorStore.roleValue != access.RoleOperator ||
+		operatorStore.roleReason != "backup operator" {
+		t.Fatalf("role call = %+v", operatorStore)
+	}
+}
+
+func TestOperatorRoleRouteProtectsLastOperator(t *testing.T) {
+	operatorStore := &fakeAccess{
+		account:   access.Account{UserID: "operator-a", Role: access.RoleOperator, Status: access.StatusActive},
+		roleError: access.ErrLastOperator,
+	}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "operator-a"}}, &fakeSessions{},
+		operatorStore, &fakeDatasets{}, &fakeCompute{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(
+		http.MethodPatch, "/api/v1/operator/accounts/operator-a/role",
+		bytes.NewBufferString(`{"role":"user","reason":"unsafe demotion"}`),
+	)
+	request.Header.Set("Authorization", "Bearer operator-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusConflict, "LAST_OPERATOR_REQUIRED")
 }
 
 func TestAccountSessionsListsOnlySafeOwnerMetadata(t *testing.T) {

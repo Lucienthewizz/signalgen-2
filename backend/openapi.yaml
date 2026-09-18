@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     Supabase performs identity login; this API verifies its bearer token and
@@ -481,6 +481,56 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/operator/accounts/{user_id}/role:
+    patch:
+      tags: [Operator]
+      operationId: changeOperatorAccountRole
+      summary: Promote or demote one application account role
+      description: Audit actor comes from the authenticated operator. Demotion is rejected unless another active operator remains.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - $ref: "#/components/parameters/TargetUserIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountRoleChangeRequest"
+      responses:
+        "200":
+          description: Current role state after the idempotent change.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountRole"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The change would remove the final active operator.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                error: {code: LAST_OPERATOR_REQUIRED, message: Operator aktif terakhir tidak dapat diturunkan rolenya., request_id: req_opaque}
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 
 components:
   securitySchemes:
@@ -674,6 +724,21 @@ components:
             label: {type: string}
             current: {type: boolean, enum: [true]}
         capabilities_version: {type: string}
+    AccountRoleChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [role, reason]
+      properties:
+        role: {type: string, enum: [user, operator]}
+        reason: {type: string, minLength: 1}
+    AccountRole:
+      type: object
+      required: [user_id, role, status, updated_at]
+      properties:
+        user_id: {type: string}
+        role: {type: string, enum: [user, operator]}
+        status: {type: string, enum: [active, suspended]}
+        updated_at: {type: string, format: date-time}
     FeatureGrantCreateRequest:
       type: object
       additionalProperties: false

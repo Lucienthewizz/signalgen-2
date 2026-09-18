@@ -23,7 +23,8 @@ Browser integration supports an exact-origin CORS allowlist configured through
 The server-side operator role guard is implemented and composes bearer,
 app-session, active-account, and database-role checks. Operator-only grant
 list/create/revoke routes are implemented and derive their audit actor from the
-authenticated principal. The first active operator can be bootstrapped exactly once
+authenticated principal. Role promotion/demotion is also implemented with an
+atomic guard that preserves at least one active operator. The first active operator can be bootstrapped exactly once
 through local CLI tooling; the role change and its actor/reason/before/after
 state are recorded atomically in the append-only audit table.
 This checkpoint is a subset, not a claim
@@ -189,7 +190,8 @@ are stored atomically in an append-only audit table. Protected
 `/operator/grants` list/create/revoke is now implemented behind the role guard;
 the list requires an explicit target user and does not expose unrelated users.
 Operator cannot read private rule/journal bodies solely by role. General role
-management still requires last-operator safety before it may be exposed.
+management is limited to role changes and protects the final active operator;
+account status management remains unavailable.
 
 Payment status is not part of manual grant. Full admin user management, billing webhooks, release management and metrics dashboard are P2 per revised priorities.
 

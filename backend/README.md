@@ -124,9 +124,12 @@ melalui API berikut:
 - `GET /api/v1/operator/grants?user_id=USER_ID`
 - `POST /api/v1/operator/grants`
 - `DELETE /api/v1/operator/grants/{user_id}/{feature}`
+- `PATCH /api/v1/operator/accounts/{user_id}/role`
 
 Semua route tersebut mengambil actor audit dari identitas operator yang sudah
 diverifikasi. Body dari frontend tidak dapat memilih atau memalsukan actor.
+Perubahan role mewajibkan alasan dan akan ditolak dengan
+`409 LAST_OPERATOR_REQUIRED` jika menurunkan role operator aktif terakhir.
 
 Grant demo lokal tetap dijalankan dengan:
 

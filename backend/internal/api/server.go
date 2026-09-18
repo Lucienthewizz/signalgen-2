@@ -45,6 +45,7 @@ type AccessStore interface {
 	RequireFeature(ctx context.Context, userID, feature string) error
 	GrantFeatureAudited(ctx context.Context, actor, requestID, userID, feature string, validUntil time.Time, reason string) (access.FeatureGrant, error)
 	RevokeFeatureAudited(ctx context.Context, actor, requestID, userID, feature, reason string) error
+	SetRoleAudited(ctx context.Context, actor, requestID, userID, role, reason string) (access.AccountRole, error)
 }
 
 type DatasetStore interface {
@@ -152,6 +153,7 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	mux.HandleFunc("GET /api/v1/operator/grants", server.listOperatorGrants)
 	mux.HandleFunc("POST /api/v1/operator/grants", server.createOperatorGrant)
 	mux.HandleFunc("DELETE /api/v1/operator/grants/{user_id}/{feature}", server.revokeOperatorGrant)
+	mux.HandleFunc("PATCH /api/v1/operator/accounts/{user_id}/role", server.changeOperatorAccountRole)
 	server.handler = requestContext(corsAllowlist(mux, config.allowedOrigins))
 	return server, nil
 }
@@ -580,6 +582,44 @@ func writeOperatorGrantError(writer http.ResponseWriter, request *http.Request, 
 	}
 }
 
+func (server *Server) changeOperatorAccountRole(writer http.ResponseWriter, request *http.Request) {
+	principal, _, ok := server.requireOperator(writer, request)
+	if !ok {
+		return
+	}
+	var input struct {
+		Role   string `json:"role"`
+		Reason string `json:"reason"`
+	}
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Body perubahan role tidak valid.")
+		return
+	}
+	accountRole, err := server.access.SetRoleAudited(
+		request.Context(), principal.ID, requestID(request.Context()),
+		request.PathValue("user_id"), input.Role, input.Reason,
+	)
+	if err != nil {
+		writeOperatorRoleError(writer, request, err)
+		return
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(writer, http.StatusOK, accountRole)
+}
+
+func writeOperatorRoleError(writer http.ResponseWriter, request *http.Request, err error) {
+	switch {
+	case errors.Is(err, access.ErrAccountNotFound):
+		writeError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Akun target tidak ditemukan.")
+	case errors.Is(err, access.ErrLastOperator):
+		writeError(writer, request, http.StatusConflict, "LAST_OPERATOR_REQUIRED", "Operator aktif terakhir tidak dapat diturunkan rolenya.")
+	case errors.Is(err, access.ErrInvalidValue):
+		writeError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "Role atau alasan tidak valid.")
+	default:
+		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Role akun belum dapat diubah.")
+	}
+}
+
 func (server *Server) requireDatasetFeature(request *http.Request, userID string, manifest dataset.Manifest) error {
 	feature, ok := featureForPurpose(manifest.Purpose)
 	if !ok {
@@ -752,7 +792,7 @@ func corsAllowlist(next http.Handler, allowedOrigins map[string]struct{}) http.H
 			next.ServeHTTP(writer, request)
 			return
 		}
-		writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-App-Session")
 		writer.Header().Set("Access-Control-Max-Age", "600")
 		writer.WriteHeader(http.StatusNoContent)
