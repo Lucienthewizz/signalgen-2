@@ -20,6 +20,9 @@ baseline as a read-only system rule to accounts with `screener`; user rule
 mutations remain unimplemented.
 Browser integration supports an exact-origin CORS allowlist configured through
 `SIGNALGEN_CORS_ORIGINS`; wildcard origins are rejected.
+The server-side operator role guard is implemented and composes bearer,
+app-session, active-account, and database-role checks. No public operator route
+is registered yet.
 This checkpoint is a subset, not a claim
 that the remaining proposed routes are available.
 

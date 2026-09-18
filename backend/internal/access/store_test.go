@@ -88,6 +88,30 @@ func TestSuspendedAccountIsDenied(t *testing.T) {
 	}
 }
 
+func TestRequireOperatorUsesServerRoleAndActiveStatus(t *testing.T) {
+	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
+	store := testStore(t, func() time.Time { return now })
+	_, _ = store.EnsureProfile(context.Background(), "user-a", "user@example.com")
+	if _, err := store.RequireOperator(context.Background(), "user-a"); !errors.Is(err, ErrRoleRequired) {
+		t.Fatalf("default user error = %v, want ErrRoleRequired", err)
+	}
+	if _, err := store.db.Exec(
+		"UPDATE account_profiles SET role = ? WHERE user_id = ?", RoleOperator, "user-a",
+	); err != nil {
+		t.Fatal(err)
+	}
+	account, err := store.RequireOperator(context.Background(), "user-a")
+	if err != nil || account.Role != RoleOperator {
+		t.Fatalf("operator account = %+v, error = %v", account, err)
+	}
+	if err := store.SetStatus(context.Background(), "user-a", StatusSuspended); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.RequireOperator(context.Background(), "user-a"); !errors.Is(err, ErrAccountSuspended) {
+		t.Fatalf("suspended operator error = %v, want ErrAccountSuspended", err)
+	}
+}
+
 func TestUnknownFeatureIsRejected(t *testing.T) {
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 	store := testStore(t, func() time.Time { return now })

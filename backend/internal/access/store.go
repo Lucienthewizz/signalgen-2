@@ -25,6 +25,7 @@ const (
 var (
 	ErrAccountNotFound    = errors.New("account not found")
 	ErrAccountSuspended   = errors.New("account is suspended")
+	ErrRoleRequired       = errors.New("required account role is missing")
 	ErrEntitlementMissing = errors.New("feature entitlement is missing or expired")
 	ErrInvalidValue       = errors.New("invalid access value")
 )
@@ -222,6 +223,20 @@ func (store *Store) RequireActive(ctx context.Context, userID string) (Account, 
 	}
 	if account.Status != StatusActive {
 		return Account{}, ErrAccountSuspended
+	}
+	return account, nil
+}
+
+// RequireOperator authorizes against SignalGen's server-side profile. The
+// Supabase token establishes identity only; token claims and client payloads
+// never decide the application role.
+func (store *Store) RequireOperator(ctx context.Context, userID string) (Account, error) {
+	account, err := store.RequireActive(ctx, userID)
+	if err != nil {
+		return Account{}, err
+	}
+	if account.Role != RoleOperator {
+		return Account{}, ErrRoleRequired
 	}
 	return account, nil
 }

@@ -112,6 +112,17 @@ func (fake *fakeAccess) RequireActive(_ context.Context, userID string) (access.
 	return fake.accountFor(userID, ""), nil
 }
 
+func (fake *fakeAccess) RequireOperator(_ context.Context, userID string) (access.Account, error) {
+	if fake.err != nil {
+		return access.Account{}, fake.err
+	}
+	account := fake.accountFor(userID, "")
+	if account.Role != access.RoleOperator {
+		return access.Account{}, access.ErrRoleRequired
+	}
+	return account, nil
+}
+
 func (fake *fakeAccess) Features(_ context.Context, _ string) ([]string, error) {
 	if fake.err != nil {
 		return nil, fake.err
@@ -479,6 +490,39 @@ func TestAccountMeReturnsServerSideAccessState(t *testing.T) {
 	}
 	if payload.User.Role != access.RoleUser || len(payload.Features) != 1 || payload.Device.InstallationID != "install-a" {
 		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestOperatorGuardRequiresServerSideRole(t *testing.T) {
+	request := func() *http.Request {
+		value := httptest.NewRequest(http.MethodGet, "/operator-test", nil)
+		value.Header.Set("Authorization", "Bearer user-token")
+		value.Header.Set("X-App-Session", "sgs_session")
+		return value.WithContext(context.WithValue(value.Context(), requestIDKey{}, "req_operator_test"))
+	}
+	server := testServer(
+		t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, &fakeSessions{},
+	)
+	response := httptest.NewRecorder()
+	if _, _, ok := server.requireOperator(response, request()); ok {
+		t.Fatal("default user unexpectedly passed operator guard")
+	}
+	assertErrorCode(t, response, http.StatusForbidden, "ROLE_REQUIRED")
+
+	operatorStore := &fakeAccess{account: access.Account{
+		UserID: "operator-a", Role: access.RoleOperator, Status: access.StatusActive,
+	}}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "operator-a"}}, &fakeSessions{},
+		operatorStore, &fakeDatasets{}, &fakeCompute{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = httptest.NewRecorder()
+	principal, _, ok := server.requireOperator(response, request())
+	if !ok || principal.ID != "operator-a" || response.Code != http.StatusOK {
+		t.Fatalf("operator ok=%v principal=%+v status=%d", ok, principal, response.Code)
 	}
 }
 

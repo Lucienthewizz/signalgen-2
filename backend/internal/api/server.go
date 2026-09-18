@@ -39,6 +39,7 @@ type SessionStore interface {
 type AccessStore interface {
 	EnsureProfile(ctx context.Context, userID, email string) (access.Account, error)
 	RequireActive(ctx context.Context, userID string) (access.Account, error)
+	RequireOperator(ctx context.Context, userID string) (access.Account, error)
 	Features(ctx context.Context, userID string) ([]string, error)
 	RequireFeature(ctx context.Context, userID, feature string) error
 }
@@ -560,10 +561,27 @@ func (server *Server) requireAppSession(writer http.ResponseWriter, request *htt
 	return principal, appSession, token, true
 }
 
+// requireOperator is the single guard for future operator routes. It requires
+// both the normal bearer/app-session chain and an active server-side operator
+// role. No public operator route is registered yet.
+func (server *Server) requireOperator(writer http.ResponseWriter, request *http.Request) (auth.Principal, session.Session, bool) {
+	principal, appSession, _, ok := server.requireAppSession(writer, request)
+	if !ok {
+		return auth.Principal{}, session.Session{}, false
+	}
+	if _, err := server.access.RequireOperator(request.Context(), principal.ID); err != nil {
+		writeAccessError(writer, request, err)
+		return auth.Principal{}, session.Session{}, false
+	}
+	return principal, appSession, true
+}
+
 func writeAccessError(writer http.ResponseWriter, request *http.Request, err error) {
 	switch {
 	case errors.Is(err, access.ErrAccountSuspended), errors.Is(err, access.ErrAccountNotFound):
 		writeError(writer, request, http.StatusForbidden, "ACCOUNT_SUSPENDED", "Akun tidak aktif.")
+	case errors.Is(err, access.ErrRoleRequired):
+		writeError(writer, request, http.StatusForbidden, "ROLE_REQUIRED", "Akses operator diperlukan.")
 	case errors.Is(err, access.ErrEntitlementMissing):
 		writeError(writer, request, http.StatusForbidden, "ENTITLEMENT_REQUIRED", "Fitur belum aktif untuk akun ini.")
 	default:
