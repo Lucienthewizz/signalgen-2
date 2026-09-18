@@ -66,6 +66,18 @@ type Server struct {
 	handler  http.Handler
 }
 
+type systemRuleResource struct {
+	ID             string                      `json:"id"`
+	Name           string                      `json:"name"`
+	OwnerType      string                      `json:"owner_type"`
+	ReadOnly       bool                        `json:"read_only"`
+	Definition     core.BaselineRuleDefinition `json:"definition"`
+	DefinitionHash string                      `json:"definition_hash"`
+	SchemaVersion  string                      `json:"schema_version"`
+	EngineVersion  string                      `json:"engine_version"`
+	Version        int                         `json:"version"`
+}
+
 type serverConfig struct {
 	allowedOrigins  map[string]struct{}
 	readinessChecks []ReadinessChecker
@@ -127,6 +139,8 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	mux.HandleFunc("GET /api/v1/account/sessions", server.accountSessions)
 	mux.HandleFunc("DELETE /api/v1/account/sessions/{id}", server.revokeAccountSession)
 	mux.HandleFunc("GET /api/v1/capabilities", server.capabilities)
+	mux.HandleFunc("GET /api/v1/rules", server.listRules)
+	mux.HandleFunc("GET /api/v1/rules/{id}", server.getRule)
 	mux.HandleFunc("POST /api/v1/datasets/prepare", server.prepareDataset)
 	mux.HandleFunc("GET /api/v1/datasets/{id}/manifest", server.datasetManifest)
 	mux.HandleFunc("GET /api/v1/datasets/{id}/content", server.datasetContent)
@@ -203,6 +217,47 @@ func (server *Server) capabilities(writer http.ResponseWriter, request *http.Req
 	capabilities := core.GetCapabilities()
 	writer.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(writer, http.StatusOK, capabilities)
+}
+
+func (server *Server) listRules(writer http.ResponseWriter, request *http.Request) {
+	principal, _, _, ok := server.requireAppSession(writer, request)
+	if !ok {
+		return
+	}
+	if err := server.access.RequireFeature(request.Context(), principal.ID, access.FeatureScreener); err != nil {
+		writeAccessError(writer, request, err)
+		return
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(writer, http.StatusOK, map[string]interface{}{
+		"items": []systemRuleResource{baselineRuleResource()}, "next_cursor": nil,
+	})
+}
+
+func (server *Server) getRule(writer http.ResponseWriter, request *http.Request) {
+	principal, _, _, ok := server.requireAppSession(writer, request)
+	if !ok {
+		return
+	}
+	if err := server.access.RequireFeature(request.Context(), principal.ID, access.FeatureScreener); err != nil {
+		writeAccessError(writer, request, err)
+		return
+	}
+	if request.PathValue("id") != core.BaselineRuleID {
+		writeError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Rule tidak ditemukan.")
+		return
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(writer, http.StatusOK, baselineRuleResource())
+}
+
+func baselineRuleResource() systemRuleResource {
+	definition := core.GetBaselineRuleDefinition()
+	return systemRuleResource{
+		ID: core.BaselineRuleID, Name: definition.Name, OwnerType: "system", ReadOnly: true,
+		Definition: definition, DefinitionHash: core.BaselineRuleHash,
+		SchemaVersion: core.SchemaVersion, EngineVersion: core.EngineVersion, Version: 1,
+	}
 }
 
 func (server *Server) accountMe(writer http.ResponseWriter, request *http.Request) {

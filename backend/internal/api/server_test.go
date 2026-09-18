@@ -341,6 +341,89 @@ func TestCapabilitiesRejectsExpiredSession(t *testing.T) {
 	assertErrorCode(t, response, http.StatusForbidden, "SESSION_EXPIRED")
 }
 
+func TestRulesRequireScreenerEntitlement(t *testing.T) {
+	server := testServer(t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, &fakeSessions{})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/rules", nil)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusForbidden, "ENTITLEMENT_REQUIRED")
+}
+
+func TestRulesExposeFrozenReadOnlyBaseline(t *testing.T) {
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}},
+		&fakeSessions{},
+		&fakeAccess{features: []string{access.FeatureScreener}},
+		&fakeDatasets{},
+		&fakeCompute{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/rules", nil)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Items []struct {
+			ID             string                      `json:"id"`
+			OwnerType      string                      `json:"owner_type"`
+			ReadOnly       bool                        `json:"read_only"`
+			Definition     core.BaselineRuleDefinition `json:"definition"`
+			DefinitionHash string                      `json:"definition_hash"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Items) != 1 || payload.Items[0].ID != core.BaselineRuleID ||
+		payload.Items[0].OwnerType != "system" || !payload.Items[0].ReadOnly ||
+		payload.Items[0].DefinitionHash != core.BaselineRuleHash || len(payload.Items[0].Definition.Conditions) != 4 {
+		t.Fatalf("payload = %+v", payload)
+	}
+
+	detailRequest := httptest.NewRequest(http.MethodGet, "/api/v1/rules/"+core.BaselineRuleID, nil)
+	detailRequest.Header.Set("Authorization", "Bearer user-token")
+	detailRequest.Header.Set("X-App-Session", "sgs_session")
+	detailResponse := httptest.NewRecorder()
+	server.ServeHTTP(detailResponse, detailRequest)
+	if detailResponse.Code != http.StatusOK {
+		t.Fatalf("detail status = %d, body = %s", detailResponse.Code, detailResponse.Body.String())
+	}
+}
+
+func TestRuleDetailHidesUnknownRuleAndSystemRuleIsReadOnly(t *testing.T) {
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}},
+		&fakeSessions{},
+		&fakeAccess{features: []string{access.FeatureScreener}},
+		&fakeDatasets{},
+		&fakeCompute{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unknown := httptest.NewRequest(http.MethodGet, "/api/v1/rules/not-found", nil)
+	unknown.Header.Set("Authorization", "Bearer user-token")
+	unknown.Header.Set("X-App-Session", "sgs_session")
+	unknownResponse := httptest.NewRecorder()
+	server.ServeHTTP(unknownResponse, unknown)
+	assertErrorCode(t, unknownResponse, http.StatusNotFound, "RESOURCE_NOT_FOUND")
+
+	mutation := httptest.NewRequest(http.MethodDelete, "/api/v1/rules/"+core.BaselineRuleID, nil)
+	mutationResponse := httptest.NewRecorder()
+	server.ServeHTTP(mutationResponse, mutation)
+	if mutationResponse.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("mutation status = %d, want 405", mutationResponse.Code)
+	}
+}
+
 func TestPrivateRouteRejectsSuspendedAccount(t *testing.T) {
 	sessions := &fakeSessions{}
 	server, err := NewServer(

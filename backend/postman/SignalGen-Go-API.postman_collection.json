@@ -174,6 +174,41 @@
       "description": "Before running this folder, grant screener to user_id with signalgen-admin as documented in backend/postman/README.md.",
       "item": [
         {
+          "name": "List system rules",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/rules"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('one frozen system rule is available', () => { pm.expect(body.items).to.have.lengthOf(1); pm.expect(body.items[0].owner_type).to.eql('system'); pm.expect(body.items[0].read_only).to.eql(true); });",
+            "pm.environment.set('rule_id', body.items[0].id);",
+            "pm.environment.set('definition_hash', body.items[0].definition_hash);"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Baseline rule detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/rules/{{rule_id}}"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('rule version binding matches core', () => { pm.expect(body.definition_hash).to.eql(pm.environment.get('definition_hash')); pm.expect(body.engine_version).to.eql(pm.environment.get('engine_version')); pm.expect(body.schema_version).to.eql(pm.environment.get('schema_version')); });",
+            "pm.test('baseline has four conditions', () => pm.expect(body.definition.conditions).to.have.lengthOf(4));"
+          ], "type": "text/javascript"}}]
+        },
+        {
           "name": "Prepare fixture dataset",
           "request": {
             "method": "POST",

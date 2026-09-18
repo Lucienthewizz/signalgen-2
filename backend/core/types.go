@@ -53,6 +53,19 @@ type RuleSnapshot struct {
 	Conditions  []Condition `json:"conditions"`
 }
 
+// BaselineRuleDefinition is the exact versioned system rule used by the M0
+// fixture. ID and Type remain part of the hashed definition for parity with
+// the frozen legacy snapshot.
+type BaselineRuleDefinition struct {
+	ID          int         `json:"id"`
+	Name        string      `json:"name"`
+	Type        string      `json:"type"`
+	Logic       string      `json:"logic"`
+	SignalType  string      `json:"signal_type"`
+	CooldownSec int64       `json:"cooldown_sec"`
+	Conditions  []Condition `json:"conditions"`
+}
+
 type RunRequest struct {
 	Purpose string       `json:"purpose"`
 	Symbol  string       `json:"symbol"`

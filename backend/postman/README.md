@@ -75,6 +75,7 @@ ditolak. Untuk mengulang pengujian, jalankan kembali **Create app session**.
 - login Supabase menghasilkan access token;
 - app-session dibuat dan token mentah tidak muncul dalam metadata;
 - profil, entitlement, dan sesi hanya dibaca untuk pemiliknya;
+- baseline rule read-only cocok dengan hash/versi core;
 - dataset ditolak sebelum grant dan tersedia setelah grant;
 - manifest/checksum/konten fixture `BBCA.JK` konsisten;
 - compute grant terikat pada dataset, rule, engine, dan schema;

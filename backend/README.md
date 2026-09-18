@@ -64,6 +64,8 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `GET /api/v1/account/sessions` — daftar maksimal 100 sesi milik pengguna;
 - `DELETE /api/v1/account/sessions/{id}` — mencabut sesi milik pengguna;
 - `GET /api/v1/capabilities` — membutuhkan bearer dan `X-App-Session`;
+- `GET /api/v1/rules` — daftar system rule read-only sesuai entitlement;
+- `GET /api/v1/rules/{id}` — snapshot rule beserta hash/versi core;
 - `POST /api/v1/datasets/prepare` — menyiapkan manifest fixture sesuai entitlement;
 - `GET /api/v1/datasets/{id}/manifest` — metadata/checksum dataset;
 - `GET /api/v1/datasets/{id}/content` — konten OHLCV sintetis terproteksi;
@@ -124,4 +126,4 @@ historis production.
 Collection, environment tanpa rahasia, urutan eksekusi, dan cara memberikan
 grant lokal tersedia di [`postman/README.md`](postman/README.md). Test script
 mencakup health/readiness, auth negatif, Supabase login, app session, account,
-entitlement, dataset fixture, compute grant, dan revoke sesi.
+entitlement, baseline rule, dataset fixture, compute grant, dan revoke sesi.

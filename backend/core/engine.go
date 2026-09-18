@@ -40,6 +40,20 @@ func GetCapabilities() Capabilities {
 	}
 }
 
+// GetBaselineRuleDefinition returns a fresh definition so API or WASM callers
+// cannot mutate the frozen system rule shared by later requests.
+func GetBaselineRuleDefinition() BaselineRuleDefinition {
+	return BaselineRuleDefinition{
+		ID: 1, Name: "Default Scalping", Type: "system", Logic: "AND", SignalType: "BUY", CooldownSec: 60,
+		Conditions: []Condition{
+			{Left: "EMA9", Op: ">", Right: "EMA20"},
+			{Left: "PRICE", Op: ">", Right: "EMA9"},
+			{Left: "RSI14", Op: ">", Right: 45},
+			{Left: "RSI14", Op: "<", Right: 75},
+		},
+	}
+}
+
 // RunSignals executes the frozen M0 subset. It intentionally produces signals
 // only; trade fills and P&L remain outside this baseline until their policy is
 // selected and frozen separately.

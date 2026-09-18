@@ -1,11 +1,40 @@
 package core
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"testing"
 )
+
+func TestBaselineRuleDefinitionMatchesFrozenHash(t *testing.T) {
+	definition := GetBaselineRuleDefinition()
+	raw, err := json.Marshal(definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var canonical interface{}
+	if err := json.Unmarshal(raw, &canonical); err != nil {
+		t.Fatal(err)
+	}
+	var canonicalBuffer bytes.Buffer
+	encoder := json.NewEncoder(&canonicalBuffer)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(canonical); err != nil {
+		t.Fatal(err)
+	}
+	canonicalRaw := bytes.TrimSpace(canonicalBuffer.Bytes())
+	hash := sha256.Sum256(canonicalRaw)
+	if actual := fmt.Sprintf("sha256:%x", hash); actual != BaselineRuleHash {
+		t.Fatalf("definition hash = %q, want %q; canonical = %s", actual, BaselineRuleHash, canonicalRaw)
+	}
+	if definition.Type != "system" || len(definition.Conditions) != 4 {
+		t.Fatalf("definition = %+v", definition)
+	}
+}
 
 type baselineFixture struct {
 	Request  RunRequest `json:"request"`

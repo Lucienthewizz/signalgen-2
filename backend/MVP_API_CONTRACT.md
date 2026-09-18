@@ -15,6 +15,9 @@ Dataset routes currently serve only the checksum-verified synthetic
 `BBCA.JK` screening fixture to accounts with an active `screener` grant.
 `POST /api/v1/compute-grants` is implemented for the frozen screening baseline
 and rejects mismatched dataset, rule, engine, or schema versions.
+`GET /api/v1/rules` and `GET /api/v1/rules/{id}` expose that same frozen
+baseline as a read-only system rule to accounts with `screener`; user rule
+mutations remain unimplemented.
 Browser integration supports an exact-origin CORS allowlist configured through
 `SIGNALGEN_CORS_ORIGINS`; wildcard origins are rejected.
 This checkpoint is a subset, not a claim
