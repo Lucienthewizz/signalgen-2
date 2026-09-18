@@ -118,3 +118,10 @@ Dataset P0 yang tersedia saat ini hanya fixture sintetis `BBCA.JK`, market
 `IDX`, timeframe `1d`, dan purpose `screen`. Endpoint menolak simbol/rentang
 lain serta akun tanpa grant `screener`; ini belum merupakan integrasi provider
 historis production.
+
+## Test dengan Postman
+
+Collection, environment tanpa rahasia, urutan eksekusi, dan cara memberikan
+grant lokal tersedia di [`postman/README.md`](postman/README.md). Test script
+mencakup health/readiness, auth negatif, Supabase login, app session, account,
+entitlement, dataset fixture, compute grant, dan revoke sesi.

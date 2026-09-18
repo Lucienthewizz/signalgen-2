@@ -1,0 +1,287 @@
+{
+  "info": {
+    "_postman_id": "96af2d46-aef6-4a90-a2fd-f8d095a31e8a",
+    "name": "SignalGen Go API",
+    "description": "Automated checks for the incremental SignalGen Go API. Run folders in numeric order. Folder 05 requires a local screener grant; run folder 06 last because it revokes the current app session.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 Public health",
+      "item": [
+        {
+          "name": "Health",
+          "request": {"method": "GET", "url": "{{base_url}}/health"},
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('service is alive', () => pm.expect(pm.response.json().status).to.eql('ok'));",
+            "pm.test('request id exists', () => pm.expect(pm.response.headers.get('X-Request-ID')).to.be.a('string').and.not.empty);"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Readiness",
+          "request": {"method": "GET", "url": "{{base_url}}/ready"},
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('dependencies are ready', () => pm.expect(pm.response.json().status).to.eql('ready'));"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "01 Authorization negative checks",
+      "item": [
+        {
+          "name": "Capabilities without bearer is rejected",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v1/capabilities"},
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 401', () => pm.response.to.have.status(401));",
+            "pm.test('stable error code', () => pm.expect(pm.response.json().error.code).to.eql('AUTH_REQUIRED'));",
+            "pm.test('private error is not cached', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "02 Supabase login",
+      "description": "Skip this request only when access_token was pasted manually into the selected environment.",
+      "item": [
+        {
+          "name": "Login with email and password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "apikey", "value": "{{supabase_publishable_key}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"},
+            "url": "{{supabase_url}}/auth/v1/token?grant_type=password"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Supabase login succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('access token returned', () => pm.expect(body.access_token).to.be.a('string').and.not.empty);",
+            "if (body.access_token) pm.environment.set('access_token', body.access_token);"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "03 App session and account",
+      "item": [
+        {
+          "name": "Create app session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"installation_id\": \"{{installation_id}}\",\n  \"label\": \"Postman local\",\n  \"client\": {\n    \"app_version\": \"postman-1\",\n    \"user_agent_family\": \"Postman\"\n  }\n}"},
+            "url": "{{base_url}}/api/v1/sessions"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 201', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.test('one-time app session token returned', () => pm.expect(body.session_token).to.be.a('string').and.not.empty);",
+            "pm.test('raw token is not mirrored in session metadata', () => pm.expect(JSON.stringify(body.session)).not.to.include(body.session_token));",
+            "if (body.session_token) pm.environment.set('app_session_token', body.session_token);",
+            "if (body.session && body.session.id) pm.environment.set('current_session_id', body.session.id);"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Current account",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/account/me"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('safe server-side role and status', () => { pm.expect(body.user.role).to.eql('user'); pm.expect(body.user.status).to.eql('active'); });",
+            "pm.test('features is an array', () => pm.expect(body.features).to.be.an('array'));",
+            "pm.test('current session matches', () => pm.expect(body.session.id).to.eql(pm.environment.get('current_session_id')));",
+            "if (body.user && body.user.id) pm.environment.set('user_id', body.user.id);"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "List owner sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/account/sessions"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('current session appears once', () => pm.expect(body.items.filter(item => item.current)).to.have.lengthOf(1));",
+            "pm.test('active limit is exposed', () => pm.expect(body.active_session_limit).to.be.a('number').and.above(0));",
+            "pm.test('no token material returned', () => { pm.expect(pm.response.text()).not.to.include('session_token'); pm.expect(pm.response.text()).not.to.include('token_hash'); });"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Capabilities",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/capabilities"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('frozen baseline is advertised', () => { pm.expect(body.engine_version).to.eql('core-0.2.0'); pm.expect(body.schema_version).to.eql('signal-baseline-1'); pm.expect(body.purposes).to.include('screen'); });",
+            "pm.environment.set('engine_version', body.engine_version);",
+            "pm.environment.set('schema_version', body.schema_version);"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "04 Expected entitlement denial",
+      "description": "Run before granting screener. A new account is intentionally denied.",
+      "item": [
+        {
+          "name": "Prepare dataset without grant is rejected",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"purpose\": \"screen\",\n  \"market\": \"IDX\",\n  \"symbols\": [\"BBCA.JK\"],\n  \"timeframe\": \"1d\",\n  \"date_from\": \"2026-01-01\",\n  \"date_to\": \"2026-02-09\"\n}"},
+            "url": "{{base_url}}/api/v1/datasets/prepare"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 403', () => pm.response.to.have.status(403));",
+            "pm.test('entitlement is enforced', () => pm.expect(pm.response.json().error.code).to.eql('ENTITLEMENT_REQUIRED'));"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "05 Authorized screening fixture",
+      "description": "Before running this folder, grant screener to user_id with signalgen-admin as documented in backend/postman/README.md.",
+      "item": [
+        {
+          "name": "Prepare fixture dataset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"purpose\": \"screen\",\n  \"market\": \"IDX\",\n  \"symbols\": [\"BBCA.JK\"],\n  \"timeframe\": \"1d\",\n  \"date_from\": \"2026-01-01\",\n  \"date_to\": \"2026-02-09\"\n}"},
+            "url": "{{base_url}}/api/v1/datasets/prepare"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('synthetic fixture is explicit', () => { pm.expect(body.provider).to.eql('fixture'); pm.expect(body.quality.warnings.join(' ')).to.include('synthetic'); });",
+            "pm.environment.set('dataset_id', body.dataset_id);",
+            "pm.environment.set('dataset_version', body.version);",
+            "pm.environment.set('dataset_checksum', body.checksum);"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Dataset manifest",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/datasets/{{dataset_id}}/manifest"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('manifest binding matches', () => { pm.expect(body.dataset_id).to.eql(pm.environment.get('dataset_id')); pm.expect(body.checksum).to.eql(pm.environment.get('dataset_checksum')); });"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Dataset content",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/datasets/{{dataset_id}}/content"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('OHLCV fixture is complete', () => { pm.expect(body.symbol).to.eql('BBCA.JK'); pm.expect(body.candles).to.have.lengthOf(40); });",
+            "pm.test('content is private and versioned', () => { pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'); pm.expect(pm.response.headers.get('ETag')).to.include(pm.environment.get('dataset_checksum')); });"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Create compute grant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"purpose\": \"screen\",\n  \"dataset_id\": \"{{dataset_id}}\",\n  \"dataset_version\": \"{{dataset_version}}\",\n  \"dataset_checksum\": \"{{dataset_checksum}}\",\n  \"rule_id\": \"{{rule_id}}\",\n  \"definition_hash\": \"{{definition_hash}}\",\n  \"engine_version\": \"{{engine_version}}\",\n  \"schema_version\": \"{{schema_version}}\"\n}"},
+            "url": "{{base_url}}/api/v1/compute-grants"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 201', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.test('grant is bound to dataset and rule', () => { pm.expect(body.id).to.match(/^cgr_/); pm.expect(body.dataset_checksum).to.eql(pm.environment.get('dataset_checksum')); pm.expect(body.rule_id).to.eql(pm.environment.get('rule_id')); });",
+            "if (body.id) pm.environment.set('compute_grant_id', body.id);"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "06 Logout - run last",
+      "item": [
+        {
+          "name": "Revoke current session",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/sessions/current"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 204', () => pm.response.to.have.status(204));",
+            "pm.test('empty response body', () => pm.expect(pm.response.text()).to.eql(''));"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Revoked session is rejected",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/capabilities"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 403', () => pm.response.to.have.status(403));",
+            "pm.test('revocation applies immediately', () => pm.expect(pm.response.json().error.code).to.eql('SESSION_REVOKED'));"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    }
+  ]
+}
