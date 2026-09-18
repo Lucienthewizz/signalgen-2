@@ -64,8 +64,11 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `GET /api/v1/account/sessions` — daftar maksimal 100 sesi milik pengguna;
 - `DELETE /api/v1/account/sessions/{id}` — mencabut sesi milik pengguna;
 - `GET /api/v1/capabilities` — membutuhkan bearer dan `X-App-Session`;
-- `GET /api/v1/rules` — daftar system rule read-only sesuai entitlement;
-- `GET /api/v1/rules/{id}` — snapshot rule beserta hash/versi core;
+- `GET /api/v1/rules` — system rule dan maksimal 100 rule milik pengguna;
+- `POST /api/v1/rules` — membuat rule pribadi;
+- `GET /api/v1/rules/{id}` — membaca system rule atau rule milik pengguna;
+- `PATCH /api/v1/rules/{id}` — memperbarui rule pribadi dengan cek versi;
+- `DELETE /api/v1/rules/{id}` — menghapus rule pribadi dengan cek versi;
 - `POST /api/v1/datasets/prepare` — menyiapkan manifest fixture sesuai entitlement;
 - `GET /api/v1/datasets/{id}/manifest` — metadata/checksum dataset;
 - `GET /api/v1/datasets/{id}/content` — konten OHLCV sintetis terproteksi;
@@ -76,7 +79,9 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 Token sesi hanya dikembalikan saat dibuat. SQLite menyimpan hash token, bukan
 nilai token mentah. Daftar sesi hanya mengembalikan metadata aman, status, dan
 penanda sesi aktif; ID milik pengguna lain tidak dapat dibaca atau dicabut.
-Endpoint bisnis lain tetap belum diimplementasikan.
+System rule tidak dapat diubah atau dihapus. Query rule pribadi selalu dibatasi
+oleh pemilik; ID milik akun lain menghasilkan respons not found agar kepemilikan
+tidak bocor. Endpoint bisnis lain tetap belum diimplementasikan.
 
 Go API memakai satu koneksi SQLite bersama untuk profile, entitlement, sesi,
 dan compute grant. Koneksi mengaktifkan foreign keys, WAL, serta busy timeout
@@ -114,8 +119,8 @@ docker compose --profile go-target run --rm go-api \
   --reason "initial project operator"
 ```
 
-Setelah operator pertama ada, perintah bootstrap selalu ditolak. Menambah atau
-menghapus operator berikutnya belum tersedia dan tidak boleh dilakukan melalui
+Setelah operator pertama ada, perintah bootstrap selalu ditolak. Perubahan role
+berikutnya hanya boleh melalui endpoint operator yang terproteksi, bukan melalui
 payload frontend maupun metadata user Supabase.
 
 Operator yang sudah login dan memiliki app session dapat mengelola entitlement
@@ -146,9 +151,9 @@ docker compose --profile go-target run --rm go-api \
 Cabut akses dengan subcommand `revoke` dan flag `--user`, `--feature`,
 `--reason`, serta `--actor`. Setiap grant/revoke lokal disimpan bersama actor,
 request ID, alasan, dan kondisi sebelum/sesudah dalam transaksi yang sama.
-Catatan audit bersifat append-only: database menolak update dan delete. Tool ini
-tetap merupakan operator lokal sementara; endpoint operator publik dan role
-guard belum tersedia.
+Catatan audit bersifat append-only: database menolak update dan delete. Tool
+lokal tetap tersedia untuk recovery/development; endpoint operator dan role
+guard server-side sudah tersedia untuk workflow aplikasi.
 
 Dataset P0 yang tersedia saat ini hanya fixture sintetis `BBCA.JK`, market
 `IDX`, timeframe `1d`, dan purpose `screen`. Endpoint menolak simbol/rentang
@@ -160,7 +165,8 @@ historis production.
 Collection, environment tanpa rahasia, urutan eksekusi, dan cara memberikan
 grant lokal tersedia di [`postman/README.md`](postman/README.md). Test script
 mencakup health/readiness, auth negatif, Supabase login, app session, account,
-entitlement, baseline rule, dataset fixture, compute grant, dan revoke sesi.
+entitlement, CRUD rule pribadi, baseline rule, dataset fixture, compute grant,
+dan revoke sesi.
 
 ## OpenAPI untuk frontend
 

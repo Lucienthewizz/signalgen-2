@@ -36,6 +36,32 @@ func TestBaselineRuleDefinitionMatchesFrozenHash(t *testing.T) {
 	}
 }
 
+func TestValidateRuleAcceptsOnlyAdvertisedSubset(t *testing.T) {
+	valid := RuleSnapshot{
+		Name: "User rule", Logic: "AND", SignalType: "BUY", CooldownSec: 60,
+		Conditions: []Condition{{Left: "EMA9", Op: ">", Right: "EMA20"}},
+	}
+	if err := ValidateRule(valid); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*RuleSnapshot){
+		"logic":      func(rule *RuleSnapshot) { rule.Logic = "OR" },
+		"signal":     func(rule *RuleSnapshot) { rule.SignalType = "SELL" },
+		"left":       func(rule *RuleSnapshot) { rule.Conditions[0].Left = "MACD" },
+		"operator":   func(rule *RuleSnapshot) { rule.Conditions[0].Op = "==" },
+		"right type": func(rule *RuleSnapshot) { rule.Conditions[0].Right = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			candidate.Conditions = append([]Condition(nil), valid.Conditions...)
+			mutate(&candidate)
+			if err := ValidateRule(candidate); err == nil {
+				t.Fatalf("invalid rule accepted: %+v", candidate)
+			}
+		})
+	}
+}
+
 type baselineFixture struct {
 	Request  RunRequest `json:"request"`
 	Expected struct {

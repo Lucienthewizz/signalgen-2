@@ -17,6 +17,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/storage"
 )
@@ -64,10 +65,18 @@ func main() {
 	if err := computeStore.Migrate(context.Background()); err != nil {
 		log.Fatal(err)
 	}
+	ruleStore, err := rules.NewStore(database)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := ruleStore.Migrate(context.Background()); err != nil {
+		log.Fatal(err)
+	}
 	handler, err := apihttp.NewServer(
 		identity, sessions, accessStore, datasets, computeStore,
+		apihttp.WithRuleStore(ruleStore),
 		apihttp.WithCORSOrigins(allowedOrigins),
-		apihttp.WithReadinessChecks(sessions, accessStore, datasets, computeStore),
+		apihttp.WithReadinessChecks(sessions, accessStore, datasets, computeStore, ruleStore),
 	)
 	if err != nil {
 		log.Fatal(err)

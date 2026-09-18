@@ -19,6 +19,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
 
@@ -500,10 +501,103 @@ func TestRuleDetailHidesUnknownRuleAndSystemRuleIsReadOnly(t *testing.T) {
 	assertErrorCode(t, unknownResponse, http.StatusNotFound, "RESOURCE_NOT_FOUND")
 
 	mutation := httptest.NewRequest(http.MethodDelete, "/api/v1/rules/"+core.BaselineRuleID, nil)
+	mutation.Header.Set("Authorization", "Bearer user-token")
+	mutation.Header.Set("X-App-Session", "sgs_session")
 	mutationResponse := httptest.NewRecorder()
 	server.ServeHTTP(mutationResponse, mutation)
-	if mutationResponse.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("mutation status = %d, want 405", mutationResponse.Code)
+	assertErrorCode(t, mutationResponse, http.StatusConflict, "RULE_READ_ONLY")
+}
+
+func TestUserRuleCRUDEnforcesOwnershipAndVersionWithSQLite(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:user_rule_api?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = db.Close() })
+	accessStore, err := access.NewStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accessStore.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, userID := range []string{"user-a", "user-b"} {
+		_, _ = accessStore.EnsureProfile(context.Background(), userID, userID+"@example.com")
+		if err := accessStore.GrantFeature(
+			context.Background(), userID, access.FeatureScreener, time.Now().UTC().Add(time.Hour), "rule test",
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ruleStore, err := rules.NewStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ruleStore.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	newServer := func(userID string) *Server {
+		server, err := NewServer(
+			fakeIdentity{principal: auth.Principal{ID: userID}}, &fakeSessions{}, accessStore,
+			&fakeDatasets{}, &fakeCompute{}, WithRuleStore(ruleStore),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return server
+	}
+	call := func(server *Server, method, target, body string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(method, target, bytes.NewBufferString(body))
+		request.Header.Set("Authorization", "Bearer user-token")
+		request.Header.Set("X-App-Session", "sgs_session")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		return response
+	}
+	serverA, serverB := newServer("user-a"), newServer("user-b")
+	createBody := `{"definition":{"name":"My EMA rule","logic":"AND","signal_type":"BUY","cooldown_sec":60,"conditions":[{"left":"EMA9","op":">","right":"EMA20"}]}}`
+	response := call(serverA, http.MethodPost, "/api/v1/rules", createBody)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var created rules.Rule
+	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.ID == "" || created.Version != 1 || created.OwnerUserID != "" || created.ReadOnly {
+		t.Fatalf("created rule = %+v", created)
+	}
+	if bytes.Contains(response.Body.Bytes(), []byte("owner_user_id")) {
+		t.Fatalf("create response leaked owner id: %s", response.Body.String())
+	}
+	response = call(serverA, http.MethodGet, "/api/v1/rules", "")
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(created.ID)) {
+		t.Fatalf("owner list status = %d, body = %s", response.Code, response.Body.String())
+	}
+	response = call(serverB, http.MethodGet, "/api/v1/rules/"+created.ID, "")
+	assertErrorCode(t, response, http.StatusNotFound, "RESOURCE_NOT_FOUND")
+	updateBody := `{"version":1,"definition":{"name":"Updated EMA rule","logic":"AND","signal_type":"BUY","cooldown_sec":120,"conditions":[{"left":"PRICE","op":">","right":"EMA9"}]}}`
+	response = call(serverB, http.MethodPatch, "/api/v1/rules/"+created.ID, updateBody)
+	assertErrorCode(t, response, http.StatusNotFound, "RESOURCE_NOT_FOUND")
+	response = call(serverA, http.MethodPatch, "/api/v1/rules/"+created.ID, updateBody)
+	if response.Code != http.StatusOK {
+		t.Fatalf("update status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var updated rules.Rule
+	if err := json.Unmarshal(response.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Version != 2 || updated.Name != "Updated EMA rule" {
+		t.Fatalf("updated rule = %+v", updated)
+	}
+	response = call(serverA, http.MethodPatch, "/api/v1/rules/"+created.ID, updateBody)
+	assertErrorCode(t, response, http.StatusConflict, "VERSION_CONFLICT")
+	response = call(serverB, http.MethodDelete, "/api/v1/rules/"+created.ID, `{"version":2}`)
+	assertErrorCode(t, response, http.StatusNotFound, "RESOURCE_NOT_FOUND")
+	response = call(serverA, http.MethodDelete, "/api/v1/rules/"+created.ID, `{"version":2}`)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("delete status = %d, body = %s", response.Code, response.Body.String())
 	}
 }
 

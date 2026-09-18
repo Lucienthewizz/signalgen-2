@@ -132,14 +132,8 @@ func validateRequest(request RunRequest) error {
 	if request.Symbol == "" {
 		return fmt.Errorf("symbol is required")
 	}
-	if request.Rule.Logic != "AND" {
-		return fmt.Errorf("unsupported rule logic %q", request.Rule.Logic)
-	}
-	if request.Rule.SignalType == "" {
-		return fmt.Errorf("signal_type is required")
-	}
-	if len(request.Rule.Conditions) == 0 {
-		return fmt.Errorf("at least one condition is required")
+	if err := ValidateRule(request.Rule); err != nil {
+		return err
 	}
 	if len(request.Candles) < 20 {
 		return fmt.Errorf("at least 20 completed candles are required")
@@ -166,17 +160,50 @@ func validateRequest(request RunRequest) error {
 		}
 	}
 
-	for _, condition := range request.Rule.Conditions {
+	return nil
+}
+
+// ValidateRule is the shared validation boundary for persisted user rules and
+// portable execution. It accepts only the subset advertised by capabilities.
+func ValidateRule(rule RuleSnapshot) error {
+	if len(rule.Name) == 0 || len(rule.Name) > 100 {
+		return fmt.Errorf("rule name must contain 1 to 100 characters")
+	}
+	if rule.Logic != "AND" {
+		return fmt.Errorf("unsupported rule logic %q", rule.Logic)
+	}
+	if rule.SignalType != "BUY" {
+		return fmt.Errorf("unsupported signal_type %q", rule.SignalType)
+	}
+	if rule.CooldownSec < 0 || rule.CooldownSec > 86400 {
+		return fmt.Errorf("cooldown_sec must be between 0 and 86400")
+	}
+	if len(rule.Conditions) == 0 || len(rule.Conditions) > 20 {
+		return fmt.Errorf("rule must contain 1 to 20 conditions")
+	}
+	for _, condition := range rule.Conditions {
 		if !supportedOperands[condition.Left] {
 			return fmt.Errorf("unsupported left operand %q", condition.Left)
 		}
 		if !supportedOperators[condition.Op] {
 			return fmt.Errorf("unsupported operator %q", condition.Op)
 		}
-		if right, ok := condition.Right.(string); ok && !supportedOperands[right] {
-			if _, err := strconv.ParseFloat(right, 64); err != nil {
-				return fmt.Errorf("unsupported right operand %q", right)
+		switch right := condition.Right.(type) {
+		case string:
+			if !supportedOperands[right] {
+				parsed, err := strconv.ParseFloat(right, 64)
+				if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+					return fmt.Errorf("unsupported right operand %q", right)
+				}
 			}
+		case float64:
+			if math.IsNaN(right) || math.IsInf(right, 0) {
+				return fmt.Errorf("right operand must be finite")
+			}
+		case int:
+			// Programmatic callers may use int; JSON numbers decode as float64.
+		default:
+			return fmt.Errorf("unsupported right value type %T", condition.Right)
 		}
 	}
 	return nil

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     Supabase performs identity login; this API verifies its bearer token and
@@ -207,7 +207,7 @@ paths:
       tags: [Analysis]
       operationId: listRules
       summary: List analysis rules visible to the current account
-      description: Currently returns only the frozen read-only system baseline.
+      description: Returns the frozen system baseline followed by up to 100 rules owned by the current account.
       security:
         - supabaseBearer: []
           appSession: []
@@ -225,6 +225,48 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/EntitlementRequired"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      tags: [Analysis]
+      operationId: createRule
+      summary: Create a rule owned by the current account
+      description: A maximum of 100 user rules may exist per account.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRuleCreateRequest"
+      responses:
+        "201":
+          description: Owner-scoped rule created.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserRuleResource"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/EntitlementRequired"
+        "409":
+          description: The account already owns the maximum 100 rules.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api/v1/rules/{id}:
     get:
       tags: [Analysis]
@@ -237,7 +279,7 @@ paths:
         - $ref: "#/components/parameters/RuleId"
       responses:
         "200":
-          description: Frozen rule snapshot.
+          description: System or owner-scoped rule snapshot.
           headers:
             Cache-Control:
               $ref: "#/components/headers/PrivateNoStore"
@@ -251,6 +293,89 @@ paths:
           $ref: "#/components/responses/EntitlementRequired"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      tags: [Analysis]
+      operationId: updateRule
+      summary: Update a rule owned by the current account
+      description: The submitted version must match the stored version. The system baseline is read-only.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - $ref: "#/components/parameters/RuleId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRuleUpdateRequest"
+      responses:
+        "200":
+          description: Updated owner-scoped rule with an incremented version.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserRuleResource"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/EntitlementRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Version conflict or attempted mutation of the read-only system rule.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      tags: [Analysis]
+      operationId: deleteRule
+      summary: Delete a rule owned by the current account
+      description: The submitted version must match the stored version. The system baseline is read-only.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - $ref: "#/components/parameters/RuleId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRuleDeleteRequest"
+      responses:
+        "204":
+          description: Owner-scoped rule deleted.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/EntitlementRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Version conflict or attempted mutation of the read-only system rule.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api/v1/datasets/prepare:
     post:
       tags: [Analysis]
@@ -821,6 +946,7 @@ components:
         max_symbols_per_run: {type: integer, enum: [1]}
     RuleCondition:
       type: object
+      additionalProperties: false
       required: [left, op, right]
       properties:
         left: {type: string, enum: [PRICE, EMA9, EMA20, RSI14]}
@@ -829,6 +955,42 @@ components:
           oneOf:
             - {type: string}
             - {type: number}
+    UserRuleDefinition:
+      type: object
+      additionalProperties: false
+      required: [name, logic, signal_type, cooldown_sec, conditions]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        logic: {type: string, enum: [AND]}
+        signal_type: {type: string, enum: [BUY]}
+        cooldown_sec: {type: integer, minimum: 0, maximum: 86400}
+        conditions:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/RuleCondition"
+    UserRuleCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [definition]
+      properties:
+        definition:
+          $ref: "#/components/schemas/UserRuleDefinition"
+    UserRuleUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [version, definition]
+      properties:
+        version: {type: integer, minimum: 1}
+        definition:
+          $ref: "#/components/schemas/UserRuleDefinition"
+    UserRuleDeleteRequest:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: {type: integer, minimum: 1}
     BaselineRuleDefinition:
       type: object
       required: [id, name, type, logic, signal_type, cooldown_sec, conditions]
@@ -845,7 +1007,7 @@ components:
           maxItems: 4
           items:
             $ref: "#/components/schemas/RuleCondition"
-    RuleResource:
+    SystemRuleResource:
       type: object
       required: [id, name, owner_type, read_only, definition, definition_hash, schema_version, engine_version, version]
       properties:
@@ -859,6 +1021,26 @@ components:
         schema_version: {type: string}
         engine_version: {type: string}
         version: {type: integer, enum: [1]}
+    UserRuleResource:
+      type: object
+      required: [id, name, owner_type, read_only, definition, definition_hash, schema_version, engine_version, version, created_at, updated_at]
+      properties:
+        id: {type: string, pattern: "^rule_[a-f0-9]{24}$"}
+        name: {type: string, minLength: 1, maxLength: 100}
+        owner_type: {type: string, enum: [user]}
+        read_only: {type: boolean, enum: [false]}
+        definition:
+          $ref: "#/components/schemas/UserRuleDefinition"
+        definition_hash: {type: string, pattern: "^sha256:"}
+        schema_version: {type: string}
+        engine_version: {type: string}
+        version: {type: integer, minimum: 1}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    RuleResource:
+      oneOf:
+        - $ref: "#/components/schemas/SystemRuleResource"
+        - $ref: "#/components/schemas/UserRuleResource"
     RuleListResponse:
       type: object
       required: [items, next_cursor]

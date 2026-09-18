@@ -63,12 +63,14 @@ docker compose --profile go-target exec go-api \
 Kemudian jalankan:
 
 6. `05 Operator entitlement`
-7. `06 Authorized screening fixture`
-8. `07 Logout - run last`
+7. `06 User rule CRUD`
+8. `07 Authorized screening fixture`
+9. `08 Logout - run last`
 
 Folder 05 membuat dan membaca grant `screener` melalui endpoint operator. Folder
-06 menyimpan dataset ID, checksum, versi, dan compute grant ke environment.
-Folder 07 mencabut sesi saat ini, lalu memastikan token sesi tersebut langsung
+06 membuat, membaca, memperbarui, dan menghapus satu rule sementara milik akun.
+Folder 07 menyimpan dataset ID, checksum, versi, dan compute grant ke environment.
+Folder 08 mencabut sesi saat ini, lalu memastikan token sesi tersebut langsung
 ditolak. Untuk mengulang pengujian, jalankan kembali **Create app session**.
 
 ## Yang diverifikasi
@@ -81,6 +83,7 @@ ditolak. Untuk mengulang pengujian, jalankan kembali **Create app session**.
 - role user biasa ditolak dari endpoint operator;
 - endpoint operator mengambil actor audit dari identitas login;
 - baseline rule read-only cocok dengan hash/versi core;
+- rule pribadi dapat di-CRUD, memakai version check, dan tidak membocorkan owner ID;
 - dataset ditolak sebelum grant dan tersedia setelah grant;
 - manifest/checksum/konten fixture `BBCA.JK` konsisten;
 - compute grant terikat pada dataset, rule, engine, dan schema;

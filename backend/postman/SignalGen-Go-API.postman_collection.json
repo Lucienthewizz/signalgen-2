@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "96af2d46-aef6-4a90-a2fd-f8d095a31e8a",
     "name": "SignalGen Go API",
-    "description": "Automated checks for the incremental SignalGen Go API. Run folders in numeric order. Folder 05 requires the signed-in account to be bootstrapped as operator; run folder 07 last because it revokes the current app session.",
+    "description": "Automated checks for the incremental SignalGen Go API. Run folders in numeric order. Folder 05 requires the signed-in account to be bootstrapped as operator; run folder 08 last because it revokes the current app session.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -211,7 +211,99 @@
       ]
     },
     {
-      "name": "06 Authorized screening fixture",
+      "name": "06 User rule CRUD",
+      "description": "Creates and removes one temporary owner-scoped rule. Requires the screener grant created in folder 05.",
+      "item": [
+        {
+          "name": "Create user rule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"definition\": {\n    \"name\": \"Postman EMA rule\",\n    \"logic\": \"AND\",\n    \"signal_type\": \"BUY\",\n    \"cooldown_sec\": 60,\n    \"conditions\": [\n      {\"left\": \"EMA9\", \"op\": \">\", \"right\": \"EMA20\"}\n    ]\n  }\n}"},
+            "url": "{{base_url}}/api/v1/rules"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 201', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.test('owner rule is private and mutable', () => { pm.expect(body.id).to.match(/^rule_[a-f0-9]{24}$/); pm.expect(body.owner_type).to.eql('user'); pm.expect(body.read_only).to.eql(false); pm.expect(body).not.to.have.property('owner_user_id'); });",
+            "pm.environment.set('user_rule_id', body.id);",
+            "pm.environment.set('user_rule_version', String(body.version));"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Read user rule",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/rules/{{user_rule_id}}"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('created rule is returned', () => pm.expect(pm.response.json().id).to.eql(pm.environment.get('user_rule_id')));"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Update user rule",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"version\": {{user_rule_version}},\n  \"definition\": {\n    \"name\": \"Postman EMA rule updated\",\n    \"logic\": \"AND\",\n    \"signal_type\": \"BUY\",\n    \"cooldown_sec\": 120,\n    \"conditions\": [\n      {\"left\": \"EMA9\", \"op\": \">\", \"right\": \"EMA20\"}\n    ]\n  }\n}"},
+            "url": "{{base_url}}/api/v1/rules/{{user_rule_id}}"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('version increments', () => pm.expect(body.version).to.eql(Number(pm.environment.get('user_rule_version')) + 1));",
+            "pm.environment.set('user_rule_version', String(body.version));"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Delete user rule",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"version\": {{user_rule_version}}\n}"},
+            "url": "{{base_url}}/api/v1/rules/{{user_rule_id}}"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 204', () => pm.response.to.have.status(204));",
+            "pm.test('empty response body', () => pm.expect(pm.response.text()).to.eql(''));"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Deleted user rule is hidden",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/rules/{{user_rule_id}}"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 404', () => pm.response.to.have.status(404));",
+            "pm.test('stable not found code', () => pm.expect(pm.response.json().error.code).to.eql('RESOURCE_NOT_FOUND'));"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "07 Authorized screening fixture",
       "description": "Requires the screener grant created in folder 05.",
       "item": [
         {
@@ -325,7 +417,7 @@
       ]
     },
     {
-      "name": "07 Logout - run last",
+      "name": "08 Logout - run last",
       "item": [
         {
           "name": "Revoke current session",
