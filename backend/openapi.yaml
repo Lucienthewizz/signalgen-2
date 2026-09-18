@@ -1,0 +1,760 @@
+openapi: 3.0.3
+info:
+  title: SignalGen Go API
+  version: 0.2.0
+  description: |
+    Implemented API surface for the incremental SignalGen Go backend.
+    Supabase performs identity login; this API verifies its bearer token and
+    issues a separate opaque app-session token. Proposed routes that are not
+    implemented are intentionally excluded.
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local Docker development
+tags:
+  - name: Operations
+    description: Liveness and dependency readiness.
+  - name: Sessions
+    description: SignalGen app-session lifecycle after Supabase login.
+  - name: Account
+    description: Current-account and owner-scoped session metadata.
+  - name: Analysis
+    description: Capabilities, rules, protected datasets, and compute coordination.
+
+paths:
+  /health:
+    get:
+      tags: [Operations]
+      operationId: getHealth
+      summary: Process liveness
+      security: []
+      responses:
+        "200":
+          description: API process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example: {status: ok}
+  /ready:
+    get:
+      tags: [Operations]
+      operationId: getReadiness
+      summary: Storage and fixture readiness
+      security: []
+      responses:
+        "200":
+          description: Required local dependencies are ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              example: {status: ready}
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/sessions:
+    post:
+      tags: [Sessions]
+      operationId: createAppSession
+      summary: Register an installation and create an app session
+      security:
+        - supabaseBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionCreateRequest"
+      responses:
+        "201":
+          description: Session created. The session token is returned only here.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionCreateResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Active installation limit reached.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                error: {code: DEVICE_LIMIT_REACHED, message: Batas sesi aktif sudah tercapai., request_id: req_opaque}
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/sessions/current:
+    delete:
+      tags: [Sessions]
+      operationId: revokeCurrentAppSession
+      summary: Revoke the current app session
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "204":
+          description: Current app session revoked.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/account/me:
+    get:
+      tags: [Account]
+      operationId: getCurrentAccount
+      summary: Read the current profile, features, session, and installation
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Current account state from server-authoritative storage.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountMeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/account/sessions:
+    get:
+      tags: [Account]
+      operationId: listAccountSessions
+      summary: List up to 100 sessions owned by the current account
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Owner-scoped session metadata. No token or token hash is returned.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/account/sessions/{id}:
+    delete:
+      tags: [Account]
+      operationId: revokeAccountSession
+      summary: Revoke an owner session by public session ID
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "204":
+          description: Session revoked, or was already revoked.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/capabilities:
+    get:
+      tags: [Analysis]
+      operationId: getCapabilities
+      summary: Read supported core, worker, rule, and dataset capabilities
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Versioned capabilities implemented by the current core.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Capabilities"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/rules:
+    get:
+      tags: [Analysis]
+      operationId: listRules
+      summary: List analysis rules visible to the current account
+      description: Currently returns only the frozen read-only system baseline.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Rule list.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/EntitlementRequired"
+  /api/v1/rules/{id}:
+    get:
+      tags: [Analysis]
+      operationId: getRule
+      summary: Read a versioned rule snapshot
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - $ref: "#/components/parameters/RuleId"
+      responses:
+        "200":
+          description: Frozen rule snapshot.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleResource"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/EntitlementRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/datasets/prepare:
+    post:
+      tags: [Analysis]
+      operationId: prepareDataset
+      summary: Validate access and prepare a versioned dataset manifest
+      security:
+        - supabaseBearer: []
+          appSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatasetPrepareRequest"
+      responses:
+        "200":
+          description: Prepared manifest. Current implementation supports one synthetic fixture.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetManifest"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/EntitlementRequired"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/datasets/{id}/manifest:
+    get:
+      tags: [Analysis]
+      operationId: getDatasetManifest
+      summary: Read version and integrity metadata for an authorized dataset
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Dataset manifest.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetManifest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/EntitlementRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/datasets/{id}/content:
+    get:
+      tags: [Analysis]
+      operationId: getDatasetContent
+      summary: Download canonical OHLCV content for an authorized dataset
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Canonical uncompressed fixture content.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+            ETag:
+              description: Quoted manifest checksum.
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetContent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/EntitlementRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/compute-grants:
+    post:
+      tags: [Analysis]
+      operationId: createComputeGrant
+      summary: Issue a short-lived receipt bound to the analysis inputs
+      security:
+        - supabaseBearer: []
+          appSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComputeGrantRequest"
+      responses:
+        "201":
+          description: Short-lived compute grant created.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComputeGrant"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/EntitlementRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+components:
+  securitySchemes:
+    supabaseBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token issued and refreshed by Supabase Auth.
+    appSession:
+      type: apiKey
+      in: header
+      name: X-App-Session
+      description: Opaque one-time-issued SignalGen app-session secret.
+  headers:
+    PrivateNoStore:
+      description: Protected responses must not be stored by shared or browser caches.
+      schema:
+        type: string
+        example: private, no-store
+  parameters:
+    SessionId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, pattern: "^ses_"}
+    RuleId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, example: default-scalping-v1}
+    DatasetId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, example: fixture-default-scalping-v1}
+  responses:
+    InvalidRequest:
+      description: Request syntax, values, or supported capability is invalid.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/PrivateNoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Unauthorized:
+      description: Bearer or app-session credential is missing or invalid.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/PrivateNoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Forbidden:
+      description: Session, account, or requested access is inactive.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/PrivateNoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    EntitlementRequired:
+      description: Required feature grant is missing, expired, or revoked.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/PrivateNoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error: {code: ENTITLEMENT_REQUIRED, message: Fitur belum aktif untuk akun ini., request_id: req_opaque}
+    NotFound:
+      description: Resource is missing or not visible to the current owner.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/PrivateNoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ServiceUnavailable:
+      description: A required local or upstream dependency is unavailable.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/PrivateNoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [ok]}
+    ReadinessResponse:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [ready]}
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            request_id: {type: string, pattern: "^req_"}
+    SessionCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [installation_id, label]
+      properties:
+        installation_id: {type: string, minLength: 1}
+        label: {type: string, minLength: 1, maxLength: 100}
+        client:
+          type: object
+          additionalProperties: false
+          properties:
+            app_version: {type: string}
+            user_agent_family: {type: string}
+    AppSession:
+      type: object
+      required: [id, installation_id, label, created_at, expires_at, last_seen_at]
+      properties:
+        id: {type: string, pattern: "^ses_"}
+        installation_id: {type: string}
+        label: {type: string}
+        created_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        last_seen_at: {type: string, format: date-time}
+        revoked_at: {type: string, format: date-time, nullable: true}
+    SessionCreateResponse:
+      type: object
+      required: [session, session_token]
+      properties:
+        session:
+          $ref: "#/components/schemas/AppSession"
+        session_token:
+          type: string
+          readOnly: true
+          pattern: "^sgs_"
+          description: One-time response secret; only its hash is stored by the API.
+    AccountMeResponse:
+      type: object
+      required: [user, features, session, device, capabilities_version]
+      properties:
+        user:
+          type: object
+          required: [id, email, role, status]
+          properties:
+            id: {type: string}
+            email: {type: string, format: email}
+            role: {type: string, enum: [user, operator]}
+            status: {type: string, enum: [active, suspended]}
+        features:
+          type: array
+          items: {type: string, enum: [screener, backtest]}
+        session:
+          type: object
+          required: [id, expires_at]
+          properties:
+            id: {type: string}
+            expires_at: {type: string, format: date-time}
+        device:
+          type: object
+          required: [installation_id, label, current]
+          properties:
+            installation_id: {type: string}
+            label: {type: string}
+            current: {type: boolean, enum: [true]}
+        capabilities_version: {type: string}
+    SessionListItem:
+      allOf:
+        - $ref: "#/components/schemas/AppSession"
+        - type: object
+          required: [status, current]
+          properties:
+            status: {type: string, enum: [active, expired, revoked]}
+            current: {type: boolean}
+    SessionListResponse:
+      type: object
+      required: [items, max_items, active_session_limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionListItem"
+        max_items: {type: integer, enum: [100]}
+        active_session_limit: {type: integer, minimum: 1}
+    Capabilities:
+      type: object
+      required: [capabilities_version, engine_version, schema_version, worker_protocol, purposes, markets, timeframes, indicators, operators, rule_logic, max_candles_per_run, max_symbols_per_run]
+      properties:
+        capabilities_version: {type: string, example: capabilities-1}
+        engine_version: {type: string, example: core-0.2.0}
+        schema_version: {type: string, example: signal-baseline-1}
+        worker_protocol: {type: string, example: worker-1}
+        purposes:
+          type: array
+          items: {type: string, enum: [screen]}
+        markets:
+          type: array
+          items: {type: string, enum: [IDX]}
+        timeframes:
+          type: array
+          items: {type: string, enum: [1d]}
+        indicators:
+          type: array
+          items: {type: string, enum: [PRICE, EMA9, EMA20, RSI14]}
+        operators:
+          type: array
+          items: {type: string, enum: ["<", "<=", ">", ">="]}
+        rule_logic:
+          type: array
+          items: {type: string, enum: [AND]}
+        max_candles_per_run: {type: integer, enum: [100000]}
+        max_symbols_per_run: {type: integer, enum: [1]}
+    RuleCondition:
+      type: object
+      required: [left, op, right]
+      properties:
+        left: {type: string, enum: [PRICE, EMA9, EMA20, RSI14]}
+        op: {type: string, enum: ["<", "<=", ">", ">="]}
+        right:
+          oneOf:
+            - {type: string}
+            - {type: number}
+    BaselineRuleDefinition:
+      type: object
+      required: [id, name, type, logic, signal_type, cooldown_sec, conditions]
+      properties:
+        id: {type: integer, enum: [1]}
+        name: {type: string, enum: [Default Scalping]}
+        type: {type: string, enum: [system]}
+        logic: {type: string, enum: [AND]}
+        signal_type: {type: string, enum: [BUY]}
+        cooldown_sec: {type: integer, enum: [60]}
+        conditions:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/RuleCondition"
+    RuleResource:
+      type: object
+      required: [id, name, owner_type, read_only, definition, definition_hash, schema_version, engine_version, version]
+      properties:
+        id: {type: string, enum: [default-scalping-v1]}
+        name: {type: string}
+        owner_type: {type: string, enum: [system]}
+        read_only: {type: boolean, enum: [true]}
+        definition:
+          $ref: "#/components/schemas/BaselineRuleDefinition"
+        definition_hash: {type: string, pattern: "^sha256:"}
+        schema_version: {type: string}
+        engine_version: {type: string}
+        version: {type: integer, enum: [1]}
+    RuleListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuleResource"
+        next_cursor: {type: string, nullable: true}
+    DatasetPrepareRequest:
+      type: object
+      additionalProperties: false
+      required: [purpose, market, symbols, timeframe, date_from, date_to]
+      properties:
+        purpose: {type: string, enum: [screen]}
+        market: {type: string, enum: [IDX]}
+        symbols:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items: {type: string, enum: [BBCA.JK]}
+        timeframe: {type: string, enum: [1d]}
+        date_from: {type: string, format: date}
+        date_to: {type: string, format: date}
+        rule_id: {type: string}
+    DateRange:
+      type: object
+      required: [from, to]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+    DatasetQuality:
+      type: object
+      required: [status, warnings]
+      properties:
+        status: {type: string, enum: [complete]}
+        warnings:
+          type: array
+          items: {type: string}
+    DatasetManifest:
+      type: object
+      required: [dataset_id, version, schema_version, provider, purpose, market, currency, symbols, timeframe, timezone, requested_range, available_range, warmup_candles, adjustment, candle_count, decoded_bytes, checksum, quality]
+      properties:
+        dataset_id: {type: string}
+        version: {type: string}
+        schema_version: {type: string, enum: [ohlcv-1]}
+        provider: {type: string, enum: [fixture]}
+        purpose: {type: string, enum: [screen]}
+        market: {type: string, enum: [IDX]}
+        currency: {type: string, enum: [IDR]}
+        symbols:
+          type: array
+          items: {type: string}
+        timeframe: {type: string, enum: [1d]}
+        timezone: {type: string, enum: [UTC]}
+        requested_range:
+          $ref: "#/components/schemas/DateRange"
+        available_range:
+          $ref: "#/components/schemas/DateRange"
+        warmup_candles: {type: integer, minimum: 0}
+        adjustment: {type: string}
+        candle_count: {type: integer, minimum: 1}
+        decoded_bytes: {type: integer, minimum: 1}
+        checksum: {type: string, pattern: "^sha256:"}
+        quality:
+          $ref: "#/components/schemas/DatasetQuality"
+    Candle:
+      type: object
+      required: [timestamp, open, high, low, close, volume]
+      properties:
+        timestamp: {type: string, format: date-time}
+        open: {type: number, minimum: 0, exclusiveMinimum: true}
+        high: {type: number, minimum: 0, exclusiveMinimum: true}
+        low: {type: number, minimum: 0, exclusiveMinimum: true}
+        close: {type: number, minimum: 0, exclusiveMinimum: true}
+        volume: {type: integer, minimum: 0}
+    DatasetContent:
+      type: object
+      required: [schema_version, purpose, market, currency, symbol, timeframe, timezone, adjustment, candles]
+      properties:
+        schema_version: {type: string, enum: [ohlcv-1]}
+        purpose: {type: string, enum: [screen]}
+        market: {type: string, enum: [IDX]}
+        currency: {type: string, enum: [IDR]}
+        symbol: {type: string, enum: [BBCA.JK]}
+        timeframe: {type: string, enum: [1d]}
+        timezone: {type: string, enum: [UTC]}
+        adjustment: {type: string}
+        candles:
+          type: array
+          minItems: 40
+          maxItems: 40
+          items:
+            $ref: "#/components/schemas/Candle"
+    ComputeGrantRequest:
+      type: object
+      additionalProperties: false
+      required: [purpose, dataset_id, dataset_version, dataset_checksum, rule_id, definition_hash, engine_version, schema_version]
+      properties:
+        purpose: {type: string, enum: [screen]}
+        dataset_id: {type: string}
+        dataset_version: {type: string}
+        dataset_checksum: {type: string, pattern: "^sha256:"}
+        rule_id: {type: string, enum: [default-scalping-v1]}
+        definition_hash: {type: string, pattern: "^sha256:"}
+        engine_version: {type: string, enum: [core-0.2.0]}
+        schema_version: {type: string, enum: [signal-baseline-1]}
+    ComputeGrant:
+      allOf:
+        - $ref: "#/components/schemas/ComputeGrantRequest"
+        - type: object
+          required: [id, created_at, expires_at]
+          properties:
+            id: {type: string, pattern: "^cgr_"}
+            created_at: {type: string, format: date-time}
+            expires_at: {type: string, format: date-time}

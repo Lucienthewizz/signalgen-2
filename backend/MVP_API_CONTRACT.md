@@ -1,6 +1,6 @@
 # SignalGen MVP — Target API & Worker Contract
 
-Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** Backend publishes OpenAPI/generated types after implementation; runtime OpenAPI wins for what exists. Changes require FE+BE review and versioning.
+Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** [`openapi.yaml`](openapi.yaml) documents only the implemented Go surface and wins for current runtime integration; this file retains proposed routes and policy decisions. Changes require FE+BE review and versioning.
 
 Implementation checkpoint 18 September 2026: Go API currently implements
 `GET /health`, `GET /ready`, `POST /api/v1/sessions`, `GET /api/v1/capabilities`, and

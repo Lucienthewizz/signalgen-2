@@ -127,3 +127,18 @@ Collection, environment tanpa rahasia, urutan eksekusi, dan cara memberikan
 grant lokal tersedia di [`postman/README.md`](postman/README.md). Test script
 mencakup health/readiness, auth negatif, Supabase login, app session, account,
 entitlement, baseline rule, dataset fixture, compute grant, dan revoke sesi.
+
+## OpenAPI untuk frontend
+
+[`openapi.yaml`](openapi.yaml) adalah kontrak machine-readable untuk endpoint Go
+yang sudah tersedia. Route yang masih berupa rencana sengaja tidak dimasukkan.
+Validasi dan pembuatan type TypeScript dapat dijalankan dari root repository:
+
+```bash
+npx --yes @redocly/cli@1.34.5 lint backend/openapi.yaml --extends=minimal
+npx --yes openapi-typescript@7.9.1 backend/openapi.yaml \
+  -o frontend/web/src/api/generated/signalgen-api.d.ts
+```
+
+File generated ditempatkan oleh frontend pada folder API client-nya dan tidak
+boleh diedit manual. Perubahan kontrak perlu direview bersama FE dan BE.
