@@ -78,6 +78,34 @@ func TestFeatureGrantExpiryAndRevocation(t *testing.T) {
 	}
 }
 
+func TestFeatureGrantsReturnsOperatorRecordState(t *testing.T) {
+	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
+	store := testStore(t, func() time.Time { return now })
+	_, _ = store.EnsureProfile(context.Background(), "user-a", "user@example.com")
+	if _, err := store.GrantFeatureAudited(
+		context.Background(), "operator-a", "req_grant", "user-a", FeatureScreener,
+		now.Add(time.Hour), "demo",
+	); err != nil {
+		t.Fatal(err)
+	}
+	grants, err := store.FeatureGrants(context.Background(), "user-a")
+	if err != nil || len(grants) != 1 || !grants[0].Active || grants[0].UserID != "user-a" {
+		t.Fatalf("active grants = %+v, error = %v", grants, err)
+	}
+	if err := store.RevokeFeatureAudited(
+		context.Background(), "operator-a", "req_revoke", "user-a", FeatureScreener, "complete",
+	); err != nil {
+		t.Fatal(err)
+	}
+	grants, err = store.FeatureGrants(context.Background(), "user-a")
+	if err != nil || len(grants) != 1 || grants[0].Active || grants[0].RevokedAt == nil {
+		t.Fatalf("revoked grants = %+v, error = %v", grants, err)
+	}
+	if _, err := store.FeatureGrants(context.Background(), "missing"); !errors.Is(err, ErrAccountNotFound) {
+		t.Fatalf("missing account error = %v", err)
+	}
+}
+
 func TestSuspendedAccountIsDenied(t *testing.T) {
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 	store := testStore(t, func() time.Time { return now })
@@ -217,7 +245,7 @@ func TestGrantAndRevokeWriteImmutableAuditStates(t *testing.T) {
 	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
 	store := testStore(t, func() time.Time { return now })
 	_, _ = store.EnsureProfile(context.Background(), "user-a", "user@example.com")
-	if err := store.GrantFeatureAudited(
+	if _, err := store.GrantFeatureAudited(
 		context.Background(), "operator-a", "cli_grant", "user-a", FeatureScreener, now.Add(time.Hour), "demo access",
 	); err != nil {
 		t.Fatal(err)
@@ -266,7 +294,7 @@ func TestGrantAndRevokeWriteImmutableAuditStates(t *testing.T) {
 func TestGrantFailureRollsBackAuditAndState(t *testing.T) {
 	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
 	store := testStore(t, func() time.Time { return now })
-	err := store.GrantFeatureAudited(
+	_, err := store.GrantFeatureAudited(
 		context.Background(), "operator-a", "cli_missing", "missing-user", FeatureScreener, now.Add(time.Hour), "invalid target",
 	)
 	if err == nil {
@@ -295,7 +323,7 @@ func TestAuditedMutationRequiresActorRequestAndReason(t *testing.T) {
 		{"operator-a", "", "demo"},
 		{"operator-a", "cli_1", ""},
 	} {
-		err := store.GrantFeatureAudited(
+		_, err := store.GrantFeatureAudited(
 			context.Background(), test.actor, test.requestID, "user-a", FeatureScreener, now.Add(time.Hour), test.reason,
 		)
 		if !errors.Is(err, ErrInvalidValue) {

@@ -118,6 +118,16 @@ Setelah operator pertama ada, perintah bootstrap selalu ditolak. Menambah atau
 menghapus operator berikutnya belum tersedia dan tidak boleh dilakukan melalui
 payload frontend maupun metadata user Supabase.
 
+Operator yang sudah login dan memiliki app session dapat mengelola entitlement
+melalui API berikut:
+
+- `GET /api/v1/operator/grants?user_id=USER_ID`
+- `POST /api/v1/operator/grants`
+- `DELETE /api/v1/operator/grants/{user_id}/{feature}`
+
+Semua route tersebut mengambil actor audit dari identitas operator yang sudah
+diverifikasi. Body dari frontend tidak dapat memilih atau memalsukan actor.
+
 Grant demo lokal tetap dijalankan dengan:
 
 ```bash

@@ -41,7 +41,10 @@ type AccessStore interface {
 	RequireActive(ctx context.Context, userID string) (access.Account, error)
 	RequireOperator(ctx context.Context, userID string) (access.Account, error)
 	Features(ctx context.Context, userID string) ([]string, error)
+	FeatureGrants(ctx context.Context, userID string) ([]access.FeatureGrant, error)
 	RequireFeature(ctx context.Context, userID, feature string) error
+	GrantFeatureAudited(ctx context.Context, actor, requestID, userID, feature string, validUntil time.Time, reason string) (access.FeatureGrant, error)
+	RevokeFeatureAudited(ctx context.Context, actor, requestID, userID, feature, reason string) error
 }
 
 type DatasetStore interface {
@@ -146,6 +149,9 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	mux.HandleFunc("GET /api/v1/datasets/{id}/manifest", server.datasetManifest)
 	mux.HandleFunc("GET /api/v1/datasets/{id}/content", server.datasetContent)
 	mux.HandleFunc("POST /api/v1/compute-grants", server.createComputeGrant)
+	mux.HandleFunc("GET /api/v1/operator/grants", server.listOperatorGrants)
+	mux.HandleFunc("POST /api/v1/operator/grants", server.createOperatorGrant)
+	mux.HandleFunc("DELETE /api/v1/operator/grants/{user_id}/{feature}", server.revokeOperatorGrant)
 	server.handler = requestContext(corsAllowlist(mux, config.allowedOrigins))
 	return server, nil
 }
@@ -487,6 +493,91 @@ func (server *Server) createComputeGrant(writer http.ResponseWriter, request *ht
 	}
 	writer.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(writer, http.StatusCreated, grant)
+}
+
+func (server *Server) listOperatorGrants(writer http.ResponseWriter, request *http.Request) {
+	if _, _, ok := server.requireOperator(writer, request); !ok {
+		return
+	}
+	userID := strings.TrimSpace(request.URL.Query().Get("user_id"))
+	if userID == "" {
+		writeError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "User ID target wajib diisi.")
+		return
+	}
+	grants, err := server.access.FeatureGrants(request.Context(), userID)
+	if err != nil {
+		writeOperatorGrantError(writer, request, err)
+		return
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(writer, http.StatusOK, map[string]interface{}{"items": grants})
+}
+
+func (server *Server) createOperatorGrant(writer http.ResponseWriter, request *http.Request) {
+	principal, _, ok := server.requireOperator(writer, request)
+	if !ok {
+		return
+	}
+	var input struct {
+		UserID     string    `json:"user_id"`
+		Feature    string    `json:"feature"`
+		ValidUntil time.Time `json:"valid_until"`
+		Reason     string    `json:"reason"`
+	}
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Body grant tidak valid.")
+		return
+	}
+	if _, err := server.access.RequireActive(request.Context(), input.UserID); err != nil {
+		writeOperatorGrantError(writer, request, err)
+		return
+	}
+	grant, err := server.access.GrantFeatureAudited(
+		request.Context(), principal.ID, requestID(request.Context()), input.UserID,
+		input.Feature, input.ValidUntil, input.Reason,
+	)
+	if err != nil {
+		writeOperatorGrantError(writer, request, err)
+		return
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(writer, http.StatusCreated, grant)
+}
+
+func (server *Server) revokeOperatorGrant(writer http.ResponseWriter, request *http.Request) {
+	principal, _, ok := server.requireOperator(writer, request)
+	if !ok {
+		return
+	}
+	var input struct {
+		Reason string `json:"reason"`
+	}
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Body revoke tidak valid.")
+		return
+	}
+	if err := server.access.RevokeFeatureAudited(
+		request.Context(), principal.ID, requestID(request.Context()),
+		request.PathValue("user_id"), request.PathValue("feature"), input.Reason,
+	); err != nil {
+		writeOperatorGrantError(writer, request, err)
+		return
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writer.WriteHeader(http.StatusNoContent)
+}
+
+func writeOperatorGrantError(writer http.ResponseWriter, request *http.Request, err error) {
+	switch {
+	case errors.Is(err, access.ErrAccountNotFound), errors.Is(err, access.ErrEntitlementMissing):
+		writeError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Akun atau grant tidak ditemukan.")
+	case errors.Is(err, access.ErrAccountSuspended):
+		writeError(writer, request, http.StatusUnprocessableEntity, "TARGET_ACCOUNT_INACTIVE", "Akun target tidak aktif.")
+	case errors.Is(err, access.ErrInvalidValue):
+		writeError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "Data grant tidak valid.")
+	default:
+		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Grant belum dapat diproses.")
+	}
 }
 
 func (server *Server) requireDatasetFeature(request *http.Request, userID string, manifest dataset.Manifest) error {

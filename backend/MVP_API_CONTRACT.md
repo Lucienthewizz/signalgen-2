@@ -21,8 +21,9 @@ mutations remain unimplemented.
 Browser integration supports an exact-origin CORS allowlist configured through
 `SIGNALGEN_CORS_ORIGINS`; wildcard origins are rejected.
 The server-side operator role guard is implemented and composes bearer,
-app-session, active-account, and database-role checks. No public operator route
-is registered yet. The first active operator can be bootstrapped exactly once
+app-session, active-account, and database-role checks. Operator-only grant
+list/create/revoke routes are implemented and derive their audit actor from the
+authenticated principal. The first active operator can be bootstrapped exactly once
 through local CLI tooling; the role change and its actor/reason/before/after
 state are recorded atomically in the append-only audit table.
 This checkpoint is a subset, not a claim
@@ -184,10 +185,11 @@ Missing quote uses null price/P&L and warning, not zero.
 
 CLI/local operator tooling is sufficient for P0 seed. Local grant/revoke now
 requires actor, reason, and expiry where applicable; actor/request ID/before/after
-are stored atomically in an append-only audit table. P1 may expose protected
-`/operator/grants` list/create/revoke only after role guard, bootstrap, and
-last-operator safety are implemented. Operator cannot read private rule/journal
-bodies solely by role.
+are stored atomically in an append-only audit table. Protected
+`/operator/grants` list/create/revoke is now implemented behind the role guard;
+the list requires an explicit target user and does not expose unrelated users.
+Operator cannot read private rule/journal bodies solely by role. General role
+management still requires last-operator safety before it may be exposed.
 
 Payment status is not part of manual grant. Full admin user management, billing webhooks, release management and metrics dashboard are P2 per revised priorities.
 

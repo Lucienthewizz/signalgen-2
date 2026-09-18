@@ -90,7 +90,7 @@ func grant(ctx context.Context, store *access.Store, args []string, stdout, stde
 		fmt.Fprintln(stderr, "create audit request id:", err)
 		return 1
 	}
-	if err := store.GrantFeatureAudited(ctx, *actor, requestID, *userID, *feature, until, *reason); err != nil {
+	if _, err := store.GrantFeatureAudited(ctx, *actor, requestID, *userID, *feature, until, *reason); err != nil {
 		fmt.Fprintln(stderr, "grant failed:", err)
 		return 1
 	}

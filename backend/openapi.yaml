@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     Supabase performs identity login; this API verifies its bearer token and
@@ -19,6 +19,8 @@ tags:
     description: Current-account and owner-scoped session metadata.
   - name: Analysis
     description: Capabilities, rules, protected datasets, and compute coordination.
+  - name: Operator
+    description: Server-role protected entitlement administration.
 
 paths:
   /health:
@@ -378,6 +380,107 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/operator/grants:
+    get:
+      tags: [Operator]
+      operationId: listOperatorFeatureGrants
+      summary: List entitlement records for one target account
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - $ref: "#/components/parameters/TargetUserIdQuery"
+      responses:
+        "200":
+          description: Active, expired, and revoked grants for the requested account.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureGrantList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      tags: [Operator]
+      operationId: createOperatorFeatureGrant
+      summary: Grant or renew an account entitlement
+      description: Audit actor and request ID are derived from the authenticated operator and server request context.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeatureGrantCreateRequest"
+      responses:
+        "201":
+          description: Entitlement granted or renewed atomically with its audit event.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureGrant"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/operator/grants/{user_id}/{feature}:
+    delete:
+      tags: [Operator]
+      operationId: revokeOperatorFeatureGrant
+      summary: Revoke one account entitlement
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - $ref: "#/components/parameters/TargetUserIdPath"
+        - $ref: "#/components/parameters/FeaturePath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeatureGrantRevokeRequest"
+      responses:
+        "204":
+          description: Entitlement revoked atomically with its audit event.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 
 components:
   securitySchemes:
@@ -413,6 +516,21 @@ components:
       in: path
       required: true
       schema: {type: string, example: fixture-default-scalping-v1}
+    TargetUserIdQuery:
+      name: user_id
+      in: query
+      required: true
+      schema: {type: string, minLength: 1}
+    TargetUserIdPath:
+      name: user_id
+      in: path
+      required: true
+      schema: {type: string, minLength: 1}
+    FeaturePath:
+      name: feature
+      in: path
+      required: true
+      schema: {type: string, enum: [screener, backtest]}
   responses:
     InvalidRequest:
       description: Request syntax, values, or supported capability is invalid.
@@ -556,6 +674,40 @@ components:
             label: {type: string}
             current: {type: boolean, enum: [true]}
         capabilities_version: {type: string}
+    FeatureGrantCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [user_id, feature, valid_until, reason]
+      properties:
+        user_id: {type: string, minLength: 1}
+        feature: {type: string, enum: [screener, backtest]}
+        valid_until: {type: string, format: date-time}
+        reason: {type: string, minLength: 1}
+    FeatureGrantRevokeRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: {type: string, minLength: 1}
+    FeatureGrant:
+      type: object
+      required: [user_id, feature, valid_until, reason, revoked_at, updated_at, active]
+      properties:
+        user_id: {type: string}
+        feature: {type: string, enum: [screener, backtest]}
+        valid_until: {type: string, format: date-time}
+        reason: {type: string}
+        revoked_at: {type: string, format: date-time, nullable: true}
+        updated_at: {type: string, format: date-time}
+        active: {type: boolean}
+    FeatureGrantList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeatureGrant"
     SessionListItem:
       allOf:
         - $ref: "#/components/schemas/AppSession"

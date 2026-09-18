@@ -54,6 +54,16 @@ type GrantState struct {
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
+type FeatureGrant struct {
+	UserID     string     `json:"user_id"`
+	Feature    string     `json:"feature"`
+	ValidUntil time.Time  `json:"valid_until"`
+	Reason     string     `json:"reason"`
+	RevokedAt  *time.Time `json:"revoked_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+	Active     bool       `json:"active"`
+}
+
 type AuditEvent struct {
 	ID           int64           `json:"id"`
 	Actor        string          `json:"actor"`
@@ -428,6 +438,46 @@ ORDER BY feature`, strings.TrimSpace(userID), now)
 	return features, nil
 }
 
+func (store *Store) FeatureGrants(ctx context.Context, userID string) ([]FeatureGrant, error) {
+	userID = strings.TrimSpace(userID)
+	if _, err := store.Account(ctx, userID); err != nil {
+		return nil, err
+	}
+	rows, err := store.db.QueryContext(ctx, `
+SELECT user_id, feature, valid_until, reason, revoked_at, updated_at
+FROM feature_grants
+WHERE user_id = ?
+ORDER BY feature`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list feature grant records: %w", err)
+	}
+	defer rows.Close()
+	now := store.now().UTC().Truncate(time.Second)
+	grants := make([]FeatureGrant, 0)
+	for rows.Next() {
+		var grant FeatureGrant
+		var validUntil, updatedAt int64
+		var revokedAt sql.NullInt64
+		if err := rows.Scan(
+			&grant.UserID, &grant.Feature, &validUntil, &grant.Reason, &revokedAt, &updatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan feature grant record: %w", err)
+		}
+		grant.ValidUntil = time.Unix(validUntil, 0).UTC()
+		grant.UpdatedAt = time.Unix(updatedAt, 0).UTC()
+		if revokedAt.Valid {
+			value := time.Unix(revokedAt.Int64, 0).UTC()
+			grant.RevokedAt = &value
+		}
+		grant.Active = grant.RevokedAt == nil && now.Before(grant.ValidUntil)
+		grants = append(grants, grant)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate feature grant records: %w", err)
+	}
+	return grants, nil
+}
+
 func (store *Store) RequireFeature(ctx context.Context, userID, feature string) error {
 	if _, err := store.RequireActive(ctx, userID); err != nil {
 		return err
@@ -448,26 +498,27 @@ func (store *Store) RequireFeature(ctx context.Context, userID, feature string) 
 }
 
 func (store *Store) GrantFeature(ctx context.Context, userID, feature string, validUntil time.Time, reason string) error {
-	return store.GrantFeatureAudited(ctx, "system:internal", "internal", userID, feature, validUntil, reason)
+	_, err := store.GrantFeatureAudited(ctx, "system:internal", "internal", userID, feature, validUntil, reason)
+	return err
 }
 
-func (store *Store) GrantFeatureAudited(ctx context.Context, actor, requestID, userID, feature string, validUntil time.Time, reason string) error {
+func (store *Store) GrantFeatureAudited(ctx context.Context, actor, requestID, userID, feature string, validUntil time.Time, reason string) (FeatureGrant, error) {
 	actor = strings.TrimSpace(actor)
 	requestID = strings.TrimSpace(requestID)
 	userID = strings.TrimSpace(userID)
 	reason = strings.TrimSpace(reason)
 	if actor == "" || requestID == "" || userID == "" || !supportedFeatures[feature] || reason == "" || !validUntil.After(store.now()) {
-		return ErrInvalidValue
+		return FeatureGrant{}, ErrInvalidValue
 	}
 	now := store.now().UTC().Truncate(time.Second)
 	transaction, err := store.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin feature grant: %w", err)
+		return FeatureGrant{}, fmt.Errorf("begin feature grant: %w", err)
 	}
 	defer transaction.Rollback()
 	before, err := grantState(ctx, transaction, userID, feature)
 	if err != nil && !errors.Is(err, ErrEntitlementMissing) {
-		return err
+		return FeatureGrant{}, err
 	}
 	_, err = transaction.ExecContext(ctx, `
 INSERT INTO feature_grants (user_id, feature, valid_until, reason, revoked_at, updated_at)
@@ -480,19 +531,22 @@ ON CONFLICT(user_id, feature) DO UPDATE SET
 		userID, feature, validUntil.UTC().Truncate(time.Second).Unix(), reason, now.Unix(),
 	)
 	if err != nil {
-		return fmt.Errorf("grant feature: %w", err)
+		return FeatureGrant{}, fmt.Errorf("grant feature: %w", err)
 	}
 	after, err := grantState(ctx, transaction, userID, feature)
 	if err != nil {
-		return err
+		return FeatureGrant{}, err
 	}
 	if err := insertAuditEvent(ctx, transaction, actor, "feature.grant", userID, feature, reason, requestID, before, after, now); err != nil {
-		return err
+		return FeatureGrant{}, err
 	}
 	if err := transaction.Commit(); err != nil {
-		return fmt.Errorf("commit feature grant: %w", err)
+		return FeatureGrant{}, fmt.Errorf("commit feature grant: %w", err)
 	}
-	return nil
+	return FeatureGrant{
+		UserID: userID, Feature: after.Feature, ValidUntil: after.ValidUntil,
+		Reason: after.Reason, RevokedAt: after.RevokedAt, UpdatedAt: after.UpdatedAt, Active: true,
+	}, nil
 }
 
 func (store *Store) RevokeFeature(ctx context.Context, userID, feature string) error {

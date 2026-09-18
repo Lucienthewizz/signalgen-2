@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "96af2d46-aef6-4a90-a2fd-f8d095a31e8a",
     "name": "SignalGen Go API",
-    "description": "Automated checks for the incremental SignalGen Go API. Run folders in numeric order. Folder 05 requires a local screener grant; run folder 06 last because it revokes the current app session.",
+    "description": "Automated checks for the incremental SignalGen Go API. Run folders in numeric order. Folder 05 requires the signed-in account to be bootstrapped as operator; run folder 07 last because it revokes the current app session.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -102,7 +102,7 @@
           "event": [{"listen": "test", "script": {"exec": [
             "pm.test('status 200', () => pm.response.to.have.status(200));",
             "const body = pm.response.json();",
-            "pm.test('safe server-side role and status', () => { pm.expect(body.user.role).to.eql('user'); pm.expect(body.user.status).to.eql('active'); });",
+            "pm.test('safe server-side role and status', () => { pm.expect(['user', 'operator']).to.include(body.user.role); pm.expect(body.user.status).to.eql('active'); });",
             "pm.test('features is an array', () => pm.expect(body.features).to.be.an('array'));",
             "pm.test('current session matches', () => pm.expect(body.session.id).to.eql(pm.environment.get('current_session_id')));",
             "if (body.user && body.user.id) pm.environment.set('user_id', body.user.id);"
@@ -170,8 +170,49 @@
       ]
     },
     {
-      "name": "05 Authorized screening fixture",
-      "description": "Before running this folder, grant screener to user_id with signalgen-admin as documented in backend/postman/README.md.",
+      "name": "05 Operator entitlement",
+      "description": "Bootstrap the signed-in account once with signalgen-admin before running this folder.",
+      "item": [
+        {
+          "name": "Grant screener to current user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"feature\": \"screener\",\n  \"valid_until\": \"2027-12-31T00:00:00Z\",\n  \"reason\": \"Postman supervised test\"\n}"},
+            "url": "{{base_url}}/api/v1/operator/grants"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 201', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.test('active grant returned', () => { pm.expect(body.user_id).to.eql(pm.environment.get('user_id')); pm.expect(body.feature).to.eql('screener'); pm.expect(body.active).to.eql(true); });"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "List current user grants as operator",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/operator/grants?user_id={{user_id}}"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('screener grant is visible', () => pm.expect(body.items.some(item => item.feature === 'screener' && item.active)).to.eql(true));",
+            "pm.test('response is private', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "06 Authorized screening fixture",
+      "description": "Requires the screener grant created in folder 05.",
       "item": [
         {
           "name": "List system rules",
@@ -284,7 +325,7 @@
       ]
     },
     {
-      "name": "06 Logout - run last",
+      "name": "07 Logout - run last",
       "item": [
         {
           "name": "Revoke current session",

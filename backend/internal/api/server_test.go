@@ -6,9 +6,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,9 +48,21 @@ type fakeSessions struct {
 type fakeAccess struct {
 	account       access.Account
 	features      []string
+	grants        []access.FeatureGrant
 	err           error
 	ensuredUserID string
 	ensuredEmail  string
+	grantActor    string
+	grantRequest  string
+	grantUserID   string
+	grantFeature  string
+	grantReason   string
+	grantUntil    time.Time
+	revokeActor   string
+	revokeRequest string
+	revokeUserID  string
+	revokeFeature string
+	revokeReason  string
 }
 
 func (fake *fakeAccess) RequireFeature(_ context.Context, _ string, feature string) error {
@@ -128,6 +142,41 @@ func (fake *fakeAccess) Features(_ context.Context, _ string) ([]string, error) 
 		return nil, fake.err
 	}
 	return fake.features, nil
+}
+
+func (fake *fakeAccess) FeatureGrants(_ context.Context, userID string) ([]access.FeatureGrant, error) {
+	if fake.err != nil {
+		return nil, fake.err
+	}
+	items := make([]access.FeatureGrant, 0, len(fake.grants))
+	for _, grant := range fake.grants {
+		if grant.UserID == userID {
+			items = append(items, grant)
+		}
+	}
+	return items, nil
+}
+
+func (fake *fakeAccess) GrantFeatureAudited(_ context.Context, actor, requestID, userID, feature string, validUntil time.Time, reason string) (access.FeatureGrant, error) {
+	if fake.err != nil {
+		return access.FeatureGrant{}, fake.err
+	}
+	fake.grantActor, fake.grantRequest = actor, requestID
+	fake.grantUserID, fake.grantFeature = userID, feature
+	fake.grantUntil, fake.grantReason = validUntil, reason
+	fake.grants = []access.FeatureGrant{{
+		UserID: userID, Feature: feature, ValidUntil: validUntil, Reason: reason, Active: true,
+	}}
+	return fake.grants[0], nil
+}
+
+func (fake *fakeAccess) RevokeFeatureAudited(_ context.Context, actor, requestID, userID, feature, reason string) error {
+	if fake.err != nil {
+		return fake.err
+	}
+	fake.revokeActor, fake.revokeRequest = actor, requestID
+	fake.revokeUserID, fake.revokeFeature, fake.revokeReason = userID, feature, reason
+	return nil
 }
 
 func (fake *fakeAccess) accountFor(userID, email string) access.Account {
@@ -526,6 +575,97 @@ func TestOperatorGuardRequiresServerSideRole(t *testing.T) {
 	}
 }
 
+func TestOperatorGrantRoutesRequireRoleAndUseAuthenticatedActor(t *testing.T) {
+	request := func(method, target, body string) *http.Request {
+		value := httptest.NewRequest(method, target, bytes.NewBufferString(body))
+		value.Header.Set("Authorization", "Bearer operator-token")
+		value.Header.Set("X-App-Session", "sgs_session")
+		if body != "" {
+			value.Header.Set("Content-Type", "application/json")
+		}
+		return value
+	}
+
+	userServer := testServer(
+		t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, &fakeSessions{},
+	)
+	response := httptest.NewRecorder()
+	userServer.ServeHTTP(response, request(http.MethodGet, "/api/v1/operator/grants?user_id=user-a", ""))
+	assertErrorCode(t, response, http.StatusForbidden, "ROLE_REQUIRED")
+
+	operatorStore := &fakeAccess{account: access.Account{
+		UserID: "operator-a", Role: access.RoleOperator, Status: access.StatusActive,
+	}}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "operator-a"}}, &fakeSessions{},
+		operatorStore, &fakeDatasets{}, &fakeCompute{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request(http.MethodPost, "/api/v1/operator/grants", `{
+  "user_id":"user-target",
+  "feature":"screener",
+  "valid_until":"2027-01-01T00:00:00Z",
+  "reason":"supervised demo"
+}`))
+	if response.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if operatorStore.grantActor != "operator-a" || !strings.HasPrefix(operatorStore.grantRequest, "req_") ||
+		operatorStore.grantUserID != "user-target" || operatorStore.grantFeature != access.FeatureScreener {
+		t.Fatalf("grant call = %+v", operatorStore)
+	}
+
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request(http.MethodGet, "/api/v1/operator/grants?user_id=user-target", ""))
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"feature":"screener"`)) {
+		t.Fatalf("list status = %d, body = %s", response.Code, response.Body.String())
+	}
+
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request(
+		http.MethodDelete, "/api/v1/operator/grants/user-target/screener", `{"reason":"demo complete"}`,
+	))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("revoke status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if operatorStore.revokeActor != "operator-a" || !strings.HasPrefix(operatorStore.revokeRequest, "req_") ||
+		operatorStore.revokeUserID != "user-target" || operatorStore.revokeFeature != access.FeatureScreener ||
+		operatorStore.revokeReason != "demo complete" {
+		t.Fatalf("revoke call = %+v", operatorStore)
+	}
+}
+
+func TestOperatorGrantRejectsClientSuppliedAuditActor(t *testing.T) {
+	operatorStore := &fakeAccess{account: access.Account{
+		UserID: "operator-a", Role: access.RoleOperator, Status: access.StatusActive,
+	}}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "operator-a"}}, &fakeSessions{},
+		operatorStore, &fakeDatasets{}, &fakeCompute{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/operator/grants", bytes.NewBufferString(`{
+  "user_id":"user-target",
+  "feature":"screener",
+  "valid_until":"2027-01-01T00:00:00Z",
+  "reason":"demo",
+  "actor":"forged-operator"
+}`))
+	request.Header.Set("Authorization", "Bearer operator-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusBadRequest, "INVALID_REQUEST")
+	if operatorStore.grantActor != "" {
+		t.Fatalf("grant unexpectedly executed as %q", operatorStore.grantActor)
+	}
+}
+
 func TestAccountSessionsListsOnlySafeOwnerMetadata(t *testing.T) {
 	now := time.Now().UTC()
 	sessions := &fakeSessions{
@@ -702,6 +842,68 @@ func TestRevokeCurrentSession(t *testing.T) {
 	}
 	if sessions.revokedUserID != "user-a" || sessions.revokedToken != "sgs_session" {
 		t.Fatalf("revocation = user %q token %q", sessions.revokedUserID, sessions.revokedToken)
+	}
+}
+
+func TestOperatorGrantLifecycleWritesAuthenticatedAuditWithSQLite(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:operator_grant_api?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = db.Close() })
+	accessStore, err := access.NewStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := accessStore.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = accessStore.EnsureProfile(context.Background(), "operator-a", "operator@example.com")
+	_, _ = accessStore.EnsureProfile(context.Background(), "user-target", "user@example.com")
+	if err := accessStore.BootstrapOperator(
+		context.Background(), "local:test", "cli_bootstrap", "operator-a", "test operator",
+	); err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "operator-a"}}, &fakeSessions{},
+		accessStore, &fakeDatasets{}, &fakeCompute{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := func(method, target, body string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(method, target, bytes.NewBufferString(body))
+		request.Header.Set("Authorization", "Bearer operator-token")
+		request.Header.Set("X-App-Session", "sgs_session")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		return response
+	}
+	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339)
+	response := call(http.MethodPost, "/api/v1/operator/grants", fmt.Sprintf(`{
+  "user_id":"user-target",
+  "feature":"screener",
+  "valid_until":%q,
+  "reason":"integration demo"
+}`, expiresAt))
+	if response.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, body = %s", response.Code, response.Body.String())
+	}
+	response = call(
+		http.MethodDelete, "/api/v1/operator/grants/user-target/screener", `{"reason":"integration complete"}`,
+	)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("revoke status = %d, body = %s", response.Code, response.Body.String())
+	}
+	events, err := accessStore.AuditEvents(context.Background(), "user-target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || events[0].Actor != "operator-a" || events[1].Actor != "operator-a" ||
+		!strings.HasPrefix(events[0].RequestID, "req_") || events[1].Action != "feature.revoke" {
+		t.Fatalf("audit events = %+v", events)
 	}
 }
 

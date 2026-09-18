@@ -48,25 +48,27 @@ Folder 04 memang harus menghasilkan `403 ENTITLEMENT_REQUIRED`. Ini membuktikan
 authorization aktif, bukan menandakan API rusak.
 
 Setelah request **Current account**, environment otomatis memiliki `user_id`.
-Berikan akses demo dari terminal dengan mengganti `USER_ID` memakai nilai itu:
+Sesudah folder 04 selesai, bootstrap akun itu sebagai operator pertama. Perintah
+ini hanya berhasil sekali untuk database baru; lewati jika operator sudah pernah
+dibuat:
 
 ```bash
 docker compose --profile go-target exec go-api \
-  signalgen-admin grant \
+  signalgen-admin bootstrap-operator \
   --user USER_ID \
-  --feature screener \
-  --until 2026-10-18T00:00:00Z \
-  --reason "postman local test" \
-  --actor "postman-local"
+  --reason "initial Postman operator" \
+  --actor "local:postman"
 ```
 
 Kemudian jalankan:
 
-6. `05 Authorized screening fixture`
-7. `06 Logout - run last`
+6. `05 Operator entitlement`
+7. `06 Authorized screening fixture`
+8. `07 Logout - run last`
 
-Folder 05 menyimpan dataset ID, checksum, versi, dan compute grant ke environment.
-Folder 06 mencabut sesi saat ini, lalu memastikan token sesi tersebut langsung
+Folder 05 membuat dan membaca grant `screener` melalui endpoint operator. Folder
+06 menyimpan dataset ID, checksum, versi, dan compute grant ke environment.
+Folder 07 mencabut sesi saat ini, lalu memastikan token sesi tersebut langsung
 ditolak. Untuk mengulang pengujian, jalankan kembali **Create app session**.
 
 ## Yang diverifikasi
@@ -76,6 +78,8 @@ ditolak. Untuk mengulang pengujian, jalankan kembali **Create app session**.
 - login Supabase menghasilkan access token;
 - app-session dibuat dan token mentah tidak muncul dalam metadata;
 - profil, entitlement, dan sesi hanya dibaca untuk pemiliknya;
+- role user biasa ditolak dari endpoint operator;
+- endpoint operator mengambil actor audit dari identitas login;
 - baseline rule read-only cocok dengan hash/versi core;
 - dataset ditolak sebelum grant dan tersedia setelah grant;
 - manifest/checksum/konten fixture `BBCA.JK` konsisten;
