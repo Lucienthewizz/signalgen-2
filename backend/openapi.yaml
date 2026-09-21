@@ -474,6 +474,7 @@ paths:
       tags: [Analysis]
       operationId: createComputeGrant
       summary: Issue a short-lived receipt bound to the analysis inputs
+      description: Accepts the read-only baseline or a rule owned by the current account, with an exact definition hash.
       security:
         - supabaseBearer: []
           appSession: []
@@ -1144,7 +1145,9 @@ components:
         dataset_id: {type: string}
         dataset_version: {type: string}
         dataset_checksum: {type: string, pattern: "^sha256:"}
-        rule_id: {type: string, enum: [default-scalping-v1]}
+        rule_id:
+          type: string
+          description: The system baseline ID or an owner-scoped user rule ID.
         definition_hash: {type: string, pattern: "^sha256:"}
         engine_version: {type: string, enum: [core-0.2.0]}
         schema_version: {type: string, enum: [signal-baseline-1]}

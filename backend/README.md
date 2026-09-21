@@ -73,7 +73,7 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `GET /api/v1/datasets/{id}/manifest` — metadata/checksum dataset;
 - `GET /api/v1/datasets/{id}/content` — konten OHLCV sintetis terproteksi;
 - `POST /api/v1/compute-grants` — receipt singkat yang mengikat sesi, dataset,
-  rule, engine, dan schema sebelum eksekusi WASM;
+  system rule atau rule pribadi, engine, dan schema sebelum eksekusi WASM;
 - `DELETE /api/v1/sessions/current` — revoke sesi aktif.
 
 Token sesi hanya dikembalikan saat dibuat. SQLite menyimpan hash token, bukan

@@ -14,7 +14,8 @@ previous one.
 Dataset routes currently serve only the checksum-verified synthetic
 `BBCA.JK` screening fixture to accounts with an active `screener` grant.
 `POST /api/v1/compute-grants` is implemented for the frozen screening baseline
-and rejects mismatched dataset, rule, engine, or schema versions.
+and owner-scoped user rules. It rejects inaccessible rules and mismatched
+dataset, definition hash, engine, or schema versions.
 `GET /api/v1/rules` and `GET /api/v1/rules/{id}` expose the frozen baseline
 plus private user rules to accounts with `screener`. User rule
 create/update/delete is implemented with owner-scoped queries, a 100-rule

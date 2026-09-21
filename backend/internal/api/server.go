@@ -636,10 +636,18 @@ func (server *Server) createComputeGrant(writer http.ResponseWriter, request *ht
 		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Dataset belum dapat diverifikasi.")
 		return
 	}
+	expectedRuleHash := core.BaselineRuleHash
+	if input.RuleID != core.BaselineRuleID {
+		rule, err := server.rules.Get(request.Context(), principal.ID, input.RuleID)
+		if err != nil {
+			writeRuleError(writer, request, err)
+			return
+		}
+		expectedRuleHash = rule.DefinitionHash
+	}
 	if input.Purpose != manifest.Purpose || input.DatasetVersion != manifest.Version ||
-		input.DatasetChecksum != manifest.Checksum || input.RuleID != core.BaselineRuleID ||
-		input.DefinitionHash != core.BaselineRuleHash || input.EngineVersion != core.EngineVersion ||
-		input.SchemaVersion != core.SchemaVersion {
+		input.DatasetChecksum != manifest.Checksum || input.DefinitionHash != expectedRuleHash ||
+		input.EngineVersion != core.EngineVersion || input.SchemaVersion != core.SchemaVersion {
 		writeError(writer, request, http.StatusUnprocessableEntity, "UNSUPPORTED_CAPABILITY", "Versi dataset, rule, atau engine tidak cocok.")
 		return
 	}

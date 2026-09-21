@@ -986,6 +986,30 @@ func TestCreateComputeGrantRejectsVersionMismatch(t *testing.T) {
 	}
 }
 
+func TestCreateComputeGrantHidesUnknownCustomRule(t *testing.T) {
+	sessions := &fakeSessions{verified: session.Session{ID: "ses-1"}}
+	manifest := dataset.Manifest{DatasetID: "fixture-1", Version: "fixture-v1", Purpose: "screen", Checksum: "sha256:data"}
+	computeStore := &fakeCompute{}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions,
+		&fakeAccess{features: []string{access.FeatureScreener}},
+		&fakeDatasets{manifest: manifest}, computeStore,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"fixture-v1","dataset_checksum":"sha256:data","rule_id":"rule_missing","definition_hash":"sha256:missing","engine_version":"core-0.2.0","schema_version":"signal-baseline-1"}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/compute-grants", body)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusNotFound, "RESOURCE_NOT_FOUND")
+	if computeStore.created.UserID != "" {
+		t.Fatal("compute store was called for an unknown custom rule")
+	}
+}
+
 func TestIdentityProviderFailureIsSanitized(t *testing.T) {
 	server := testServer(t, fakeIdentity{err: errors.New("upstream leaked detail")}, &fakeSessions{})
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/sessions", bytes.NewBufferString(`{}`))
@@ -1108,7 +1132,17 @@ func TestSessionLifecycleWithSQLite(t *testing.T) {
 	if err := computeStore.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accessStore, datasets, computeStore)
+	ruleStore, err := rules.NewStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ruleStore.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accessStore, datasets, computeStore,
+		WithRuleStore(ruleStore),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1142,6 +1176,20 @@ func TestSessionLifecycleWithSQLite(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
+	ruleRequest := httptest.NewRequest(http.MethodPost, "/api/v1/rules", bytes.NewBufferString(
+		`{"definition":{"name":"Lifecycle EMA rule","logic":"AND","signal_type":"BUY","cooldown_sec":60,"conditions":[{"left":"EMA9","op":">","right":"EMA20"}]}}`,
+	))
+	ruleRequest.Header.Set("Authorization", "Bearer user-token")
+	ruleRequest.Header.Set("X-App-Session", created.Token)
+	ruleResponse := httptest.NewRecorder()
+	server.ServeHTTP(ruleResponse, ruleRequest)
+	if ruleResponse.Code != http.StatusCreated {
+		t.Fatalf("rule status = %d, body = %s", ruleResponse.Code, ruleResponse.Body.String())
+	}
+	var userRule rules.Rule
+	if err := json.Unmarshal(ruleResponse.Body.Bytes(), &userRule); err != nil {
+		t.Fatal(err)
+	}
 	prepareRequest := httptest.NewRequest(http.MethodPost, "/api/v1/datasets/prepare",
 		bytes.NewBufferString(`{"purpose":"screen","market":"IDX","symbols":["BBCA.JK"],"timeframe":"1d","date_from":"2026-01-01","date_to":"2026-02-09"}`))
 	prepareRequest.Header.Set("Authorization", "Bearer user-token")
@@ -1165,8 +1213,8 @@ func TestSessionLifecycleWithSQLite(t *testing.T) {
 	}
 	computeBody, _ := json.Marshal(map[string]string{
 		"purpose": "screen", "dataset_id": manifest.DatasetID, "dataset_version": manifest.Version,
-		"dataset_checksum": manifest.Checksum, "rule_id": core.BaselineRuleID,
-		"definition_hash": core.BaselineRuleHash, "engine_version": core.EngineVersion,
+		"dataset_checksum": manifest.Checksum, "rule_id": userRule.ID,
+		"definition_hash": userRule.DefinitionHash, "engine_version": core.EngineVersion,
 		"schema_version": core.SchemaVersion,
 	})
 	computeRequest := httptest.NewRequest(http.MethodPost, "/api/v1/compute-grants", bytes.NewReader(computeBody))
