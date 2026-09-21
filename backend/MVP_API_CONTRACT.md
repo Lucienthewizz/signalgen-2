@@ -43,6 +43,7 @@ that the remaining proposed routes are available.
 - Unknown enum/field policy is schema-specific; writes reject unknown fields. IDs opaque; clients do not infer ownership.
 - Protected/private responses: `Cache-Control: private, no-store`. Versioned WASM public asset may use immutable cache.
 - JSON request bodies are limited to 64 KiB and oversized bodies fail with `413 PAYLOAD_TOO_LARGE`.
+- Sensitive mutations are rate-limited per authenticated account and operation group. A rejected request returns `429 RATE_LIMITED` with `Retry-After` in seconds. The MVP limiter is process-local; multi-instance deployment requires a shared limiter or API gateway.
 
 Success envelope is resource-specific. Error envelope:
 

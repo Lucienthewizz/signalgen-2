@@ -17,6 +17,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/ratelimit"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/storage"
@@ -30,6 +31,7 @@ func main() {
 	address := environment("SIGNALGEN_GO_API_ADDR", ":8080")
 	allowedOrigins := commaSeparatedEnvironment("SIGNALGEN_CORS_ORIGINS")
 	maxActiveSessions := positiveIntegerEnvironment("SIGNALGEN_MAX_ACTIVE_SESSIONS", 3)
+	mutationRatePerMinute := positiveIntegerEnvironment("SIGNALGEN_MUTATION_RATE_LIMIT_PER_MINUTE", 60)
 
 	identity, err := auth.NewSupabaseVerifier(projectURL, publishableKey, nil)
 	if err != nil {
@@ -72,9 +74,14 @@ func main() {
 	if err := ruleStore.Migrate(context.Background()); err != nil {
 		log.Fatal(err)
 	}
+	mutationLimiter, err := ratelimit.New(mutationRatePerMinute, time.Minute)
+	if err != nil {
+		log.Fatal(err)
+	}
 	handler, err := apihttp.NewServer(
 		identity, sessions, accessStore, datasets, computeStore,
 		apihttp.WithRuleStore(ruleStore),
+		apihttp.WithRateLimiter(mutationLimiter),
 		apihttp.WithCORSOrigins(allowedOrigins),
 		apihttp.WithReadinessChecks(sessions, accessStore, datasets, computeStore, ruleStore),
 	)

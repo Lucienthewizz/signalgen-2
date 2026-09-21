@@ -105,6 +105,7 @@ eksplisit pada `SIGNALGEN_CORS_ORIGINS` (dipisahkan koma). Contoh development:
 ```env
 SIGNALGEN_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 SIGNALGEN_MAX_ACTIVE_SESSIONS=3
+SIGNALGEN_MUTATION_RATE_LIMIT_PER_MINUTE=60
 ```
 
 Konfigurasi ini tidak menerima wildcard. Request browser yang diizinkan dapat
@@ -114,6 +115,13 @@ Electron/server-side yang tidak mengirim header `Origin` tidak terpengaruh.
 Semua body JSON dibatasi maksimal 64 KiB. Request yang melewati batas ditolak
 dengan `413 PAYLOAD_TOO_LARGE`, termasuk jika JSON valid diletakkan sebelum data
 tambahan yang terlalu besar.
+
+Endpoint mutasi sensitif dibatasi per akun dan kelompok operasi. Nilai default
+adalah 60 request per menit dan dapat diubah melalui
+`SIGNALGEN_MUTATION_RATE_LIMIT_PER_MINUTE`. Saat batas tercapai, API mengirim
+`429 RATE_LIMITED` beserta header `Retry-After`. Limiter MVP ini tersimpan di
+memori proses, sehingga deployment multi-instance nantinya perlu limiter bersama
+seperti Redis atau rate limit pada API gateway.
 
 Batas sesi aktif berlaku per pengguna. Pembuatan sesi pada `installation_id`
 yang sama mengganti dan mencabut sesi lama secara atomik. Pembuatan sesi dari

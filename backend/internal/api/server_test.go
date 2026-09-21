@@ -19,6 +19,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/ratelimit"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
@@ -396,6 +397,38 @@ func TestJSONBodyLimitRejectsValidPrefixWithOversizedTrailingData(t *testing.T) 
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 	assertErrorCode(t, response, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE")
+}
+
+func TestMutationRateLimitReturnsRetryAfter(t *testing.T) {
+	limiter, err := ratelimit.New(1, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, &fakeSessions{},
+		&fakeAccess{}, &fakeDatasets{}, &fakeCompute{}, WithRateLimiter(limiter),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := func() *httptest.ResponseRecorder {
+		request := httptest.NewRequest(
+			http.MethodPost, "/api/v1/sessions",
+			strings.NewReader(`{"installation_id":"install-a","label":"Chrome"}`),
+		)
+		request.Header.Set("Authorization", "Bearer user-token")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		return response
+	}
+	if response := call(); response.Code != http.StatusCreated {
+		t.Fatalf("first status = %d, body = %s", response.Code, response.Body.String())
+	}
+	response := call()
+	assertErrorCode(t, response, http.StatusTooManyRequests, "RATE_LIMITED")
+	if response.Header().Get("Retry-After") == "" {
+		t.Fatal("rate-limited response omitted Retry-After")
+	}
 }
 
 func TestCapabilitiesRequiresBearerAndMatchingAppSession(t *testing.T) {

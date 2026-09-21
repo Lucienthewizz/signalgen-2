@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -94,6 +95,14 @@ type ReadinessChecker interface {
 	Ready(ctx context.Context) error
 }
 
+type RateLimiter interface {
+	Allow(key string) (bool, time.Duration)
+}
+
+type unlimitedRateLimiter struct{}
+
+func (unlimitedRateLimiter) Allow(string) (bool, time.Duration) { return true, 0 }
+
 type Server struct {
 	identity IdentityVerifier
 	sessions SessionStore
@@ -101,6 +110,7 @@ type Server struct {
 	datasets DatasetStore
 	compute  ComputeStore
 	rules    RuleStore
+	limiter  RateLimiter
 	handler  http.Handler
 }
 
@@ -120,6 +130,7 @@ type serverConfig struct {
 	allowedOrigins  map[string]struct{}
 	readinessChecks []ReadinessChecker
 	ruleStore       RuleStore
+	rateLimiter     RateLimiter
 }
 
 func WithReadinessChecks(checkers ...ReadinessChecker) ServerOption {
@@ -140,6 +151,16 @@ func WithRuleStore(store RuleStore) ServerOption {
 			return fmt.Errorf("rule store is required")
 		}
 		config.ruleStore = store
+		return nil
+	}
+}
+
+func WithRateLimiter(limiter RateLimiter) ServerOption {
+	return func(config *serverConfig) error {
+		if limiter == nil {
+			return fmt.Errorf("rate limiter is required")
+		}
+		config.rateLimiter = limiter
 		return nil
 	}
 }
@@ -181,9 +202,12 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	if config.ruleStore == nil {
 		config.ruleStore = noUserRuleStore{}
 	}
+	if config.rateLimiter == nil {
+		config.rateLimiter = unlimitedRateLimiter{}
+	}
 	server := &Server{
 		identity: identity, sessions: sessions, access: accessStore,
-		datasets: datasets, compute: computeStore, rules: config.ruleStore,
+		datasets: datasets, compute: computeStore, rules: config.ruleStore, limiter: config.rateLimiter,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", server.health)
@@ -236,6 +260,9 @@ func (server *Server) ready(checkers []ReadinessChecker) http.HandlerFunc {
 func (server *Server) createSession(writer http.ResponseWriter, request *http.Request) {
 	principal, ok := server.requirePrincipal(writer, request)
 	if !ok {
+		return
+	}
+	if !server.allowRate(writer, request, "sessions:create", principal.ID) {
 		return
 	}
 	var input struct {
@@ -332,6 +359,9 @@ func (server *Server) createRule(writer http.ResponseWriter, request *http.Reque
 	if !ok {
 		return
 	}
+	if !server.allowRate(writer, request, "rules:write", principal.ID) {
+		return
+	}
 	var input struct {
 		Definition core.RuleSnapshot `json:"definition"`
 	}
@@ -351,6 +381,9 @@ func (server *Server) createRule(writer http.ResponseWriter, request *http.Reque
 func (server *Server) updateRule(writer http.ResponseWriter, request *http.Request) {
 	principal, ok := server.requireRuleAccess(writer, request)
 	if !ok {
+		return
+	}
+	if !server.allowRate(writer, request, "rules:write", principal.ID) {
 		return
 	}
 	if request.PathValue("id") == core.BaselineRuleID {
@@ -379,6 +412,9 @@ func (server *Server) updateRule(writer http.ResponseWriter, request *http.Reque
 func (server *Server) deleteRule(writer http.ResponseWriter, request *http.Request) {
 	principal, ok := server.requireRuleAccess(writer, request)
 	if !ok {
+		return
+	}
+	if !server.allowRate(writer, request, "rules:write", principal.ID) {
 		return
 	}
 	if request.PathValue("id") == core.BaselineRuleID {
@@ -528,6 +564,9 @@ func (server *Server) prepareDataset(writer http.ResponseWriter, request *http.R
 	if !ok {
 		return
 	}
+	if !server.allowRate(writer, request, "datasets:prepare", principal.ID) {
+		return
+	}
 	var input dataset.PrepareRequest
 	if err := decodeJSON(request, &input); err != nil {
 		writeJSONInputError(writer, request, err, "Permintaan dataset tidak valid.")
@@ -605,6 +644,9 @@ func (server *Server) datasetContent(writer http.ResponseWriter, request *http.R
 func (server *Server) createComputeGrant(writer http.ResponseWriter, request *http.Request) {
 	principal, appSession, _, ok := server.requireAppSession(writer, request)
 	if !ok {
+		return
+	}
+	if !server.allowRate(writer, request, "compute-grants:create", principal.ID) {
 		return
 	}
 	var input struct {
@@ -695,6 +737,9 @@ func (server *Server) createOperatorGrant(writer http.ResponseWriter, request *h
 	if !ok {
 		return
 	}
+	if !server.allowRate(writer, request, "operator:write", principal.ID) {
+		return
+	}
 	var input struct {
 		UserID     string    `json:"user_id"`
 		Feature    string    `json:"feature"`
@@ -724,6 +769,9 @@ func (server *Server) createOperatorGrant(writer http.ResponseWriter, request *h
 func (server *Server) revokeOperatorGrant(writer http.ResponseWriter, request *http.Request) {
 	principal, _, ok := server.requireOperator(writer, request)
 	if !ok {
+		return
+	}
+	if !server.allowRate(writer, request, "operator:write", principal.ID) {
 		return
 	}
 	var input struct {
@@ -760,6 +808,9 @@ func writeOperatorGrantError(writer http.ResponseWriter, request *http.Request, 
 func (server *Server) changeOperatorAccountRole(writer http.ResponseWriter, request *http.Request) {
 	principal, _, ok := server.requireOperator(writer, request)
 	if !ok {
+		return
+	}
+	if !server.allowRate(writer, request, "operator:write", principal.ID) {
 		return
 	}
 	var input struct {
@@ -931,6 +982,20 @@ func writeJSONInputError(writer http.ResponseWriter, request *http.Request, err 
 		return
 	}
 	writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", invalidMessage)
+}
+
+func (server *Server) allowRate(writer http.ResponseWriter, request *http.Request, operation, userID string) bool {
+	allowed, retryAfter := server.limiter.Allow(operation + ":" + userID)
+	if allowed {
+		return true
+	}
+	retrySeconds := int64((retryAfter + time.Second - 1) / time.Second)
+	if retrySeconds < 1 {
+		retrySeconds = 1
+	}
+	writer.Header().Set("Retry-After", strconv.FormatInt(retrySeconds, 10))
+	writeError(writer, request, http.StatusTooManyRequests, "RATE_LIMITED", "Terlalu banyak permintaan; coba lagi nanti.")
+	return false
 }
 
 func writeJSON(writer http.ResponseWriter, status int, value interface{}) {

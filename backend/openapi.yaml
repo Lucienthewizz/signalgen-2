@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     Supabase performs identity login; this API verifies its bearer token and
@@ -90,6 +90,8 @@ paths:
                 error: {code: DEVICE_LIMIT_REACHED, message: Batas sesi aktif sudah tercapai., request_id: req_opaque}
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "422":
           $ref: "#/components/responses/InvalidRequest"
         "503":
@@ -267,6 +269,8 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "422":
           $ref: "#/components/responses/InvalidRequest"
         "503":
@@ -341,6 +345,8 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "422":
           $ref: "#/components/responses/InvalidRequest"
         "503":
@@ -380,6 +386,8 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "422":
           $ref: "#/components/responses/InvalidRequest"
         "503":
@@ -416,6 +424,8 @@ paths:
           $ref: "#/components/responses/EntitlementRequired"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "422":
           $ref: "#/components/responses/InvalidRequest"
         "503":
@@ -514,6 +524,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "422":
           $ref: "#/components/responses/InvalidRequest"
         "503":
@@ -582,6 +594,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "422":
           $ref: "#/components/responses/InvalidRequest"
         "503":
@@ -619,6 +633,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "422":
           $ref: "#/components/responses/InvalidRequest"
         "503":
@@ -671,6 +687,8 @@ paths:
                 error: {code: LAST_OPERATOR_REQUIRED, message: Operator aktif terakhir tidak dapat diturunkan rolenya., request_id: req_opaque}
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "422":
           $ref: "#/components/responses/InvalidRequest"
         "503":
@@ -784,6 +802,20 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
           example:
             error: {code: PAYLOAD_TOO_LARGE, message: Body JSON melebihi batas 64 KiB., request_id: req_opaque}
+    RateLimited:
+      description: The authenticated account exceeded the mutation limit for this operation group.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/PrivateNoStore"
+        Retry-After:
+          description: Whole seconds until the current rate-limit window resets.
+          schema: {type: integer, minimum: 1}
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error: {code: RATE_LIMITED, message: Terlalu banyak permintaan. Coba lagi nanti., request_id: req_opaque}
     ServiceUnavailable:
       description: A required local or upstream dependency is unavailable.
       headers:
