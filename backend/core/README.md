@@ -34,5 +34,8 @@ docker build -f backend/Go.Dockerfile --target wasm-artifact \
   --output type=local,dest=frontend/web/public/wasm .
 ```
 
-`signalgen_core.wasm` and `wasm_exec.js` must always come from the same Go
-toolchain build. Generated artifacts are build outputs and are not committed.
+The output contains `signalgen_core.wasm`, `wasm_exec.js`, and
+`signalgen_core.manifest.json`. The manifest records the exact engine, schema,
+capabilities, worker protocol, byte sizes, and SHA-256 values expected by the frontend.
+The WASM and runtime files must always come from the same Go toolchain build.
+Generated artifacts are build outputs and are not committed.

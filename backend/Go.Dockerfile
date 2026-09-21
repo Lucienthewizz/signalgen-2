@@ -44,7 +44,11 @@ FROM source AS wasm-build
 
 RUN mkdir -p /out \
     && GOOS=js GOARCH=wasm go build -trimpath -o /out/signalgen_core.wasm ./cmd/wasm \
-    && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /out/wasm_exec.js
+    && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /out/wasm_exec.js \
+    && go run ./cmd/wasmmanifest \
+        --wasm /out/signalgen_core.wasm \
+        --runtime /out/wasm_exec.js \
+        --output /out/signalgen_core.manifest.json
 
 
 FROM scratch AS wasm-artifact

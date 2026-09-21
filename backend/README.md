@@ -43,6 +43,17 @@ Core Go/WASM dapat diuji tanpa memasang Go lokal:
 docker build -f backend/Go.Dockerfile --target test .
 ```
 
+Artefak browser dibangun bersama manifest checksum/versinya:
+
+```bash
+docker build -f backend/Go.Dockerfile --target wasm-artifact \
+  --output type=local,dest=frontend/web/public/wasm .
+```
+
+Frontend harus memverifikasi checksum WASM dan runtime dari
+`signalgen_core.manifest.json` sebelum menjalankan `signalgen_core.wasm`; file
+WASM dan `wasm_exec.js` wajib berasal dari build yang sama.
+
 `internal/auth` memverifikasi bearer ke Supabase Auth menggunakan publishable
 key. Package tersebut hanya menghasilkan principal (`id` dan `email`); role,
 status akun, sesi aplikasi, dan entitlement tetap harus dibaca dari storage
