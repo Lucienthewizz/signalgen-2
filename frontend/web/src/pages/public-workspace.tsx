@@ -1,12 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  ArrowRight,
-  Check,
-  LayoutDashboard,
-  LogIn,
-  ShieldCheck,
-  Star,
-} from "lucide-react";
+import { ArrowRight, Check, ShieldCheck, Star } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { FeatureFigure } from "@/components/feature-figure";
 import { MarketTrace } from "@/components/market-trace";
@@ -133,61 +126,26 @@ export function PublicWorkspace({
               <a href="#reviews">Rating</a>
               <a href="#faq">FAQ</a>
               <a href="#app/overview">Demo</a>
-              <a
-                className="landing-header__session"
-                href={user ? "#app/overview" : "#login"}
-              >
-                {user ? "Dashboard" : "Masuk"}
-              </a>
             </nav>
+            <a
+              className="landing-header__session"
+              href={user ? "#app/overview" : "#login"}
+            >
+              {user ? "Dashboard" : "Masuk"}
+            </a>
           </div>
         </header>
         <div className="workspace__content landing-content">
-          <div
-            className={`verification-rail ${backendOnline ? "" : "is-offline"}`}
-          >
-            <span>
-              <i />{" "}
-              {backendOnline
-                ? "Backend base API terjangkau"
-                : "Backend base API belum terjangkau"}
-            </span>
-            <b>Analisis pada preview memakai fixture lokal</b>
-            <small>Tidak ada data live</small>
-          </div>
           <section className="market-hero">
             <div className="market-hero__chart" aria-hidden="true">
               <MarketTrace />
             </div>
-            <svg
-              className="market-hero__divider"
-              viewBox="0 0 120 640"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            >
-              <defs>
-                <linearGradient
-                  id="hero-divider-gradient"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop offset="0" stopColor="#214a34" stopOpacity="0" />
-                  <stop offset="0.2" stopColor="#3b8a5c" stopOpacity="0.58" />
-                  <stop offset="0.76" stopColor="#285f40" stopOpacity="0.42" />
-                  <stop offset="1" stopColor="#173322" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M78 0C88 118 30 182 40 306C49 418 90 432 73 640"
-                fill="none"
-                stroke="url(#hero-divider-gradient)"
-                strokeWidth="1.2"
-                vectorEffect="non-scaling-stroke"
-              />
-            </svg>
             <div className="market-hero__copy">
+              <span
+                className={`hero-data-note ${backendOnline ? "is-online" : ""}`}
+              >
+                <i /> Preview fixture lokal · Data tidak live
+              </span>
               <h2>
                 Read the market.
                 <br />
@@ -223,30 +181,6 @@ export function PublicWorkspace({
                 </span>
               </div>
             </div>
-            <aside className="hero-dashboard-cta" aria-label="Akses workspace">
-              <span className="hero-dashboard-cta__status">
-                <i /> {user ? "Sesi Anda aktif" : "Siap untuk digunakan"}
-              </span>
-              <a
-                className="liquid-glass-button"
-                href={user ? "#app/overview" : "#login"}
-              >
-                <span className="liquid-glass-button__icon">
-                  {user ? <LayoutDashboard /> : <LogIn />}
-                </span>
-                <span>
-                  <strong>
-                    {user ? "Buka dashboard" : "Masuk ke Signalgen"}
-                  </strong>
-                  <small>
-                    {user
-                      ? "Lanjutkan ke workspace Anda"
-                      : "Login untuk membuka workspace"}
-                  </small>
-                </span>
-                <ArrowRight className="liquid-glass-button__arrow" />
-              </a>
-            </aside>
           </section>
           <section className="capability-section" id="capabilities">
             <div className="section-heading split-heading">
