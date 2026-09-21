@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -23,6 +24,8 @@ import (
 )
 
 const maxJSONBody = 64 << 10
+
+var errJSONBodyTooLarge = errors.New("JSON body exceeds limit")
 
 type IdentityVerifier interface {
 	Verify(ctx context.Context, accessToken string) (auth.Principal, error)
@@ -244,7 +247,7 @@ func (server *Server) createSession(writer http.ResponseWriter, request *http.Re
 		} `json:"client"`
 	}
 	if err := decodeJSON(request, &input); err != nil {
-		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Body sesi tidak valid.")
+		writeJSONInputError(writer, request, err, "Body sesi tidak valid.")
 		return
 	}
 	if _, err := server.access.EnsureProfile(request.Context(), principal.ID, principal.Email); err != nil {
@@ -333,7 +336,7 @@ func (server *Server) createRule(writer http.ResponseWriter, request *http.Reque
 		Definition core.RuleSnapshot `json:"definition"`
 	}
 	if err := decodeJSON(request, &input); err != nil {
-		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Body rule tidak valid.")
+		writeJSONInputError(writer, request, err, "Body rule tidak valid.")
 		return
 	}
 	rule, err := server.rules.Create(request.Context(), principal.ID, input.Definition)
@@ -359,7 +362,7 @@ func (server *Server) updateRule(writer http.ResponseWriter, request *http.Reque
 		Definition core.RuleSnapshot `json:"definition"`
 	}
 	if err := decodeJSON(request, &input); err != nil {
-		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Body rule tidak valid.")
+		writeJSONInputError(writer, request, err, "Body rule tidak valid.")
 		return
 	}
 	rule, err := server.rules.Update(
@@ -386,7 +389,7 @@ func (server *Server) deleteRule(writer http.ResponseWriter, request *http.Reque
 		Version int `json:"version"`
 	}
 	if err := decodeJSON(request, &input); err != nil {
-		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Versi rule wajib diisi.")
+		writeJSONInputError(writer, request, err, "Versi rule wajib diisi.")
 		return
 	}
 	if err := server.rules.Delete(request.Context(), principal.ID, request.PathValue("id"), input.Version); err != nil {
@@ -527,7 +530,7 @@ func (server *Server) prepareDataset(writer http.ResponseWriter, request *http.R
 	}
 	var input dataset.PrepareRequest
 	if err := decodeJSON(request, &input); err != nil {
-		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Permintaan dataset tidak valid.")
+		writeJSONInputError(writer, request, err, "Permintaan dataset tidak valid.")
 		return
 	}
 	feature, ok := featureForPurpose(input.Purpose)
@@ -615,7 +618,7 @@ func (server *Server) createComputeGrant(writer http.ResponseWriter, request *ht
 		SchemaVersion   string `json:"schema_version"`
 	}
 	if err := decodeJSON(request, &input); err != nil {
-		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Permintaan compute grant tidak valid.")
+		writeJSONInputError(writer, request, err, "Permintaan compute grant tidak valid.")
 		return
 	}
 	feature, supported := featureForPurpose(input.Purpose)
@@ -699,7 +702,7 @@ func (server *Server) createOperatorGrant(writer http.ResponseWriter, request *h
 		Reason     string    `json:"reason"`
 	}
 	if err := decodeJSON(request, &input); err != nil {
-		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Body grant tidak valid.")
+		writeJSONInputError(writer, request, err, "Body grant tidak valid.")
 		return
 	}
 	if _, err := server.access.RequireActive(request.Context(), input.UserID); err != nil {
@@ -727,7 +730,7 @@ func (server *Server) revokeOperatorGrant(writer http.ResponseWriter, request *h
 		Reason string `json:"reason"`
 	}
 	if err := decodeJSON(request, &input); err != nil {
-		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Body revoke tidak valid.")
+		writeJSONInputError(writer, request, err, "Body revoke tidak valid.")
 		return
 	}
 	if err := server.access.RevokeFeatureAudited(
@@ -764,7 +767,7 @@ func (server *Server) changeOperatorAccountRole(writer http.ResponseWriter, requ
 		Reason string `json:"reason"`
 	}
 	if err := decodeJSON(request, &input); err != nil {
-		writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", "Body perubahan role tidak valid.")
+		writeJSONInputError(writer, request, err, "Body perubahan role tidak valid.")
 		return
 	}
 	accountRole, err := server.access.SetRoleAudited(
@@ -904,7 +907,14 @@ func writeSessionError(writer http.ResponseWriter, request *http.Request, err er
 }
 
 func decodeJSON(request *http.Request, target interface{}) error {
-	decoder := json.NewDecoder(io.LimitReader(request.Body, maxJSONBody))
+	raw, err := io.ReadAll(io.LimitReader(request.Body, maxJSONBody+1))
+	if err != nil {
+		return err
+	}
+	if len(raw) > maxJSONBody {
+		return errJSONBodyTooLarge
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
@@ -913,6 +923,14 @@ func decodeJSON(request *http.Request, target interface{}) error {
 		return fmt.Errorf("request must contain one JSON object")
 	}
 	return nil
+}
+
+func writeJSONInputError(writer http.ResponseWriter, request *http.Request, err error, invalidMessage string) {
+	if errors.Is(err, errJSONBodyTooLarge) {
+		writeError(writer, request, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "Body JSON melebihi batas 64 KiB.")
+		return
+	}
+	writeError(writer, request, http.StatusBadRequest, "INVALID_REQUEST", invalidMessage)
 }
 
 func writeJSON(writer http.ResponseWriter, status int, value interface{}) {

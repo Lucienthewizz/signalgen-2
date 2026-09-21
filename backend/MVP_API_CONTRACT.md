@@ -42,6 +42,7 @@ that the remaining proposed routes are available.
 - Money/quantity: decimal string. OHLC values: decimal string on wire; conversion to core format is versioned and tested.
 - Unknown enum/field policy is schema-specific; writes reject unknown fields. IDs opaque; clients do not infer ownership.
 - Protected/private responses: `Cache-Control: private, no-store`. Versioned WASM public asset may use immutable cache.
+- JSON request bodies are limited to 64 KiB and oversized bodies fail with `413 PAYLOAD_TOO_LARGE`.
 
 Success envelope is resource-specific. Error envelope:
 
@@ -66,7 +67,7 @@ Stable HTTP/code minimum:
 | 403 | `ACCOUNT_SUSPENDED`, `SESSION_REVOKED`, `SESSION_EXPIRED`, `ENTITLEMENT_REQUIRED`, `ROLE_REQUIRED` |
 | 404 | `RESOURCE_NOT_FOUND` (consistent for non-owner/private missing) |
 | 409 | `VERSION_CONFLICT`, `DEVICE_LIMIT_REACHED`, `IDEMPOTENCY_CONFLICT`, `POSITION_INSUFFICIENT` |
-| 413/429 | `DATASET_LIMIT_EXCEEDED`, `RATE_LIMITED` |
+| 413/429 | `PAYLOAD_TOO_LARGE`, `DATASET_LIMIT_EXCEEDED`, `RATE_LIMITED` |
 | 502/503 | `PROVIDER_UNAVAILABLE`, `SERVICE_UNAVAILABLE` |
 
 ## 2. Auth/account/session routes

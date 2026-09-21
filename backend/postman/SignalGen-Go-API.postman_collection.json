@@ -109,6 +109,28 @@
           ], "type": "text/javascript"}}]
         },
         {
+          "name": "Oversized JSON is rejected",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{{oversized_json}}"},
+            "url": "{{base_url}}/api/v1/sessions"
+          },
+          "event": [
+            {"listen": "prerequest", "script": {"exec": [
+              "pm.variables.set('oversized_json', JSON.stringify({ installation_id: 'oversized-postman', label: 'x'.repeat(65536) }));"
+            ], "type": "text/javascript"}},
+            {"listen": "test", "script": {"exec": [
+              "pm.test('status 413', () => pm.response.to.have.status(413));",
+              "pm.test('stable payload limit code', () => pm.expect(pm.response.json().error.code).to.eql('PAYLOAD_TOO_LARGE'));",
+              "pm.variables.unset('oversized_json');"
+            ], "type": "text/javascript"}}
+          ]
+        },
+        {
           "name": "List owner sessions",
           "request": {
             "method": "GET",

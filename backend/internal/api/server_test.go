@@ -386,6 +386,18 @@ func TestCreateSessionReturnsStableLimitError(t *testing.T) {
 	assertErrorCode(t, response, http.StatusConflict, "DEVICE_LIMIT_REACHED")
 }
 
+func TestJSONBodyLimitRejectsValidPrefixWithOversizedTrailingData(t *testing.T) {
+	server := testServer(
+		t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, &fakeSessions{},
+	)
+	body := `{"installation_id":"install-a","label":"Chrome"}` + strings.Repeat(" ", maxJSONBody)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/sessions", strings.NewReader(body))
+	request.Header.Set("Authorization", "Bearer user-token")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE")
+}
+
 func TestCapabilitiesRequiresBearerAndMatchingAppSession(t *testing.T) {
 	sessions := &fakeSessions{}
 	server := testServer(t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions)

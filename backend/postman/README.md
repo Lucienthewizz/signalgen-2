@@ -79,6 +79,7 @@ ditolak. Untuk mengulang pengujian, jalankan kembali **Create app session**.
 - request tanpa bearer ditolak;
 - login Supabase menghasilkan access token;
 - app-session dibuat dan token mentah tidak muncul dalam metadata;
+- body JSON di atas 64 KiB ditolak dengan `413 PAYLOAD_TOO_LARGE`;
 - profil, entitlement, dan sesi hanya dibaca untuk pemiliknya;
 - role user biasa ditolak dari endpoint operator;
 - endpoint operator mengambil actor audit dari identitas login;

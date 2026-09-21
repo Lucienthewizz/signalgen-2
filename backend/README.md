@@ -111,6 +111,10 @@ Konfigurasi ini tidak menerima wildcard. Request browser yang diizinkan dapat
 mengirim header `Authorization`, `Content-Type`, dan `X-App-Session`. Client
 Electron/server-side yang tidak mengirim header `Origin` tidak terpengaruh.
 
+Semua body JSON dibatasi maksimal 64 KiB. Request yang melewati batas ditolak
+dengan `413 PAYLOAD_TOO_LARGE`, termasuk jika JSON valid diletakkan sebelum data
+tambahan yang terlalu besar.
+
 Batas sesi aktif berlaku per pengguna. Pembuatan sesi pada `installation_id`
 yang sama mengganti dan mencabut sesi lama secara atomik. Pembuatan sesi dari
 instalasi baru setelah batas tercapai menghasilkan `409 DEVICE_LIMIT_REACHED`;
