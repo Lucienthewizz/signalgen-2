@@ -563,36 +563,53 @@ a {
 }
 
 .landing-content > section:not(.market-hero),
-.landing-product-flow > section {
+.landing-stage > section {
   width: calc(100% - (var(--landing-rail-inset) * 2));
   margin-inline: auto;
 }
 
 .landing-product-flow {
-  position: relative;
-  isolation: isolate;
-  padding: 24px 0 68px;
-  background:
-    radial-gradient(
-      ellipse 80% 16% at 50% 10%,
-      rgba(31, 83, 53, 0.13),
-      transparent 76%
-    ),
-    radial-gradient(
-      ellipse 74% 14% at 50% 49%,
-      rgba(28, 76, 48, 0.1),
-      transparent 78%
-    ),
-    radial-gradient(
-      ellipse 72% 12% at 50% 84%,
-      rgba(24, 68, 43, 0.1),
-      transparent 80%
-    ),
-    #010302;
+  background: #010302;
 }
 
-.landing-product-flow > .pricing-section {
-  margin-top: 24px;
+.landing-stage {
+  padding: 12px 0;
+}
+
+.landing-stage:first-child {
+  padding-top: 24px;
+}
+
+.landing-stage:last-child {
+  padding-bottom: 68px;
+}
+
+.landing-stage--black {
+  background: #010302;
+}
+
+.landing-stage--green {
+  background:
+    radial-gradient(
+      ellipse 86% 78% at 50% 50%,
+      rgba(34, 91, 59, 0.12),
+      rgba(13, 35, 22, 0.06) 54%,
+      transparent 80%
+    ),
+    linear-gradient(
+      180deg,
+      #010302 0%,
+      rgba(4, 13, 8, 0.94) 22%,
+      rgba(4, 14, 9, 0.96) 78%,
+      #010302 100%
+    );
+}
+
+.landing-stage > .pricing-section,
+.landing-stage > .rating-section,
+.landing-stage > .faq-section,
+.landing-stage > .landing-cta {
+  margin-top: 0;
 }
 
 .market-hero {
@@ -1509,7 +1526,7 @@ a {
   margin-top: 0;
   border: 1px solid rgba(43, 70, 53, 0.58);
   border-radius: 18px;
-  background: rgba(2, 5, 3, 0.88);
+  background: rgba(2, 5, 3, 0.96);
   box-shadow: 0 30px 90px rgba(0, 8, 3, 0.26);
 }
 .capability-section .section-heading {
@@ -1705,9 +1722,6 @@ a {
     ),
     rgba(3, 10, 6, 0.72);
   box-shadow: 0 30px 90px rgba(0, 8, 3, 0.24);
-}
-.product-tour + .capability-section {
-  margin-top: 24px;
 }
 .product-tour__heading {
   min-height: 126px;
@@ -2051,7 +2065,7 @@ a {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(2, 5, 3, 0.88);
+  background: rgba(2, 5, 3, 0.96);
 }
 .rating-context {
   max-width: 820px;
@@ -2232,7 +2246,7 @@ a {
 }
 .landing-cta {
   margin-bottom: 0;
-  background: rgba(2, 6, 4, 0.9);
+  background: rgba(2, 5, 3, 0.96);
 }
 
 .demo-content {

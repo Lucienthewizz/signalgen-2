@@ -168,139 +168,151 @@ export function PublicWorkspace({
             </div>
           </section>
           <div className="landing-product-flow">
-            <section className="product-tour" id="product-tour">
-              <div className="product-tour__heading">
-                <div>
-                  <h3>See the workspace before you start.</h3>
-                  <p>
-                    Every preview comes directly from a feature you can explore
-                    now.
-                  </p>
-                </div>
-                <a
-                  href={`#app/${productViews[selectedView].id}`}
-                  className="text-link"
-                >
-                  Open {productViews[selectedView].label} <ArrowRight />
-                </a>
-              </div>
-              <div
-                className="product-tour__tabs"
-                role="tablist"
-                aria-label="Web feature preview"
-              >
-                {productViews.map((view, index) => {
-                  const Icon = view.icon;
-                  return (
-                    <button
-                      key={view.id}
-                      role="tab"
-                      aria-selected={selectedView === index}
-                      className={cn(
-                        "product-tour__tab",
-                        selectedView === index && "active",
-                      )}
-                      onClick={() => setSelectedView(index)}
-                    >
-                      <Icon aria-hidden="true" />
-                      <strong>{view.label}</strong>
-                    </button>
-                  );
-                })}
-              </div>
-              <figure className="product-tour__frame">
-                <div className="product-tour__image">
-                  <iframe
-                    key={productViews[selectedView].id}
-                    src={`?preview=product-tour#app/${productViews[selectedView].id}`}
-                    title={`Current ${productViews[selectedView].label} view in Signalgen web`}
-                    loading={selectedView === 0 ? "eager" : "lazy"}
-                    tabIndex={-1}
-                  />
-                </div>
-                <figcaption>
-                  <strong>{productViews[selectedView].label}</strong>
-                  <span>Live preview from the current workspace build.</span>
-                </figcaption>
-              </figure>
-            </section>
-            <section className="capability-section" id="capabilities">
-              <div className="section-heading split-heading">
-                <div>
-                  <h3>Every core feature in one workspace.</h3>
-                  <p>
-                    Explore the complete PRD workflow with one consistent demo
-                    dataset.
-                  </p>
-                </div>
-                <a className="ui-button" href="#app/overview">
-                  Open workspace <ArrowRight />
-                </a>
-              </div>
-              <div className="feature-gallery">
-                {capabilityViews.map((feature) => (
+            <div className="landing-stage landing-stage--black">
+              <section className="product-tour" id="product-tour">
+                <div className="product-tour__heading">
+                  <div>
+                    <h3>See the workspace before you start.</h3>
+                    <p>
+                      Every preview comes directly from a feature you can
+                      explore now.
+                    </p>
+                  </div>
                   <a
-                    className="feature-gallery__item"
-                    href={`#app/${feature.id}`}
-                    key={feature.id}
+                    href={`#app/${productViews[selectedView].id}`}
+                    className="text-link"
                   >
-                    <div className="feature-gallery__figure">
-                      <FeatureFigure kind={feature.id} />
-                    </div>
-                    <div className="feature-gallery__copy">
-                      <strong>{feature.title}</strong>
-                      <p>{feature.description}</p>
-                      <span>
-                        Open feature <ArrowRight />
-                      </span>
-                    </div>
+                    Open {productViews[selectedView].label} <ArrowRight />
                   </a>
-                ))}
-              </div>
-            </section>
-            <Pricing />
-            <section className="rating-section" id="reviews">
-              <div className="rating-context">
-                <h3>What Signalgen feels like in practice.</h3>
-                <p>
-                  Cards move horizontally and pause on hover or touch. These are
-                  demo profiles for UX review, not verified testimonials.
-                </p>
-              </div>
-              <TestimonialsMarquee testimonials={sampleRatings} />
-            </section>
-            <section className="faq-section" id="faq">
-              <div className="faq-intro">
-                <h3>Answers before you begin.</h3>
-                <p>
-                  Essential details about product scope, demo data, and the web
-                  MVP.
-                </p>
-              </div>
-              <Accordion className="faq-list" defaultValue={["faq-0"]}>
-                {faqItems.map(([question, answer], index) => (
-                  <AccordionItem key={question} value={`faq-${index}`}>
-                    <AccordionTrigger>{question}</AccordionTrigger>
-                    <AccordionContent>
-                      <p>{answer}</p>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </section>
-            <section className="boundary-panel landing-cta">
-              <ShieldCheck />
-              <div>
-                <h3>Analysis support, not investment advice.</h3>
-                <p>
-                  Start with the demo, review the complete workflow, then use
-                  your account when the backend is ready.
-                </p>
-              </div>
-              <a href="#app/overview">
-                Open the demo <ArrowRight />
-              </a>
-            </section>
+                </div>
+                <div
+                  className="product-tour__tabs"
+                  role="tablist"
+                  aria-label="Web feature preview"
+                >
+                  {productViews.map((view, index) => {
+                    const Icon = view.icon;
+                    return (
+                      <button
+                        key={view.id}
+                        role="tab"
+                        aria-selected={selectedView === index}
+                        className={cn(
+                          "product-tour__tab",
+                          selectedView === index && "active",
+                        )}
+                        onClick={() => setSelectedView(index)}
+                      >
+                        <Icon aria-hidden="true" />
+                        <strong>{view.label}</strong>
+                      </button>
+                    );
+                  })}
+                </div>
+                <figure className="product-tour__frame">
+                  <div className="product-tour__image">
+                    <iframe
+                      key={productViews[selectedView].id}
+                      src={`?preview=product-tour#app/${productViews[selectedView].id}`}
+                      title={`Current ${productViews[selectedView].label} view in Signalgen web`}
+                      loading={selectedView === 0 ? "eager" : "lazy"}
+                      tabIndex={-1}
+                    />
+                  </div>
+                  <figcaption>
+                    <strong>{productViews[selectedView].label}</strong>
+                    <span>Live preview from the current workspace build.</span>
+                  </figcaption>
+                </figure>
+              </section>
+            </div>
+            <div className="landing-stage landing-stage--green">
+              <section className="capability-section" id="capabilities">
+                <div className="section-heading split-heading">
+                  <div>
+                    <h3>Every core feature in one workspace.</h3>
+                    <p>
+                      Explore the complete PRD workflow with one consistent demo
+                      dataset.
+                    </p>
+                  </div>
+                  <a className="ui-button" href="#app/overview">
+                    Open workspace <ArrowRight />
+                  </a>
+                </div>
+                <div className="feature-gallery">
+                  {capabilityViews.map((feature) => (
+                    <a
+                      className="feature-gallery__item"
+                      href={`#app/${feature.id}`}
+                      key={feature.id}
+                    >
+                      <div className="feature-gallery__figure">
+                        <FeatureFigure kind={feature.id} />
+                      </div>
+                      <div className="feature-gallery__copy">
+                        <strong>{feature.title}</strong>
+                        <p>{feature.description}</p>
+                        <span>
+                          Open feature <ArrowRight />
+                        </span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            </div>
+            <div className="landing-stage landing-stage--black">
+              <Pricing />
+            </div>
+            <div className="landing-stage landing-stage--green">
+              <section className="rating-section" id="reviews">
+                <div className="rating-context">
+                  <h3>What Signalgen feels like in practice.</h3>
+                  <p>
+                    Cards move horizontally and pause on hover or touch. These
+                    are demo profiles for UX review, not verified testimonials.
+                  </p>
+                </div>
+                <TestimonialsMarquee testimonials={sampleRatings} />
+              </section>
+            </div>
+            <div className="landing-stage landing-stage--black">
+              <section className="faq-section" id="faq">
+                <div className="faq-intro">
+                  <h3>Answers before you begin.</h3>
+                  <p>
+                    Essential details about product scope, demo data, and the
+                    web MVP.
+                  </p>
+                </div>
+                <Accordion className="faq-list" defaultValue={["faq-0"]}>
+                  {faqItems.map(([question, answer], index) => (
+                    <AccordionItem key={question} value={`faq-${index}`}>
+                      <AccordionTrigger>{question}</AccordionTrigger>
+                      <AccordionContent>
+                        <p>{answer}</p>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </section>
+            </div>
+            <div className="landing-stage landing-stage--green">
+              <section className="boundary-panel landing-cta">
+                <ShieldCheck />
+                <div>
+                  <h3>Analysis support, not investment advice.</h3>
+                  <p>
+                    Start with the demo, review the complete workflow, then use
+                    your account when the backend is ready.
+                  </p>
+                </div>
+                <a href="#app/overview">
+                  Open the demo <ArrowRight />
+                </a>
+              </section>
+            </div>
           </div>
         </div>
       </section>
