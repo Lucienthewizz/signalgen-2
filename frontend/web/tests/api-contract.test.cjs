@@ -63,7 +63,7 @@ test("offline profile request preserves the session for retry", async () => {
 
 test("invalid login has a useful error without profile reset", async () => {
   const c = client(() => response({ detail: "Invalid email or password" }, 401));
-  await assert.rejects(c.api.login("demo@example.test", "wrong"), (error) => error.message.includes("Email atau password"));
+  await assert.rejects(c.api.login("demo@example.test", "wrong"), (error) => error.message.includes("email or password"));
   assert.deepEqual(c.events, []);
 });
 

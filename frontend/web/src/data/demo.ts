@@ -3,7 +3,7 @@ export type DemoRule = {
   name: string;
   logic: string;
   version: string;
-  scope: "System" | "Milik Anda";
+  scope: "System" | "Yours";
   enabled: boolean;
 };
 
@@ -39,7 +39,7 @@ export const demoRules: DemoRule[] = [
     name: "Pullback test",
     logic: "Trend up · Low ≤ EMA20 · Close > Open",
     version: "draft 03",
-    scope: "Milik Anda",
+    scope: "Yours",
     enabled: false,
   },
 ];
@@ -50,28 +50,28 @@ export const demoSignals = [
     state: "Match",
     close: "9.675",
     score: "86",
-    reason: "Trend, RSI, dan volume terkonfirmasi",
+    reason: "Trend, RSI, and volume confirmed",
   },
   {
     symbol: "TLKM",
     state: "Match",
     close: "3.180",
     score: "78",
-    reason: "Breakout valid; volume belum maksimal",
+    reason: "Valid breakout; volume is not yet optimal",
   },
   {
     symbol: "ASII",
     state: "Watch",
     close: "5.225",
     score: "64",
-    reason: "Trend valid; RSI masih di bawah batas",
+    reason: "Valid trend; RSI remains below the threshold",
   },
   {
     symbol: "BMRI",
     state: "No match",
     close: "6.025",
     score: "48",
-    reason: "Close kembali di bawah EMA20",
+    reason: "Close moved back below EMA20",
   },
 ];
 
@@ -101,38 +101,38 @@ export const demoSessions = [
     id: "current",
     device: "Chrome · MacBook Air",
     place: "Denpasar, ID",
-    active: "Sekarang",
+    active: "Now",
     current: true,
   },
   {
     id: "secondary",
     device: "Safari · iPhone",
     place: "Denpasar, ID",
-    active: "2 jam lalu",
+    active: "2 hours ago",
     current: false,
   },
 ];
 
 export const faqItems = [
   [
-    "Apakah Signalgen memberi rekomendasi beli atau jual?",
-    "Tidak. Signalgen membantu Anda menyusun rule dan membaca bukti di balik sebuah signal. Keputusan investasi tetap sepenuhnya milik pengguna.",
+    "Does Signalgen provide buy or sell recommendations?",
+    "No. Signalgen helps you build rules and inspect the evidence behind a signal. Every investment decision remains yours.",
   ],
   [
-    "Apakah data di preview ini live?",
-    "Belum. Seluruh angka di demo workspace adalah fixture statik untuk menguji alur dan kenyamanan UI sebelum API analisis tersedia.",
+    "Is the preview using live data?",
+    "No. Every value in the demo workspace is static fixture data used to evaluate the workflow before the analysis API is available.",
   ],
   [
-    "Apakah rule bisa dibuat sendiri?",
-    "Bisa pada scope MVP: pilih indikator, operator, dan nilai yang didukung. Rule sistem tetap read-only, sedangkan rule milik pengguna dapat diedit atau dihapus.",
+    "Can I create my own rules?",
+    "Yes, within the MVP scope. Choose from supported indicators, operators, and values. System rules remain read-only, while your rules can be edited or deleted.",
   ],
   [
-    "Bagaimana hasil analisis dijelaskan?",
-    "Setiap hasil menampilkan status kondisi, alasan match, asumsi, versi rule, dan kualitas data—bukan hanya label signal tanpa konteks.",
+    "How are analysis results explained?",
+    "Every result includes condition states, match reasons, assumptions, rule versions, and data quality—not just an isolated signal label.",
   ],
   [
-    "Apakah login web sudah terhubung?",
-    "Login, register, dan pembacaan profil memakai endpoint authorization yang tersedia. Status koneksi API selalu ditampilkan dan kegagalan tidak disamarkan.",
+    "Is web authentication connected?",
+    "Sign-in, registration, and profile retrieval use the available authorization endpoints. API connectivity is always visible, and failures are never hidden.",
   ],
 ];
 
@@ -142,41 +142,41 @@ export const sampleRatings = [
     initials: "IA",
     role: "Active investor",
     quote:
-      "Alurnya jelas: saya tahu rule apa yang berjalan dan kenapa sebuah saham lolos.",
+      "The workflow is clear: I can see which rule ran and why a stock passed.",
   },
   {
     score: "4.6",
     initials: "ST",
     role: "Swing trader",
     quote:
-      "Tabel hasilnya padat tapi tetap mudah dipindai. Status demo juga tidak menyesatkan.",
+      "The results table is dense but easy to scan, and the demo status is always clear.",
   },
   {
     score: "4.9",
     initials: "PR",
     role: "Research learner",
     quote:
-      "Bagian jurnal terasa menyatu dengan analisis, bukan fitur terpisah yang ditempel.",
+      "The journal feels connected to analysis instead of added as a separate feature.",
   },
   {
     score: "4.7",
     initials: "RA",
     role: "Rule analyst",
     quote:
-      "Saya bisa membandingkan kondisi rule tanpa kehilangan konteks hasil screening.",
+      "I can compare rule conditions without losing the screening context.",
   },
   {
     score: "4.8",
     initials: "PJ",
-    role: "Pengguna jurnal",
+    role: "Journal user",
     quote:
-      "Signal dapat dilanjutkan ke catatan transaksi tanpa mengulang data dari awal.",
+      "A signal can move into a trade record without re-entering the same data.",
   },
   {
     score: "4.6",
     initials: "PM",
-    role: "Penguji MVP",
+    role: "MVP tester",
     quote:
-      "Navigasi antarfungsi terasa konsisten dan status data demonstrasinya jelas.",
+      "Navigation stays consistent across features, and demo data is clearly labeled.",
   },
 ];

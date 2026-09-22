@@ -103,7 +103,7 @@ export default function App() {
           <Skeleton />
           <Skeleton />
         </div>
-        <p>Menyiapkan workspace…</p>
+        <p>Preparing your workspace…</p>
       </main>
     );
   }

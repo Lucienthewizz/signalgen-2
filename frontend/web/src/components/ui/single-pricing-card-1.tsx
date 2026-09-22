@@ -10,45 +10,41 @@ const plans = [
     name: "Free",
     monthlyPrice: "0",
     annualPrice: "0",
-    note: "Jelajahi alur Signalgen dengan data demonstrasi statik.",
+    note: "Explore the Signalgen workflow with static demo data.",
     badge: "Demo",
     featured: false,
     features: [
-      "Workspace demo",
-      "Data fixture lokal",
-      "Preview rule dan hasil",
+      "Demo workspace",
+      "Local fixture data",
+      "Rule and result previews",
     ],
-    action: "Buka demo",
+    action: "Open demo",
     href: "#app/overview",
   },
   {
     name: "Analyst",
     monthlyPrice: "79.000",
     annualPrice: "69.000",
-    note: "Toolkit lengkap untuk membangun dan menguji proses analisis.",
-    badge: "Direkomendasikan",
+    note: "A complete toolkit for building and testing an analysis workflow.",
+    badge: "Recommended",
     featured: true,
-    features: [
-      "Screening penuh",
-      "Custom rules dan backtest",
-      "Jurnal transaksi",
-    ],
-    action: "Pilih Analyst",
+    features: ["Full screening", "Custom rules and backtests", "Trade journal"],
+    action: "Choose Analyst",
     href: "#register",
   },
   {
     name: "Pro",
     monthlyPrice: "159.000",
     annualPrice: "139.000",
-    note: "Ruang lebih besar untuk workflow analisis yang lebih intensif.",
-    badge: "Batas lebih besar",
+    note: "Higher limits for more intensive analysis workflows.",
+    badge: "Higher limits",
     featured: false,
     features: [
-      "Semua fitur Analyst",
-      "Fitur lanjutan dan ekspor",
-      "Prioritas data dan support",
+      "Everything in Analyst",
+      "Advanced features and exports",
+      "Priority data and support",
     ],
-    action: "Pilih Pro",
+    action: "Choose Pro",
     href: "#register",
   },
 ] as const;
@@ -59,20 +55,20 @@ export function Pricing() {
   return (
     <section className="pricing-section" id="pricing">
       <div className="pricing-section__heading">
-        <h3>Akses Signalgen sesuai cara Anda menganalisis.</h3>
+        <h3>Choose access that fits your analysis.</h3>
         <p>
-          Mulai dari demo, lanjutkan ke workflow analisis penuh, lalu tingkatkan
-          batas saat kebutuhan Anda bertambah.
+          Start with the demo, move into the complete workflow, and increase
+          your limits as your needs grow.
         </p>
         <div className="pricing-billing">
-          <span className={!annual ? "active" : ""}>Bulanan</span>
+          <span className={!annual ? "active" : ""}>Monthly</span>
           <Switch
             checked={annual}
             onCheckedChange={setAnnual}
-            aria-label="Gunakan harga tahunan"
+            aria-label="Use annual pricing"
           />
-          <span className={annual ? "active" : ""}>Tahunan</span>
-          <Badge variant="secondary">Hemat hingga 13%</Badge>
+          <span className={annual ? "active" : ""}>Annual</span>
+          <Badge variant="secondary">Save up to 13%</Badge>
         </div>
       </div>
 
@@ -97,14 +93,14 @@ export function Pricing() {
               <strong key={`${plan.name}-${annual}`}>
                 {annual ? plan.annualPrice : plan.monthlyPrice}
               </strong>
-              <small>/ bulan</small>
+              <small>/ month</small>
             </div>
             <span className="pricing-plan__billing-note">
               {plan.name === "Free"
-                ? "Tidak memerlukan pembayaran"
+                ? "No payment required"
                 : annual
-                  ? "Ditagihkan tahunan"
-                  : "Ditagihkan bulanan"}
+                  ? "Billed annually"
+                  : "Billed monthly"}
             </span>
             <ul>
               {plan.features.map((feature) => (
@@ -130,8 +126,8 @@ export function Pricing() {
       </div>
 
       <p className="pricing-section__assurance">
-        <ShieldCheck aria-hidden="true" /> Harga masih berupa simulasi UI;
-        checkout belum diaktifkan.
+        <ShieldCheck aria-hidden="true" /> Pricing is a UI simulation; checkout
+        is not enabled yet.
       </p>
     </section>
   );

@@ -64,34 +64,33 @@ type JobState = "idle" | "preparing" | "running" | "completed" | "cancelled";
 
 const viewMeta: Record<DemoView, { title: string; description: string }> = {
   overview: {
-    title: "Ringkasan workspace",
-    description: "Peta fitur MVP dan status integrasi saat ini.",
+    title: "Workspace overview",
+    description: "A map of MVP features and their current integration status.",
   },
   analysis: {
-    title: "Jalankan analisis",
-    description:
-      "Konfigurasikan screening atau backtest dan periksa alasannya.",
+    title: "Run analysis",
+    description: "Configure a screening or backtest and inspect the evidence.",
   },
   rules: {
     title: "Rule management",
-    description: "Kelola rule sistem dan rule privat dalam scope MVP.",
+    description: "Manage system and private rules within the MVP scope.",
   },
   journal: {
-    title: "Jurnal transaksi",
-    description: "Catat transaksi dan telaah posisi dari satu alur.",
+    title: "Trade journal",
+    description: "Record trades and review positions in one workflow.",
   },
   access: {
-    title: "Akses & perangkat",
-    description: "Periksa entitlement, sesi, perangkat, dan cache pengguna.",
+    title: "Access & devices",
+    description: "Review entitlements, sessions, devices, and user cache.",
   },
 };
 
 const navItems: Array<{ view: DemoView; label: string; icon: typeof Gauge }> = [
   { view: "overview", label: "Overview", icon: Gauge },
-  { view: "analysis", label: "Analisis", icon: BarChart3 },
+  { view: "analysis", label: "Analysis", icon: BarChart3 },
   { view: "rules", label: "Rules", icon: Braces },
-  { view: "journal", label: "Jurnal", icon: BookOpenCheck },
-  { view: "access", label: "Akses", icon: ShieldCheck },
+  { view: "journal", label: "Journal", icon: BookOpenCheck },
+  { view: "access", label: "Access", icon: ShieldCheck },
 ];
 
 function DemoNotice() {
@@ -99,13 +98,12 @@ function DemoNotice() {
     <div className="demo-notice" role="note">
       <Database />
       <div>
-        <strong>Data demonstrasi aktif</strong>
+        <strong>Demo data is active</strong>
         <span>
-          Semua fitur dapat dijelajahi; perubahan lokal tersimpan selama sesi
-          ini.
+          Every feature is available; local changes persist for this session.
         </span>
       </div>
-      <Badge variant="outline">Data lokal</Badge>
+      <Badge variant="outline">Local data</Badge>
     </div>
   );
 }
@@ -117,39 +115,39 @@ function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
   const activeRules = demoRules.filter((rule) => rule.enabled).length;
   const metrics = [
     {
-      label: "Cakupan screening",
+      label: "Screening coverage",
       value: demoSignals.length.toString(),
-      unit: "emiten",
-      note: "Fixture IDX",
+      unit: "stocks",
+      note: "IDX fixture",
       icon: SearchCheck,
     },
     {
-      label: "Signal cocok",
+      label: "Matched signals",
       value: matchingSignals.toString(),
-      unit: `dari ${demoSignals.length}`,
-      note: "Lolos seluruh kondisi",
+      unit: `of ${demoSignals.length}`,
+      note: "Passed every condition",
       icon: LineChart,
     },
     {
-      label: "Rule aktif",
+      label: "Active rules",
       value: activeRules.toString(),
       unit: "rule",
-      note: "Versi tersimpan",
+      note: "Saved versions",
       icon: ListChecks,
     },
     {
-      label: "Posisi tercatat",
+      label: "Recorded positions",
       value: initialTransactions.length.toString(),
-      unit: "posisi",
-      note: "State jurnal lokal",
+      unit: "positions",
+      note: "Local journal state",
       icon: NotebookTabs,
     },
   ];
   const quickActions = [
-    ["Buka analisis", "Jalankan screening fixture", "analysis", BarChart3],
-    ["Kelola rules", "Periksa logika dan versi", "rules", Braces],
-    ["Lihat jurnal", "Lanjutkan signal ke posisi", "journal", BookOpenCheck],
-    ["Periksa akses", "Sesi dan perangkat aktif", "access", ShieldCheck],
+    ["Open analysis", "Run a fixture screening", "analysis", BarChart3],
+    ["Manage rules", "Review logic and versions", "rules", Braces],
+    ["Open journal", "Turn a signal into a position", "journal", BookOpenCheck],
+    ["Review access", "Check sessions and devices", "access", ShieldCheck],
   ] as const;
 
   return (
@@ -159,25 +157,22 @@ function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
           <span className="overview-eyebrow">
             <CircleDot /> Workspace snapshot
           </span>
-          <h2>Baca kondisi pasar dari satu layar.</h2>
+          <h2>Read the market from one screen.</h2>
           <p>
-            Pantau hasil screening, rule yang bekerja, dan posisi jurnal tanpa
-            kehilangan jejak alasan di balik setiap signal.
+            Track screening results, active rules, and journal positions without
+            losing the evidence behind each signal.
           </p>
         </div>
-        <div className="overview-summary__status" aria-label="Status workspace">
-          <span>Status workspace</span>
-          <strong>Siap diuji</strong>
-          <small>Authorization aktif · analisis memakai fixture lokal</small>
+        <div className="overview-summary__status" aria-label="Workspace status">
+          <span>Workspace status</span>
+          <strong>Ready to test</strong>
+          <small>Authorization active · analysis uses local fixtures</small>
           <button onClick={() => go("analysis")}>
-            Jalankan analisis <ChevronRight />
+            Run analysis <ChevronRight />
           </button>
         </div>
       </section>
-      <section
-        className="overview-metrics"
-        aria-label="Ringkasan data demonstrasi"
-      >
+      <section className="overview-metrics" aria-label="Demo data summary">
         {metrics.map(({ label, value, unit, note, icon: Icon }) => (
           <article key={label} className="overview-metric">
             <div>
@@ -196,26 +191,26 @@ function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
         <article className="overview-chart">
           <header>
             <div>
-              <span>SKOR SIGNAL · FIXTURE LOKAL</span>
-              <h3>Kualitas hasil screening</h3>
+              <span>SIGNAL SCORE · LOCAL FIXTURE</span>
+              <h3>Screening result quality</h3>
             </div>
             <div className="overview-chart__score">
               <strong>82</strong>
               <span>/ 100</span>
             </div>
           </header>
-          <div className="overview-chart__legend" aria-label="Legenda grafik">
+          <div className="overview-chart__legend" aria-label="Chart legend">
             <span>
-              <i className="is-primary" /> Skor gabungan
+              <i className="is-primary" /> Composite score
             </span>
             <span>
-              <i /> Ambang rule
+              <i /> Rule threshold
             </span>
-            <em>8 pemindaian terakhir</em>
+            <em>Last 8 scans</em>
           </div>
           <div
             className="overview-chart__plot"
-            aria-label="Grafik skor signal demonstrasi"
+            aria-label="Demo signal score chart"
           >
             <svg
               viewBox="0 0 800 280"
@@ -223,7 +218,7 @@ function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
               aria-labelledby="overview-chart-title"
             >
               <title id="overview-chart-title">
-                Skor signal dari delapan pemindaian fixture
+                Signal score across eight fixture scans
               </title>
               <defs>
                 <linearGradient id="overview-area" x1="0" y1="0" x2="0" y2="1">
@@ -256,19 +251,19 @@ function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
               </g>
             </svg>
             <div className="overview-chart__axis" aria-hidden="true">
-              <span>Awal sesi</span>
-              <span>Pemindaian terbaru</span>
+              <span>Session start</span>
+              <span>Latest scan</span>
             </div>
           </div>
           <footer>
             <div>
-              <span>Rule dominan</span>
+              <span>Dominant rule</span>
               <strong>Momentum confirmation</strong>
             </div>
             <div>
-              <span>Kualitas data</span>
+              <span>Data quality</span>
               <strong>
-                <Check /> Lengkap
+                <Check /> Complete
               </strong>
             </div>
             <div>
@@ -281,10 +276,10 @@ function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
         <aside className="overview-signal-panel">
           <header>
             <div>
-              <span>HASIL TERBARU</span>
-              <h3>Signal terpantau</h3>
+              <span>LATEST RESULTS</span>
+              <h3>Tracked signals</h3>
             </div>
-            <button onClick={() => go("analysis")}>Lihat semua</button>
+            <button onClick={() => go("analysis")}>View all</button>
           </header>
           <div className="overview-signal-list">
             {demoSignals.map((signal) => (
@@ -303,8 +298,8 @@ function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
           <div className="overview-signal-panel__note">
             <Database />
             <p>
-              <strong>Data demonstrasi</strong>
-              <span>Nilai ini tidak merepresentasikan kondisi pasar live.</span>
+              <strong>Demo data</strong>
+              <span>These values do not represent live market conditions.</span>
             </p>
           </div>
         </aside>
@@ -312,7 +307,7 @@ function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
 
       <section
         className="overview-actions"
-        aria-label="Shortcut fitur workspace"
+        aria-label="Workspace feature shortcuts"
       >
         {quickActions.map(([label, description, view, Icon]) => (
           <button key={view} onClick={() => go(view)}>
@@ -331,7 +326,7 @@ function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
 
 function AnalysisSkeleton() {
   return (
-    <div className="analysis-skeleton" aria-label="Menyiapkan hasil analisis">
+    <div className="analysis-skeleton" aria-label="Preparing analysis results">
       <div className="analysis-skeleton__metrics">
         <Skeleton />
         <Skeleton />
@@ -363,7 +358,7 @@ function AnalysisPanel({
     symbol: "BBCA, TLKM, ASII, BMRI",
     rule: "Momentum confirmation",
     timeframe: "1D",
-    period: "1 tahun",
+    period: "1 year",
   });
 
   useEffect(
@@ -405,13 +400,13 @@ function AnalysisPanel({
       <section className="panel configure-panel">
         <div className="panel-heading">
           <div>
-            <h3>Konfigurasi</h3>
+            <h3>Configuration</h3>
           </div>
           <Badge variant="outline">Demo</Badge>
         </div>
         <div className="control-grid">
           <label>
-            Tujuan
+            Mode
             <select
               value={config.mode}
               onChange={(e) => setConfig({ ...config, mode: e.target.value })}
@@ -433,7 +428,7 @@ function AnalysisPanel({
             </select>
           </label>
           <label className="control-wide">
-            Daftar saham
+            Stock list
             <Input
               value={config.symbol}
               onChange={(e) => setConfig({ ...config, symbol: e.target.value })}
@@ -453,23 +448,23 @@ function AnalysisPanel({
             </select>
           </label>
           <label>
-            Periode
+            Period
             <select
               value={config.period}
               onChange={(e) => setConfig({ ...config, period: e.target.value })}
             >
-              <option>6 bulan</option>
-              <option>1 tahun</option>
-              <option>3 tahun</option>
+              <option>6 months</option>
+              <option>1 year</option>
+              <option>3 years</option>
             </select>
           </label>
         </div>
         <div className="dataset-readout">
           <Database />
           <div>
-            <strong>IDX daily fixture · 4 simbol</strong>
+            <strong>IDX daily fixture · 4 symbols</strong>
             <span>
-              01 Sep 2025—01 Sep 2026 · checksum demo-8f21 · warmup 30 candle
+              01 Sep 2025—01 Sep 2026 · checksum demo-8f21 · 30-candle warmup
             </span>
           </div>
         </div>
@@ -480,11 +475,11 @@ function AnalysisPanel({
             disabled={job === "running" || job === "preparing"}
           >
             {job === "completed" ? <RefreshCw /> : <BarChart3 />}
-            {job === "completed" ? "Jalankan ulang" : "Jalankan analisis"}
+            {job === "completed" ? "Run again" : "Run analysis"}
           </Button>
           {(job === "running" || job === "preparing") && (
             <Button className="ui-button" onClick={cancel}>
-              <XCircle /> Batalkan
+              <XCircle /> Cancel
             </Button>
           )}
         </div>
@@ -493,17 +488,15 @@ function AnalysisPanel({
             <div>
               <span>
                 {job === "preparing"
-                  ? "Menyiapkan dataset"
+                  ? "Preparing dataset"
                   : job === "running"
-                    ? "Menjalankan fixture"
+                    ? "Running fixture"
                     : job === "completed"
-                      ? "Analisis selesai"
-                      : "Analisis dibatalkan"}
+                      ? "Analysis complete"
+                      : "Analysis cancelled"}
               </span>
               <strong>
-                {job === "cancelled"
-                  ? "Konfigurasi tetap tersimpan"
-                  : `${progress}%`}
+                {job === "cancelled" ? "Configuration saved" : `${progress}%`}
               </strong>
             </div>
             <i
@@ -517,7 +510,7 @@ function AnalysisPanel({
       <section className="panel results-panel">
         <div className="panel-heading">
           <div>
-            <h3>Hasil & bukti</h3>
+            <h3>Results & evidence</h3>
           </div>
           <span className="muted-meta">
             rule{" "}
@@ -531,10 +524,10 @@ function AnalysisPanel({
         ) : job !== "completed" ? (
           <div className="results-empty">
             <BarChart3 />
-            <strong>Hasil akan muncul di sini</strong>
+            <strong>Results will appear here</strong>
             <p>
-              Jalankan konfigurasi untuk melihat summary, alasan match, asumsi,
-              dan tabel signal.
+              Run this configuration to view the summary, match reasons,
+              assumptions, and signal table.
             </p>
           </div>
         ) : (
@@ -561,7 +554,7 @@ function AnalysisPanel({
                     <TableHead>Status</TableHead>
                     <TableHead>Close</TableHead>
                     <TableHead>Score</TableHead>
-                    <TableHead>Alasan</TableHead>
+                    <TableHead>Reason</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -586,7 +579,7 @@ function AnalysisPanel({
                           className="table-action"
                           onClick={() => onDraft(signal.symbol)}
                         >
-                          Draft jurnal
+                          Draft journal
                         </button>
                       </TableCell>
                     </TableRow>
@@ -597,8 +590,8 @@ function AnalysisPanel({
             <div className="assumption-line">
               <CircleAlert />
               <span>
-                <strong>Asumsi:</strong> harga penutupan, tanpa slippage; hasil
-                ini fixture UX dan bukan output engine investasi.
+                <strong>Assumptions:</strong> closing prices with no slippage.
+                These are UX fixtures, not investment-engine output.
               </span>
             </div>
           </div>
@@ -636,7 +629,7 @@ function RulesPanel({
           name: draft.name,
           logic: draft.logic,
           version: "draft 01",
-          scope: "Milik Anda",
+          scope: "Yours",
           enabled: true,
         },
       ]);
@@ -658,10 +651,10 @@ function RulesPanel({
         <div className="panel-heading">
           <div>
             <span>RULE SET</span>
-            <h3>{rules.length} rule tersedia</h3>
+            <h3>{rules.length} rules available</h3>
           </div>
           <Button className="ui-button ui-button--primary" onClick={openNew}>
-            <Plus /> Rule baru
+            <Plus /> New rule
           </Button>
         </div>
         {rules.map((rule) => (
@@ -678,7 +671,7 @@ function RulesPanel({
                     ),
                   )
                 }
-                aria-label={`Aktifkan ${rule.name}`}
+                aria-label={`Enable ${rule.name}`}
               />
             </div>
             <div>
@@ -692,7 +685,7 @@ function RulesPanel({
                 {rule.scope === "System" ? "read-only" : "editable"}
               </small>
             </div>
-            {rule.scope === "Milik Anda" && (
+            {rule.scope === "Yours" && (
               <div className="rule-actions">
                 <button
                   className="icon-action"
@@ -706,7 +699,7 @@ function RulesPanel({
                   onClick={() =>
                     setRules(rules.filter((item) => item.id !== rule.id))
                   }
-                  aria-label={`Hapus ${rule.name}`}
+                  aria-label={`Delete ${rule.name}`}
                 >
                   <Trash2 />
                 </button>
@@ -723,54 +716,53 @@ function RulesPanel({
                 <span>BUILDER</span>
                 <h3>
                   {editingId === "new"
-                    ? "Rule privat baru"
-                    : "Edit rule privat"}
+                    ? "New private rule"
+                    : "Edit private rule"}
                 </h3>
               </div>
               <button
                 type="button"
                 className="icon-action"
                 onClick={() => setEditingId(null)}
-                aria-label="Tutup builder rule"
+                aria-label="Close rule builder"
               >
                 <X />
               </button>
             </div>
             <label>
-              Nama rule
+              Rule name
               <Input
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                placeholder="Contoh: Trend pullback"
+                placeholder="Example: Trend pullback"
                 required
               />
             </label>
             <label>
-              Logika
+              Logic
               <Textarea
                 value={draft.logic}
                 onChange={(e) => setDraft({ ...draft, logic: e.target.value })}
               />
             </label>
             <p className="form-help">
-              Builder MVP menyimpan kondisi sebagai draft lokal. Validasi
-              operator akan mengikuti kontrak engine.
+              The MVP builder stores conditions as a local draft. Operator
+              validation will follow the engine contract.
             </p>
             <Button className="ui-button ui-button--primary" type="submit">
-              <Save />{" "}
-              {editingId === "new" ? "Simpan rule" : "Simpan perubahan"}
+              <Save /> {editingId === "new" ? "Save rule" : "Save changes"}
             </Button>
           </form>
         ) : (
           <>
             <Braces />
-            <h3>Rule tetap bisa diperiksa.</h3>
+            <h3>Every rule remains inspectable.</h3>
             <p>
-              System rule diberi versi dan bersifat read-only. Rule milik Anda
-              dapat diaktifkan, dibuat, diedit, atau dihapus di preview ini.
+              System rules are versioned and read-only. Your rules can be
+              enabled, created, edited, or deleted in this preview.
             </p>
             <button className="text-link" onClick={openNew}>
-              Buka builder <ChevronRight />
+              Open builder <ChevronRight />
             </button>
           </>
         )}
@@ -836,9 +828,11 @@ function JournalPanel({
         <div className="panel-heading">
           <div>
             <span>INPUT</span>
-            <h3>Transaksi manual</h3>
+            <h3>Manual transaction</h3>
           </div>
-          {draftSymbol && <Badge variant="outline">Draft dari analisis</Badge>}
+          {draftSymbol && (
+            <Badge variant="outline">Drafted from analysis</Badge>
+          )}
         </div>
         <form onSubmit={addTransaction} className="control-grid">
           <label>
@@ -850,7 +844,7 @@ function JournalPanel({
             />
           </label>
           <label>
-            Sisi
+            Side
             <select
               value={form.side}
               onChange={(e) =>
@@ -872,7 +866,7 @@ function JournalPanel({
             />
           </label>
           <label>
-            Harga
+            Price
             <Input
               type="number"
               min="1"
@@ -891,7 +885,7 @@ function JournalPanel({
             />
           </label>
           <label>
-            Tanggal
+            Date
             <Input
               type="date"
               value={form.date}
@@ -903,31 +897,31 @@ function JournalPanel({
             className="ui-button ui-button--primary control-wide"
             type="submit"
           >
-            <Save /> Simpan transaksi lokal
+            <Save /> Save local transaction
           </Button>
         </form>
       </section>
       <section className="panel journal-book">
         <div className="journal-summary">
           <div>
-            <span>Modal tercatat</span>
+            <span>Recorded capital</span>
             <strong>Rp {invested.toLocaleString("id-ID")}</strong>
           </div>
           <div>
-            <span>Valuasi contoh</span>
+            <span>Sample valuation</span>
             <strong>Rp 16.825.000</strong>
           </div>
           <div>
-            <span>P&amp;L belum direalisasi</span>
+            <span>Unrealized P&amp;L</span>
             <strong className="positive">+Rp 1.137.400</strong>
           </div>
         </div>
         <div className="panel-heading">
           <div>
             <span>LEDGER</span>
-            <h3>Riwayat transaksi</h3>
+            <h3>Transaction history</h3>
           </div>
-          <small className="muted-meta">Harga contoh · 16 Sep 2026</small>
+          <small className="muted-meta">Sample prices · 16 Sep 2026</small>
         </div>
         <div className="transaction-list">
           {transactions.map((tx) => (
@@ -950,7 +944,7 @@ function JournalPanel({
                     transactions.filter((item) => item.id !== tx.id),
                   )
                 }
-                aria-label={`Hapus transaksi ${tx.symbol}`}
+                aria-label={`Delete ${tx.symbol} transaction`}
               >
                 <Trash2 />
               </button>
@@ -988,19 +982,19 @@ function AccessPanel({
         <div className="entitlement-row">
           <span>Screening</span>
           <strong>
-            <Check /> Diizinkan
+            <Check /> Allowed
           </strong>
         </div>
         <div className="entitlement-row">
-          <span>Backtest 3 tahun</span>
+          <span>3-year backtest</span>
           <strong>
-            <Check /> Diizinkan
+            <Check /> Allowed
           </strong>
         </div>
         <div className="entitlement-row">
           <span>Realtime feed</span>
           <em>
-            <X /> Di luar MVP
+            <X /> Outside MVP scope
           </em>
         </div>
         <div className="auth-contract">
@@ -1009,8 +1003,8 @@ function AccessPanel({
             <strong>Backend API</strong>
             <span>
               {backendOnline
-                ? "Base API terjangkau; kontrak login memakai /api/auth"
-                : "Base API belum terjangkau; login akan menampilkan error nyata"}
+                ? "Base API available; sign-in uses the /api/auth contract"
+                : "Base API unavailable; sign-in will show the actual error"}
             </span>
           </div>
         </div>
@@ -1019,9 +1013,9 @@ function AccessPanel({
         <div className="panel-heading">
           <div>
             <span>SESSIONS</span>
-            <h3>Perangkat aktif</h3>
+            <h3>Active devices</h3>
           </div>
-          <span className="muted-meta">{sessions.length} perangkat</span>
+          <span className="muted-meta">{sessions.length} devices</span>
         </div>
         {sessions.map((session) => (
           <article key={session.id}>
@@ -1031,7 +1025,7 @@ function AccessPanel({
             <div>
               <strong>
                 {session.device}
-                {session.current && <Badge variant="outline">Saat ini</Badge>}
+                {session.current && <Badge variant="outline">Current</Badge>}
               </strong>
               <span>
                 {session.place} · {session.active}
@@ -1054,15 +1048,15 @@ function AccessPanel({
         <div>
           <Database />
           <span>
-            <strong>Cache pengguna</strong>
+            <strong>User cache</strong>
             <small>{cacheState}</small>
           </span>
         </div>
         <Button
           className="ui-button"
-          onClick={() => setCacheState("Kosong · dibersihkan barusan")}
+          onClick={() => setCacheState("Empty · cleared just now")}
         >
-          <Trash2 /> Bersihkan cache
+          <Trash2 /> Clear cache
         </Button>
       </section>
     </div>
@@ -1082,9 +1076,7 @@ export function DemoWorkspace({
   const [transactions, setTransactions] =
     useState<DemoTransaction[]>(initialTransactions);
   const [sessions, setSessions] = useState(demoSessions);
-  const [cacheState, setCacheState] = useState(
-    "14,8 MB · terenkripsi (contoh)",
-  );
+  const [cacheState, setCacheState] = useState("14.8 MB · encrypted (sample)");
   const meta = viewMeta[view];
   function go(next: DemoView) {
     location.hash = `app/${next}`;
@@ -1101,7 +1093,7 @@ export function DemoWorkspace({
           <a href="#home">
             <Brand compact />
           </a>
-          <button onClick={() => setMenuOpen(false)} aria-label="Tutup menu">
+          <button onClick={() => setMenuOpen(false)} aria-label="Close menu">
             <X />
           </button>
         </div>
@@ -1109,7 +1101,7 @@ export function DemoWorkspace({
           <span>Demo workspace</span>
           <i className="status-dot is-online" />
         </div>
-        <nav aria-label="Navigasi demo">
+        <nav aria-label="Demo navigation">
           {" "}
           <div className="nav-group">
             <span>MVP SURFACES</span>
@@ -1130,13 +1122,13 @@ export function DemoWorkspace({
           <div className="nav-group">
             <span>ACCOUNT</span>
             <a href="#account">
-              <KeyRound /> Akun asli
+              <KeyRound /> Live account
             </a>
           </div>
         </nav>
         <div className="sidebar__footer">
           <a className="back-home" href="#home">
-            <ArrowLeft /> Kembali ke landing
+            <ArrowLeft /> Back to landing page
           </a>
           <small>Signalgen web · local UX fixture</small>
         </div>
@@ -1145,7 +1137,7 @@ export function DemoWorkspace({
         <button
           className="backdrop"
           onClick={() => setMenuOpen(false)}
-          aria-label="Tutup menu"
+          aria-label="Close menu"
         />
       )}
       <section className="workspace">
@@ -1154,7 +1146,7 @@ export function DemoWorkspace({
             <button
               className="menu-button"
               onClick={() => setMenuOpen(true)}
-              aria-label="Buka menu demo"
+              aria-label="Open demo menu"
             >
               <Menu />
             </button>
@@ -1164,9 +1156,9 @@ export function DemoWorkspace({
             </div>
           </div>
           <div className="topbar__actions">
-            <span className="preview-chip">Data statik</span>
+            <span className="preview-chip">Static data</span>
             <a className="ui-button" href="#login">
-              Masuk
+              Sign in
             </a>
           </div>
         </header>
@@ -1177,7 +1169,7 @@ export function DemoWorkspace({
               <h2>{meta.title}</h2>
               <p>{meta.description}</p>
             </div>
-            <span>Last reset · reload halaman</span>
+            <span>Last reset · reload page</span>
           </div>
           <div className="route-stage" key={view}>
             {view === "overview" && <OverviewPanel go={go} />}

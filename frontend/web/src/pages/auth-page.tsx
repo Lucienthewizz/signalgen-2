@@ -60,19 +60,19 @@ export function AuthPage({
         await api.requestPasswordReset(email);
         setNotice({
           kind: "success",
-          title: "Periksa inbox Anda",
+          title: "Check your inbox",
           detail:
-            "Jika akun tersebut terdaftar, tautan reset sudah dikirim. Tautan hanya berlaku untuk satu sesi recovery.",
+            "If that account exists, a reset link has been sent. The link is valid for one recovery session.",
         });
       } else if (view === "reset-password") {
         const confirmation = String(data.get("confirmation") ?? "");
         if (!recovery.accessToken || !recovery.refreshToken)
           throw new ApiError(
-            "Tautan reset tidak lengkap atau sudah tidak berlaku.",
+            "The reset link is incomplete or has expired.",
             400,
           );
         if (password !== confirmation)
-          throw new ApiError("Konfirmasi password belum sama.", 400);
+          throw new ApiError("The passwords do not match.", 400);
         await api.resetPassword(
           recovery.accessToken,
           recovery.refreshToken,
@@ -81,8 +81,8 @@ export function AuthPage({
         history.replaceState(null, "", location.pathname);
         setNotice({
           kind: "success",
-          title: "Password berhasil diperbarui",
-          detail: "Anda sekarang dapat masuk menggunakan password baru.",
+          title: "Password updated",
+          detail: "You can now sign in with your new password.",
         });
         setTimeout(() => {
           location.hash = "login";
@@ -90,7 +90,7 @@ export function AuthPage({
       } else if (view === "register") {
         const confirmation = String(data.get("confirmation") ?? "");
         if (password !== confirmation)
-          throw new ApiError("Konfirmasi password belum sama.", 400);
+          throw new ApiError("The passwords do not match.", 400);
         const result = await api.register(
           String(data.get("fullName") ?? "").trim(),
           email,
@@ -102,8 +102,8 @@ export function AuthPage({
         } else {
           setNotice({
             kind: "success",
-            title: "Akun berhasil dibuat",
-            detail: "Konfirmasi email Anda, lalu masuk ke workspace.",
+            title: "Account created",
+            detail: "Confirm your email, then sign in to the workspace.",
           });
         }
       } else {
@@ -114,11 +114,11 @@ export function AuthPage({
     } catch (error) {
       setNotice({
         kind: "error",
-        title: "Permintaan belum berhasil",
+        title: "Request failed",
         detail:
           error instanceof Error
             ? error.message
-            : "Terjadi kesalahan. Coba kembali.",
+            : "Something went wrong. Try again.",
       });
     } finally {
       setLoading(false);
@@ -128,26 +128,26 @@ export function AuthPage({
   const copy = {
     login: [
       "Continue to Signalgen",
-      "Gunakan akun yang sama untuk web dan desktop.",
+      "Use the same account across web and desktop.",
     ],
     register: [
       "Create your account",
-      "Satu identitas untuk seluruh workspace Signalgen.",
+      "One identity for every Signalgen workspace.",
     ],
     "forgot-password": [
       "Reset your password",
-      "Kami akan mengirim tautan recovery ke email akun Anda.",
+      "We will send a recovery link to your account email.",
     ],
     "reset-password": [
       "Choose a new password",
-      "Gunakan minimal 8 karakter yang tidak digunakan di layanan lain.",
+      "Use at least 8 characters and avoid reusing another password.",
     ],
   }[view];
 
   return (
     <main className="auth-layout">
       <section className="auth-story">
-        <a href="#home" aria-label="Kembali ke Signalgen">
+        <a href="#home" aria-label="Back to Signalgen">
           <Brand />
         </a>
         <div className="auth-story__content">
@@ -157,22 +157,22 @@ export function AuthPage({
             <span>Verify the signal.</span>
           </h1>
           <p>
-            Workspace untuk menyusun rule, menguji hipotesis, dan memahami
-            alasan di balik setiap signal IDX.
+            Build rules, test hypotheses, and understand the evidence behind
+            every IDX signal.
           </p>
           <div className="auth-proof">
             <div>
               <ShieldCheck />
               <span>
                 <b>Private by account</b>
-                <small>Strategi tidak bercampur antar-user</small>
+                <small>Your strategies remain isolated by account</small>
               </span>
             </div>
             <div>
               <KeyRound />
               <span>
                 <b>Backend authorization</b>
-                <small>Session diverifikasi oleh Supabase</small>
+                <small>Sessions are verified by Supabase</small>
               </span>
             </div>
           </div>
@@ -189,20 +189,20 @@ export function AuthPage({
               <Brand compact />
             </a>
             {view === "login" || view === "register" ? (
-              <div className="auth-switch" aria-label="Pilihan autentikasi">
+              <div className="auth-switch" aria-label="Authentication options">
                 <a className={view === "login" ? "active" : ""} href="#login">
-                  Masuk
+                  Sign in
                 </a>
                 <a
                   className={view === "register" ? "active" : ""}
                   href="#register"
                 >
-                  Daftar
+                  Register
                 </a>
               </div>
             ) : (
               <a className="back-link" href="#login">
-                <ArrowLeft /> Kembali ke masuk
+                <ArrowLeft /> Back to sign in
               </a>
             )}
           </div>
@@ -214,10 +214,10 @@ export function AuthPage({
             <FieldGroup className="auth-fields">
               {view === "register" && (
                 <AuthField
-                  label="Nama lengkap"
+                  label="Full name"
                   name="fullName"
                   type="text"
-                  placeholder="Nama Anda"
+                  placeholder="Your name"
                   minLength={2}
                   autoComplete="name"
                 />
@@ -227,7 +227,7 @@ export function AuthPage({
                   label="Email"
                   name="email"
                   type="email"
-                  placeholder="nama@email.com"
+                  placeholder="name@email.com"
                   autoComplete="email"
                 />
               )}
@@ -236,12 +236,12 @@ export function AuthPage({
                 view === "reset-password") && (
                 <AuthField
                   label={
-                    view === "reset-password" ? "Password baru" : "Password"
+                    view === "reset-password" ? "New password" : "Password"
                   }
                   name="password"
                   type="password"
                   placeholder={
-                    view === "login" ? "Password Anda" : "Minimal 8 karakter"
+                    view === "login" ? "Your password" : "At least 8 characters"
                   }
                   minLength={view === "login" ? 1 : 8}
                   autoComplete={
@@ -251,10 +251,10 @@ export function AuthPage({
               )}
               {(view === "register" || view === "reset-password") && (
                 <AuthField
-                  label="Konfirmasi password"
+                  label="Confirm password"
                   name="confirmation"
                   type="password"
-                  placeholder="Ulangi password"
+                  placeholder="Repeat your password"
                   minLength={8}
                   autoComplete="new-password"
                 />
@@ -262,7 +262,7 @@ export function AuthPage({
             </FieldGroup>
             {view === "login" && (
               <a className="forgot-link" href="#forgot-password">
-                Lupa password?
+                Forgot your password?
               </a>
             )}
             {notice && (
@@ -281,26 +281,26 @@ export function AuthPage({
               type="submit"
             >
               {loading
-                ? "Memproses…"
+                ? "Processing…"
                 : view === "login"
-                  ? "Masuk ke workspace"
+                  ? "Sign in to workspace"
                   : view === "register"
-                    ? "Buat akun"
+                    ? "Create account"
                     : view === "forgot-password"
-                      ? "Kirim tautan reset"
-                      : "Simpan password baru"}
+                      ? "Send reset link"
+                      : "Save new password"}
               <ArrowRight />
             </Button>
           </form>
           {!backendOnline && (
             <p className="auth-note">
-              Backend belum dapat dijangkau. Form akan aktif kembali setelah
-              koneksi tersedia.
+              The backend is unavailable. This form will reactivate when the
+              connection returns.
             </p>
           )}
           <p className="auth-note">
-            Signalgen adalah alat analisis, bukan rekomendasi investasi
-            personal.
+            Signalgen supports analysis. It does not provide personalized
+            investment advice.
           </p>
         </div>
       </section>
@@ -321,7 +321,7 @@ function AuthField(props: {
       <FieldLabel htmlFor={props.name}>{props.label}</FieldLabel>
       <Input id={props.name} className="auth-input" required {...props} />
       <FieldDescription className="sr-only">
-        Masukkan {props.label.toLowerCase()}
+        Enter {props.label.toLowerCase()}
       </FieldDescription>
     </Field>
   );

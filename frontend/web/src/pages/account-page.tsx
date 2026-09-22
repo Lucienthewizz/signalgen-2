@@ -18,17 +18,14 @@ export function AccountPage({
           <Brand compact />
         </a>
         <a href="#home">
-          <ArrowLeft /> Kembali ke overview
+          <ArrowLeft /> Back to overview
         </a>
       </header>
       <section className="account-shell">
         <div className="account-intro">
           <span className="section-index">Account / Identity</span>
           <h1>Workspace access</h1>
-          <p>
-            Identitas ini diverifikasi langsung oleh backend authorization
-            Signalgen.
-          </p>
+          <p>This identity is verified directly by Signalgen authorization.</p>
         </div>
         <div className="account-ledger">
           <div className="account-avatar">{name.slice(0, 2).toUpperCase()}</div>
@@ -68,7 +65,7 @@ export function AccountPage({
           variant="outline"
           onClick={onLogout}
         >
-          <LogOut /> Keluar dari akun
+          <LogOut /> Sign out
         </Button>
       </section>
     </main>

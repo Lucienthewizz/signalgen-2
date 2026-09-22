@@ -35,7 +35,6 @@ export function MarketTrace() {
         className="trace-line"
         d="M0 217 C72 210 88 181 143 187 S229 133 288 148 S377 95 431 113 S518 56 567 78 S634 34 680 42"
       />
-      <circle cx="680" cy="42" r="5" />
     </svg>
   );
 }

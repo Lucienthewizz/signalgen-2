@@ -31,7 +31,7 @@ const productViews = [
   },
   {
     id: "analysis",
-    label: "Analisis",
+    label: "Analysis",
     icon: BarChart3,
   },
   {
@@ -41,12 +41,12 @@ const productViews = [
   },
   {
     id: "journal",
-    label: "Jurnal",
+    label: "Journal",
     icon: BookOpenCheck,
   },
   {
     id: "access",
-    label: "Akses",
+    label: "Access",
     icon: ShieldCheck,
   },
 ] as const;
@@ -56,24 +56,24 @@ const capabilityViews = [
     id: "analysis",
     title: "Screening & backtest",
     description:
-      "Konfigurasi, progress, cancel, result metrics, dan alasan per signal.",
+      "Configure a run, track progress, cancel safely, and inspect every signal.",
   },
   {
     id: "rules",
     title: "Rule management",
     description:
-      "System rule read-only dan CRUD rule privat untuk menguji builder.",
+      "Review read-only system rules and manage private rules in the builder.",
   },
   {
     id: "journal",
     title: "Journal & position",
     description:
-      "Draft dari hasil, transaksi manual, posisi, dan ringkasan P&L.",
+      "Turn results into drafts, log trades, and review positions and P&L.",
   },
   {
     id: "access",
     title: "Entitlement & devices",
-    description: "Status akses, sesi perangkat, revoke, dan clear cache.",
+    description: "Review access, active devices, session controls, and cache.",
   },
 ] as const;
 
@@ -98,11 +98,11 @@ export function PublicWorkspace({
             >
               <Brand compact />
             </a>
-            <nav className="landing-header__nav" aria-label="Navigasi utama">
+            <nav className="landing-header__nav" aria-label="Main navigation">
               <a href="#product-tour">Preview</a>
-              <a href="#capabilities">Fitur</a>
-              <a href="#pricing">Harga</a>
-              <a href="#reviews">Rating</a>
+              <a href="#capabilities">Features</a>
+              <a href="#pricing">Pricing</a>
+              <a href="#reviews">Reviews</a>
               <a href="#faq">FAQ</a>
               <a href="#app/overview">Demo</a>
             </nav>
@@ -116,7 +116,7 @@ export function PublicWorkspace({
                 className="landing-header__session"
                 href={user ? "#app/overview" : "#login"}
               >
-                {user ? "Dashboard" : "Masuk"}
+                {user ? "Dashboard" : "Sign in"}
               </a>
             </div>
           </div>
@@ -130,7 +130,7 @@ export function PublicWorkspace({
               <span
                 className={`hero-data-note ${backendOnline ? "is-online" : ""}`}
               >
-                <i /> Preview fixture lokal · Data tidak live
+                <i /> Local preview · Not live market data
               </span>
               <h2>
                 Read the market.
@@ -138,9 +138,8 @@ export function PublicWorkspace({
                 <em>Verify the signal.</em>
               </h2>
               <p>
-                Susun rule, jalankan screening, dan telusuri alasan di balik
-                setiap signal IDX dalam workspace web yang ringan dan bisa
-                diperiksa.
+                Build rules, run screenings, and inspect the evidence behind
+                every IDX signal in one focused web workspace.
               </p>
               <div className="hero-actions">
                 <Button
@@ -149,159 +148,160 @@ export function PublicWorkspace({
                     location.hash = "app/overview";
                   }}
                 >
-                  Coba seluruh flow <ArrowRight />
+                  Explore the workflow <ArrowRight />
                 </Button>
                 <a className="ui-button" href="#capabilities">
-                  Lihat fiturnya
+                  View features
                 </a>
               </div>
               <div className="hero-proof">
                 <span>
-                  <Check /> Rule transparan
+                  <Check /> Transparent rules
                 </span>
                 <span>
-                  <Check /> Hasil explainable
+                  <Check /> Explainable results
                 </span>
                 <span>
-                  <Check /> Jurnal terhubung
+                  <Check /> Connected journal
                 </span>
               </div>
             </div>
           </section>
-          <section className="product-tour" id="product-tour">
-            <div className="product-tour__heading">
-              <div>
-                <h3>Lihat workspace sebelum mulai.</h3>
-                <p>
-                  Setiap gambar diambil langsung dari fitur web yang dapat Anda
-                  buka sekarang.
-                </p>
-              </div>
-              <a
-                href={`#app/${productViews[selectedView].id}`}
-                className="text-link"
-              >
-                Buka {productViews[selectedView].label} <ArrowRight />
-              </a>
-            </div>
-            <div
-              className="product-tour__tabs"
-              role="tablist"
-              aria-label="Preview fitur web"
-            >
-              {productViews.map((view, index) => {
-                const Icon = view.icon;
-                return (
-                  <button
-                    key={view.id}
-                    role="tab"
-                    aria-selected={selectedView === index}
-                    className={cn(
-                      "product-tour__tab",
-                      selectedView === index && "active",
-                    )}
-                    onClick={() => setSelectedView(index)}
-                  >
-                    <Icon aria-hidden="true" />
-                    <strong>{view.label}</strong>
-                  </button>
-                );
-              })}
-            </div>
-            <figure className="product-tour__frame">
-              <div className="product-tour__image">
-                <iframe
-                  key={productViews[selectedView].id}
-                  src={`?preview=product-tour#app/${productViews[selectedView].id}`}
-                  title={`Tampilan terbaru fitur ${productViews[selectedView].label} pada Signalgen web`}
-                  loading={selectedView === 0 ? "eager" : "lazy"}
-                  tabIndex={-1}
-                />
-              </div>
-              <figcaption>
-                <strong>{productViews[selectedView].label}</strong>
-                <span>Preview langsung dari workspace terbaru.</span>
-              </figcaption>
-            </figure>
-          </section>
-          <section className="capability-section" id="capabilities">
-            <div className="section-heading split-heading">
-              <div>
-                <h3>Semua fitur utama dalam satu workspace.</h3>
-                <p>
-                  Seluruh flow pada PRD dapat dijelajahi dengan data demonstrasi
-                  yang konsisten.
-                </p>
-              </div>
-              <a className="ui-button" href="#app/overview">
-                Buka workspace <ArrowRight />
-              </a>
-            </div>
-            <div className="feature-gallery">
-              {capabilityViews.map((feature) => (
+          <div className="landing-product-flow">
+            <section className="product-tour" id="product-tour">
+              <div className="product-tour__heading">
+                <div>
+                  <h3>See the workspace before you start.</h3>
+                  <p>
+                    Every preview comes directly from a feature you can explore
+                    now.
+                  </p>
+                </div>
                 <a
-                  className="feature-gallery__item"
-                  href={`#app/${feature.id}`}
-                  key={feature.id}
+                  href={`#app/${productViews[selectedView].id}`}
+                  className="text-link"
                 >
-                  <div className="feature-gallery__figure">
-                    <FeatureFigure kind={feature.id} />
-                  </div>
-                  <div className="feature-gallery__copy">
-                    <strong>{feature.title}</strong>
-                    <p>{feature.description}</p>
-                    <span>
-                      Buka fitur <ArrowRight />
-                    </span>
-                  </div>
+                  Open {productViews[selectedView].label} <ArrowRight />
                 </a>
-              ))}
-            </div>
-          </section>
-          <Pricing />
-          <section className="rating-section" id="reviews">
-            <div className="rating-context">
-              <h3>Cara Signalgen terasa saat dipakai.</h3>
-              <p>
-                Kartu bergerak ke samping dan berhenti saat disentuh atau
-                diarahkan. Seluruh profil tetap berupa contoh UX, bukan
-                testimoni terverifikasi.
-              </p>
-            </div>
-            <TestimonialsMarquee testimonials={sampleRatings} />
-          </section>
-          <section className="faq-section" id="faq">
-            <div className="faq-intro">
-              <h3>Jawaban sebelum Anda masuk.</h3>
-              <p>
-                Detail penting tentang batas produk, data demo, dan cara kerja
-                web MVP.
-              </p>
-            </div>
-            <Accordion className="faq-list" defaultValue={["faq-0"]}>
-              {faqItems.map(([question, answer], index) => (
-                <AccordionItem key={question} value={`faq-${index}`}>
-                  <AccordionTrigger>{question}</AccordionTrigger>
-                  <AccordionContent>
-                    <p>{answer}</p>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </section>
-          <section className="boundary-panel landing-cta">
-            <ShieldCheck />
-            <div>
-              <h3>Alat analisis, bukan pemberi keputusan.</h3>
-              <p>
-                Mulai dari demo, periksa seluruh flow, lalu gunakan akun saat
-                backend siap.
-              </p>
-            </div>
-            <a href="#app/overview">
-              Masuk ke demo <ArrowRight />
-            </a>
-          </section>
+              </div>
+              <div
+                className="product-tour__tabs"
+                role="tablist"
+                aria-label="Web feature preview"
+              >
+                {productViews.map((view, index) => {
+                  const Icon = view.icon;
+                  return (
+                    <button
+                      key={view.id}
+                      role="tab"
+                      aria-selected={selectedView === index}
+                      className={cn(
+                        "product-tour__tab",
+                        selectedView === index && "active",
+                      )}
+                      onClick={() => setSelectedView(index)}
+                    >
+                      <Icon aria-hidden="true" />
+                      <strong>{view.label}</strong>
+                    </button>
+                  );
+                })}
+              </div>
+              <figure className="product-tour__frame">
+                <div className="product-tour__image">
+                  <iframe
+                    key={productViews[selectedView].id}
+                    src={`?preview=product-tour#app/${productViews[selectedView].id}`}
+                    title={`Current ${productViews[selectedView].label} view in Signalgen web`}
+                    loading={selectedView === 0 ? "eager" : "lazy"}
+                    tabIndex={-1}
+                  />
+                </div>
+                <figcaption>
+                  <strong>{productViews[selectedView].label}</strong>
+                  <span>Live preview from the current workspace build.</span>
+                </figcaption>
+              </figure>
+            </section>
+            <section className="capability-section" id="capabilities">
+              <div className="section-heading split-heading">
+                <div>
+                  <h3>Every core feature in one workspace.</h3>
+                  <p>
+                    Explore the complete PRD workflow with one consistent demo
+                    dataset.
+                  </p>
+                </div>
+                <a className="ui-button" href="#app/overview">
+                  Open workspace <ArrowRight />
+                </a>
+              </div>
+              <div className="feature-gallery">
+                {capabilityViews.map((feature) => (
+                  <a
+                    className="feature-gallery__item"
+                    href={`#app/${feature.id}`}
+                    key={feature.id}
+                  >
+                    <div className="feature-gallery__figure">
+                      <FeatureFigure kind={feature.id} />
+                    </div>
+                    <div className="feature-gallery__copy">
+                      <strong>{feature.title}</strong>
+                      <p>{feature.description}</p>
+                      <span>
+                        Open feature <ArrowRight />
+                      </span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </section>
+            <Pricing />
+            <section className="rating-section" id="reviews">
+              <div className="rating-context">
+                <h3>What Signalgen feels like in practice.</h3>
+                <p>
+                  Cards move horizontally and pause on hover or touch. These are
+                  demo profiles for UX review, not verified testimonials.
+                </p>
+              </div>
+              <TestimonialsMarquee testimonials={sampleRatings} />
+            </section>
+            <section className="faq-section" id="faq">
+              <div className="faq-intro">
+                <h3>Answers before you begin.</h3>
+                <p>
+                  Essential details about product scope, demo data, and the web
+                  MVP.
+                </p>
+              </div>
+              <Accordion className="faq-list" defaultValue={["faq-0"]}>
+                {faqItems.map(([question, answer], index) => (
+                  <AccordionItem key={question} value={`faq-${index}`}>
+                    <AccordionTrigger>{question}</AccordionTrigger>
+                    <AccordionContent>
+                      <p>{answer}</p>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </section>
+            <section className="boundary-panel landing-cta">
+              <ShieldCheck />
+              <div>
+                <h3>Analysis support, not investment advice.</h3>
+                <p>
+                  Start with the demo, review the complete workflow, then use
+                  your account when the backend is ready.
+                </p>
+              </div>
+              <a href="#app/overview">
+                Open the demo <ArrowRight />
+              </a>
+            </section>
+          </div>
         </div>
       </section>
     </main>

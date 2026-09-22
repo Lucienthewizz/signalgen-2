@@ -35,7 +35,7 @@ export function TestimonialsMarquee({
                   </span>
                   <span>
                     <strong>{testimonial.role}</strong>
-                    <small>Profil demonstrasi</small>
+                    <small>Demo profile</small>
                   </span>
                   <span className="testimonial-marquee__score">
                     <Star aria-hidden="true" />

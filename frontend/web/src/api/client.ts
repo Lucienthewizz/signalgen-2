@@ -42,7 +42,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     });
   } catch {
     throw new ApiError(
-      "Layanan belum dapat dijangkau. Coba kembali beberapa saat lagi.",
+      "The service is currently unavailable. Try again in a moment.",
       0,
     );
   } finally {
@@ -65,16 +65,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 function errorDetail(detail: unknown, status: number): string {
   if (Array.isArray(detail)) {
-    return "Periksa email, nama, dan panjang password Anda, lalu coba kembali.";
+    return "Check your email, name, and password length, then try again.";
   }
   if (detail === "Invalid email or password")
-    return "Email atau password belum sesuai. Periksa kembali.";
+    return "The email or password is incorrect. Check your details and try again.";
   if (typeof detail === "string" && detail.startsWith("Registration failed"))
-    return "Pendaftaran belum berhasil. Periksa data Anda, lalu coba kembali.";
+    return "Registration failed. Check your details and try again.";
   if (typeof detail === "string") return detail;
   if (status >= 500)
-    return "Layanan sedang bermasalah. Coba kembali beberapa saat lagi.";
-  return "Permintaan gagal diproses. Coba kembali.";
+    return "The service is having trouble. Try again in a moment.";
+  return "The request could not be completed. Try again.";
 }
 
 export const api = {
