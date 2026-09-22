@@ -38,6 +38,9 @@ type SessionStore interface {
 	Revoke(ctx context.Context, userID, token string) error
 	List(ctx context.Context, userID string) ([]session.Session, error)
 	RevokeByID(ctx context.Context, userID, sessionID string) error
+	ListDevices(ctx context.Context, userID string) ([]session.Device, error)
+	RenameDevice(ctx context.Context, userID, installationID, label string) error
+	RevokeDevice(ctx context.Context, userID, installationID string) error
 	ActiveLimit() int
 }
 
@@ -217,6 +220,8 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	mux.HandleFunc("GET /api/v1/account/me", server.accountMe)
 	mux.HandleFunc("GET /api/v1/account/sessions", server.accountSessions)
 	mux.HandleFunc("DELETE /api/v1/account/sessions/{id}", server.revokeAccountSession)
+	mux.HandleFunc("GET /api/v1/account/devices", server.accountDevices)
+	mux.HandleFunc("PATCH /api/v1/account/devices/{id}", server.updateAccountDevice)
 	mux.HandleFunc("GET /api/v1/capabilities", server.capabilities)
 	mux.HandleFunc("GET /api/v1/rules", server.listRules)
 	mux.HandleFunc("POST /api/v1/rules", server.createRule)
@@ -556,6 +561,70 @@ func (server *Server) revokeAccountSession(writer http.ResponseWriter, request *
 		}
 		return
 	}
+	writer.WriteHeader(http.StatusNoContent)
+}
+
+func (server *Server) accountDevices(writer http.ResponseWriter, request *http.Request) {
+	principal, currentSession, _, ok := server.requireAppSession(writer, request)
+	if !ok {
+		return
+	}
+	devices, err := server.sessions.ListDevices(request.Context(), principal.ID)
+	if err != nil {
+		writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Daftar perangkat belum dapat dibaca.")
+		return
+	}
+	items := make([]map[string]interface{}, 0, len(devices))
+	for _, device := range devices {
+		items = append(items, map[string]interface{}{
+			"id": device.ID, "label": device.Label, "status": device.Status,
+			"created_at": device.CreatedAt, "last_seen_at": device.LastSeenAt,
+			"current": device.ID == currentSession.InstallationID,
+		})
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(writer, http.StatusOK, map[string]interface{}{"items": items})
+}
+
+func (server *Server) updateAccountDevice(writer http.ResponseWriter, request *http.Request) {
+	principal, _, _, ok := server.requireAppSession(writer, request)
+	if !ok {
+		return
+	}
+	if !server.allowRate(writer, request, "devices:write", principal.ID) {
+		return
+	}
+	var input struct {
+		Label  *string `json:"label"`
+		Status *string `json:"status"`
+	}
+	if err := decodeJSON(request, &input); err != nil {
+		writeJSONInputError(writer, request, err, "Perubahan perangkat tidak valid.")
+		return
+	}
+	installationID := request.PathValue("id")
+	var err error
+	switch {
+	case input.Label != nil && input.Status == nil:
+		err = server.sessions.RenameDevice(request.Context(), principal.ID, installationID, *input.Label)
+	case input.Label == nil && input.Status != nil && *input.Status == "revoked":
+		err = server.sessions.RevokeDevice(request.Context(), principal.ID, installationID)
+	default:
+		writeError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "Kirim tepat satu perubahan: label atau status revoked.")
+		return
+	}
+	if err != nil {
+		switch {
+		case errors.Is(err, session.ErrNotFound):
+			writeError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Perangkat tidak ditemukan.")
+		case errors.Is(err, session.ErrInvalidRequest):
+			writeError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "Perubahan perangkat tidak valid.")
+		default:
+			writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Perangkat belum dapat diubah.")
+		}
+		return
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
 	writer.WriteHeader(http.StatusNoContent)
 }
 

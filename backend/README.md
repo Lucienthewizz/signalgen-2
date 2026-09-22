@@ -85,11 +85,17 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `GET /api/v1/datasets/{id}/content` — konten OHLCV sintetis terproteksi;
 - `POST /api/v1/compute-grants` — receipt singkat yang mengikat sesi, dataset,
   system rule atau rule pribadi, engine, dan schema sebelum eksekusi WASM;
+- `GET /api/v1/account/devices` — daftar perangkat milik akun yang sedang login;
+- `PATCH /api/v1/account/devices/{id}` — mengganti label perangkat atau mencabut
+  seluruh sesi pada perangkat tersebut;
 - `DELETE /api/v1/sessions/current` — revoke sesi aktif.
 
 Token sesi hanya dikembalikan saat dibuat. SQLite menyimpan hash token, bukan
 nilai token mentah. Daftar sesi hanya mengembalikan metadata aman, status, dan
 penanda sesi aktif; ID milik pengguna lain tidak dapat dibaca atau dicabut.
+Daftar perangkat menggabungkan riwayat sesi berdasarkan `installation_id`.
+Rename dan revoke selalu dibatasi oleh pemilik; revoke perangkat aktif akan
+membuat request berikutnya dari perangkat tersebut ditolak.
 System rule tidak dapat diubah atau dihapus. Query rule pribadi selalu dibatasi
 oleh pemilik; ID milik akun lain menghasilkan respons not found agar kepemilikan
 tidak bocor. Endpoint bisnis lain tetap belum diimplementasikan.

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.7.0
+  version: 0.8.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     Supabase performs identity login; this API verifies its bearer token and
@@ -182,6 +182,66 @@ paths:
           $ref: "#/components/responses/NotFound"
         "422":
           $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/account/devices:
+    get:
+      tags: [Account]
+      operationId: listAccountDevices
+      summary: List installations owned by the current account
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Owner-scoped devices aggregated from app-session history.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/account/devices/{id}:
+    patch:
+      tags: [Account]
+      operationId: updateAccountDevice
+      summary: Rename an owner device or revoke all of its app sessions
+      description: Submit exactly one action. Revoking the current device invalidates its app session for subsequent requests.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceUpdateRequest"
+      responses:
+        "204":
+          description: Device renamed or all of its sessions revoked.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
   /api/v1/capabilities:
@@ -718,6 +778,12 @@ components:
       in: path
       required: true
       schema: {type: string, pattern: "^ses_"}
+    DeviceId:
+      name: id
+      in: path
+      required: true
+      description: URL-encoded installation ID originally registered by this account.
+      schema: {type: string, minLength: 1}
     RuleId:
       name: id
       in: path
@@ -978,6 +1044,36 @@ components:
             $ref: "#/components/schemas/SessionListItem"
         max_items: {type: integer, enum: [100]}
         active_session_limit: {type: integer, minimum: 1}
+    Device:
+      type: object
+      required: [id, label, status, created_at, last_seen_at, current]
+      properties:
+        id: {type: string}
+        label: {type: string}
+        status: {type: string, enum: [active, expired, revoked]}
+        created_at: {type: string, format: date-time}
+        last_seen_at: {type: string, format: date-time}
+        current: {type: boolean}
+    DeviceListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Device"
+    DeviceUpdateRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [label]
+          properties:
+            label: {type: string, minLength: 1, maxLength: 100}
+        - type: object
+          additionalProperties: false
+          required: [status]
+          properties:
+            status: {type: string, enum: [revoked]}
     Capabilities:
       type: object
       required: [capabilities_version, engine_version, schema_version, worker_protocol, purposes, markets, timeframes, indicators, operators, rule_logic, max_candles_per_run, max_symbols_per_run]

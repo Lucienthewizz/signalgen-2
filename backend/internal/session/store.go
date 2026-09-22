@@ -46,6 +46,14 @@ type Created struct {
 	Token   string  `json:"session_token"`
 }
 
+type Device struct {
+	ID         string    `json:"id"`
+	Label      string    `json:"label"`
+	Status     string    `json:"status"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+}
+
 type Store struct {
 	db                *sql.DB
 	now               func() time.Time
@@ -318,6 +326,101 @@ WHERE id = ? AND user_id = ? AND revoked_at IS NULL`, now.Unix(), sessionID, use
 	}
 	if err != nil {
 		return fmt.Errorf("read app session owner: %w", err)
+	}
+	return nil
+}
+
+func (store *Store) ListDevices(ctx context.Context, userID string) ([]Device, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, ErrInvalidRequest
+	}
+	sessions, err := store.List(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	devices := make([]Device, 0)
+	byID := make(map[string]int)
+	for _, appSession := range sessions {
+		index, exists := byID[appSession.InstallationID]
+		if !exists {
+			status := "expired"
+			if appSession.RevokedAt != nil {
+				status = "revoked"
+			} else if now.Before(appSession.ExpiresAt) {
+				status = "active"
+			}
+			byID[appSession.InstallationID] = len(devices)
+			devices = append(devices, Device{
+				ID: appSession.InstallationID, Label: appSession.Label, Status: status,
+				CreatedAt: appSession.CreatedAt, LastSeenAt: appSession.LastSeenAt,
+			})
+			continue
+		}
+		device := &devices[index]
+		if appSession.CreatedAt.Before(device.CreatedAt) {
+			device.CreatedAt = appSession.CreatedAt
+		}
+		if appSession.LastSeenAt.After(device.LastSeenAt) {
+			device.LastSeenAt = appSession.LastSeenAt
+		}
+		if appSession.RevokedAt == nil && now.Before(appSession.ExpiresAt) {
+			device.Status = "active"
+		}
+	}
+	return devices, nil
+}
+
+func (store *Store) RenameDevice(ctx context.Context, userID, installationID, label string) error {
+	userID = strings.TrimSpace(userID)
+	installationID = strings.TrimSpace(installationID)
+	label = strings.TrimSpace(label)
+	if userID == "" || installationID == "" || label == "" || len(label) > maxLabel {
+		return ErrInvalidRequest
+	}
+	result, err := store.db.ExecContext(ctx, `
+UPDATE app_sessions SET label = ?
+WHERE user_id = ? AND installation_id = ?`, label, userID, installationID)
+	if err != nil {
+		return fmt.Errorf("rename device: %w", err)
+	}
+	changed, _ := result.RowsAffected()
+	if changed == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (store *Store) RevokeDevice(ctx context.Context, userID, installationID string) error {
+	userID = strings.TrimSpace(userID)
+	installationID = strings.TrimSpace(installationID)
+	if userID == "" || installationID == "" {
+		return ErrInvalidRequest
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	result, err := store.db.ExecContext(ctx, `
+UPDATE app_sessions SET revoked_at = ?
+WHERE user_id = ? AND installation_id = ? AND revoked_at IS NULL`,
+		now.Unix(), userID, installationID,
+	)
+	if err != nil {
+		return fmt.Errorf("revoke device: %w", err)
+	}
+	changed, _ := result.RowsAffected()
+	if changed > 0 {
+		return nil
+	}
+	var exists int
+	err = store.db.QueryRowContext(ctx,
+		"SELECT 1 FROM app_sessions WHERE user_id = ? AND installation_id = ? LIMIT 1",
+		userID, installationID,
+	).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read device owner: %w", err)
 	}
 	return nil
 }

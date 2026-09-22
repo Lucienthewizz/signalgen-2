@@ -2,7 +2,7 @@
 
 Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** [`openapi.yaml`](openapi.yaml) documents only the implemented Go surface and wins for current runtime integration; this file retains proposed routes and policy decisions. Changes require FE+BE review and versioning.
 
-Implementation checkpoint 18 September 2026: Go API currently implements
+Implementation checkpoint 22 September 2026: Go API currently implements
 `GET /health`, `GET /ready`, `POST /api/v1/sessions`, `GET /api/v1/capabilities`, and
 `DELETE /api/v1/sessions/current`. `GET /api/v1/account/me` is also available
 with the currently implemented profile, feature, session, and device fields.
@@ -11,6 +11,9 @@ provide an owner-scoped session list and idempotent revoke; cursor pagination
 remains future work. Active-session limits are configurable and enforced
 transactionally; creating a new session for the same installation replaces the
 previous one.
+`GET /api/v1/account/devices` aggregates the account's session history by
+installation. `PATCH /api/v1/account/devices/{id}` performs exactly one
+owner-scoped action: rename the installation or revoke all of its sessions.
 Dataset routes currently serve only the checksum-verified synthetic
 `BBCA.JK` screening fixture to accounts with an active `screener` grant.
 `POST /api/v1/compute-grants` is implemented for the frozen screening baseline

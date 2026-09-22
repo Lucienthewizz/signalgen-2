@@ -149,6 +149,23 @@
           ], "type": "text/javascript"}}]
         },
         {
+          "name": "List owner devices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/account/devices"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('current device appears once', () => pm.expect(body.items.filter(item => item.current)).to.have.lengthOf(1));",
+            "pm.test('device metadata contains no token', () => { pm.expect(pm.response.text()).not.to.include('session_token'); pm.expect(pm.response.text()).not.to.include('token_hash'); });"
+          ], "type": "text/javascript"}}]
+        },
+        {
           "name": "Capabilities",
           "request": {
             "method": "GET",

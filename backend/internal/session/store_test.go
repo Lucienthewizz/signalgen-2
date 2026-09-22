@@ -185,3 +185,56 @@ func TestCreateReplacesSessionForSameInstallation(t *testing.T) {
 		t.Fatalf("new session error = %v", err)
 	}
 }
+
+func TestListDevicesAggregatesOwnerSessions(t *testing.T) {
+	now := time.Date(2026, 9, 22, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	if _, err := store.Create(context.Background(), "user-a", "install-a", "Chrome"); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(10 * time.Minute)
+	if _, err := store.Create(context.Background(), "user-a", "install-a", "Chrome renamed"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Create(context.Background(), "user-b", "install-b", "Firefox"); err != nil {
+		t.Fatal(err)
+	}
+	devices, err := store.ListDevices(context.Background(), "user-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(devices) != 1 || devices[0].ID != "install-a" || devices[0].Label != "Chrome renamed" || devices[0].Status != "active" {
+		t.Fatalf("devices = %+v", devices)
+	}
+}
+
+func TestRenameAndRevokeDeviceAreOwnerScoped(t *testing.T) {
+	now := time.Date(2026, 9, 22, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	created, err := store.Create(context.Background(), "user-a", "install-a", "Chrome")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RenameDevice(context.Background(), "user-b", "install-a", "Stolen"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cross-user rename error = %v, want ErrNotFound", err)
+	}
+	if err := store.RenameDevice(context.Background(), "user-a", "install-a", "Work Mac"); err != nil {
+		t.Fatal(err)
+	}
+	devices, err := store.ListDevices(context.Background(), "user-a")
+	if err != nil || len(devices) != 1 || devices[0].Label != "Work Mac" {
+		t.Fatalf("renamed devices = %+v, error = %v", devices, err)
+	}
+	if err := store.RevokeDevice(context.Background(), "user-b", "install-a"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cross-user revoke error = %v, want ErrNotFound", err)
+	}
+	if err := store.RevokeDevice(context.Background(), "user-a", "install-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RevokeDevice(context.Background(), "user-a", "install-a"); err != nil {
+		t.Fatalf("idempotent revoke error = %v", err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", created.Token); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("verify error = %v, want ErrRevoked", err)
+	}
+}

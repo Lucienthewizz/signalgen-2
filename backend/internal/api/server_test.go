@@ -43,7 +43,11 @@ type fakeSessions struct {
 	revokedUserID  string
 	revokedToken   string
 	listed         []session.Session
+	devices        []session.Device
 	revokedID      string
+	deviceID       string
+	deviceLabel    string
+	deviceRevoked  bool
 	createError    error
 }
 
@@ -241,6 +245,25 @@ func (fake *fakeSessions) List(_ context.Context, userID string) ([]session.Sess
 func (fake *fakeSessions) RevokeByID(_ context.Context, userID, sessionID string) error {
 	fake.revokedUserID = userID
 	fake.revokedID = sessionID
+	return nil
+}
+
+func (fake *fakeSessions) ListDevices(_ context.Context, userID string) ([]session.Device, error) {
+	fake.verifiedUserID = userID
+	return fake.devices, nil
+}
+
+func (fake *fakeSessions) RenameDevice(_ context.Context, userID, installationID, label string) error {
+	fake.revokedUserID = userID
+	fake.deviceID = installationID
+	fake.deviceLabel = label
+	return nil
+}
+
+func (fake *fakeSessions) RevokeDevice(_ context.Context, userID, installationID string) error {
+	fake.revokedUserID = userID
+	fake.deviceID = installationID
+	fake.deviceRevoked = true
 	return nil
 }
 
@@ -933,6 +956,85 @@ func TestRevokeAccountSessionUsesAuthenticatedOwner(t *testing.T) {
 	if sessions.revokedUserID != "user-a" || sessions.revokedID != "ses_other" {
 		t.Fatalf("revocation = user %q id %q", sessions.revokedUserID, sessions.revokedID)
 	}
+}
+
+func TestAccountDevicesListsOwnerDevicesAndMarksCurrent(t *testing.T) {
+	now := time.Now().UTC()
+	sessions := &fakeSessions{
+		verified: session.Session{ID: "ses_current", InstallationID: "install-a"},
+		devices: []session.Device{
+			{ID: "install-a", Label: "Chrome", Status: "active", CreatedAt: now, LastSeenAt: now},
+			{ID: "install-b", Label: "Firefox", Status: "revoked", CreatedAt: now, LastSeenAt: now},
+		},
+	}
+	server := testServer(t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/account/devices", nil)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Items []struct {
+			ID      string `json:"id"`
+			Current bool   `json:"current"`
+			Status  string `json:"status"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Items) != 2 || !payload.Items[0].Current || payload.Items[1].Status != "revoked" {
+		t.Fatalf("payload = %+v", payload)
+	}
+	if sessions.verifiedUserID != "user-a" {
+		t.Fatalf("listed user = %q", sessions.verifiedUserID)
+	}
+}
+
+func TestUpdateAccountDeviceUsesAuthenticatedOwner(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		label   string
+		revoked bool
+	}{
+		{name: "rename", body: `{"label":"Work Mac"}`, label: "Work Mac"},
+		{name: "revoke", body: `{"status":"revoked"}`, revoked: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sessions := &fakeSessions{}
+			server := testServer(t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions)
+			request := httptest.NewRequest(http.MethodPatch, "/api/v1/account/devices/install-a", strings.NewReader(test.body))
+			request.Header.Set("Authorization", "Bearer user-token")
+			request.Header.Set("X-App-Session", "sgs_session")
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, request)
+			if response.Code != http.StatusNoContent {
+				t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+			}
+			if sessions.revokedUserID != "user-a" || sessions.deviceID != "install-a" || sessions.deviceLabel != test.label || sessions.deviceRevoked != test.revoked {
+				t.Fatalf("device mutation = %+v", sessions)
+			}
+		})
+	}
+}
+
+func TestUpdateAccountDeviceRejectsAmbiguousMutation(t *testing.T) {
+	sessions := &fakeSessions{}
+	server := testServer(t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions)
+	request := httptest.NewRequest(
+		http.MethodPatch, "/api/v1/account/devices/install-a",
+		strings.NewReader(`{"label":"Work Mac","status":"revoked"}`),
+	)
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusUnprocessableEntity, "INVALID_REQUEST")
 }
 
 func TestPrepareDatasetRequiresFeatureEntitlement(t *testing.T) {
