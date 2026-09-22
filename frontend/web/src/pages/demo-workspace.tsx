@@ -16,14 +16,19 @@ import {
   Check,
   ChevronRight,
   CircleAlert,
+  CircleDot,
   Database,
   Gauge,
   KeyRound,
+  LineChart,
+  ListChecks,
   Menu,
+  NotebookTabs,
   Pencil,
   Plus,
   RefreshCw,
   Save,
+  SearchCheck,
   ShieldCheck,
   Trash2,
   X,
@@ -106,86 +111,221 @@ function DemoNotice() {
 }
 
 function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
-  const features = [
-    [
-      "Analisis",
-      "Screening, backtest, lifecycle run/cancel, dan hasil explainable.",
-      "Siap diuji",
-      "analysis",
-    ],
-    [
-      "Rules",
-      "Baseline rule serta builder CRUD subset dengan status privat/system.",
-      "Siap diuji",
-      "rules",
-    ],
-    [
-      "Jurnal",
-      "Transaksi manual, draft dari signal, posisi, dan P&L demonstrasi.",
-      "Siap diuji",
-      "journal",
-    ],
-    [
-      "Akses",
-      "Entitlement, sesi/perangkat, revoke, dan clear cache.",
-      "Siap diuji",
-      "access",
-    ],
+  const matchingSignals = demoSignals.filter(
+    (signal) => signal.state === "Match",
+  ).length;
+  const activeRules = demoRules.filter((rule) => rule.enabled).length;
+  const metrics = [
+    {
+      label: "Cakupan screening",
+      value: demoSignals.length.toString(),
+      unit: "emiten",
+      note: "Fixture IDX",
+      icon: SearchCheck,
+    },
+    {
+      label: "Signal cocok",
+      value: matchingSignals.toString(),
+      unit: `dari ${demoSignals.length}`,
+      note: "Lolos seluruh kondisi",
+      icon: LineChart,
+    },
+    {
+      label: "Rule aktif",
+      value: activeRules.toString(),
+      unit: "rule",
+      note: "Versi tersimpan",
+      icon: ListChecks,
+    },
+    {
+      label: "Posisi tercatat",
+      value: initialTransactions.length.toString(),
+      unit: "posisi",
+      note: "State jurnal lokal",
+      icon: NotebookTabs,
+    },
+  ];
+  const quickActions = [
+    ["Buka analisis", "Jalankan screening fixture", "analysis", BarChart3],
+    ["Kelola rules", "Periksa logika dan versi", "rules", Braces],
+    ["Lihat jurnal", "Lanjutkan signal ke posisi", "journal", BookOpenCheck],
+    ["Periksa akses", "Sesi dan perangkat aktif", "access", ShieldCheck],
   ] as const;
+
   return (
-    <>
-      <section className="workspace-intro">
-        <div>
-          <h2>Satu jalur dari rule sampai catatan transaksi.</h2>
+    <div className="overview-command">
+      <section className="overview-summary">
+        <div className="overview-summary__copy">
+          <span className="overview-eyebrow">
+            <CircleDot /> Workspace snapshot
+          </span>
+          <h2>Baca kondisi pasar dari satu layar.</h2>
           <p>
-            Preview ini mencakup seluruh surface P0 dan P1 pada PRD web. Gunakan
-            datanya untuk mengecek urutan kerja, istilah, dan kepadatan
-            informasi.
+            Pantau hasil screening, rule yang bekerja, dan posisi jurnal tanpa
+            kehilangan jejak alasan di balik setiap signal.
           </p>
         </div>
-        <div className="scope-readout" aria-label="Status MVP">
+        <div className="overview-summary__status" aria-label="Status workspace">
           <span>Status workspace</span>
-          <strong>Ready</strong>
-          <small>Auth asli · fitur analisis demo</small>
+          <strong>Siap diuji</strong>
+          <small>Authorization aktif · analisis memakai fixture lokal</small>
+          <button onClick={() => go("analysis")}>
+            Jalankan analisis <ChevronRight />
+          </button>
         </div>
       </section>
-      <section className="feature-ledger">
-        {features.map(([name, description, status, view]) => (
-          <button key={name} onClick={() => go(view)}>
+      <section
+        className="overview-metrics"
+        aria-label="Ringkasan data demonstrasi"
+      >
+        {metrics.map(({ label, value, unit, note, icon: Icon }) => (
+          <article key={label} className="overview-metric">
             <div>
-              <strong>{name}</strong>
-              <small>{description}</small>
+              <span>{label}</span>
+              <Icon />
             </div>
-            <em>
-              <Check /> {status}
-            </em>
+            <strong>
+              {value} <small>{unit}</small>
+            </strong>
+            <p>{note}</p>
+          </article>
+        ))}
+      </section>
+
+      <section className="overview-market">
+        <article className="overview-chart">
+          <header>
+            <div>
+              <span>SKOR SIGNAL · FIXTURE LOKAL</span>
+              <h3>Kualitas hasil screening</h3>
+            </div>
+            <div className="overview-chart__score">
+              <strong>82</strong>
+              <span>/ 100</span>
+            </div>
+          </header>
+          <div className="overview-chart__legend" aria-label="Legenda grafik">
+            <span>
+              <i className="is-primary" /> Skor gabungan
+            </span>
+            <span>
+              <i /> Ambang rule
+            </span>
+            <em>8 pemindaian terakhir</em>
+          </div>
+          <div
+            className="overview-chart__plot"
+            aria-label="Grafik skor signal demonstrasi"
+          >
+            <svg
+              viewBox="0 0 800 280"
+              role="img"
+              aria-labelledby="overview-chart-title"
+            >
+              <title id="overview-chart-title">
+                Skor signal dari delapan pemindaian fixture
+              </title>
+              <defs>
+                <linearGradient id="overview-area" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#43df9b" stopOpacity="0.28" />
+                  <stop offset="1" stopColor="#43df9b" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <g className="overview-chart__grid">
+                <path d="M20 44H780M20 104H780M20 164H780M20 224H780" />
+                <path d="M112 20V250M224 20V250M336 20V250M448 20V250M560 20V250M672 20V250" />
+              </g>
+              <path className="overview-chart__threshold" d="M20 168H780" />
+              <path
+                className="overview-chart__area"
+                d="M20 216 C78 210 100 188 132 192 S196 178 228 157 S288 168 326 142 S392 126 438 134 S508 112 550 119 S618 91 662 98 S730 57 780 64 L780 250 L20 250 Z"
+              />
+              <path
+                className="overview-chart__line"
+                d="M20 216 C78 210 100 188 132 192 S196 178 228 157 S288 168 326 142 S392 126 438 134 S508 112 550 119 S618 91 662 98 S730 57 780 64"
+              />
+              <g className="overview-chart__points">
+                <circle cx="20" cy="216" r="4" />
+                <circle cx="132" cy="192" r="4" />
+                <circle cx="228" cy="157" r="4" />
+                <circle cx="326" cy="142" r="4" />
+                <circle cx="438" cy="134" r="4" />
+                <circle cx="550" cy="119" r="4" />
+                <circle cx="662" cy="98" r="4" />
+                <circle cx="780" cy="64" r="5" />
+              </g>
+            </svg>
+            <div className="overview-chart__axis" aria-hidden="true">
+              <span>Awal sesi</span>
+              <span>Pemindaian terbaru</span>
+            </div>
+          </div>
+          <footer>
+            <div>
+              <span>Rule dominan</span>
+              <strong>Momentum confirmation</strong>
+            </div>
+            <div>
+              <span>Kualitas data</span>
+              <strong>
+                <Check /> Lengkap
+              </strong>
+            </div>
+            <div>
+              <span>Mode</span>
+              <strong>Screening 1D</strong>
+            </div>
+          </footer>
+        </article>
+
+        <aside className="overview-signal-panel">
+          <header>
+            <div>
+              <span>HASIL TERBARU</span>
+              <h3>Signal terpantau</h3>
+            </div>
+            <button onClick={() => go("analysis")}>Lihat semua</button>
+          </header>
+          <div className="overview-signal-list">
+            {demoSignals.map((signal) => (
+              <button key={signal.symbol} onClick={() => go("analysis")}>
+                <span
+                  className={`signal-state is-${signal.state.toLowerCase().replace(" ", "-")}`}
+                />
+                <div>
+                  <strong>{signal.symbol}</strong>
+                  <small>{signal.reason}</small>
+                </div>
+                <em>{signal.score}</em>
+              </button>
+            ))}
+          </div>
+          <div className="overview-signal-panel__note">
+            <Database />
+            <p>
+              <strong>Data demonstrasi</strong>
+              <span>Nilai ini tidak merepresentasikan kondisi pasar live.</span>
+            </p>
+          </div>
+        </aside>
+      </section>
+
+      <section
+        className="overview-actions"
+        aria-label="Shortcut fitur workspace"
+      >
+        {quickActions.map(([label, description, view, Icon]) => (
+          <button key={view} onClick={() => go(view)}>
+            <Icon />
+            <span>
+              <strong>{label}</strong>
+              <small>{description}</small>
+            </span>
             <ChevronRight />
           </button>
         ))}
       </section>
-      <section className="integration-strip">
-        <div>
-          <Activity />
-          <span>Authorization</span>
-          <strong>Endpoint nyata</strong>
-        </div>
-        <div>
-          <Database />
-          <span>Dataset</span>
-          <strong>Fixture lokal</strong>
-        </div>
-        <div>
-          <Braces />
-          <span>Compute engine</span>
-          <strong>Simulasi UI</strong>
-        </div>
-        <div>
-          <BookOpenCheck />
-          <span>Jurnal API</span>
-          <strong>State lokal</strong>
-        </div>
-      </section>
-    </>
+    </div>
   );
 }
 

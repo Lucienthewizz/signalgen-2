@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ArrowRight, Check, ShieldCheck, Star } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, Check, ShieldCheck } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { FeatureFigure } from "@/components/feature-figure";
 import { MarketTrace } from "@/components/market-trace";
@@ -10,14 +10,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-  type CarouselApi,
-} from "@/components/ui/carousel";
+import { Pricing } from "@/components/ui/single-pricing-card-1";
+import { TestimonialsMarquee } from "@/components/ui/testimonials-columns-1";
 import { faqItems, sampleRatings } from "@/data/demo";
 import { cn } from "@/lib/utils";
 import type { User } from "@/types";
@@ -94,19 +88,7 @@ export function PublicWorkspace({
   backendOnline: boolean;
   user: User | null;
 }) {
-  const [ratingApi, setRatingApi] = useState<CarouselApi>();
-  const [ratingIndex, setRatingIndex] = useState(0);
   const [selectedView, setSelectedView] = useState(0);
-
-  useEffect(() => {
-    if (!ratingApi) return;
-    const updateIndex = () => setRatingIndex(ratingApi.selectedScrollSnap());
-    updateIndex();
-    ratingApi.on("select", updateIndex);
-    return () => {
-      ratingApi.off("select", updateIndex);
-    };
-  }, [ratingApi]);
 
   return (
     <main className="workbench landing-shell">
@@ -121,18 +103,26 @@ export function PublicWorkspace({
               <Brand compact />
             </a>
             <nav className="landing-header__nav" aria-label="Navigasi utama">
-              <a href="#capabilities">Fitur</a>
               <a href="#product-tour">Preview</a>
+              <a href="#capabilities">Fitur</a>
+              <a href="#pricing">Harga</a>
               <a href="#reviews">Rating</a>
               <a href="#faq">FAQ</a>
               <a href="#app/overview">Demo</a>
             </nav>
-            <a
-              className="landing-header__session"
-              href={user ? "#app/overview" : "#login"}
-            >
-              {user ? "Dashboard" : "Masuk"}
-            </a>
+            <div className="landing-header__actions">
+              {!user && (
+                <a className="landing-header__register" href="#register">
+                  Register
+                </a>
+              )}
+              <a
+                className="landing-header__session"
+                href={user ? "#app/overview" : "#login"}
+              >
+                {user ? "Dashboard" : "Masuk"}
+              </a>
+            </div>
           </div>
         </header>
         <div className="workspace__content landing-content">
@@ -182,40 +172,6 @@ export function PublicWorkspace({
               </div>
             </div>
           </section>
-          <section className="capability-section" id="capabilities">
-            <div className="section-heading split-heading">
-              <div>
-                <h3>Semua fitur utama dalam satu workspace.</h3>
-                <p>
-                  Seluruh flow pada PRD dapat dijelajahi dengan data demonstrasi
-                  yang konsisten.
-                </p>
-              </div>
-              <a className="ui-button" href="#app/overview">
-                Buka workspace <ArrowRight />
-              </a>
-            </div>
-            <div className="feature-gallery">
-              {capabilityViews.map((feature) => (
-                <a
-                  className="feature-gallery__item"
-                  href={`#app/${feature.id}`}
-                  key={feature.id}
-                >
-                  <div className="feature-gallery__figure">
-                    <FeatureFigure kind={feature.id} />
-                  </div>
-                  <div className="feature-gallery__copy">
-                    <strong>{feature.title}</strong>
-                    <p>{feature.description}</p>
-                    <span>
-                      Buka fitur <ArrowRight />
-                    </span>
-                  </div>
-                </a>
-              ))}
-            </div>
-          </section>
           <section className="product-tour" id="product-tour">
             <div className="product-tour__heading">
               <div>
@@ -254,64 +210,68 @@ export function PublicWorkspace({
               ))}
             </div>
             <figure className="product-tour__frame">
-              <img
-                key={productViews[selectedView].id}
-                src={productViews[selectedView].image}
-                alt={`Tampilan fitur ${productViews[selectedView].label} pada Signalgen web`}
-                loading={selectedView === 0 ? "eager" : "lazy"}
-              />
+              <div className="product-tour__image">
+                <img
+                  key={productViews[selectedView].id}
+                  src={productViews[selectedView].image}
+                  alt={`Tampilan fitur ${productViews[selectedView].label} pada Signalgen web`}
+                  loading={selectedView === 0 ? "eager" : "lazy"}
+                />
+                <span className="product-tour__brand-patch" aria-hidden="true">
+                  <Brand compact />
+                </span>
+              </div>
               <figcaption>
                 <strong>{productViews[selectedView].label}</strong>
                 <span>{productViews[selectedView].description}</span>
               </figcaption>
             </figure>
           </section>
+          <section className="capability-section" id="capabilities">
+            <div className="section-heading split-heading">
+              <div>
+                <h3>Semua fitur utama dalam satu workspace.</h3>
+                <p>
+                  Seluruh flow pada PRD dapat dijelajahi dengan data demonstrasi
+                  yang konsisten.
+                </p>
+              </div>
+              <a className="ui-button" href="#app/overview">
+                Buka workspace <ArrowRight />
+              </a>
+            </div>
+            <div className="feature-gallery">
+              {capabilityViews.map((feature) => (
+                <a
+                  className="feature-gallery__item"
+                  href={`#app/${feature.id}`}
+                  key={feature.id}
+                >
+                  <div className="feature-gallery__figure">
+                    <FeatureFigure kind={feature.id} />
+                  </div>
+                  <div className="feature-gallery__copy">
+                    <strong>{feature.title}</strong>
+                    <p>{feature.description}</p>
+                    <span>
+                      Buka fitur <ArrowRight />
+                    </span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+          <Pricing />
           <section className="rating-section" id="reviews">
             <div className="rating-context">
-              <h3>Format rating yang bisa digeser dan diklik.</h3>
+              <h3>Cara Signalgen terasa saat dipakai.</h3>
               <p>
-                Konten berikut adalah contoh copy untuk mengecek pengalaman
-                carousel—bukan testimoni pelanggan terverifikasi.
+                Kartu bergerak ke samping dan berhenti saat disentuh atau
+                diarahkan. Seluruh profil tetap berupa contoh UX, bukan
+                testimoni terverifikasi.
               </p>
             </div>
-            <Carousel
-              setApi={setRatingApi}
-              className="rating-carousel"
-              opts={{ loop: true }}
-            >
-              <CarouselContent>
-                {sampleRatings.map((rating, index) => (
-                  <CarouselItem key={index}>
-                    <article className="rating-card">
-                      <div className="rating-score">
-                        <Star />
-                        <strong>{rating.score}</strong>
-                        <span>/ 5</span>
-                      </div>
-                      <blockquote>“{rating.quote}”</blockquote>
-                      <footer>
-                        <span>Contoh profil</span>
-                        <strong>{rating.role}</strong>
-                      </footer>
-                    </article>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              <div className="rating-controls">
-                <CarouselPrevious className="rating-arrow" />
-                <CarouselNext className="rating-arrow" />
-              </div>
-              <div className="rating-dots" aria-label="Pilih slide rating">
-                {sampleRatings.map((_, index) => (
-                  <button
-                    key={index}
-                    className={ratingIndex === index ? "active" : ""}
-                    onClick={() => ratingApi?.scrollTo(index)}
-                    aria-label={`Buka rating ${index + 1}`}
-                  />
-                ))}
-              </div>
-            </Carousel>
+            <TestimonialsMarquee testimonials={sampleRatings} />
           </section>
           <section className="faq-section" id="faq">
             <div className="faq-intro">

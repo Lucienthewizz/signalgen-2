@@ -139,20 +139,44 @@ export const faqItems = [
 export const sampleRatings = [
   {
     score: "4.8",
+    initials: "IA",
     role: "Active investor",
     quote:
       "Alurnya jelas: saya tahu rule apa yang berjalan dan kenapa sebuah saham lolos.",
   },
   {
     score: "4.6",
+    initials: "ST",
     role: "Swing trader",
     quote:
       "Tabel hasilnya padat tapi tetap mudah dipindai. Status demo juga tidak menyesatkan.",
   },
   {
     score: "4.9",
+    initials: "PR",
     role: "Research learner",
     quote:
       "Bagian jurnal terasa menyatu dengan analisis, bukan fitur terpisah yang ditempel.",
+  },
+  {
+    score: "4.7",
+    initials: "RA",
+    role: "Rule analyst",
+    quote:
+      "Saya bisa membandingkan kondisi rule tanpa kehilangan konteks hasil screening.",
+  },
+  {
+    score: "4.8",
+    initials: "PJ",
+    role: "Pengguna jurnal",
+    quote:
+      "Signal dapat dilanjutkan ke catatan transaksi tanpa mengulang data dari awal.",
+  },
+  {
+    score: "4.6",
+    initials: "PM",
+    role: "Penguji MVP",
+    quote:
+      "Navigasi antarfungsi terasa konsisten dan status data demonstrasinya jelas.",
   },
 ];
