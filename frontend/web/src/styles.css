@@ -1688,13 +1688,13 @@ a {
 }
 .product-tour__tab {
   min-width: 0;
-  min-height: 82px;
+  min-height: 104px;
   flex: 1;
-  display: grid;
-  align-content: center;
-  gap: 6px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
   position: relative;
-  padding: 14px 16px;
+  padding: 17px 18px;
   border: 1px solid rgba(43, 65, 51, 0.62);
   border-radius: 12px;
   color: #747f77;
@@ -1732,12 +1732,26 @@ a {
 .product-tour__tab.active::after {
   transform: scaleX(1);
 }
-.product-tour__tab strong {
-  font-size: 10px;
+.product-tour__tab > svg {
+  width: 27px;
+  height: 27px;
+  flex: 0 0 auto;
+  color: #5f8d72;
+  stroke-width: 1.45;
+  transition:
+    color 0.18s ease,
+    transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.product-tour__tab span {
-  font-size: 8px;
-  line-height: 1.5;
+.product-tour__tab:hover > svg,
+.product-tour__tab.active > svg {
+  color: var(--green);
+  transform: translateY(-2px);
+}
+.product-tour__tab strong {
+  color: inherit;
+  font-size: 13px;
+  font-weight: 620;
+  letter-spacing: -0.015em;
 }
 .product-tour__frame {
   margin: 0;
@@ -1753,30 +1767,14 @@ a {
   border-radius: 14px;
   background: #070b08;
 }
-.product-tour__image img {
+.product-tour__image iframe {
   width: 100%;
   aspect-ratio: 16 / 9;
   display: block;
-  object-fit: cover;
-  object-position: top;
+  border: 0;
+  pointer-events: none;
   background: #0b0f0c;
-  image-rendering: -webkit-optimize-contrast;
   animation: screen-reveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-.product-tour__brand-patch {
-  width: 184px;
-  height: 64px;
-  display: grid;
-  place-items: center;
-  position: absolute;
-  top: 0;
-  left: 0;
-  border-right: 1px solid rgba(37, 48, 41, 0.78);
-  border-bottom: 1px solid rgba(37, 48, 41, 0.78);
-  background: #070b08;
-}
-.product-tour__brand-patch .brand--compact {
-  width: 150px;
 }
 .product-tour__frame figcaption {
   display: flex;
@@ -3405,19 +3403,6 @@ a {
   }
   .product-tour__frame {
     padding: 10px;
-  }
-  .product-tour__brand-patch {
-    width: 15%;
-    height: 9%;
-    min-width: 0;
-    place-items: start;
-    border-color: rgba(37, 48, 41, 0.45);
-  }
-  .product-tour__brand-patch .brand--compact {
-    width: 150px;
-    height: 52px;
-    transform: scale(0.24);
-    transform-origin: top left;
   }
   .product-tour__frame figcaption {
     align-items: flex-start;

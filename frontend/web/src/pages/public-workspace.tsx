@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { ArrowRight, Check, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  BarChart3,
+  BookOpenCheck,
+  Braces,
+  Check,
+  Gauge,
+  ShieldCheck,
+} from "lucide-react";
 import { Brand } from "@/components/brand";
 import { FeatureFigure } from "@/components/feature-figure";
 import { MarketTrace } from "@/components/market-trace";
@@ -15,43 +23,31 @@ import { TestimonialsMarquee } from "@/components/ui/testimonials-columns-1";
 import { faqItems, sampleRatings } from "@/data/demo";
 import { cn } from "@/lib/utils";
 import type { User } from "@/types";
-import overviewImage from "@/assets/feature-overview.png";
-import analysisImage from "@/assets/feature-analysis.png";
-import rulesImage from "@/assets/feature-rules.png";
-import journalImage from "@/assets/feature-journal.png";
-import accessImage from "@/assets/feature-access.png";
-
 const productViews = [
   {
     id: "overview",
     label: "Overview",
-    image: overviewImage,
-    description: "Status integrasi dan akses cepat ke seluruh workflow.",
+    icon: Gauge,
   },
   {
     id: "analysis",
     label: "Analisis",
-    image: analysisImage,
-    description:
-      "Konfigurasi screening atau backtest dengan hasil yang dapat ditelusuri.",
+    icon: BarChart3,
   },
   {
     id: "rules",
     label: "Rules",
-    image: rulesImage,
-    description: "Kelola rule sistem dan rule privat dari satu tempat.",
+    icon: Braces,
   },
   {
     id: "journal",
     label: "Jurnal",
-    image: journalImage,
-    description: "Catat transaksi dan lanjutkan signal menjadi draft jurnal.",
+    icon: BookOpenCheck,
   },
   {
     id: "access",
     label: "Akses",
-    image: accessImage,
-    description: "Periksa entitlement, perangkat aktif, dan cache pengguna.",
+    icon: ShieldCheck,
   },
 ] as const;
 
@@ -193,37 +189,38 @@ export function PublicWorkspace({
               role="tablist"
               aria-label="Preview fitur web"
             >
-              {productViews.map((view, index) => (
-                <button
-                  key={view.id}
-                  role="tab"
-                  aria-selected={selectedView === index}
-                  className={cn(
-                    "product-tour__tab",
-                    selectedView === index && "active",
-                  )}
-                  onClick={() => setSelectedView(index)}
-                >
-                  <strong>{view.label}</strong>
-                  <span>{view.description}</span>
-                </button>
-              ))}
+              {productViews.map((view, index) => {
+                const Icon = view.icon;
+                return (
+                  <button
+                    key={view.id}
+                    role="tab"
+                    aria-selected={selectedView === index}
+                    className={cn(
+                      "product-tour__tab",
+                      selectedView === index && "active",
+                    )}
+                    onClick={() => setSelectedView(index)}
+                  >
+                    <Icon aria-hidden="true" />
+                    <strong>{view.label}</strong>
+                  </button>
+                );
+              })}
             </div>
             <figure className="product-tour__frame">
               <div className="product-tour__image">
-                <img
+                <iframe
                   key={productViews[selectedView].id}
-                  src={productViews[selectedView].image}
-                  alt={`Tampilan fitur ${productViews[selectedView].label} pada Signalgen web`}
+                  src={`?preview=product-tour#app/${productViews[selectedView].id}`}
+                  title={`Tampilan terbaru fitur ${productViews[selectedView].label} pada Signalgen web`}
                   loading={selectedView === 0 ? "eager" : "lazy"}
+                  tabIndex={-1}
                 />
-                <span className="product-tour__brand-patch" aria-hidden="true">
-                  <Brand compact />
-                </span>
               </div>
               <figcaption>
                 <strong>{productViews[selectedView].label}</strong>
-                <span>{productViews[selectedView].description}</span>
+                <span>Preview langsung dari workspace terbaru.</span>
               </figcaption>
             </figure>
           </section>
