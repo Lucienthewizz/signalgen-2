@@ -98,6 +98,7 @@ export function AuthPage({
         );
         if (result.access_token) {
           session.setToken(result.access_token);
+          await api.ensureAppSession();
           onAuthenticated(result.user);
         } else {
           setNotice({
@@ -109,6 +110,7 @@ export function AuthPage({
       } else {
         const result = await api.login(email, password);
         session.setToken(result.access_token);
+        await api.ensureAppSession();
         onAuthenticated(result.user);
       }
     } catch (error) {

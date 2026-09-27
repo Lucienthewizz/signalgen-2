@@ -51,16 +51,23 @@ import {
 } from "@/components/ui/table";
 import {
   demoRules,
-  demoSessions,
   demoSignals,
   initialTransactions,
   type DemoRule,
   type DemoTransaction,
 } from "@/data/demo";
+import {
+  runLiveScreener,
+  type LiveScreenerRun,
+  type ScreenerStage,
+} from "@/analysis/screener";
+import { api } from "@/api/client";
+import type { AccountDevice, AccountState } from "@/types";
 
 export type DemoView = "overview" | "analysis" | "rules" | "journal" | "access";
 
-type JobState = "idle" | "preparing" | "running" | "completed" | "cancelled";
+type JobState =
+  "idle" | "preparing" | "running" | "completed" | "cancelled" | "failed";
 
 const viewMeta: Record<DemoView, { title: string; description: string }> = {
   overview: {
@@ -93,17 +100,25 @@ const navItems: Array<{ view: DemoView; label: string; icon: typeof Gauge }> = [
   { view: "access", label: "Access", icon: ShieldCheck },
 ];
 
-function DemoNotice() {
+function DemoNotice({ authenticated }: { authenticated: boolean }) {
   return (
     <div className="demo-notice" role="note">
       <Database />
       <div>
-        <strong>Demo data is active</strong>
+        <strong>
+          {authenticated
+            ? "Go-connected features are ready"
+            : "Demo data is active"}
+        </strong>
         <span>
-          Every feature is available; local changes persist for this session.
+          {authenticated
+            ? "Analysis and account access use the Go API; rules and journal remain previews."
+            : "Sign in to use Go-connected analysis and owner-scoped device controls."}
         </span>
       </div>
-      <Badge variant="outline">Local data</Badge>
+      <Badge variant="outline">
+        {authenticated ? "Hybrid POC" : "Local data"}
+      </Badge>
     </div>
   );
 }
@@ -344,127 +359,138 @@ function AnalysisSkeleton() {
 
 function AnalysisPanel({
   onDraft,
-  rules,
+  authenticated,
+  backendOnline,
 }: {
   onDraft: (symbol: string) => void;
-  rules: DemoRule[];
+  authenticated: boolean;
+  backendOnline: boolean;
 }) {
   const [job, setJob] = useState<JobState>("idle");
   const [progress, setProgress] = useState(0);
-  const timer = useRef<number | null>(null);
-  const prepareTimer = useRef<number | null>(null);
-  const [config, setConfig] = useState({
-    mode: "Screening",
-    symbol: "BBCA, TLKM, ASII, BMRI",
-    rule: "Momentum confirmation",
-    timeframe: "1D",
-    period: "1 year",
-  });
+  const [stage, setStage] = useState("Siap memulai");
+  const [error, setError] = useState<string | null>(null);
+  const [liveRun, setLiveRun] = useState<LiveScreenerRun | null>(null);
+  const controller = useRef<AbortController | null>(null);
 
   useEffect(
     () => () => {
-      if (timer.current) window.clearInterval(timer.current);
-      if (prepareTimer.current) window.clearTimeout(prepareTimer.current);
+      controller.current?.abort();
     },
     [],
   );
 
-  function run() {
-    if (timer.current) window.clearInterval(timer.current);
-    if (prepareTimer.current) window.clearTimeout(prepareTimer.current);
+  function updateStage(next: ScreenerStage) {
+    const stages: Record<ScreenerStage, [string, number]> = {
+      validating_access: ["Memvalidasi sesi dan hak screener", 20],
+      preparing_data: ["Menyiapkan fixture IDX", 45],
+      loading_engine: ["Menghitung feature melalui Go/WASM", 70],
+      private_scoring: ["Meminta keputusan privat dari server", 88],
+    };
+    setStage(stages[next][0]);
+    setProgress(stages[next][1]);
+    setJob(next === "private_scoring" ? "running" : "preparing");
+  }
+
+  async function run() {
+    if (!authenticated) {
+      setError("Masuk ke akun terlebih dahulu untuk membuat app-session.");
+      setStage("Autentikasi diperlukan");
+      setProgress(0);
+      setJob("failed");
+      return;
+    }
+    if (!backendOnline) {
+      setError("Backend Go belum terhubung. Jalankan API lalu coba lagi.");
+      setStage("Backend belum terhubung");
+      setProgress(0);
+      setJob("failed");
+      return;
+    }
+    controller.current?.abort();
+    controller.current = new AbortController();
+    setError(null);
+    setLiveRun(null);
     setJob("preparing");
-    setProgress(12);
-    prepareTimer.current = window.setTimeout(() => {
-      setJob("running");
-      timer.current = window.setInterval(() => {
-        setProgress((value) => {
-          const next = Math.min(value + 18, 100);
-          if (next === 100) {
-            if (timer.current) window.clearInterval(timer.current);
-            setJob("completed");
-          }
-          return next;
-        });
-      }, 240);
-    }, 350);
+    try {
+      const result = await runLiveScreener(
+        controller.current.signal,
+        updateStage,
+      );
+      setLiveRun(result);
+      setStage("Analisis hybrid selesai");
+      setProgress(100);
+      setJob("completed");
+    } catch (caught) {
+      if (controller.current.signal.aborted) return;
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Analisis tidak dapat diselesaikan.",
+      );
+      setStage("Analisis gagal");
+      setJob("failed");
+    }
   }
 
   function cancel() {
-    if (timer.current) window.clearInterval(timer.current);
-    if (prepareTimer.current) window.clearTimeout(prepareTimer.current);
+    controller.current?.abort();
+    setStage("Analisis dibatalkan");
+    setProgress(0);
     setJob("cancelled");
   }
+
+  const status =
+    liveRun?.result.decision === "candidate" ? "Match" : "No match";
+  const reasons = liveRun?.result.reason_codes
+    .map((reason) => reason.toLowerCase().replaceAll("_", " "))
+    .join(", ");
 
   return (
     <div className="analysis-layout">
       <section className="panel configure-panel">
         <div className="panel-heading">
           <div>
-            <h3>Configuration</h3>
+            <h3>Konfigurasi POC</h3>
           </div>
-          <Badge variant="outline">Demo</Badge>
+          <Badge variant="outline">Go/WASM + Gin</Badge>
         </div>
         <div className="control-grid">
           <label>
             Mode
-            <select
-              value={config.mode}
-              onChange={(e) => setConfig({ ...config, mode: e.target.value })}
-            >
+            <select value="Screening" disabled>
               <option>Screening</option>
-              <option>Backtest</option>
             </select>
           </label>
           <label>
             Timeframe
-            <select
-              value={config.timeframe}
-              onChange={(e) =>
-                setConfig({ ...config, timeframe: e.target.value })
-              }
-            >
+            <select value="1D" disabled>
               <option>1D</option>
-              <option>4H</option>
             </select>
           </label>
           <label className="control-wide">
-            Stock list
-            <Input
-              value={config.symbol}
-              onChange={(e) => setConfig({ ...config, symbol: e.target.value })}
-            />
+            Saham
+            <Input value="BBCA.JK" disabled />
           </label>
           <label>
             Rule
-            <select
-              value={config.rule}
-              onChange={(e) => setConfig({ ...config, rule: e.target.value })}
-            >
-              {rules
-                .filter((rule) => rule.enabled)
-                .map((rule) => (
-                  <option key={rule.id}>{rule.name}</option>
-                ))}
+            <select value="Default Scalping" disabled>
+              <option>Default Scalping</option>
             </select>
           </label>
           <label>
-            Period
-            <select
-              value={config.period}
-              onChange={(e) => setConfig({ ...config, period: e.target.value })}
-            >
-              <option>6 months</option>
-              <option>1 year</option>
-              <option>3 years</option>
+            Periode fixture
+            <select value="01 Jan—09 Feb 2026" disabled>
+              <option>01 Jan—09 Feb 2026</option>
             </select>
           </label>
         </div>
         <div className="dataset-readout">
           <Database />
           <div>
-            <strong>IDX daily fixture · 4 symbols</strong>
+            <strong>IDX daily fixture · 1 simbol · 40 candle</strong>
             <span>
-              01 Sep 2025—01 Sep 2026 · checksum demo-8f21 · 30-candle warmup
+              Data sintetis berversi · hash diverifikasi · bukan harga live
             </span>
           </div>
         </div>
@@ -475,28 +501,20 @@ function AnalysisPanel({
             disabled={job === "running" || job === "preparing"}
           >
             {job === "completed" ? <RefreshCw /> : <BarChart3 />}
-            {job === "completed" ? "Run again" : "Run analysis"}
+            {job === "completed" ? "Jalankan lagi" : "Jalankan analisis"}
           </Button>
           {(job === "running" || job === "preparing") && (
             <Button className="ui-button" onClick={cancel}>
-              <XCircle /> Cancel
+              <XCircle /> Batalkan
             </Button>
           )}
         </div>
         {job !== "idle" && (
           <div className={`job-status is-${job}`} role="status">
             <div>
-              <span>
-                {job === "preparing"
-                  ? "Preparing dataset"
-                  : job === "running"
-                    ? "Running fixture"
-                    : job === "completed"
-                      ? "Analysis complete"
-                      : "Analysis cancelled"}
-              </span>
+              <span>{stage}</span>
               <strong>
-                {job === "cancelled" ? "Configuration saved" : `${progress}%`}
+                {job === "cancelled" ? "Konfigurasi tersimpan" : `${progress}%`}
               </strong>
             </div>
             <i
@@ -506,44 +524,49 @@ function AnalysisPanel({
             />
           </div>
         )}
+        {error && (
+          <div className="analysis-error" role="alert">
+            <CircleAlert />
+            <span>
+              <strong>Analisis belum berhasil</strong>
+              {error}
+            </span>
+            {!authenticated && <a href="#login">Masuk sekarang</a>}
+          </div>
+        )}
       </section>
       <section className="panel results-panel">
         <div className="panel-heading">
           <div>
-            <h3>Results & evidence</h3>
+            <h3>Hasil & bukti eksekusi</h3>
           </div>
-          <span className="muted-meta">
-            rule{" "}
-            {rules.find((rule) => rule.name === config.rule)?.version ??
-              "draft"}{" "}
-            · synthetic
-          </span>
+          <span className="muted-meta">default-scalping-v1 · synthetic</span>
         </div>
         {job === "preparing" || job === "running" ? (
           <AnalysisSkeleton />
-        ) : job !== "completed" ? (
+        ) : job !== "completed" || !liveRun ? (
           <div className="results-empty">
             <BarChart3 />
-            <strong>Results will appear here</strong>
+            <strong>Hasil akan tampil di sini</strong>
             <p>
-              Run this configuration to view the summary, match reasons,
-              assumptions, and signal table.
+              Jalankan konfigurasi untuk melihat feature hasil WASM, skor
+              server, alasan keputusan, serta versi data yang digunakan.
             </p>
           </div>
         ) : (
           <div className="results-loaded">
             <div className="result-metrics">
               <div>
-                <span>Matches</span>
-                <strong>2 / 4</strong>
+                <span>Keputusan</span>
+                <strong>{liveRun.result.decision}</strong>
               </div>
               <div>
-                <span>Median score</span>
-                <strong>71.0</strong>
+                <span>Skor server</span>
+                <strong>{liveRun.result.score} / 100</strong>
               </div>
               <div>
-                <span>Data quality</span>
-                <strong>Complete</strong>
+                <span>Kualitas data</span>
+                <strong>{liveRun.manifest.quality.status}</strong>
               </div>
             </div>
             <div className="result-table-wrap">
@@ -559,39 +582,71 @@ function AnalysisPanel({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {demoSignals.map((signal) => (
-                    <TableRow key={signal.symbol}>
-                      <TableCell>
-                        <strong>{signal.symbol}</strong>
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={`signal-state is-${signal.state.toLowerCase().replace(" ", "-")}`}
-                        >
-                          {signal.state}
-                        </span>
-                      </TableCell>
-                      <TableCell>{signal.close}</TableCell>
-                      <TableCell>{signal.score}</TableCell>
-                      <TableCell>{signal.reason}</TableCell>
-                      <TableCell>
-                        <button
-                          className="table-action"
-                          onClick={() => onDraft(signal.symbol)}
-                        >
-                          Draft journal
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  <TableRow>
+                    <TableCell>
+                      <strong>{liveRun.result.symbol}</strong>
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`signal-state is-${status.toLowerCase().replace(" ", "-")}`}
+                      >
+                        {status}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {new Intl.NumberFormat("id-ID").format(
+                        liveRun.latestClose,
+                      )}
+                    </TableCell>
+                    <TableCell>{liveRun.result.score}</TableCell>
+                    <TableCell>
+                      {reasons || "Tidak ada kondisi yang terpenuhi"}
+                    </TableCell>
+                    <TableCell>
+                      <button
+                        className="table-action"
+                        onClick={() => onDraft(liveRun.result.symbol)}
+                      >
+                        Draft jurnal
+                      </button>
+                    </TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
             </div>
             <div className="assumption-line">
               <CircleAlert />
               <span>
-                <strong>Assumptions:</strong> closing prices with no slippage.
-                These are UX fixtures, not investment-engine output.
+                <strong>Eksekusi:</strong> indikator dihitung oleh Go/WASM di
+                browser, sedangkan keputusan akhir dihitung oleh private scoring
+                Gin. Fixture ini bukan prediksi harga atau rekomendasi
+                transaksi.
+              </span>
+            </div>
+            <div
+              className="feature-evidence"
+              aria-label="Feature vector hasil Go WebAssembly"
+            >
+              <span>
+                RSI14 <strong>{liveRun.features.rsi.toFixed(2)}</strong>
+              </span>
+              <span>
+                EMA cepat{" "}
+                <strong>{liveRun.features.ema_fast.toFixed(2)}</strong>
+              </span>
+              <span>
+                EMA lambat{" "}
+                <strong>{liveRun.features.ema_slow.toFixed(2)}</strong>
+              </span>
+              <span>
+                Rasio volume{" "}
+                <strong>{liveRun.features.volume_ratio.toFixed(2)}×</strong>
+              </span>
+              <span>
+                ATR/close{" "}
+                <strong>
+                  {(liveRun.features.atr_ratio * 100).toFixed(2)}%
+                </strong>
               </span>
             </div>
           </div>
@@ -958,91 +1013,261 @@ function JournalPanel({
 
 function AccessPanel({
   backendOnline,
-  sessions,
-  setSessions,
+  authenticated,
   cacheState,
   setCacheState,
 }: {
   backendOnline: boolean;
-  sessions: typeof demoSessions;
-  setSessions: Dispatch<SetStateAction<typeof demoSessions>>;
+  authenticated: boolean;
   cacheState: string;
   setCacheState: Dispatch<SetStateAction<string>>;
 }) {
+  const [account, setAccount] = useState<AccountState | null>(null);
+  const [devices, setDevices] = useState<AccountDevice[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deviceLabel, setDeviceLabel] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  async function loadAccess() {
+    if (!authenticated || !backendOnline) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [nextAccount, response] = await Promise.all([
+        api.account(),
+        api.listDevices(),
+      ]);
+      setAccount(nextAccount);
+      setDevices(response.items);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Data akses belum dapat dimuat.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadAccess();
+  }, [authenticated, backendOnline]);
+
+  async function renameDevice(event: FormEvent, device: AccountDevice) {
+    event.preventDefault();
+    const label = deviceLabel.trim();
+    if (!label) return;
+    setSavingId(device.id);
+    setError(null);
+    try {
+      await api.renameDevice(device.id, label);
+      setEditingId(null);
+      await loadAccess();
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Nama belum tersimpan.",
+      );
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function revokeDevice(device: AccountDevice) {
+    if (
+      !window.confirm(
+        `Cabut akses ${device.label}? Semua app-session perangkat ini akan tidak berlaku.`,
+      )
+    )
+      return;
+    setSavingId(device.id);
+    setError(null);
+    try {
+      await api.revokeDevice(device.id);
+      await loadAccess();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Perangkat belum dapat dicabut.",
+      );
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  const ready = authenticated && backendOnline && account;
+
   return (
     <div className="access-grid">
       <section className="panel entitlement-panel">
         <div className="panel-heading">
           <div>
             <span>ENTITLEMENT</span>
-            <h3>Research access</h3>
+            <h3>Akses riset</h3>
           </div>
-          <Badge variant="outline">Demo tier</Badge>
+          <Badge variant="outline">
+            {account ? account.user.role : authenticated ? "Memuat" : "Guest"}
+          </Badge>
         </div>
         <div className="entitlement-row">
           <span>Screening</span>
-          <strong>
-            <Check /> Allowed
-          </strong>
+          {account?.features.includes("screener") ? (
+            <strong>
+              <Check /> Diizinkan
+            </strong>
+          ) : (
+            <em>
+              <X /> Belum aktif
+            </em>
+          )}
         </div>
         <div className="entitlement-row">
-          <span>3-year backtest</span>
-          <strong>
-            <Check /> Allowed
-          </strong>
+          <span>Backtest</span>
+          {account?.features.includes("backtest") ? (
+            <strong>
+              <Check /> Diizinkan
+            </strong>
+          ) : (
+            <em>
+              <X /> Belum aktif
+            </em>
+          )}
         </div>
         <div className="entitlement-row">
           <span>Realtime feed</span>
           <em>
-            <X /> Outside MVP scope
+            <X /> Di luar MVP
           </em>
         </div>
         <div className="auth-contract">
           <KeyRound />
           <div>
-            <strong>Backend API</strong>
+            <strong>{ready ? "Sesi terverifikasi" : "Backend API"}</strong>
             <span>
-              {backendOnline
-                ? "Base API available; sign-in uses the /api/auth contract"
-                : "Base API unavailable; sign-in will show the actual error"}
+              {!backendOnline
+                ? "Go API belum terhubung."
+                : !authenticated
+                  ? "Masuk untuk membaca entitlement dan perangkat milik akun."
+                  : account
+                    ? `${account.user.email} · ${account.capabilities_version}`
+                    : "Memvalidasi akun dan app-session…"}
             </span>
           </div>
         </div>
+        {!authenticated && (
+          <a className="access-login" href="#login">
+            Masuk ke akun
+          </a>
+        )}
       </section>
       <section className="panel sessions-panel">
         <div className="panel-heading">
           <div>
-            <span>SESSIONS</span>
-            <h3>Active devices</h3>
+            <span>PERANGKAT</span>
+            <h3>Instalasi akun</h3>
           </div>
-          <span className="muted-meta">{sessions.length} devices</span>
+          <span className="muted-meta">
+            {loading ? "memuat…" : `${devices.length} perangkat`}
+          </span>
         </div>
-        {sessions.map((session) => (
-          <article key={session.id}>
+        {loading && !account && (
+          <div className="device-loading" aria-label="Memuat perangkat">
+            <Skeleton />
+            <Skeleton />
+          </div>
+        )}
+        {!loading && authenticated && devices.length === 0 && !error && (
+          <div className="device-empty">
+            <Activity />
+            <strong>Belum ada perangkat</strong>
+            <span>App-session pertama akan muncul setelah login berhasil.</span>
+          </div>
+        )}
+        {!authenticated && (
+          <div className="device-empty">
+            <KeyRound />
+            <strong>Autentikasi diperlukan</strong>
+            <span>Daftar ini hanya dibaca dari resource milik akun.</span>
+          </div>
+        )}
+        {devices.map((device) => (
+          <article key={device.id}>
             <div className="device-icon">
               <Activity />
             </div>
             <div>
-              <strong>
-                {session.device}
-                {session.current && <Badge variant="outline">Current</Badge>}
-              </strong>
-              <span>
-                {session.place} · {session.active}
-              </span>
+              {editingId === device.id ? (
+                <form
+                  className="device-rename"
+                  onSubmit={(event) => renameDevice(event, device)}
+                >
+                  <Input
+                    value={deviceLabel}
+                    onChange={(event) => setDeviceLabel(event.target.value)}
+                    maxLength={100}
+                    aria-label={`Nama baru untuk ${device.label}`}
+                    autoFocus
+                  />
+                  <button type="submit" disabled={savingId === device.id}>
+                    Simpan
+                  </button>
+                  <button type="button" onClick={() => setEditingId(null)}>
+                    Batal
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <strong>
+                    {device.label}
+                    {device.current && (
+                      <Badge variant="outline">Saat ini</Badge>
+                    )}
+                  </strong>
+                  <span>
+                    {device.status} · terakhir aktif{" "}
+                    {formatDeviceTime(device.last_seen_at)}
+                  </span>
+                </>
+              )}
             </div>
-            {!session.current && (
-              <button
-                className="table-action"
-                onClick={() =>
-                  setSessions(sessions.filter((item) => item.id !== session.id))
-                }
-              >
-                Revoke
-              </button>
+            {editingId !== device.id && (
+              <div className="device-actions">
+                <button
+                  className="icon-action"
+                  onClick={() => {
+                    setEditingId(device.id);
+                    setDeviceLabel(device.label);
+                  }}
+                  aria-label={`Ubah nama ${device.label}`}
+                >
+                  <Pencil />
+                </button>
+                {!device.current && device.status === "active" && (
+                  <button
+                    className="table-action is-danger"
+                    disabled={savingId === device.id}
+                    onClick={() => void revokeDevice(device)}
+                  >
+                    Cabut
+                  </button>
+                )}
+              </div>
             )}
           </article>
         ))}
+        {error && (
+          <div className="access-error" role="alert">
+            <CircleAlert />
+            <span>
+              <strong>Data akses belum siap</strong>
+              {error}
+            </span>
+            <button onClick={() => void loadAccess()}>Coba lagi</button>
+          </div>
+        )}
       </section>
       <section className="panel cache-panel">
         <div>
@@ -1063,19 +1288,29 @@ function AccessPanel({
   );
 }
 
+function formatDeviceTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) return "waktu tidak tersedia";
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
+}
+
 export function DemoWorkspace({
   view,
   backendOnline,
+  authenticated,
 }: {
   view: DemoView;
   backendOnline: boolean;
+  authenticated: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [draftSymbol, setDraftSymbol] = useState<string | null>(null);
   const [rules, setRules] = useState<DemoRule[]>(demoRules);
   const [transactions, setTransactions] =
     useState<DemoTransaction[]>(initialTransactions);
-  const [sessions, setSessions] = useState(demoSessions);
   const [cacheState, setCacheState] = useState("14.8 MB · encrypted (sample)");
   const meta = viewMeta[view];
   function go(next: DemoView) {
@@ -1156,14 +1391,19 @@ export function DemoWorkspace({
             </div>
           </div>
           <div className="topbar__actions">
-            <span className="preview-chip">Static data</span>
-            <a className="ui-button" href="#login">
-              Sign in
+            <span className="preview-chip">
+              {authenticated ? "Go API connected" : "Static preview"}
+            </span>
+            <a
+              className="ui-button"
+              href={authenticated ? "#account" : "#login"}
+            >
+              {authenticated ? "Account" : "Sign in"}
             </a>
           </div>
         </header>
         <div className="workspace__content demo-content">
-          <DemoNotice />
+          <DemoNotice authenticated={authenticated} />
           <div className="page-heading">
             <div>
               <h2>{meta.title}</h2>
@@ -1174,7 +1414,11 @@ export function DemoWorkspace({
           <div className="route-stage" key={view}>
             {view === "overview" && <OverviewPanel go={go} />}
             {view === "analysis" && (
-              <AnalysisPanel onDraft={draft} rules={rules} />
+              <AnalysisPanel
+                onDraft={draft}
+                authenticated={authenticated}
+                backendOnline={backendOnline}
+              />
             )}
             {view === "rules" && (
               <RulesPanel rules={rules} setRules={setRules} />
@@ -1190,8 +1434,7 @@ export function DemoWorkspace({
             {view === "access" && (
               <AccessPanel
                 backendOnline={backendOnline}
-                sessions={sessions}
-                setSessions={setSessions}
+                authenticated={authenticated}
                 cacheState={cacheState}
                 setCacheState={setCacheState}
               />

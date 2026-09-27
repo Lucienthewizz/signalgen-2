@@ -59,7 +59,7 @@ export default function App() {
         if (active) setBackendOnline(true);
       }),
       session.getToken()
-        ? api.me().then((profile) => {
+        ? Promise.all([api.me(), api.ensureAppSession()]).then(([profile]) => {
             if (active) setUser(profile);
           })
         : Promise.resolve(),
@@ -82,10 +82,15 @@ export default function App() {
     location.hash = "account";
   }
 
-  function logout() {
-    session.clear();
-    setUser(null);
-    location.hash = "home";
+  async function logout() {
+    try {
+      if (session.getToken() && session.getAppSession())
+        await api.revokeCurrentAppSession();
+    } finally {
+      session.clear();
+      setUser(null);
+      location.hash = "home";
+    }
   }
 
   if (booting) {
@@ -122,6 +127,7 @@ export default function App() {
       <DemoWorkspace
         view={route.replace("app/", "") as DemoView}
         backendOnline={backendOnline}
+        authenticated={Boolean(user && session.getAppSession())}
       />
     );
   }

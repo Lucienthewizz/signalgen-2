@@ -157,6 +157,7 @@ signalgen.db
 signalgen.log
 *.log
 reports/
+frontend/web/public/wasm/
 
 # Thesis/sprint docs kept local-only, not part of the running system
 docs/

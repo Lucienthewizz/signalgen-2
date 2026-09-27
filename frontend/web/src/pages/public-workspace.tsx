@@ -241,13 +241,16 @@ export function PublicWorkspace({
                   </a>
                 </div>
                 <div className="feature-gallery">
-                  {capabilityViews.map((feature) => (
+                  {capabilityViews.map((feature, index) => (
                     <a
                       className="feature-gallery__item"
                       href={`#app/${feature.id}`}
                       key={feature.id}
                     >
                       <div className="feature-gallery__figure">
+                        <span className="feature-gallery__index">
+                          FIG 0.{index + 1}
+                        </span>
                         <FeatureFigure kind={feature.id} />
                       </div>
                       <div className="feature-gallery__copy">
