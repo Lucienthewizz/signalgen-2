@@ -1,18 +1,20 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.8.0
+  version: 0.9.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
-    Supabase performs identity login; this API verifies its bearer token and
-    issues a separate opaque app-session token. Proposed routes that are not
-    implemented are intentionally excluded.
+    The Go API performs email/password and recovery flows through Supabase Auth,
+    verifies returned bearer tokens, and issues a separate opaque app-session
+    token. Proposed routes that are not implemented are intentionally excluded.
 servers:
   - url: http://127.0.0.1:8080
     description: Local Docker development
 tags:
   - name: Operations
     description: Liveness and dependency readiness.
+  - name: Authentication
+    description: Go-owned email/password flows backed by Supabase Auth.
   - name: Sessions
     description: SignalGen app-session lifecycle after Supabase login.
   - name: Account
@@ -23,6 +25,153 @@ tags:
     description: Server-role protected entitlement administration.
 
 paths:
+  /api:
+    get:
+      tags: [Operations]
+      operationId: getAPIStatus
+      summary: Frontend-compatible API status
+      security: []
+      responses:
+        "200":
+          description: API identity and status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIStatus"
+  /api/auth/register:
+    post:
+      tags: [Authentication]
+      operationId: register
+      summary: Register an email/password identity through Go
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "200":
+          description: Account created; access token is nullable when email confirmation is required.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Exchange email/password credentials for a Supabase bearer token through Go
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Authenticated bearer session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/auth/me:
+    get:
+      tags: [Authentication]
+      operationId: getAuthProfile
+      summary: Read the Supabase-verified public identity
+      security:
+        - supabaseBearer: []
+      responses:
+        "200":
+          description: Server-verified public identity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/auth/password/reset-request:
+    post:
+      tags: [Authentication]
+      operationId: requestPasswordReset
+      summary: Send a Supabase recovery email without revealing account existence
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetRequest"
+      responses:
+        "200":
+          description: Generic recovery acknowledgement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/auth/password/reset:
+    post:
+      tags: [Authentication]
+      operationId: resetPassword
+      summary: Refresh a recovery session and update its password through Go
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetConfirmRequest"
+      responses:
+        "200":
+          description: Password updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /health:
     get:
       tags: [Operations]
@@ -892,6 +1041,74 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
   schemas:
+    APIStatus:
+      type: object
+      required: [name, version, description, docs, status]
+      properties:
+        name: {type: string}
+        version: {type: string, enum: [0.9.0]}
+        description: {type: string}
+        docs: {type: string}
+        status: {type: string, enum: [ok]}
+    AuthUser:
+      type: object
+      required: [id, email, full_name]
+      properties:
+        id: {type: string}
+        email: {type: string, format: email}
+        full_name: {type: string, nullable: true}
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [full_name, email, password]
+      properties:
+        full_name: {type: string, minLength: 2, maxLength: 100}
+        email: {type: string, format: email, maxLength: 320}
+        password: {type: string, format: password, minLength: 8, maxLength: 1024}
+    RegisterResponse:
+      type: object
+      required: [message, requires_email_confirmation, access_token, user]
+      properties:
+        message: {type: string}
+        requires_email_confirmation: {type: boolean}
+        access_token: {type: string, nullable: true, writeOnly: true}
+        user:
+          $ref: "#/components/schemas/AuthUser"
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: {type: string, format: email, maxLength: 320}
+        password: {type: string, format: password, minLength: 1, maxLength: 1024}
+    LoginResponse:
+      type: object
+      required: [access_token, token_type, expires_in, user]
+      properties:
+        access_token: {type: string, writeOnly: true}
+        token_type: {type: string, enum: [bearer]}
+        expires_in: {type: integer, minimum: 1}
+        user:
+          $ref: "#/components/schemas/AuthUser"
+    PasswordResetRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email: {type: string, format: email, maxLength: 320}
+    PasswordResetConfirmRequest:
+      type: object
+      additionalProperties: false
+      required: [access_token, refresh_token, password]
+      properties:
+        access_token: {type: string, minLength: 1, writeOnly: true}
+        refresh_token: {type: string, minLength: 1, writeOnly: true}
+        password: {type: string, format: password, minLength: 8, maxLength: 1024}
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message: {type: string}
     HealthResponse:
       type: object
       required: [status]

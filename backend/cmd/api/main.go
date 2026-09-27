@@ -30,6 +30,7 @@ func main() {
 	fixturePath := environment("SIGNALGEN_FIXTURE_PATH", "/usr/share/signalgen/fixtures/default_scalping_v1.json")
 	address := environment("SIGNALGEN_GO_API_ADDR", ":8080")
 	allowedOrigins := commaSeparatedEnvironment("SIGNALGEN_CORS_ORIGINS")
+	passwordResetRedirectURL := environment("SIGNALGEN_PASSWORD_RESET_REDIRECT_URL", "http://127.0.0.1:5174/?view=reset-password")
 	maxActiveSessions := positiveIntegerEnvironment("SIGNALGEN_MAX_ACTIVE_SESSIONS", 3)
 	mutationRatePerMinute := positiveIntegerEnvironment("SIGNALGEN_MUTATION_RATE_LIMIT_PER_MINUTE", 60)
 
@@ -80,6 +81,8 @@ func main() {
 	}
 	handler, err := apihttp.NewServer(
 		identity, sessions, accessStore, datasets, computeStore,
+		apihttp.WithAuthService(identity),
+		apihttp.WithPasswordResetRedirectURL(passwordResetRedirectURL),
 		apihttp.WithRuleStore(ruleStore),
 		apihttp.WithRateLimiter(mutationLimiter),
 		apihttp.WithCORSOrigins(allowedOrigins),

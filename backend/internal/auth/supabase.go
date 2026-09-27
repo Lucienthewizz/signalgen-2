@@ -24,8 +24,9 @@ var (
 // data is intentionally absent: roles and entitlements belong to SignalGen's
 // server-side application storage, not user-editable metadata.
 type Principal struct {
-	ID    string `json:"id"`
-	Email string `json:"email,omitempty"`
+	ID       string `json:"id"`
+	Email    string `json:"email,omitempty"`
+	FullName string `json:"full_name,omitempty"`
 }
 
 type HTTPClient interface {
@@ -89,8 +90,11 @@ func (verifier *SupabaseVerifier) Verify(ctx context.Context, accessToken string
 	}
 
 	var payload struct {
-		ID    string `json:"id"`
-		Email string `json:"email"`
+		ID           string `json:"id"`
+		Email        string `json:"email"`
+		UserMetadata struct {
+			FullName string `json:"full_name"`
+		} `json:"user_metadata"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, maxUserResponseBytes))
 	if err := decoder.Decode(&payload); err != nil {
@@ -100,7 +104,7 @@ func (verifier *SupabaseVerifier) Verify(ctx context.Context, accessToken string
 		return Principal{}, fmt.Errorf("%w: user id is missing", ErrProviderUnavailable)
 	}
 
-	return Principal{ID: payload.ID, Email: payload.Email}, nil
+	return Principal{ID: payload.ID, Email: payload.Email, FullName: payload.UserMetadata.FullName}, nil
 }
 
 // BearerToken extracts a strict Authorization bearer token. It never accepts
