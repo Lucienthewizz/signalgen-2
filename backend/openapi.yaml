@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.8.0
+  version: 0.9.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     Supabase performs identity login; this API verifies its bearer token and
@@ -81,13 +81,18 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "409":
-          description: Active installation limit reached.
+          description: Active installation limit reached or the 24-hour device-switch cooldown is still active.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
-              example:
-                error: {code: DEVICE_LIMIT_REACHED, message: Batas sesi aktif sudah tercapai., request_id: req_opaque}
+              examples:
+                activeLimit:
+                  value:
+                    error: {code: DEVICE_LIMIT_REACHED, message: Batas sesi aktif sudah tercapai., request_id: req_opaque}
+                switchCooldown:
+                  value:
+                    error: {code: DEVICE_SWITCH_COOLDOWN, message: Perangkat hanya dapat dipindahkan sekali dalam 24 jam., request_id: req_opaque}
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
         "429":
@@ -590,6 +595,64 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/screener/socket-tickets:
+    post:
+      tags: [Analysis]
+      operationId: createScreenerSocketTicket
+      summary: Exchange a verified compute grant for a one-use WebSocket ticket
+      description: The returned ticket expires quickly, is consumed once, and is bound to the current user, app session, compute grant, rule hash, and engine versions.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScreenerSocketTicketRequest"
+      responses:
+        "201":
+          description: One-use socket ticket created.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScreenerSocketTicketResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/screener/ws:
+    get:
+      tags: [Analysis]
+      operationId: connectPrivateScreener
+      summary: Upgrade a one-use ticket to the private-scoring WebSocket
+      description: OpenAPI records only the upgrade boundary. Message schemas are defined in contracts/hybrid-screener.schema.json.
+      security: []
+      parameters:
+        - name: ticket
+          in: query
+          required: true
+          schema: {type: string, pattern: "^sgt_"}
+      responses:
+        "101":
+          description: WebSocket protocol upgrade accepted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
   /api/v1/operator/grants:
     get:
       tags: [Operator]
@@ -1036,14 +1099,15 @@ components:
             current: {type: boolean}
     SessionListResponse:
       type: object
-      required: [items, max_items, active_session_limit]
+      required: [items, max_items, active_session_limit, device_switch_cooldown_seconds]
       properties:
         items:
           type: array
           items:
             $ref: "#/components/schemas/SessionListItem"
         max_items: {type: integer, enum: [100]}
-        active_session_limit: {type: integer, minimum: 1}
+        active_session_limit: {type: integer, minimum: 1, example: 1}
+        device_switch_cooldown_seconds: {type: integer, minimum: 1, example: 86400}
     Device:
       type: object
       required: [id, label, status, created_at, last_seen_at, current]
@@ -1076,12 +1140,15 @@ components:
             status: {type: string, enum: [revoked]}
     Capabilities:
       type: object
-      required: [capabilities_version, engine_version, schema_version, worker_protocol, purposes, markets, timeframes, indicators, operators, rule_logic, max_candles_per_run, max_symbols_per_run]
+      required: [capabilities_version, engine_version, schema_version, feature_schema_version, decision_version, private_protocol, worker_protocol, purposes, markets, timeframes, indicators, operators, rule_logic, max_candles_per_run, max_symbols_per_run]
       properties:
-        capabilities_version: {type: string, example: capabilities-1}
-        engine_version: {type: string, example: core-0.2.0}
+        capabilities_version: {type: string, example: capabilities-2}
+        engine_version: {type: string, example: core-0.3.0}
         schema_version: {type: string, example: signal-baseline-1}
-        worker_protocol: {type: string, example: worker-1}
+        feature_schema_version: {type: string, example: screener-features-1}
+        decision_version: {type: string, example: decision-1}
+        private_protocol: {type: string, example: screener-private-1}
+        worker_protocol: {type: string, example: worker-2}
         purposes:
           type: array
           items: {type: string, enum: [screen]}
@@ -1149,32 +1216,14 @@ components:
       required: [version]
       properties:
         version: {type: integer, minimum: 1}
-    BaselineRuleDefinition:
-      type: object
-      required: [id, name, type, logic, signal_type, cooldown_sec, conditions]
-      properties:
-        id: {type: integer, enum: [1]}
-        name: {type: string, enum: [Default Scalping]}
-        type: {type: string, enum: [system]}
-        logic: {type: string, enum: [AND]}
-        signal_type: {type: string, enum: [BUY]}
-        cooldown_sec: {type: integer, enum: [60]}
-        conditions:
-          type: array
-          minItems: 4
-          maxItems: 4
-          items:
-            $ref: "#/components/schemas/RuleCondition"
     SystemRuleResource:
       type: object
-      required: [id, name, owner_type, read_only, definition, definition_hash, schema_version, engine_version, version]
+      required: [id, name, owner_type, read_only, definition_hash, schema_version, engine_version, version]
       properties:
         id: {type: string, enum: [default-scalping-v1]}
         name: {type: string}
         owner_type: {type: string, enum: [system]}
         read_only: {type: boolean, enum: [true]}
-        definition:
-          $ref: "#/components/schemas/BaselineRuleDefinition"
         definition_hash: {type: string, pattern: "^sha256:"}
         schema_version: {type: string}
         engine_version: {type: string}
@@ -1306,7 +1355,7 @@ components:
           type: string
           description: The system baseline ID or an owner-scoped user rule ID.
         definition_hash: {type: string, pattern: "^sha256:"}
-        engine_version: {type: string, enum: [core-0.2.0]}
+        engine_version: {type: string, enum: [core-0.3.0]}
         schema_version: {type: string, enum: [signal-baseline-1]}
     ComputeGrant:
       allOf:
@@ -1317,3 +1366,24 @@ components:
             id: {type: string, pattern: "^cgr_"}
             created_at: {type: string, format: date-time}
             expires_at: {type: string, format: date-time}
+    ScreenerSocketTicketRequest:
+      type: object
+      additionalProperties: false
+      required: [compute_grant_id, protocol]
+      properties:
+        compute_grant_id: {type: string, pattern: "^cgr_"}
+        protocol: {type: string, enum: [screener-private-1]}
+    ScreenerSocketTicketResponse:
+      type: object
+      additionalProperties: false
+      required: [ticket, expires_at, websocket_path, protocol, feature_schema_version, max_candidates]
+      properties:
+        ticket:
+          type: string
+          pattern: "^sgt_"
+          description: One-use secret. Never log or persist it in the client.
+        expires_at: {type: string, format: date-time}
+        websocket_path: {type: string, enum: [/api/v1/screener/ws]}
+        protocol: {type: string, enum: [screener-private-1]}
+        feature_schema_version: {type: string, enum: [screener-features-1]}
+        max_candidates: {type: integer, enum: [1000]}

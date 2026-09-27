@@ -69,7 +69,7 @@ type baselineFixture struct {
 	} `json:"expected"`
 }
 
-func loadFixture(t *testing.T) baselineFixture {
+func loadFixture(t testing.TB) baselineFixture {
 	t.Helper()
 	raw, err := os.ReadFile("testdata/default_scalping_v1.json")
 	if err != nil {
@@ -102,6 +102,90 @@ func TestDefaultScalpingGoldenSignals(t *testing.T) {
 		assertClose(t, "EMA9", signal.Indicators.EMA9, expected.Indicators.EMA9)
 		assertClose(t, "EMA20", signal.Indicators.EMA20, expected.Indicators.EMA20)
 		assertClose(t, "RSI14", signal.Indicators.RSI14, expected.Indicators.RSI14)
+	}
+}
+
+func TestHybridSplitMatchesFrozenGoldenSignals(t *testing.T) {
+	fixture := loadFixture(t)
+	features, err := ComputeFeatures(FeatureRequest{
+		Purpose: fixture.Request.Purpose,
+		Symbol:  fixture.Request.Symbol,
+		Candles: fixture.Request.Candles,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if features.FeatureSchemaVersion != FeatureSchemaVersion {
+		t.Fatalf("feature schema = %q, want %q", features.FeatureSchemaVersion, FeatureSchemaVersion)
+	}
+	if features.CandleCount != len(fixture.Request.Candles) || len(features.Candidates) == 0 {
+		t.Fatalf("feature result = %+v", features)
+	}
+	encoded, err := json.Marshal(features)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, []byte(`"conditions"`)) || bytes.Contains(encoded, []byte(`"rule"`)) {
+		t.Fatalf("client feature payload leaked a rule: %s", encoded)
+	}
+
+	decision, err := EvaluateDecision(DecisionRequest{
+		Rule:       fixture.Request.Rule,
+		Candidates: features.Candidates,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision.DecisionVersion != DecisionVersion {
+		t.Fatalf("decision version = %q, want %q", decision.DecisionVersion, DecisionVersion)
+	}
+	if len(decision.Signals) != len(fixture.Expected.Signals) {
+		t.Fatalf("signal count = %d, want %d", len(decision.Signals), len(fixture.Expected.Signals))
+	}
+	for i, signal := range decision.Signals {
+		expected := fixture.Expected.Signals[i]
+		if signal.Symbol != expected.Symbol || signal.Timestamp != expected.Timestamp || signal.SignalType != expected.SignalType {
+			t.Errorf("signal %d identity = %+v, want %+v", i, signal, expected)
+		}
+		assertClose(t, "PRICE", signal.Price, expected.Price)
+		assertClose(t, "EMA9", signal.Indicators.EMA9, expected.Indicators.EMA9)
+		assertClose(t, "EMA20", signal.Indicators.EMA20, expected.Indicators.EMA20)
+		assertClose(t, "RSI14", signal.Indicators.RSI14, expected.Indicators.RSI14)
+	}
+}
+
+func TestEvaluateDecisionRejectsUntrustedFeaturePayloads(t *testing.T) {
+	fixture := loadFixture(t)
+	features, err := ComputeFeatures(FeatureRequest{
+		Purpose: fixture.Request.Purpose,
+		Symbol:  fixture.Request.Symbol,
+		Candles: fixture.Request.Candles,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, mutate := range map[string]func([]FeatureCandidate){
+		"mixed symbol": func(candidates []FeatureCandidate) {
+			candidates[len(candidates)-1].Symbol = "TLKM.JK"
+		},
+		"unordered timestamp": func(candidates []FeatureCandidate) {
+			candidates[1].Timestamp = candidates[0].Timestamp
+		},
+		"invalid RSI": func(candidates []FeatureCandidate) {
+			candidates[0].Features.RSI14 = 101
+		},
+		"non-finite value": func(candidates []FeatureCandidate) {
+			candidates[0].Features.EMA9 = math.NaN()
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidates := append([]FeatureCandidate(nil), features.Candidates...)
+			mutate(candidates)
+			if _, err := EvaluateDecision(DecisionRequest{Rule: fixture.Request.Rule, Candidates: candidates}); err == nil {
+				t.Fatalf("invalid candidates accepted: %+v", candidates)
+			}
+		})
 	}
 }
 

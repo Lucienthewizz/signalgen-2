@@ -18,7 +18,8 @@ import (
 const (
 	defaultTTL               = 24 * time.Hour
 	maxLabel                 = 100
-	defaultMaxActiveSessions = 3
+	defaultMaxActiveSessions = 1
+	defaultSwitchCooldown    = 24 * time.Hour
 )
 
 var (
@@ -28,6 +29,7 @@ var (
 	ErrInvalidRequest = errors.New("invalid session request")
 	ErrNotFound       = errors.New("app session was not found")
 	ErrSessionLimit   = errors.New("active session limit reached")
+	ErrDeviceCooldown = errors.New("device switch cooldown is active")
 )
 
 type Session struct {
@@ -55,11 +57,12 @@ type Device struct {
 }
 
 type Store struct {
-	db                *sql.DB
-	now               func() time.Time
-	random            io.Reader
-	ttl               time.Duration
-	maxActiveSessions int
+	db                   *sql.DB
+	now                  func() time.Time
+	random               io.Reader
+	ttl                  time.Duration
+	maxActiveSessions    int
+	deviceSwitchCooldown time.Duration
 }
 
 type Option func(*Store)
@@ -80,15 +83,22 @@ func WithMaxActiveSessions(limit int) Option {
 	return func(store *Store) { store.maxActiveSessions = limit }
 }
 
+func WithDeviceSwitchCooldown(cooldown time.Duration) Option {
+	return func(store *Store) { store.deviceSwitchCooldown = cooldown }
+}
+
 func NewStore(db *sql.DB, options ...Option) (*Store, error) {
 	if db == nil {
 		return nil, fmt.Errorf("session database is required")
 	}
-	store := &Store{db: db, now: time.Now, random: rand.Reader, ttl: defaultTTL, maxActiveSessions: defaultMaxActiveSessions}
+	store := &Store{
+		db: db, now: time.Now, random: rand.Reader, ttl: defaultTTL,
+		maxActiveSessions: defaultMaxActiveSessions, deviceSwitchCooldown: defaultSwitchCooldown,
+	}
 	for _, option := range options {
 		option(store)
 	}
-	if store.now == nil || store.random == nil || store.ttl <= 0 || store.maxActiveSessions <= 0 {
+	if store.now == nil || store.random == nil || store.ttl <= 0 || store.maxActiveSessions != 1 || store.deviceSwitchCooldown <= 0 {
 		return nil, fmt.Errorf("invalid session store configuration")
 	}
 	return store, nil
@@ -96,6 +106,10 @@ func NewStore(db *sql.DB, options ...Option) (*Store, error) {
 
 func (store *Store) ActiveLimit() int {
 	return store.maxActiveSessions
+}
+
+func (store *Store) DeviceSwitchCooldown() time.Duration {
+	return store.deviceSwitchCooldown
 }
 
 func (store *Store) Ready(ctx context.Context) error {
@@ -145,6 +159,12 @@ CREATE TABLE IF NOT EXISTS app_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_app_sessions_user_active
 ON app_sessions(user_id, expires_at, revoked_at);
+CREATE TABLE IF NOT EXISTS account_device_state (
+    user_id TEXT PRIMARY KEY,
+    current_installation_id TEXT NOT NULL,
+    last_switched_at INTEGER,
+    updated_at INTEGER NOT NULL
+);
 `
 	if _, err := store.db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("migrate app sessions: %w", err)
@@ -184,13 +204,59 @@ func (store *Store) Create(ctx context.Context, userID, installationID, label st
 		return Created{}, fmt.Errorf("begin app session creation: %w", err)
 	}
 	defer transaction.Rollback()
-	if _, err := transaction.ExecContext(ctx, `
-UPDATE app_sessions
-SET revoked_at = ?
-WHERE user_id = ? AND installation_id = ? AND revoked_at IS NULL AND expires_at > ?`,
-		now.Unix(), userID, installationID, now.Unix(),
-	); err != nil {
-		return Created{}, fmt.Errorf("replace installation session: %w", err)
+	var currentInstallation string
+	var lastSwitchedAt sql.NullInt64
+	err = transaction.QueryRowContext(ctx, `
+SELECT current_installation_id, last_switched_at
+FROM account_device_state WHERE user_id = ?`, userID).Scan(&currentInstallation, &lastSwitchedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = transaction.QueryRowContext(ctx, `
+SELECT installation_id FROM app_sessions
+WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+ORDER BY created_at DESC, id DESC LIMIT 1`, userID, now.Unix()).Scan(&currentInstallation)
+		if errors.Is(err, sql.ErrNoRows) {
+			currentInstallation = installationID
+		} else if err != nil {
+			return Created{}, fmt.Errorf("read current installation: %w", err)
+		}
+		if _, err := transaction.ExecContext(ctx, `
+INSERT INTO account_device_state (user_id, current_installation_id, last_switched_at, updated_at)
+VALUES (?, ?, NULL, ?)`, userID, currentInstallation, now.Unix()); err != nil {
+			return Created{}, fmt.Errorf("create device state: %w", err)
+		}
+	} else if err != nil {
+		return Created{}, fmt.Errorf("read device state: %w", err)
+	}
+
+	if currentInstallation != installationID {
+		if lastSwitchedAt.Valid && now.Before(time.Unix(lastSwitchedAt.Int64, 0).UTC().Add(store.deviceSwitchCooldown)) {
+			return Created{}, ErrDeviceCooldown
+		}
+		if _, err := transaction.ExecContext(ctx, `
+UPDATE app_sessions SET revoked_at = ?
+WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?`, now.Unix(), userID, now.Unix()); err != nil {
+			return Created{}, fmt.Errorf("revoke previous device sessions: %w", err)
+		}
+		if _, err := transaction.ExecContext(ctx, `
+UPDATE account_device_state
+SET current_installation_id = ?, last_switched_at = ?, updated_at = ?
+WHERE user_id = ?`, installationID, now.Unix(), now.Unix(), userID); err != nil {
+			return Created{}, fmt.Errorf("record device switch: %w", err)
+		}
+	} else {
+		revokeQuery := `
+UPDATE app_sessions SET revoked_at = ?
+WHERE user_id = ? AND installation_id = ? AND revoked_at IS NULL AND expires_at > ?`
+		arguments := []interface{}{now.Unix(), userID, installationID, now.Unix()}
+		if store.maxActiveSessions == 1 {
+			revokeQuery = `
+UPDATE app_sessions SET revoked_at = ?
+WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?`
+			arguments = []interface{}{now.Unix(), userID, now.Unix()}
+		}
+		if _, err := transaction.ExecContext(ctx, revokeQuery, arguments...); err != nil {
+			return Created{}, fmt.Errorf("replace installation session: %w", err)
+		}
 	}
 	var activeCount int
 	if err := transaction.QueryRowContext(ctx, `
@@ -245,6 +311,34 @@ func (store *Store) Verify(ctx context.Context, userID, token string) (Session, 
 		return Session{}, fmt.Errorf("update app session activity: %w", err)
 	}
 	session.LastSeenAt = now
+	return session, nil
+}
+
+// VerifyByID re-checks the session bound into a short-lived server capability,
+// such as a WebSocket ticket. It never accepts an ID supplied as standalone
+// authentication; the caller must already hold and consume that capability.
+func (store *Store) VerifyByID(ctx context.Context, userID, sessionID string) (Session, error) {
+	userID = strings.TrimSpace(userID)
+	sessionID = strings.TrimSpace(sessionID)
+	if userID == "" || sessionID == "" {
+		return Session{}, ErrInvalid
+	}
+	session, err := scanSession(store.db.QueryRowContext(ctx, `
+SELECT id, user_id, installation_id, label, created_at, expires_at, last_seen_at, revoked_at
+FROM app_sessions WHERE id = ? AND user_id = ?`, sessionID, userID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Session{}, ErrInvalid
+	}
+	if err != nil {
+		return Session{}, fmt.Errorf("read app session by id: %w", err)
+	}
+	if session.RevokedAt != nil {
+		return Session{}, ErrRevoked
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	if !now.Before(session.ExpiresAt) {
+		return Session{}, ErrExpired
+	}
 	return session, nil
 }
 

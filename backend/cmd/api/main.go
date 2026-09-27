@@ -30,7 +30,8 @@ func main() {
 	fixturePath := environment("SIGNALGEN_FIXTURE_PATH", "/usr/share/signalgen/fixtures/default_scalping_v1.json")
 	address := environment("SIGNALGEN_GO_API_ADDR", ":8080")
 	allowedOrigins := commaSeparatedEnvironment("SIGNALGEN_CORS_ORIGINS")
-	maxActiveSessions := positiveIntegerEnvironment("SIGNALGEN_MAX_ACTIVE_SESSIONS", 3)
+	maxActiveSessions := positiveIntegerEnvironment("SIGNALGEN_MAX_ACTIVE_SESSIONS", 1)
+	deviceSwitchCooldownHours := positiveIntegerEnvironment("SIGNALGEN_DEVICE_SWITCH_COOLDOWN_HOURS", 24)
 	mutationRatePerMinute := positiveIntegerEnvironment("SIGNALGEN_MUTATION_RATE_LIMIT_PER_MINUTE", 60)
 
 	identity, err := auth.NewSupabaseVerifier(projectURL, publishableKey, nil)
@@ -42,7 +43,11 @@ func main() {
 		log.Fatal(err)
 	}
 	defer database.Close()
-	sessions, err := session.NewStore(database, session.WithMaxActiveSessions(maxActiveSessions))
+	sessions, err := session.NewStore(
+		database,
+		session.WithMaxActiveSessions(maxActiveSessions),
+		session.WithDeviceSwitchCooldown(time.Duration(deviceSwitchCooldownHours)*time.Hour),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}

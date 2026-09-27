@@ -25,18 +25,21 @@ var supportedOperators = map[string]bool{
 // slices and accidentally change the advertised contract.
 func GetCapabilities() Capabilities {
 	return Capabilities{
-		CapabilitiesVersion: CapabilitiesVersion,
-		EngineVersion:       EngineVersion,
-		SchemaVersion:       SchemaVersion,
-		WorkerProtocol:      WorkerProtocol,
-		Purposes:            []string{"screen"},
-		Markets:             []string{"IDX"},
-		Timeframes:          []string{"1d"},
-		Indicators:          []string{"PRICE", "EMA9", "EMA20", "RSI14"},
-		Operators:           []string{"<", "<=", ">", ">="},
-		RuleLogic:           []string{"AND"},
-		MaxCandlesPerRun:    MaxCandlesPerRun,
-		MaxSymbolsPerRun:    1,
+		CapabilitiesVersion:  CapabilitiesVersion,
+		EngineVersion:        EngineVersion,
+		SchemaVersion:        SchemaVersion,
+		FeatureSchemaVersion: FeatureSchemaVersion,
+		DecisionVersion:      DecisionVersion,
+		PrivateProtocol:      PrivateProtocol,
+		WorkerProtocol:       WorkerProtocol,
+		Purposes:             []string{"screen"},
+		Markets:              []string{"IDX"},
+		Timeframes:           []string{"1d"},
+		Indicators:           []string{"PRICE", "EMA9", "EMA20", "RSI14"},
+		Operators:            []string{"<", "<=", ">", ">="},
+		RuleLogic:            []string{"AND"},
+		MaxCandlesPerRun:     MaxCandlesPerRun,
+		MaxSymbolsPerRun:     1,
 	}
 }
 
@@ -58,82 +61,135 @@ func GetBaselineRuleDefinition() BaselineRuleDefinition {
 // only; trade fills and P&L remain outside this baseline until their policy is
 // selected and frozen separately.
 func RunSignals(request RunRequest) (RunResult, error) {
-	if err := validateRequest(request); err != nil {
+	features, err := ComputeFeatures(FeatureRequest{
+		Purpose: request.Purpose,
+		Symbol:  request.Symbol,
+		Candles: request.Candles,
+	})
+	if err != nil {
 		return RunResult{}, err
 	}
-
-	closes := make([]float64, len(request.Candles))
-	times := make([]time.Time, len(request.Candles))
-	for i, candle := range request.Candles {
-		closes[i] = candle.Close
-		parsed, _ := time.Parse(time.RFC3339, candle.Timestamp)
-		times[i] = parsed
-	}
-
-	ema9, _ := emaSeries(closes, 9)
-	ema20, _ := emaSeries(closes, 20)
-	rsi14, _ := rsiSeries(closes, 14)
-
-	signals := make([]Signal, 0)
-	var lastSignal time.Time
-	for i, candle := range request.Candles {
-		// The Python IndicatorEngine deliberately requires period+1 candles for
-		// RSI14, while EMA20 is available from candle 20.
-		if i+1 < 15 || math.IsNaN(ema9[i]) || math.IsNaN(ema20[i]) || math.IsNaN(rsi14[i]) {
-			continue
-		}
-		if !lastSignal.IsZero() && times[i].Sub(lastSignal) < time.Duration(request.Rule.CooldownSec)*time.Second {
-			continue
-		}
-
-		values := map[string]float64{
-			"PRICE": candle.Close,
-			"EMA9":  ema9[i],
-			"EMA20": ema20[i],
-			"RSI14": rsi14[i],
-		}
-		matched, err := evaluateRule(request.Rule, values)
-		if err != nil {
-			return RunResult{}, err
-		}
-		if !matched {
-			continue
-		}
-
-		signals = append(signals, Signal{
-			Symbol:     request.Symbol,
-			Timestamp:  candle.Timestamp,
-			SignalType: request.Rule.SignalType,
-			Price:      candle.Close,
-			Indicators: IndicatorValues{
-				Price: candle.Close,
-				EMA9:  ema9[i],
-				EMA20: ema20[i],
-				RSI14: rsi14[i],
-			},
-		})
-		lastSignal = times[i]
+	decision, err := EvaluateDecision(DecisionRequest{
+		Rule:       request.Rule,
+		Candidates: features.Candidates,
+	})
+	if err != nil {
+		return RunResult{}, err
 	}
 
 	return RunResult{
 		EngineVersion: EngineVersion,
 		SchemaVersion: SchemaVersion,
 		Execution:     "portable_go",
-		Signals:       signals,
+		Signals:       decision.Signals,
 		CandleCount:   len(request.Candles),
 		Warnings:      []string{"signal-only baseline; trade fills and P&L are not defined"},
 	}, nil
 }
 
-func validateRequest(request RunRequest) error {
+// ComputeFeatures performs the expensive indicator calculation intended for
+// the client/WASM stage. It does not receive or evaluate a rule.
+func ComputeFeatures(request FeatureRequest) (FeatureResult, error) {
+	if err := validateFeatureRequest(request); err != nil {
+		return FeatureResult{}, err
+	}
+
+	closes := make([]float64, len(request.Candles))
+	for i, candle := range request.Candles {
+		closes[i] = candle.Close
+	}
+
+	ema9, _ := emaSeries(closes, 9)
+	ema20, _ := emaSeries(closes, 20)
+	rsi14, _ := rsiSeries(closes, 14)
+
+	candidates := make([]FeatureCandidate, 0, len(request.Candles))
+	for i, candle := range request.Candles {
+		// The Python IndicatorEngine deliberately requires period+1 candles for
+		// RSI14, while EMA20 is available from candle 20.
+		if i+1 < 15 || math.IsNaN(ema9[i]) || math.IsNaN(ema20[i]) || math.IsNaN(rsi14[i]) {
+			continue
+		}
+		candidates = append(candidates, FeatureCandidate{
+			Symbol:    request.Symbol,
+			Timestamp: candle.Timestamp,
+			Features: FeatureVector{
+				Price: candle.Close,
+				EMA9:  ema9[i],
+				EMA20: ema20[i],
+				RSI14: rsi14[i],
+			},
+		})
+	}
+
+	return FeatureResult{
+		EngineVersion:        EngineVersion,
+		FeatureSchemaVersion: FeatureSchemaVersion,
+		Execution:            "client_go_features",
+		Candidates:           candidates,
+		CandleCount:          len(request.Candles),
+		Warnings:             []string{},
+	}, nil
+}
+
+// EvaluateDecision applies the rule and cooldown to compact feature candidates.
+// This is the small stage proposed to remain private on the server.
+func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
+	if err := ValidateRule(request.Rule); err != nil {
+		return DecisionResult{}, err
+	}
+	if err := validateCandidates(request.Candidates); err != nil {
+		return DecisionResult{}, err
+	}
+
+	signals := make([]Signal, 0)
+	var lastSignal time.Time
+	for _, candidate := range request.Candidates {
+		parsed, _ := time.Parse(time.RFC3339, candidate.Timestamp)
+		if !lastSignal.IsZero() && parsed.Sub(lastSignal) < time.Duration(request.Rule.CooldownSec)*time.Second {
+			continue
+		}
+		values := map[string]float64{
+			"PRICE": candidate.Features.Price,
+			"EMA9":  candidate.Features.EMA9,
+			"EMA20": candidate.Features.EMA20,
+			"RSI14": candidate.Features.RSI14,
+		}
+		matched, err := evaluateRule(request.Rule, values)
+		if err != nil {
+			return DecisionResult{}, err
+		}
+		if !matched {
+			continue
+		}
+		signals = append(signals, Signal{
+			Symbol:     candidate.Symbol,
+			Timestamp:  candidate.Timestamp,
+			SignalType: request.Rule.SignalType,
+			Price:      candidate.Features.Price,
+			Indicators: IndicatorValues{
+				Price: candidate.Features.Price,
+				EMA9:  candidate.Features.EMA9,
+				EMA20: candidate.Features.EMA20,
+				RSI14: candidate.Features.RSI14,
+			},
+		})
+		lastSignal = parsed
+	}
+
+	return DecisionResult{
+		DecisionVersion: DecisionVersion,
+		Signals:         signals,
+		CandidateCount:  len(request.Candidates),
+	}, nil
+}
+
+func validateFeatureRequest(request FeatureRequest) error {
 	if request.Purpose != "screen" {
 		return fmt.Errorf("unsupported purpose %q; supported purposes: screen", request.Purpose)
 	}
 	if request.Symbol == "" {
 		return fmt.Errorf("symbol is required")
-	}
-	if err := ValidateRule(request.Rule); err != nil {
-		return err
 	}
 	if len(request.Candles) < 20 {
 		return fmt.Errorf("at least 20 completed candles are required")
@@ -160,6 +216,53 @@ func validateRequest(request RunRequest) error {
 		}
 	}
 
+	return nil
+}
+
+func validateCandidates(candidates []FeatureCandidate) error {
+	if len(candidates) == 0 {
+		return fmt.Errorf("at least one feature candidate is required")
+	}
+	if len(candidates) > MaxCandlesPerRun {
+		return fmt.Errorf("candidate count exceeds limit of %d", MaxCandlesPerRun)
+	}
+	var previous time.Time
+	var symbol string
+	for i, candidate := range candidates {
+		if candidate.Symbol == "" {
+			return fmt.Errorf("candidate %d symbol is required", i)
+		}
+		if i == 0 {
+			symbol = candidate.Symbol
+		} else if candidate.Symbol != symbol {
+			return fmt.Errorf("candidate %d symbol %q does not match %q", i, candidate.Symbol, symbol)
+		}
+		parsed, err := time.Parse(time.RFC3339, candidate.Timestamp)
+		if err != nil {
+			return fmt.Errorf("candidate %d has invalid RFC3339 timestamp: %w", i, err)
+		}
+		if i > 0 && !parsed.After(previous) {
+			return fmt.Errorf("feature candidates must be strictly chronological")
+		}
+		previous = parsed
+		values := []float64{
+			candidate.Features.Price,
+			candidate.Features.EMA9,
+			candidate.Features.EMA20,
+			candidate.Features.RSI14,
+		}
+		for _, value := range values {
+			if math.IsNaN(value) || math.IsInf(value, 0) {
+				return fmt.Errorf("candidate %d contains a non-finite feature", i)
+			}
+		}
+		if candidate.Features.Price <= 0 || candidate.Features.EMA9 <= 0 || candidate.Features.EMA20 <= 0 {
+			return fmt.Errorf("candidate %d contains a non-positive price feature", i)
+		}
+		if candidate.Features.RSI14 < 0 || candidate.Features.RSI14 > 100 {
+			return fmt.Errorf("candidate %d RSI14 must be between 0 and 100", i)
+		}
+	}
 	return nil
 }
 

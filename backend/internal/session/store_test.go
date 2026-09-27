@@ -66,6 +66,28 @@ func TestCreateAndVerifySession(t *testing.T) {
 	}
 }
 
+func TestVerifyByIDRechecksTicketBoundSession(t *testing.T) {
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	created, err := store.Create(context.Background(), "user-a", "install-a", "Browser")
+	if err != nil {
+		t.Fatal(err)
+	}
+	verified, err := store.VerifyByID(context.Background(), "user-a", created.Session.ID)
+	if err != nil || verified.ID != created.Session.ID {
+		t.Fatalf("verified = %+v, error = %v", verified, err)
+	}
+	if _, err := store.VerifyByID(context.Background(), "user-b", created.Session.ID); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("cross-user error = %v, want ErrInvalid", err)
+	}
+	if err := store.RevokeByID(context.Background(), "user-a", created.Session.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.VerifyByID(context.Background(), "user-a", created.Session.ID); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("revoked error = %v, want ErrRevoked", err)
+	}
+}
+
 func TestSessionCannotCrossUsers(t *testing.T) {
 	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
 	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
@@ -102,6 +124,17 @@ func TestCreateRejectsIncompleteRequest(t *testing.T) {
 	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
 	if _, err := store.Create(context.Background(), "user-a", "", "Browser"); !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("error = %v, want ErrInvalidRequest", err)
+	}
+}
+
+func TestStoreRejectsMultiDeviceConfiguration(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:reject_multi_device?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := NewStore(db, WithMaxActiveSessions(2)); err == nil {
+		t.Fatal("multi-device configuration should be rejected")
 	}
 }
 
@@ -145,21 +178,39 @@ func TestRevokeByIDIsOwnerScopedAndIdempotent(t *testing.T) {
 	}
 }
 
-func TestCreateEnforcesActiveSessionLimit(t *testing.T) {
+func TestCreateEnforcesOneDeviceAndSwitchCooldown(t *testing.T) {
 	now := time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC)
-	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
-	store.maxActiveSessions = 2
-	if _, err := store.Create(context.Background(), "user-a", "install-a", "Chrome"); err != nil {
+	store, _ := testStore(t, func() time.Time { return now }, 72*time.Hour)
+	first, err := store.Create(context.Background(), "user-a", "install-a", "Chrome")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Create(context.Background(), "user-a", "install-b", "Firefox"); err != nil {
+	second, err := store.Create(context.Background(), "user-a", "install-b", "Firefox")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Create(context.Background(), "user-a", "install-c", "Safari"); !errors.Is(err, ErrSessionLimit) {
-		t.Fatalf("error = %v, want ErrSessionLimit", err)
+	if _, err := store.Verify(context.Background(), "user-a", first.Token); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("previous device error = %v, want ErrRevoked", err)
 	}
-	if _, err := store.Create(context.Background(), "user-b", "install-c", "Safari"); err != nil {
-		t.Fatalf("other user should have an independent limit: %v", err)
+	if _, err := store.Create(context.Background(), "user-a", "install-c", "Safari"); !errors.Is(err, ErrDeviceCooldown) {
+		t.Fatalf("early switch error = %v, want ErrDeviceCooldown", err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", second.Token); err != nil {
+		t.Fatalf("rejected switch revoked current device: %v", err)
+	}
+	now = now.Add(24 * time.Hour)
+	third, err := store.Create(context.Background(), "user-a", "install-c", "Safari")
+	if err != nil {
+		t.Fatalf("switch after cooldown: %v", err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", second.Token); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("second device error = %v, want ErrRevoked", err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", third.Token); err != nil {
+		t.Fatalf("third device session: %v", err)
+	}
+	if _, err := store.Create(context.Background(), "user-b", "install-d", "Other user"); err != nil {
+		t.Fatalf("other user should have independent device state: %v", err)
 	}
 }
 

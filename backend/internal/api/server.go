@@ -21,6 +21,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
 
@@ -35,6 +36,7 @@ type IdentityVerifier interface {
 type SessionStore interface {
 	Create(ctx context.Context, userID, installationID, label string) (session.Created, error)
 	Verify(ctx context.Context, userID, token string) (session.Session, error)
+	VerifyByID(ctx context.Context, userID, sessionID string) (session.Session, error)
 	Revoke(ctx context.Context, userID, token string) error
 	List(ctx context.Context, userID string) ([]session.Session, error)
 	RevokeByID(ctx context.Context, userID, sessionID string) error
@@ -42,6 +44,7 @@ type SessionStore interface {
 	RenameDevice(ctx context.Context, userID, installationID, label string) error
 	RevokeDevice(ctx context.Context, userID, installationID string) error
 	ActiveLimit() int
+	DeviceSwitchCooldown() time.Duration
 }
 
 type AccessStore interface {
@@ -64,6 +67,12 @@ type DatasetStore interface {
 
 type ComputeStore interface {
 	Create(ctx context.Context, request compute.CreateRequest) (compute.Grant, error)
+	Verify(ctx context.Context, userID, sessionID, grantID string) (compute.Grant, error)
+}
+
+type ScreenerTicketStore interface {
+	Create(ctx context.Context, binding screener.Binding) (screener.CreatedTicket, error)
+	Consume(ctx context.Context, token string) (screener.Binding, error)
 }
 
 type RuleStore interface {
@@ -107,26 +116,27 @@ type unlimitedRateLimiter struct{}
 func (unlimitedRateLimiter) Allow(string) (bool, time.Duration) { return true, 0 }
 
 type Server struct {
-	identity IdentityVerifier
-	sessions SessionStore
-	access   AccessStore
-	datasets DatasetStore
-	compute  ComputeStore
-	rules    RuleStore
-	limiter  RateLimiter
-	handler  http.Handler
+	identity       IdentityVerifier
+	sessions       SessionStore
+	access         AccessStore
+	datasets       DatasetStore
+	compute        ComputeStore
+	rules          RuleStore
+	limiter        RateLimiter
+	tickets        ScreenerTicketStore
+	originPatterns []string
+	handler        http.Handler
 }
 
 type systemRuleResource struct {
-	ID             string                      `json:"id"`
-	Name           string                      `json:"name"`
-	OwnerType      string                      `json:"owner_type"`
-	ReadOnly       bool                        `json:"read_only"`
-	Definition     core.BaselineRuleDefinition `json:"definition"`
-	DefinitionHash string                      `json:"definition_hash"`
-	SchemaVersion  string                      `json:"schema_version"`
-	EngineVersion  string                      `json:"engine_version"`
-	Version        int                         `json:"version"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	OwnerType      string `json:"owner_type"`
+	ReadOnly       bool   `json:"read_only"`
+	DefinitionHash string `json:"definition_hash"`
+	SchemaVersion  string `json:"schema_version"`
+	EngineVersion  string `json:"engine_version"`
+	Version        int    `json:"version"`
 }
 
 type serverConfig struct {
@@ -134,6 +144,8 @@ type serverConfig struct {
 	readinessChecks []ReadinessChecker
 	ruleStore       RuleStore
 	rateLimiter     RateLimiter
+	ticketStore     ScreenerTicketStore
+	originPatterns  []string
 }
 
 func WithReadinessChecks(checkers ...ReadinessChecker) ServerOption {
@@ -168,6 +180,16 @@ func WithRateLimiter(limiter RateLimiter) ServerOption {
 	}
 }
 
+func WithScreenerTicketStore(store ScreenerTicketStore) ServerOption {
+	return func(config *serverConfig) error {
+		if store == nil {
+			return fmt.Errorf("screener ticket store is required")
+		}
+		config.ticketStore = store
+		return nil
+	}
+}
+
 type ServerOption func(*serverConfig) error
 
 // WithCORSOrigins enables browser access only for the exact HTTP(S) origins provided.
@@ -184,6 +206,7 @@ func WithCORSOrigins(origins []string) ServerOption {
 				return fmt.Errorf("invalid CORS origin %q", rawOrigin)
 			}
 			config.allowedOrigins[origin] = struct{}{}
+			config.originPatterns = append(config.originPatterns, origin)
 		}
 		return nil
 	}
@@ -208,9 +231,17 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	if config.rateLimiter == nil {
 		config.rateLimiter = unlimitedRateLimiter{}
 	}
+	if config.ticketStore == nil {
+		var err error
+		config.ticketStore, err = screener.NewTicketStore()
+		if err != nil {
+			return nil, err
+		}
+	}
 	server := &Server{
 		identity: identity, sessions: sessions, access: accessStore,
 		datasets: datasets, compute: computeStore, rules: config.ruleStore, limiter: config.rateLimiter,
+		tickets: config.ticketStore, originPatterns: append([]string(nil), config.originPatterns...),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", server.health)
@@ -232,6 +263,8 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	mux.HandleFunc("GET /api/v1/datasets/{id}/manifest", server.datasetManifest)
 	mux.HandleFunc("GET /api/v1/datasets/{id}/content", server.datasetContent)
 	mux.HandleFunc("POST /api/v1/compute-grants", server.createComputeGrant)
+	mux.HandleFunc("POST /api/v1/screener/socket-tickets", server.createScreenerSocketTicket)
+	mux.HandleFunc("GET /api/v1/screener/ws", server.screenerWebSocket)
 	mux.HandleFunc("GET /api/v1/operator/grants", server.listOperatorGrants)
 	mux.HandleFunc("POST /api/v1/operator/grants", server.createOperatorGrant)
 	mux.HandleFunc("DELETE /api/v1/operator/grants/{user_id}/{feature}", server.revokeOperatorGrant)
@@ -293,6 +326,10 @@ func (server *Server) createSession(writer http.ResponseWriter, request *http.Re
 	}
 	if errors.Is(err, session.ErrSessionLimit) {
 		writeError(writer, request, http.StatusConflict, "DEVICE_LIMIT_REACHED", "Batas sesi aktif sudah tercapai.")
+		return
+	}
+	if errors.Is(err, session.ErrDeviceCooldown) {
+		writeError(writer, request, http.StatusConflict, "DEVICE_SWITCH_COOLDOWN", "Perangkat hanya dapat dipindahkan sekali dalam 24 jam.")
 		return
 	}
 	if err != nil {
@@ -472,8 +509,8 @@ func baselineRuleResource() systemRuleResource {
 	definition := core.GetBaselineRuleDefinition()
 	return systemRuleResource{
 		ID: core.BaselineRuleID, Name: definition.Name, OwnerType: "system", ReadOnly: true,
-		Definition: definition, DefinitionHash: core.BaselineRuleHash,
-		SchemaVersion: core.SchemaVersion, EngineVersion: core.EngineVersion, Version: 1,
+		DefinitionHash: core.BaselineRuleHash,
+		SchemaVersion:  core.SchemaVersion, EngineVersion: core.EngineVersion, Version: 1,
 	}
 }
 
@@ -542,6 +579,7 @@ func (server *Server) accountSessions(writer http.ResponseWriter, request *http.
 	writer.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(writer, http.StatusOK, map[string]interface{}{
 		"items": items, "max_items": 100, "active_session_limit": server.sessions.ActiveLimit(),
+		"device_switch_cooldown_seconds": int64(server.sessions.DeviceSwitchCooldown().Seconds()),
 	})
 }
 

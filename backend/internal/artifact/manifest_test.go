@@ -22,6 +22,7 @@ func TestBuildProducesVersionedDeterministicManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	if manifest.EngineVersion != core.EngineVersion || manifest.SchemaVersion != core.SchemaVersion ||
+		manifest.FeatureSchemaVersion != core.FeatureSchemaVersion ||
 		manifest.CapabilitiesVersion != core.CapabilitiesVersion || manifest.WorkerProtocol != core.WorkerProtocol {
 		t.Fatalf("versions = %+v", manifest)
 	}

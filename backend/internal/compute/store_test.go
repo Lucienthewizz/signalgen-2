@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Lucienthewizz/signalgen-2/backend/core"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -35,7 +37,7 @@ func TestComputeGrantBindingAndExpiry(t *testing.T) {
 		UserID: "user-a", SessionID: "ses-a", Purpose: "screen",
 		DatasetID: "dataset-a", DatasetVersion: "v1", DatasetChecksum: "sha256:data",
 		RuleID: "rule-a", DefinitionHash: "sha256:rule",
-		EngineVersion: "core-0.2.0", SchemaVersion: "signal-baseline-1",
+		EngineVersion: core.EngineVersion, SchemaVersion: core.SchemaVersion,
 	})
 	if err != nil {
 		t.Fatal(err)

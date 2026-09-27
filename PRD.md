@@ -57,8 +57,9 @@ P0 selesai bukan berarti MVP selesai. Target satu minggu demo adalah estimasi aw
 | MVP-RULE-02 | P1 | CRUD rule subset tanpa kode | Operand/operator didukung core; backend/WASM menolak yang unsupported |
 | MVP-DATA-01 | P0 | Fixture historis berversi | Sumber, market, currency, UTC, warmup, adjustment dan checksum tercatat |
 | MVP-DATA-02 | P1 | Provider historis melalui server | IDX dahulu; hak penggunaan/redistribusi diperiksa; timeout/rate limit/missing data ditangani |
-| MVP-SCREEN-01 | P0 | Screening historis lokal | Fixture universe kecil menghasilkan match dengan alasan; bukan live signal |
-| MVP-WASM-01 | P0 | Backtest Go/WASM di worker | Jalur web baru tanpa backtest compute server; run/status/result/error/cancel tersedia |
+| MVP-SCREEN-01 | P0 | Screening historis hybrid | Client menghitung fitur berat; server decision kernel kecil menilai batch kandidat; fixture menghasilkan match dengan alasan; bukan live signal |
+| MVP-SCREEN-02 | P0 | Eksperimen batas client/server | Model decision-kernel dan satu alternatif dibandingkan pada fixture yang sama untuk correctness, beban, network, failure, dan exposure logika sebelum split difinalkan |
+| MVP-WASM-01 | P0 | Go/WASM di worker | Indikator/fitur berat berjalan di client; worker run/status/result/error/cancel tersedia; keputusan kritis boleh memakai kernel server yang ringan |
 | MVP-PARITY-01 | P0 | Kesetaraan hasil | Signal/trade sesuai baseline; toleransi metrik disepakati sebelum tes |
 | MVP-RESULT-01 | P0 | Hasil dapat dijelaskan | Metrik, signal/trade dan asumsi tervalidasi; unsupported ditandai, bukan dipalsukan |
 | MVP-CACHE-01 | P1 | Cache terkompresi/terenkripsi | Tidak ada plaintext persisten; user/version/checksum terpisah; clear cache tersedia |

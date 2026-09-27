@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signalgen.local/schemas/hybrid-screener.schema.json",
+  "title": "SignalGen hybrid screener proposed contract",
+  "description": "Proposed experiment contract. Not an implemented runtime guarantee.",
+  "oneOf": [
+    { "$ref": "#/$defs/socketTicketRequest" },
+    { "$ref": "#/$defs/socketTicketResponse" },
+    { "$ref": "#/$defs/evaluateMessage" },
+    { "$ref": "#/$defs/resultMessage" },
+    { "$ref": "#/$defs/errorMessage" }
+  ],
+  "$defs": {
+    "protocol": { "const": "screener-private-1" },
+    "socketTicketRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compute_grant_id", "protocol"],
+      "properties": {
+        "compute_grant_id": { "type": "string", "pattern": "^cgr_[A-Za-z0-9_-]+$" },
+        "protocol": { "$ref": "#/$defs/protocol" }
+      }
+    },
+    "socketTicketResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticket", "websocket_path", "protocol", "expires_at", "feature_schema_version", "max_candidates"],
+      "properties": {
+        "ticket": { "type": "string", "minLength": 32, "maxLength": 256 },
+        "websocket_path": { "const": "/api/v1/screener/ws" },
+        "protocol": { "$ref": "#/$defs/protocol" },
+        "expires_at": { "type": "string", "format": "date-time" },
+        "feature_schema_version": { "const": "screener-features-1" },
+        "max_candidates": { "type": "integer", "minimum": 1, "maximum": 1000 }
+      }
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["price", "ema9", "ema20", "rsi14"],
+      "properties": {
+        "price": { "type": "number", "exclusiveMinimum": 0 },
+        "ema9": { "type": "number", "exclusiveMinimum": 0 },
+        "ema20": { "type": "number", "exclusiveMinimum": 0 },
+        "rsi14": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbol", "timestamp", "features"],
+      "properties": {
+        "symbol": { "type": "string", "pattern": "^[A-Z0-9.-]{1,24}$" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "features": { "$ref": "#/$defs/features" }
+      }
+    },
+    "evaluateMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "protocol", "request_id", "engine_version", "feature_schema_version", "candidates"],
+      "properties": {
+        "type": { "const": "screener.evaluate" },
+        "protocol": { "$ref": "#/$defs/protocol" },
+        "request_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "engine_version": { "const": "core-0.3.0" },
+        "feature_schema_version": { "const": "screener-features-1" },
+        "candidates": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/candidate" }
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbol", "timestamp", "matched", "reason_codes"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "matched": { "type": "boolean" },
+        "reason_codes": {
+          "type": "array",
+          "maxItems": 16,
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$" }
+        }
+      }
+    },
+    "resultMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "protocol", "request_id", "decision_version", "results"],
+      "properties": {
+        "type": { "const": "screener.result" },
+        "protocol": { "$ref": "#/$defs/protocol" },
+        "request_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "decision_version": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "results": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/decision" } }
+      }
+    },
+    "errorMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "protocol", "code", "message", "retryable"],
+      "properties": {
+        "type": { "const": "screener.error" },
+        "protocol": { "$ref": "#/$defs/protocol" },
+        "request_id": { "type": ["string", "null"], "maxLength": 100 },
+        "code": {
+          "enum": [
+            "TICKET_INVALID",
+            "TICKET_EXPIRED",
+            "TICKET_REPLAYED",
+            "SESSION_REVOKED",
+            "ENTITLEMENT_REQUIRED",
+            "GRANT_INVALID",
+            "VERSION_MISMATCH",
+            "INVALID_MESSAGE",
+            "PAYLOAD_TOO_LARGE",
+            "RATE_LIMITED",
+            "INTERNAL_ERROR"
+          ]
+        },
+        "message": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "retryable": { "type": "boolean" }
+      }
+    }
+  }
+}

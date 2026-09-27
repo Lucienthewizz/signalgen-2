@@ -4,7 +4,12 @@ Versi 2.0 · 16 September 2026 · Target Go API + Go/WASM berdasarkan revisi voi
 
 ## 1. Outcome dan status implementasi
 
-Pisahkan compute historis yang portable dari layanan server. Client menjalankan Go/WASM; server mengelola principal, data berizin, rule, entitlement, sesi/perangkat, jurnal/portofolio dan audit. Satu backend boundary, bukan microservice per fitur.
+Pisahkan compute historis yang portable dari layanan server. Client menjalankan
+indikator dan fitur berat melalui Go/WASM; decision kernel screener yang kecil dan
+kritis diusulkan tetap di server. Batas final dipilih setelah eksperimen Model A/B
+di [`HYBRID_SCREENER_DESIGN.md`](HYBRID_SCREENER_DESIGN.md). Server juga mengelola
+principal, data berizin, rule, entitlement, sesi/perangkat, jurnal/portofolio dan
+audit. Satu backend boundary, bukan microservice per fitur.
 
 Simbol baseline yang dibaca: get_current_user di app/auth/dependencies.py memvalidasi bearer melalui Supabase; BacktestingEngine di app/engines/backtesting_engine.py fetch data, evaluate indicators/rule dan menyimpan run/signals lewat SQLiteRepository. Class tersebut mengeluarkan metrik jumlah signal, **bukan bukti seluruh jalur P&L/exit backtest telah dipetakan**. Pemilihan jalur baseline exact adalah gate M0.
 
@@ -38,6 +43,8 @@ Framework/router Go ditetapkan lewat keputusan teknik kecil; bukan kebutuhan pro
 | BE-CORE-01 | P0 | Freeze exact baseline fixture | Rule/config/source path, data/version/checksum, signal/trade/metrics dan asumsi tercatat |
 | BE-CORE-02 | P0 | Port subset core ke Go | Golden tests indikator/rule/signal dan execution metrics; unsupported ditolak |
 | BE-WASM-01 | P0 | Compile WASM dan bridge contract | Versioned artifact/runtime/schema; worker run/error/cancel terintegrasi FE |
+| BE-SPLIT-01 | P0 | Bandingkan split screener | Decision-kernel server dan satu alternatif diuji pada fixture sama; ukur correctness, CPU/RAM, network, latency, failure, dan exposure logika |
+| BE-SOCKET-01 | P0 | Private scoring ringan | Ticket sekali pakai terikat user/session/grant/version; batch feature dibatasi; replay, expiry, revoke, mismatch, dan oversize ditolak |
 | BE-DATA-01 | P0 | Authorized fixture distribution | Bearer/session/hak fitur diverifikasi; checksum/warmup/UTC konsisten |
 | BE-AUTH-01 | P0 | Current principal + app session | Supabase token tervalidasi; status/session binding expiry/revoke diperiksa server |
 | BE-OWN-01 | P0 | Ownership guards | A/B list/detail/update/delete/aggregate isolation; nested references divalidasi |
@@ -47,7 +54,7 @@ Framework/router Go ditetapkan lewat keputusan teknik kecil; bukan kebutuhan pro
 | BE-RULE-01 | P1 | Rule subset CRUD/capabilities | System read-only; user owner; validation schema sama dengan core |
 | BE-DATA-02 | P1 | Historical adapter/cache | Rights verified, normalized metadata, upstream rate limit/coalescing/timeouts, bounded datasets |
 | BE-ENT-02 | P1 | Manual grants + audit | Restricted operator tool/CLI; reason/expiry mandatory; update+audit atomic |
-| BE-DEVICE-01 | P1 | Device/session limit & revoke | Transactionally enforce configurable limit; session/user/device binding; revoke next request |
+| BE-DEVICE-01 | P1 | Device/session limit & revoke | Satu perangkat aktif; perpindahan maksimal sekali per 24 jam secara transaksional; session/user/device binding; revoke berlaku pada request berikutnya |
 | BE-STORAGE-01 | P1 | SQLite encrypted at rest/recovery | Real protection of db/backups/temp/WAL under chosen method; restart/recovery/key rotation tests |
 | BE-CACHE-01 | P1 | FE cache metadata/security handoff | Hash/version/user scope and key lifecycle jointly specified; no server secret shared |
 | BE-JOURNAL-01 | P1 | Manual transaction CRUD | BUY/SELL decimal money/quantity, fees/time/currency, owner, optimistic concurrency/idempotency |
@@ -74,7 +81,16 @@ P0 can seed users/grants through restricted local tooling; P1 grant tooling requ
 
 Compute grant coordinates purpose/dataset/rule/engine/version access; **not cryptographic DRM over offline math**. Data fetch and grant check are bounded and do not trigger server backtest. Same data obtained through screener can be reused by a malicious client; this is a documented limit of the requirement.
 
-Browser installation UUID is pseudonymous registration, not hardware identity. Limit/session/revoke policy configurable. IP from trusted proxy chain only; changes logged as risk signal, not automatic hard-lock. Retention/privacy policy defined before production.
+Private scoring memakai feature vector dari client. Karena client dapat dimodifikasi,
+hasil ini tidak menjadi bukti authoritative untuk billing atau kompetisi. Socket
+ticket mempersempit akses/replay, bukan membuat browser terpercaya.
+
+Browser installation UUID is pseudonymous registration, not hardware identity.
+Browser web tidak dapat membaca MAC address secara aman dan portable. Server
+menegakkan satu perangkat aktif dan cooldown perpindahan pada tingkat akun, bukan
+mempercayai installation ID saja. IP from trusted proxy chain only; changes logged
+as risk signal, not automatic hard-lock. Retention/privacy policy defined before
+production.
 
 ## 6. Models and storage
 

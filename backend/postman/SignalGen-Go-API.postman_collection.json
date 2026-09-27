@@ -178,9 +178,11 @@
           "event": [{"listen": "test", "script": {"exec": [
             "pm.test('status 200', () => pm.response.to.have.status(200));",
             "const body = pm.response.json();",
-            "pm.test('frozen baseline is advertised', () => { pm.expect(body.engine_version).to.eql('core-0.2.0'); pm.expect(body.schema_version).to.eql('signal-baseline-1'); pm.expect(body.purposes).to.include('screen'); });",
+            "pm.test('hybrid core is advertised', () => { pm.expect(body.engine_version).to.eql('core-0.3.0'); pm.expect(body.feature_schema_version).to.eql('screener-features-1'); pm.expect(body.private_protocol).to.eql('screener-private-1'); pm.expect(body.purposes).to.include('screen'); });",
             "pm.environment.set('engine_version', body.engine_version);",
-            "pm.environment.set('schema_version', body.schema_version);"
+            "pm.environment.set('schema_version', body.schema_version);",
+            "pm.environment.set('feature_schema_version', body.feature_schema_version);",
+            "pm.environment.set('private_protocol', body.private_protocol);"
           ], "type": "text/javascript"}}]
         }
       ]
@@ -377,7 +379,7 @@
             "pm.test('status 200', () => pm.response.to.have.status(200));",
             "const body = pm.response.json();",
             "pm.test('rule version binding matches core', () => { pm.expect(body.definition_hash).to.eql(pm.environment.get('definition_hash')); pm.expect(body.engine_version).to.eql(pm.environment.get('engine_version')); pm.expect(body.schema_version).to.eql(pm.environment.get('schema_version')); });",
-            "pm.test('baseline has four conditions', () => pm.expect(body.definition.conditions).to.have.lengthOf(4));"
+            "pm.test('private system definition is not exposed', () => { pm.expect(body).to.not.have.property('definition'); pm.expect(body).to.not.have.property('conditions'); });"
           ], "type": "text/javascript"}}]
         },
         {
@@ -451,6 +453,25 @@
             "const body = pm.response.json();",
             "pm.test('grant is bound to dataset and rule', () => { pm.expect(body.id).to.match(/^cgr_/); pm.expect(body.dataset_checksum).to.eql(pm.environment.get('dataset_checksum')); pm.expect(body.rule_id).to.eql(pm.environment.get('rule_id')); });",
             "if (body.id) pm.environment.set('compute_grant_id', body.id);"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Create one-use screener socket ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"compute_grant_id\": \"{{compute_grant_id}}\",\n  \"protocol\": \"{{private_protocol}}\"\n}"},
+            "url": "{{base_url}}/api/v1/screener/socket-tickets"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 201', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.test('ticket is one-use and versioned', () => { pm.expect(body.ticket).to.match(/^sgt_/); pm.expect(body.protocol).to.eql('screener-private-1'); pm.expect(body.feature_schema_version).to.eql('screener-features-1'); pm.expect(body.websocket_path).to.eql('/api/v1/screener/ws'); });",
+            "if (body.ticket) pm.environment.set('screener_socket_ticket', body.ticket);"
           ], "type": "text/javascript"}}]
         }
       ]

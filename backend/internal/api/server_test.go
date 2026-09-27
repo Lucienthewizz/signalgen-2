@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -22,6 +23,8 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/ratelimit"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 )
 
 type fakeIdentity struct {
@@ -96,9 +99,12 @@ type fakeDatasets struct {
 }
 
 type fakeCompute struct {
-	created compute.CreateRequest
-	grant   compute.Grant
-	err     error
+	created           compute.CreateRequest
+	grant             compute.Grant
+	err               error
+	verifiedUserID    string
+	verifiedSessionID string
+	verifiedGrantID   string
 }
 
 type fakeReadiness struct{ err error }
@@ -107,6 +113,13 @@ func (fake fakeReadiness) Ready(_ context.Context) error { return fake.err }
 
 func (fake *fakeCompute) Create(_ context.Context, request compute.CreateRequest) (compute.Grant, error) {
 	fake.created = request
+	return fake.grant, fake.err
+}
+
+func (fake *fakeCompute) Verify(_ context.Context, userID, sessionID, grantID string) (compute.Grant, error) {
+	fake.verifiedUserID = userID
+	fake.verifiedSessionID = sessionID
+	fake.verifiedGrantID = grantID
 	return fake.grant, fake.err
 }
 
@@ -223,12 +236,24 @@ func (fake *fakeSessions) Create(_ context.Context, userID, installationID, labe
 	return fake.created, nil
 }
 
-func (fake *fakeSessions) ActiveLimit() int { return 3 }
+func (fake *fakeSessions) ActiveLimit() int                    { return 1 }
+func (fake *fakeSessions) DeviceSwitchCooldown() time.Duration { return 24 * time.Hour }
 
 func (fake *fakeSessions) Verify(_ context.Context, userID, token string) (session.Session, error) {
 	fake.verifiedUserID = userID
 	fake.verifiedToken = token
 	return fake.verified, fake.verifyError
+}
+
+func (fake *fakeSessions) VerifyByID(_ context.Context, userID, sessionID string) (session.Session, error) {
+	fake.verifiedUserID = userID
+	if fake.verifyError != nil {
+		return session.Session{}, fake.verifyError
+	}
+	if fake.verified.ID != "" && fake.verified.ID != sessionID {
+		return session.Session{}, session.ErrInvalid
+	}
+	return fake.verified, nil
 }
 
 func (fake *fakeSessions) Revoke(_ context.Context, userID, token string) error {
@@ -410,6 +435,17 @@ func TestCreateSessionReturnsStableLimitError(t *testing.T) {
 	assertErrorCode(t, response, http.StatusConflict, "DEVICE_LIMIT_REACHED")
 }
 
+func TestCreateSessionReturnsStableDeviceCooldownError(t *testing.T) {
+	sessions := &fakeSessions{createError: session.ErrDeviceCooldown}
+	server := testServer(t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/sessions",
+		strings.NewReader(`{"installation_id":"install-c","label":"Safari"}`))
+	request.Header.Set("Authorization", "Bearer user-token")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusConflict, "DEVICE_SWITCH_COOLDOWN")
+}
+
 func TestJSONBodyLimitRejectsValidPrefixWithOversizedTrailingData(t *testing.T) {
 	server := testServer(
 		t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, &fakeSessions{},
@@ -477,7 +513,7 @@ func TestCapabilitiesRequiresBearerAndMatchingAppSession(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload["engine_version"] != "core-0.2.0" {
+	if payload["engine_version"] != core.EngineVersion {
 		t.Fatalf("engine version = %v", payload["engine_version"])
 	}
 }
@@ -503,7 +539,7 @@ func TestRulesRequireScreenerEntitlement(t *testing.T) {
 	assertErrorCode(t, response, http.StatusForbidden, "ENTITLEMENT_REQUIRED")
 }
 
-func TestRulesExposeFrozenReadOnlyBaseline(t *testing.T) {
+func TestRulesExposeBaselineMetadataWithoutPrivateDefinition(t *testing.T) {
 	server, err := NewServer(
 		fakeIdentity{principal: auth.Principal{ID: "user-a"}},
 		&fakeSessions{},
@@ -524,11 +560,10 @@ func TestRulesExposeFrozenReadOnlyBaseline(t *testing.T) {
 	}
 	var payload struct {
 		Items []struct {
-			ID             string                      `json:"id"`
-			OwnerType      string                      `json:"owner_type"`
-			ReadOnly       bool                        `json:"read_only"`
-			Definition     core.BaselineRuleDefinition `json:"definition"`
-			DefinitionHash string                      `json:"definition_hash"`
+			ID             string `json:"id"`
+			OwnerType      string `json:"owner_type"`
+			ReadOnly       bool   `json:"read_only"`
+			DefinitionHash string `json:"definition_hash"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
@@ -536,8 +571,11 @@ func TestRulesExposeFrozenReadOnlyBaseline(t *testing.T) {
 	}
 	if len(payload.Items) != 1 || payload.Items[0].ID != core.BaselineRuleID ||
 		payload.Items[0].OwnerType != "system" || !payload.Items[0].ReadOnly ||
-		payload.Items[0].DefinitionHash != core.BaselineRuleHash || len(payload.Items[0].Definition.Conditions) != 4 {
+		payload.Items[0].DefinitionHash != core.BaselineRuleHash {
 		t.Fatalf("payload = %+v", payload)
+	}
+	if bytes.Contains(response.Body.Bytes(), []byte(`"definition"`)) || bytes.Contains(response.Body.Bytes(), []byte(`"conditions"`)) {
+		t.Fatalf("private baseline rule leaked: %s", response.Body.String())
 	}
 
 	detailRequest := httptest.NewRequest(http.MethodGet, "/api/v1/rules/"+core.BaselineRuleID, nil)
@@ -1095,7 +1133,7 @@ func TestCreateComputeGrantBindsVerifiedVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"fixture-v1","dataset_checksum":"sha256:data","rule_id":"default-scalping-v1","definition_hash":"sha256:74cb82c5bf9cf8fc06ce6eab0c054734110ad6775b0ab57a203836d588d1f52a","engine_version":"core-0.2.0","schema_version":"signal-baseline-1"}`)
+	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"fixture-v1","dataset_checksum":"sha256:data","rule_id":"default-scalping-v1","definition_hash":"sha256:74cb82c5bf9cf8fc06ce6eab0c054734110ad6775b0ab57a203836d588d1f52a","engine_version":"core-0.3.0","schema_version":"signal-baseline-1"}`)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/compute-grants", body)
 	request.Header.Set("Authorization", "Bearer user-token")
 	request.Header.Set("X-App-Session", "sgs_session")
@@ -1121,7 +1159,7 @@ func TestCreateComputeGrantRejectsVersionMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"wrong","dataset_checksum":"sha256:data","rule_id":"default-scalping-v1","definition_hash":"sha256:74cb82c5bf9cf8fc06ce6eab0c054734110ad6775b0ab57a203836d588d1f52a","engine_version":"core-0.2.0","schema_version":"signal-baseline-1"}`)
+	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"wrong","dataset_checksum":"sha256:data","rule_id":"default-scalping-v1","definition_hash":"sha256:74cb82c5bf9cf8fc06ce6eab0c054734110ad6775b0ab57a203836d588d1f52a","engine_version":"core-0.3.0","schema_version":"signal-baseline-1"}`)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/compute-grants", body)
 	request.Header.Set("Authorization", "Bearer user-token")
 	request.Header.Set("X-App-Session", "sgs_session")
@@ -1145,7 +1183,7 @@ func TestCreateComputeGrantHidesUnknownCustomRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"fixture-v1","dataset_checksum":"sha256:data","rule_id":"rule_missing","definition_hash":"sha256:missing","engine_version":"core-0.2.0","schema_version":"signal-baseline-1"}`)
+	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"fixture-v1","dataset_checksum":"sha256:data","rule_id":"rule_missing","definition_hash":"sha256:missing","engine_version":"core-0.3.0","schema_version":"signal-baseline-1"}`)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/compute-grants", body)
 	request.Header.Set("Authorization", "Bearer user-token")
 	request.Header.Set("X-App-Session", "sgs_session")
@@ -1155,6 +1193,122 @@ func TestCreateComputeGrantHidesUnknownCustomRule(t *testing.T) {
 	if computeStore.created.UserID != "" {
 		t.Fatal("compute store was called for an unknown custom rule")
 	}
+}
+
+func TestHybridScreenerTicketAndWebSocketLifecycle(t *testing.T) {
+	sessions := &fakeSessions{verified: session.Session{ID: "ses-1", UserID: "user-a"}}
+	computeStore := &fakeCompute{grant: compute.Grant{
+		ID: "cgr-1", Purpose: "screen", RuleID: core.BaselineRuleID,
+		DefinitionHash: core.BaselineRuleHash, EngineVersion: core.EngineVersion,
+		SchemaVersion: core.SchemaVersion,
+	}}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions,
+		&fakeAccess{features: []string{access.FeatureScreener}},
+		&fakeDatasets{}, computeStore,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpServer := httptest.NewServer(server)
+	defer httpServer.Close()
+
+	ticketRequest, _ := http.NewRequest(
+		http.MethodPost, httpServer.URL+"/api/v1/screener/socket-tickets",
+		strings.NewReader(`{"compute_grant_id":"cgr-1","protocol":"screener-private-1"}`),
+	)
+	ticketRequest.Header.Set("Authorization", "Bearer user-token")
+	ticketRequest.Header.Set("X-App-Session", "sgs_session")
+	ticketResponse, err := http.DefaultClient.Do(ticketRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ticketResponse.Body.Close()
+	if ticketResponse.StatusCode != http.StatusCreated {
+		raw, _ := io.ReadAll(ticketResponse.Body)
+		t.Fatalf("ticket status = %d, body = %s", ticketResponse.StatusCode, raw)
+	}
+	var ticket struct {
+		Token         string `json:"ticket"`
+		WebSocketPath string `json:"websocket_path"`
+		Protocol      string `json:"protocol"`
+	}
+	if err := json.NewDecoder(ticketResponse.Body).Decode(&ticket); err != nil {
+		t.Fatal(err)
+	}
+	if ticket.Token == "" || ticket.WebSocketPath != "/api/v1/screener/ws" || ticket.Protocol != core.PrivateProtocol {
+		t.Fatalf("ticket = %+v", ticket)
+	}
+
+	websocketURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + ticket.WebSocketPath + "?ticket=" + ticket.Token
+	connection, response, err := websocket.Dial(context.Background(), websocketURL, nil)
+	if err != nil {
+		if response != nil {
+			t.Fatalf("websocket status = %d, error = %v", response.StatusCode, err)
+		}
+		t.Fatal(err)
+	}
+	requestID := "scr_test_request"
+	err = wsjson.Write(context.Background(), connection, screenerEvaluateMessage{
+		Type: "screener.evaluate", Protocol: core.PrivateProtocol, RequestID: requestID,
+		EngineVersion: core.EngineVersion, FeatureSchemaVersion: core.FeatureSchemaVersion,
+		Candidates: []core.FeatureCandidate{{
+			Symbol: "BBCA.JK", Timestamp: "2026-02-07T00:00:00Z",
+			Features: core.FeatureVector{Price: 128, EMA9: 125, EMA20: 121, RSI14: 72},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result screenerResultMessage
+	if err := wsjson.Read(context.Background(), connection, &result); err != nil {
+		t.Fatal(err)
+	}
+	_ = connection.Close(websocket.StatusNormalClosure, "test complete")
+	if result.RequestID != requestID || result.DecisionVersion != core.DecisionVersion ||
+		len(result.Results) != 1 || !result.Results[0].Matched {
+		t.Fatalf("result = %+v", result)
+	}
+
+	_, replayResponse, replayErr := websocket.Dial(context.Background(), websocketURL, nil)
+	if replayErr == nil || replayResponse == nil || replayResponse.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("replay response = %+v, error = %v", replayResponse, replayErr)
+	}
+}
+
+func TestScreenerWebSocketRechecksRevokedSession(t *testing.T) {
+	sessions := &fakeSessions{verified: session.Session{ID: "ses-1", UserID: "user-a"}}
+	computeStore := &fakeCompute{grant: compute.Grant{
+		ID: "cgr-1", Purpose: "screen", RuleID: core.BaselineRuleID,
+		DefinitionHash: core.BaselineRuleHash, EngineVersion: core.EngineVersion,
+		SchemaVersion: core.SchemaVersion,
+	}}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions,
+		&fakeAccess{features: []string{access.FeatureScreener}},
+		&fakeDatasets{}, computeStore,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticketRequest := httptest.NewRequest(http.MethodPost, "/api/v1/screener/socket-tickets",
+		strings.NewReader(`{"compute_grant_id":"cgr-1","protocol":"screener-private-1"}`))
+	ticketRequest.Header.Set("Authorization", "Bearer user-token")
+	ticketRequest.Header.Set("X-App-Session", "sgs_session")
+	ticketResponse := httptest.NewRecorder()
+	server.ServeHTTP(ticketResponse, ticketRequest)
+	if ticketResponse.Code != http.StatusCreated {
+		t.Fatalf("ticket status = %d, body = %s", ticketResponse.Code, ticketResponse.Body.String())
+	}
+	var ticket struct {
+		Token string `json:"ticket"`
+	}
+	_ = json.Unmarshal(ticketResponse.Body.Bytes(), &ticket)
+	sessions.verifyError = session.ErrRevoked
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/screener/ws?ticket="+ticket.Token, nil)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	assertErrorCode(t, response, http.StatusForbidden, "SESSION_REVOKED")
 }
 
 func TestIdentityProviderFailureIsSanitized(t *testing.T) {

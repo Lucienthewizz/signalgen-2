@@ -23,7 +23,15 @@ Legacy: backend/app Python/FastAPI + frontend/desktop Electron
         dipertahankan untuk baseline/rollback, bukan deliverable installer MVP.
 ```
 
-Screening/backtest historis dihitung client, data akun/portofolio/jurnal authoritative di server. Worker menjaga respons UI, bukan menghilangkan CPU/RAM perangkat. Go/WASM bukan pengganti React dan bukan jaminan enkripsi kode.
+Indikator dan komputasi historis yang berat dihitung client. Berdasarkan bimbingan
+terbaru, keputusan screener kritis diusulkan tetap berada pada modul kecil server
+yang menerima feature vector ringkas melalui WebSocket. Model split final harus
+dipilih setelah eksperimen, bukan diasumsikan selesai. Data akun/portofolio/jurnal
+tetap authoritative di server. Worker menjaga respons UI, bukan menghilangkan
+CPU/RAM perangkat. Go/WASM bukan pengganti React dan bukan jaminan enkripsi kode.
+
+Lihat [desain hybrid screener](backend/HYBRID_SCREENER_DESIGN.md) untuk tiga model
+pembanding, threat model, dan urutan implementasi.
 
 ## 3. Monorepo dan tanggung jawab
 

@@ -69,9 +69,43 @@ Kemudian jalankan:
 
 Folder 05 membuat dan membaca grant `screener` melalui endpoint operator. Folder
 06 membuat, membaca, memperbarui, dan menghapus satu rule sementara milik akun.
-Folder 07 menyimpan dataset ID, checksum, versi, dan compute grant ke environment.
+Folder 07 menyimpan dataset ID, checksum, versi, compute grant, dan socket ticket
+sekali pakai ke environment.
 Folder 08 mencabut sesi saat ini, lalu memastikan token sesi tersebut langsung
 ditolak. Untuk mengulang pengujian, jalankan kembali **Create app session**.
+
+## 4. Uji WebSocket private scoring secara manual
+
+Collection runner membuat `screener_socket_ticket`, tetapi tidak mengirim frame
+WebSocket. Segera setelah request ticket selesai, buat **New → WebSocket Request**
+di Postman dan hubungkan ke:
+
+```text
+ws://127.0.0.1:8080/api/v1/screener/ws?ticket={{screener_socket_ticket}}
+```
+
+Kirim satu kali:
+
+```json
+{
+  "type": "screener.evaluate",
+  "protocol": "screener-private-1",
+  "request_id": "postman-demo-1",
+  "engine_version": "core-0.3.0",
+  "feature_schema_version": "screener-features-1",
+  "candidates": [
+    {
+      "symbol": "BBCA.JK",
+      "timestamp": "2026-02-07T00:00:00Z",
+      "features": {"price": 128, "ema9": 125, "ema20": 121, "rsi14": 72}
+    }
+  ]
+}
+```
+
+Respons harus `screener.result` dengan `matched: true`. Ticket langsung habis
+setelah dipakai; koneksi kedua dengan ticket yang sama harus ditolak. Jangan
+menyimpan atau membagikan ticket tersebut.
 
 ## Yang diverifikasi
 
@@ -88,4 +122,6 @@ ditolak. Untuk mengulang pengujian, jalankan kembali **Create app session**.
 - dataset ditolak sebelum grant dan tersedia setelah grant;
 - manifest/checksum/konten fixture `BBCA.JK` konsisten;
 - compute grant terikat pada dataset, rule, engine, dan schema;
+- socket ticket terikat, singkat, dan hanya dapat digunakan sekali;
+- private decision menerima feature ringkas tanpa menerima candle OHLCV mentah;
 - revoke sesi berlaku pada request berikutnya.

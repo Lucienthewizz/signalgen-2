@@ -4,6 +4,10 @@ Backend legacy SignalGen menggunakan Python, FastAPI, Supabase Auth, dan
 SQLite. Migrasi target Go dikembangkan bertahap di `core`, `cmd`, dan
 `internal`; backend Python tetap menjadi baseline dan jalur rollback.
 
+Untuk mempelajari pembagian screener antara Go/WASM dan backend, mulai dari
+[`HYBRID_SCREENER_DESIGN.md`](HYBRID_SCREENER_DESIGN.md). Vertical slice Model A
+sudah tersedia untuk eksperimen; pemilihan model final belum diputuskan.
+
 ## Menjalankan backend
 
 Dari folder repository:
@@ -85,6 +89,10 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `GET /api/v1/datasets/{id}/content` — konten OHLCV sintetis terproteksi;
 - `POST /api/v1/compute-grants` — receipt singkat yang mengikat sesi, dataset,
   system rule atau rule pribadi, engine, dan schema sebelum eksekusi WASM;
+- `POST /api/v1/screener/socket-tickets` — menukar compute grant valid menjadi
+  ticket WebSocket sekali pakai berumur pendek;
+- `GET /api/v1/screener/ws` — upgrade WebSocket dan menjalankan private decision
+  pada batch feature, bukan pada candle OHLCV mentah;
 - `GET /api/v1/account/devices` — daftar perangkat milik akun yang sedang login;
 - `PATCH /api/v1/account/devices/{id}` — mengganti label perangkat atau mencabut
   seluruh sesi pada perangkat tersebut;
@@ -96,7 +104,10 @@ penanda sesi aktif; ID milik pengguna lain tidak dapat dibaca atau dicabut.
 Daftar perangkat menggabungkan riwayat sesi berdasarkan `installation_id`.
 Rename dan revoke selalu dibatasi oleh pemilik; revoke perangkat aktif akan
 membuat request berikutnya dari perangkat tersebut ditolak.
-System rule tidak dapat diubah atau dihapus. Query rule pribadi selalu dibatasi
+Default satu perangkat aktif berlaku di server. Perpindahan ke installation ID
+lain mencabut sesi perangkat sebelumnya dan hanya boleh sekali per 24 jam.
+System rule tidak dapat diubah/dihapus dan definisi privatnya tidak dikirim oleh
+endpoint rule. Query rule pribadi selalu dibatasi
 oleh pemilik; ID milik akun lain menghasilkan respons not found agar kepemilikan
 tidak bocor. Endpoint bisnis lain tetap belum diimplementasikan.
 
@@ -110,7 +121,8 @@ eksplisit pada `SIGNALGEN_CORS_ORIGINS` (dipisahkan koma). Contoh development:
 
 ```env
 SIGNALGEN_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-SIGNALGEN_MAX_ACTIVE_SESSIONS=3
+SIGNALGEN_MAX_ACTIVE_SESSIONS=1
+SIGNALGEN_DEVICE_SWITCH_COOLDOWN_HOURS=24
 SIGNALGEN_MUTATION_RATE_LIMIT_PER_MINUTE=60
 ```
 
@@ -129,10 +141,14 @@ adalah 60 request per menit dan dapat diubah melalui
 memori proses, sehingga deployment multi-instance nantinya perlu limiter bersama
 seperti Redis atau rate limit pada API gateway.
 
-Batas sesi aktif berlaku per pengguna. Pembuatan sesi pada `installation_id`
-yang sama mengganti dan mencabut sesi lama secara atomik. Pembuatan sesi dari
-instalasi baru setelah batas tercapai menghasilkan `409 DEVICE_LIMIT_REACHED`;
-pengguna dapat mencabut sesi lama melalui endpoint daftar sesi.
+Batas satu perangkat aktif berlaku per pengguna. Pembuatan sesi pada
+`installation_id` yang sama mengganti dan mencabut sesi lama secara atomik.
+Perpindahan pertama ke instalasi lain mencabut sesi lama; perpindahan berikutnya
+dalam 24 jam ditolak dengan `409 DEVICE_SWITCH_COOLDOWN`.
+
+Socket ticket dan rate limiter masih disimpan di memori satu proses. Deployment
+multi-instance harus memakai shared store atau routing yang menjamin ticket masuk
+ke instance penerbitnya.
 
 Setelah pengguna login dan membuat sesi pertamanya, developer dapat memberikan
 akses demo secara lokal tanpa endpoint admin publik:

@@ -51,3 +51,24 @@ tetap dipertahankan sebagai baseline/rollback selama migrasi bertahap.
 Untuk tugas berikutnya, gunakan dokumen ini sebagai provenance lalu ikuti `PRD.md`
 v2 dan PRD frontend/backend sebagai scope. Jangan menganggap transkripsi sempurna
 atau arsitektur target sudah diterapkan.
+
+## Addendum bimbingan terbaru — 27 September 2026
+
+Transkrip terbaru memperjelas revisi berikut:
+
+- komputasi tetap dominan di client/WASM, tetapi logika screener tidak boleh
+  seluruhnya berada di WASM karena dapat direkayasa balik;
+- satu modul keputusan kecil dan kritis tetap di server, diakses dengan pesan
+  ringan melalui socket dan tidak terus-menerus;
+- dataset boleh diambil sekali dan diproteksi saat distribusi/penyimpanan, dengan
+  batas bahwa plaintext tetap terlihat ketika dipakai client;
+- kontrol perangkat memakai app session, installation ID, serta IP sebagai sinyal;
+  target kebijakan adalah satu perangkat aktif dan perpindahan maksimal sekali
+  dalam satu hari;
+- fokus minggu berikutnya adalah membandingkan beberapa model pemisahan screener,
+  lalu mendiskusikan hasilnya dengan pembimbing. UI, kompetisi, payment, dan
+  real-time penuh belum menjadi fokus saat ini.
+
+Rancangan eksperimen dan batas keamanannya ada di
+[`backend/HYBRID_SCREENER_DESIGN.md`](backend/HYBRID_SCREENER_DESIGN.md). Dokumen
+itu berstatus usulan, bukan keputusan arsitektur final.

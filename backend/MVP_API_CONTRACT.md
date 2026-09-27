@@ -2,6 +2,21 @@
 
 Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** [`openapi.yaml`](openapi.yaml) documents only the implemented Go surface and wins for current runtime integration; this file retains proposed routes and policy decisions. Changes require FE+BE review and versioning.
 
+Addendum 27 September 2026: bimbingan terbaru meminta pemisahan screener hybrid.
+Kontrak eksperimen socket ticket dan private decision tersedia di
+[`HYBRID_SCREENER_DESIGN.md`](HYBRID_SCREENER_DESIGN.md) dan schema
+[`contracts/hybrid-screener.schema.json`](contracts/hybrid-screener.schema.json).
+OpenAPI tetap menjadi sumber kebenaran endpoint yang sudah tersedia; pilihan Model
+A sebagai arsitektur final masih proposed sampai eksperimen pembanding selesai.
+
+Implementation checkpoint 27 September 2026: Model A kini memiliki vertical
+slice backend awal. `core-0.3.0` memisahkan feature calculation dan private
+decision; WASM hanya mengekspor feature calculation. Endpoint socket-ticket dan
+WebSocket private scoring sudah diimplementasikan dengan binding, TTL, single-use,
+replay rejection, session/entitlement recheck, payload limit, dan parity test.
+Ini masih kandidat eksperimen yang harus dibandingkan dengan Model B sebelum
+keputusan arsitektur final.
+
 Implementation checkpoint 22 September 2026: Go API currently implements
 `GET /health`, `GET /ready`, `POST /api/v1/sessions`, `GET /api/v1/capabilities`, and
 `DELETE /api/v1/sessions/current`. `GET /api/v1/account/me` is also available
@@ -70,7 +85,7 @@ Stable HTTP/code minimum:
 | 401 | `AUTH_REQUIRED`, `AUTH_INVALID`, `AUTH_EXPIRED` |
 | 403 | `ACCOUNT_SUSPENDED`, `SESSION_REVOKED`, `SESSION_EXPIRED`, `ENTITLEMENT_REQUIRED`, `ROLE_REQUIRED` |
 | 404 | `RESOURCE_NOT_FOUND` (consistent for non-owner/private missing) |
-| 409 | `VERSION_CONFLICT`, `DEVICE_LIMIT_REACHED`, `IDEMPOTENCY_CONFLICT`, `POSITION_INSUFFICIENT` |
+| 409 | `VERSION_CONFLICT`, `DEVICE_LIMIT_REACHED`, `DEVICE_SWITCH_COOLDOWN`, `IDEMPOTENCY_CONFLICT`, `POSITION_INSUFFICIENT` |
 | 413/429 | `PAYLOAD_TOO_LARGE`, `DATASET_LIMIT_EXCEEDED`, `RATE_LIMITED` |
 | 502/503 | `PROVIDER_UNAVAILABLE`, `SERVICE_UNAVAILABLE` |
 
@@ -125,13 +140,15 @@ Response returns `session.id`, one-time `session_token`, `expires_at`, device su
 | GET | `/datasets/{id}/content` | matching feature | Canonical compressed payload; bounded/range-checked; no server compute |
 | POST | `/compute-grants` | purpose feature | Short-lived coordination receipt for a run; not DRM or proof result correctness |
 
-Rule snapshot minimum:
+Private user-rule snapshot minimum:
 
 ```json
 {"id":"rule_opaque","name":"Baseline RSI","owner_type":"user","schema_version":"rule-1","engine_version":"core-1","definition":{},"definition_hash":"sha256:...","version":3,"updated_at":"..."}
 ```
 
-`definition` is intentionally not invented in this document. It is frozen at M0 from selected baseline and represented by JSON Schema in `/capabilities`; FE and Go core consume the same fixtures.
+For a private user rule, `definition` is returned only to its owner. The frozen
+system rule returns metadata and `definition_hash`, but deliberately omits
+`definition`; the private decision kernel remains on the server.
 
 Prepare request:
 
@@ -202,35 +219,42 @@ account status management remains unavailable.
 
 Payment status is not part of manual grant. Full admin user management, billing webhooks, release management and metrics dashboard are P2 per revised priorities.
 
-## 6. Worker protocol (P0)
+## 6. Worker dan private-scoring protocol (P0)
 
-Dedicated ES module Worker owns Go runtime/WASM. Message schema versioned and validated both sides.
+Dedicated ES module Worker owns Go runtime/WASM. Mulai `core-0.3.0`, WASM hanya
+menghitung feature; rule decision privat tidak diberikan kepada worker.
 
 Main → worker:
 
 ```ts
 type WorkerRequest =
-  | { type: "init"; protocol: "worker-1"; wasmUrl: string; wasmSha256: string }
-  | { type: "run"; protocol: "worker-1"; jobId: string; purpose: "screen" | "backtest";
-      engineVersion: string; dataset: ArrayBuffer; datasetManifest: object;
-      ruleSnapshot: object; config: object }
-  | { type: "cancel"; protocol: "worker-1"; jobId: string }
+  | { type: "init"; protocol: "worker-2"; wasmUrl: string; wasmSha256: string }
+  | { type: "features"; protocol: "worker-2"; jobId: string; purpose: "screen";
+      engineVersion: "core-0.3.0"; dataset: ArrayBuffer; datasetManifest: object }
+  | { type: "cancel"; protocol: "worker-2"; jobId: string }
 ```
 
 Worker → main:
 
 ```ts
 type WorkerEvent =
-  | { type: "ready"; protocol: "worker-1"; engineVersion: string; capabilitiesVersion: string }
-  | { type: "progress"; jobId: string; stage: "decode"|"validate"|"indicators"|"evaluate"|"metrics"; completed?: number; total?: number }
-  | { type: "result"; jobId: string; execution: "client_wasm"; result: object; warnings: object[]; timings: object }
+  | { type: "ready"; protocol: "worker-2"; engineVersion: string; capabilitiesVersion: string }
+  | { type: "progress"; jobId: string; stage: "decode"|"validate"|"indicators"; completed?: number; total?: number }
+  | { type: "features"; jobId: string; execution: "client_wasm_features"; result: object; warnings: object[]; timings: object }
   | { type: "cancelled"; jobId: string }
   | { type: "error"; jobId?: string; code: string; message: string; retryable: boolean; details?: object }
 ```
 
-The dataset buffer is transferred, not cloned. Only one job per worker. FE throttles progress rendering; worker emits meaningful counts/stages, not fake percentages. Cancel may be implemented by terminating/recreating worker if cooperative cancel cannot interrupt Go/WASM reliably; terminal cancelled state must be deterministic. Late events for old jobId ignored.
+The dataset buffer is transferred, not cloned. Only one job per worker. Feature
+result kemudian dikirim ke private-scoring WebSocket memakai
+`screener-private-1`. Kontrak HTTP ticket dan pesan socket ada pada OpenAPI dan
+`contracts/hybrid-screener.schema.json`. Ticket sekali pakai, terikat user,
+session, compute grant, rule hash, dan versi.
 
-Result minimum: protocol/engine/schema/data/rule/config hashes, purpose, execution, signals/matches or trades, supported metrics, assumptions, warnings and stage timings. Exact trade/config/result schema is frozen M0 from baseline; do not invent metrics the selected engine cannot produce.
+WASM result minimum: protocol/engine/feature schema, candidate timestamp/symbol,
+feature numerik, warnings, dan stage timings. Server result minimum: request ID,
+decision version, match, dan reason code. Server tidak menerima OHLCV mentah pada
+private-scoring socket.
 
 ## 7. Limits, versions and compatibility
 
