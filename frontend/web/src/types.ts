@@ -98,7 +98,7 @@ export type RuleResource = {
   schema_version: string;
   engine_version: string;
   version: number;
-  definition: Record<string, unknown>;
+  definition?: Record<string, unknown>;
 };
 
 export type ComputeGrant = {
@@ -119,24 +119,46 @@ export type ScreenerSocketTicket = {
   ticket: string;
   expires_at: string;
   websocket_path: string;
+  protocol: "screener-private-1";
+  feature_schema_version: "screener-features-1";
+  max_candidates: number;
 };
 
-export type ScreenerFeatures = {
-  rsi: number;
-  ema_fast: number;
-  ema_slow: number;
-  volume_ratio: number;
-  atr_ratio: number;
+export type ScreenerFeatureVector = {
+  price: number;
+  ema9: number;
+  ema20: number;
+  rsi14: number;
+};
+
+export type ScreenerFeatureCandidate = {
+  symbol: string;
+  timestamp: string;
+  features: ScreenerFeatureVector;
+};
+
+export type ScreenerFeatureResult = {
+  engine_version: "core-0.3.0";
+  feature_schema_version: "screener-features-1";
+  execution: "client_go_features";
+  candidates: ScreenerFeatureCandidate[];
+  candle_count: number;
+  warnings: string[];
+};
+
+export type ScreenerDecision = {
+  symbol: string;
+  timestamp: string;
+  matched: boolean;
+  reason_codes: string[];
 };
 
 export type ScreenerResult = {
   type: "screener.result";
+  protocol: "screener-private-1";
   request_id: string;
-  symbol: string;
-  score: number;
-  decision: "candidate" | "observe";
-  reason_codes: string[];
-  evaluated_at: string;
+  decision_version: string;
+  results: ScreenerDecision[];
 };
 
 export type AccountState = {

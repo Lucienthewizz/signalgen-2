@@ -224,6 +224,7 @@ test("hybrid screener calls use the implemented Go API contract", async () => {
   );
   assert.deepEqual(JSON.parse(c.calls[2].init.body), {
     compute_grant_id: "cgr_1",
+    protocol: "screener-private-1",
   });
 });
 

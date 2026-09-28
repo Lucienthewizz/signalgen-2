@@ -1,16 +1,13 @@
-import { useState } from "react";
 import {
   ArrowRight,
-  BarChart3,
-  BookOpenCheck,
-  Braces,
   Check,
-  Gauge,
   ShieldCheck,
+  UserRound,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { FeatureFigure } from "@/components/feature-figure";
 import { MarketTrace } from "@/components/market-trace";
+import { SignalLattice } from "@/components/signal-lattice";
 import {
   Accordion,
   AccordionContent,
@@ -21,35 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Pricing } from "@/components/ui/single-pricing-card-1";
 import { TestimonialsMarquee } from "@/components/ui/testimonials-columns-1";
 import { faqItems, sampleRatings } from "@/data/demo";
-import { cn } from "@/lib/utils";
 import type { User } from "@/types";
-const productViews = [
-  {
-    id: "overview",
-    label: "Overview",
-    icon: Gauge,
-  },
-  {
-    id: "analysis",
-    label: "Analysis",
-    icon: BarChart3,
-  },
-  {
-    id: "rules",
-    label: "Rules",
-    icon: Braces,
-  },
-  {
-    id: "journal",
-    label: "Journal",
-    icon: BookOpenCheck,
-  },
-  {
-    id: "access",
-    label: "Access",
-    icon: ShieldCheck,
-  },
-] as const;
 
 const capabilityViews = [
   {
@@ -84,7 +53,8 @@ export function PublicWorkspace({
   backendOnline: boolean;
   user: User | null;
 }) {
-  const [selectedView, setSelectedView] = useState(0);
+  const accountName = user?.full_name?.trim() || user?.email.split("@")[0] || "";
+  const initials = accountName.slice(0, 2).toUpperCase();
 
   return (
     <main className="workbench landing-shell">
@@ -118,6 +88,14 @@ export function PublicWorkspace({
               >
                 {user ? "Dashboard" : "Sign in"}
               </a>
+              {user && (
+                <a className="landing-header__profile" href="#account">
+                  <span className="landing-header__profile-avatar" aria-hidden="true">
+                    {initials || <UserRound />}
+                  </span>
+                  <span>Profile</span>
+                </a>
+              )}
             </div>
           </div>
         </header>
@@ -169,62 +147,7 @@ export function PublicWorkspace({
           </section>
           <div className="landing-product-flow">
             <div className="landing-stage landing-stage--black">
-              <section className="product-tour" id="product-tour">
-                <div className="product-tour__heading">
-                  <div>
-                    <h3>See the workspace before you start.</h3>
-                    <p>
-                      Every preview comes directly from a feature you can
-                      explore now.
-                    </p>
-                  </div>
-                  <a
-                    href={`#app/${productViews[selectedView].id}`}
-                    className="text-link"
-                  >
-                    Open {productViews[selectedView].label} <ArrowRight />
-                  </a>
-                </div>
-                <div
-                  className="product-tour__tabs"
-                  role="tablist"
-                  aria-label="Web feature preview"
-                >
-                  {productViews.map((view, index) => {
-                    const Icon = view.icon;
-                    return (
-                      <button
-                        key={view.id}
-                        role="tab"
-                        aria-selected={selectedView === index}
-                        className={cn(
-                          "product-tour__tab",
-                          selectedView === index && "active",
-                        )}
-                        onClick={() => setSelectedView(index)}
-                      >
-                        <Icon aria-hidden="true" />
-                        <strong>{view.label}</strong>
-                      </button>
-                    );
-                  })}
-                </div>
-                <figure className="product-tour__frame">
-                  <div className="product-tour__image">
-                    <iframe
-                      key={productViews[selectedView].id}
-                      src={`?preview=product-tour#app/${productViews[selectedView].id}`}
-                      title={`Current ${productViews[selectedView].label} view in Signalgen web`}
-                      loading={selectedView === 0 ? "eager" : "lazy"}
-                      tabIndex={-1}
-                    />
-                  </div>
-                  <figcaption>
-                    <strong>{productViews[selectedView].label}</strong>
-                    <span>Live preview from the current workspace build.</span>
-                  </figcaption>
-                </figure>
-              </section>
+              <SignalLattice />
             </div>
             <div className="landing-stage landing-stage--green">
               <section className="capability-section" id="capabilities">

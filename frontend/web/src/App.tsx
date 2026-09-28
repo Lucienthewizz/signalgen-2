@@ -18,6 +18,7 @@ function currentRoute(): Route {
     [
       "app/overview",
       "app/analysis",
+      "app/realtime",
       "app/rules",
       "app/journal",
       "app/access",

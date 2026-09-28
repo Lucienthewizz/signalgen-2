@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import type { Candle, ScreenerFeatures } from "@/types";
+import type { Candle, ScreenerFeatureResult } from "@/types";
 
 type GoRuntime = {
   importObject: WebAssembly.Imports;
@@ -10,6 +10,8 @@ type GoRuntime = {
 type WasmManifest = {
   engine_version: string;
   schema_version: string;
+  feature_schema_version: string;
+  capabilities_version: string;
   worker_protocol: string;
   wasm_file: string;
   runtime_file: string;
@@ -19,7 +21,7 @@ type WasmManifest = {
 
 type WorkerScope = typeof globalThis & {
   Go?: new () => GoRuntime;
-  signalgenExtractLatestFeatures?: (request: string) => string;
+  signalgenComputeFeatures?: (request: string) => string;
 };
 
 const scope = self as WorkerScope;
@@ -29,19 +31,24 @@ self.onmessage = async (event: MessageEvent) => {
   const message = event.data as {
     type: "extract";
     jobId: string;
+    symbol: string;
     candles: Candle[];
   };
   if (message.type !== "extract") return;
   try {
     ready ??= loadEngine();
     await ready;
-    const encoded = scope.signalgenExtractLatestFeatures?.(
-      JSON.stringify({ candles: message.candles }),
+    const encoded = scope.signalgenComputeFeatures?.(
+      JSON.stringify({
+        purpose: "screen",
+        symbol: message.symbol,
+        candles: message.candles,
+      }),
     );
     if (!encoded) throw new Error("WASM feature function is unavailable");
     const response = JSON.parse(encoded) as {
       ok: boolean;
-      result?: ScreenerFeatures;
+      result?: ScreenerFeatureResult;
       error?: { message?: string };
     };
     if (!response.ok || !response.result)
@@ -67,7 +74,11 @@ async function loadEngine(): Promise<void> {
   );
   if (!manifestResponse.ok) throw new Error("WASM manifest tidak ditemukan");
   const manifest = (await manifestResponse.json()) as WasmManifest;
-  if (manifest.worker_protocol !== "worker-1")
+  if (
+    manifest.engine_version !== "core-0.3.0" ||
+    manifest.worker_protocol !== "worker-2" ||
+    manifest.feature_schema_version !== "screener-features-1"
+  )
     throw new Error("Versi worker WASM tidak didukung");
 
   const [runtimeResponse, wasmResponse] = await Promise.all([
@@ -98,7 +109,7 @@ async function loadEngine(): Promise<void> {
     go.importObject,
   );
   void go.run(instantiated.instance);
-  if (!scope.signalgenExtractLatestFeatures)
+  if (!scope.signalgenComputeFeatures)
     throw new Error("WASM feature function gagal diinisialisasi");
 }
 
