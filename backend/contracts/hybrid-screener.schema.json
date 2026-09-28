@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://signalgen.local/schemas/hybrid-screener.schema.json",
-  "title": "SignalGen hybrid screener proposed contract",
-  "description": "Proposed experiment contract. Not an implemented runtime guarantee.",
+  "title": "SignalGen hybrid screener contract",
+  "description": "Implemented experimental contract for the Model A vertical slice.",
   "oneOf": [
     { "$ref": "#/$defs/socketTicketRequest" },
     { "$ref": "#/$defs/socketTicketResponse" },
