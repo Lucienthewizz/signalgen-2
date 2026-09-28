@@ -33,6 +33,13 @@ type IdentityVerifier interface {
 	Verify(ctx context.Context, accessToken string) (auth.Principal, error)
 }
 
+type AuthService interface {
+	Register(ctx context.Context, email, password, fullName string) (auth.AuthResult, error)
+	Login(ctx context.Context, email, password string) (auth.AuthResult, error)
+	RequestPasswordReset(ctx context.Context, email, redirectURL string) error
+	ResetPassword(ctx context.Context, accessToken, refreshToken, password string) error
+}
+
 type SessionStore interface {
 	Create(ctx context.Context, userID, installationID, label string) (session.Created, error)
 	Verify(ctx context.Context, userID, token string) (session.Session, error)
@@ -117,6 +124,7 @@ func (unlimitedRateLimiter) Allow(string) (bool, time.Duration) { return true, 0
 
 type Server struct {
 	identity       IdentityVerifier
+	auth           AuthService
 	sessions       SessionStore
 	access         AccessStore
 	datasets       DatasetStore
@@ -146,6 +154,34 @@ type serverConfig struct {
 	rateLimiter     RateLimiter
 	ticketStore     ScreenerTicketStore
 	originPatterns  []string
+	authService     AuthService
+	resetRedirect   string
+}
+
+func WithAuthService(service AuthService) ServerOption {
+	return func(config *serverConfig) error {
+		if service == nil {
+			return fmt.Errorf("auth service is required")
+		}
+		config.authService = service
+		return nil
+	}
+}
+
+func WithPasswordResetRedirectURL(rawURL string) ServerOption {
+	return func(config *serverConfig) error {
+		rawURL = strings.TrimSpace(rawURL)
+		if rawURL == "" {
+			config.resetRedirect = ""
+			return nil
+		}
+		parsed, err := url.Parse(rawURL)
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return fmt.Errorf("invalid password reset redirect URL")
+		}
+		config.resetRedirect = rawURL
+		return nil
+	}
 }
 
 func WithReadinessChecks(checkers ...ReadinessChecker) ServerOption {
@@ -239,13 +275,19 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 		}
 	}
 	server := &Server{
-		identity: identity, sessions: sessions, access: accessStore,
+		identity: identity, auth: config.authService, sessions: sessions, access: accessStore,
 		datasets: datasets, compute: computeStore, rules: config.ruleStore, limiter: config.rateLimiter,
 		tickets: config.ticketStore, originPatterns: append([]string(nil), config.originPatterns...),
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api", server.apiStatus)
 	mux.HandleFunc("GET /health", server.health)
 	mux.HandleFunc("GET /ready", server.ready(config.readinessChecks))
+	mux.HandleFunc("POST /api/auth/register", server.register)
+	mux.HandleFunc("POST /api/auth/login", server.login)
+	mux.HandleFunc("GET /api/auth/me", server.me)
+	mux.HandleFunc("POST /api/auth/password/reset-request", server.requestPasswordReset(config.resetRedirect))
+	mux.HandleFunc("POST /api/auth/password/reset", server.resetPassword)
 	mux.HandleFunc("POST /api/v1/sessions", server.createSession)
 	mux.HandleFunc("DELETE /api/v1/sessions/current", server.revokeCurrentSession)
 	mux.HandleFunc("GET /api/v1/account/me", server.accountMe)

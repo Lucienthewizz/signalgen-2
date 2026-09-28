@@ -1,8 +1,11 @@
 # SignalGen Backend
 
-Backend legacy SignalGen menggunakan Python, FastAPI, Supabase Auth, dan
-SQLite. Migrasi target Go dikembangkan bertahap di `core`, `cmd`, dan
-`internal`; backend Python tetap menjadi baseline dan jalur rollback.
+Backend aktif SignalGen menggunakan Go, Supabase Auth, dan SQLite. Login,
+register, profil, forgot password, reset password, app-session, perangkat,
+entitlement, dataset, rules, serta compute grant dilayani Go API pada port
+8080. Kode Python/FastAPI tetap disimpan hanya sebagai baseline dan jalur
+rollback melalui profile Docker `legacy`; frontend tidak lagi bergantung pada
+endpoint autentikasi Python.
 
 Untuk mempelajari pembagian screener antara Go/WASM dan backend, mulai dari
 [`HYBRID_SCREENER_DESIGN.md`](HYBRID_SCREENER_DESIGN.md). Vertical slice Model A
@@ -14,30 +17,29 @@ Dari folder repository:
 
 ```bash
 cp backend/.env.example backend/.env
-docker compose up --build backend
+docker compose up --build go-api
 ```
 
-API tersedia di `http://127.0.0.1:3456` dan dokumentasi OpenAPI di
-`http://127.0.0.1:3456/docs`. Socket.IO tersedia di
-`http://127.0.0.1:8765`.
+API tersedia di `http://127.0.0.1:8080`; kontrak lengkap berada di
+`backend/openapi.yaml`.
 
 ## Menjalankan test
 
 ```bash
-docker compose run --rm backend-test
+cd backend
+go test ./...
 ```
 
 Konfigurasi rahasia backend disimpan pada `backend/.env` dan tidak boleh
 dimasukkan ke Git atau ke bundle frontend.
 
 Isi nilai Supabase di `backend/.env` sebelum menjalankannya. Docker menyimpan
-SQLite pada volume `signalgen-backend-data`. Untuk koneksi IBKR/TWS dari
-container gunakan host `host.docker.internal`, bukan `127.0.0.1`. Container
-menjalankan REST API dan Socket.IO tanpa membuka window PyWebView lama.
+SQLite Go pada volume `signalgen-go-data`. Virtual environment Python tidak
+diperlukan untuk workflow standar.
 
-Virtual environment Python tidak diperlukan untuk workflow standar. Developer
-boleh membuat `.venv` sendiri untuk debugging lokal, tetapi folder tersebut tidak
-boleh masuk Git.
+Jika baseline lama perlu diperiksa secara eksplisit, jalankan
+`docker compose --profile legacy up backend`. Profile tersebut bukan jalur
+runtime frontend saat ini.
 
 ## Target Go
 
@@ -58,22 +60,30 @@ Frontend harus memverifikasi checksum WASM dan runtime dari
 `signalgen_core.manifest.json` sebelum menjalankan `signalgen_core.wasm`; file
 WASM dan `wasm_exec.js` wajib berasal dari build yang sama.
 
-`internal/auth` memverifikasi bearer ke Supabase Auth menggunakan publishable
-key. Package tersebut hanya menghasilkan principal (`id` dan `email`); role,
-status akun, sesi aplikasi, dan entitlement tetap harus dibaca dari storage
-server SignalGen. Endpoint bisnis Go belum boleh dibuka hanya berdasarkan
-metadata user Supabase.
+`internal/auth` menangani register, login, recovery password, pembaruan password,
+dan verifikasi bearer ke Supabase Auth menggunakan publishable key. Package
+tersebut hanya menghasilkan identitas publik (`id`, `email`, dan nama tampilan);
+role, status akun, sesi aplikasi, dan entitlement tetap dibaca dari storage
+server SignalGen. Metadata user Supabase tidak digunakan untuk keputusan
+otorisasi.
 
-Menjalankan target Go API secara terpisah dari FastAPI legacy:
+Menjalankan Go API:
 
 ```bash
-docker compose --profile go-target up --build go-api
+docker compose up --build go-api
 ```
 
 Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 
 - `GET /health` — public health check;
 - `GET /ready` — readiness SQLite dan integritas fixture untuk Docker;
+- `GET /api` — status yang dipakai frontend;
+- `POST /api/auth/register` — membuat akun Supabase melalui Go;
+- `POST /api/auth/login` — login Supabase melalui Go;
+- `GET /api/auth/me` — membaca identitas publik dari bearer terverifikasi;
+- `POST /api/auth/password/reset-request` — mengirim email pemulihan tanpa
+  membocorkan apakah email terdaftar;
+- `POST /api/auth/password/reset` — memperbarui password dari recovery session;
 - `POST /api/v1/sessions` — membuat sesi aplikasi, membutuhkan bearer Supabase;
 - `GET /api/v1/account/me` — profil/status/feature grant server-side;
 - `GET /api/v1/account/sessions` — daftar maksimal 100 sesi milik pengguna;
@@ -121,10 +131,14 @@ eksplisit pada `SIGNALGEN_CORS_ORIGINS` (dipisahkan koma). Contoh development:
 
 ```env
 SIGNALGEN_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+SIGNALGEN_PASSWORD_RESET_REDIRECT_URL=http://127.0.0.1:5174/?view=reset-password
 SIGNALGEN_MAX_ACTIVE_SESSIONS=1
 SIGNALGEN_DEVICE_SWITCH_COOLDOWN_HOURS=24
 SIGNALGEN_MUTATION_RATE_LIMIT_PER_MINUTE=60
 ```
+
+URL reset wajib dimasukkan juga ke daftar redirect yang diizinkan pada
+Supabase Dashboard: **Authentication → URL Configuration → Redirect URLs**.
 
 Konfigurasi ini tidak menerima wildcard. Request browser yang diizinkan dapat
 mengirim header `Authorization`, `Content-Type`, dan `X-App-Session`. Client
@@ -157,7 +171,7 @@ Untuk instalasi baru, bootstrap operator pertama hanya dapat dijalankan satu
 kali dan target harus akun aktif yang sudah pernah membuat sesi:
 
 ```bash
-docker compose --profile go-target run --rm go-api \
+docker compose run --rm go-api \
   signalgen-admin bootstrap-operator \
   --user USER_ID_SUPABASE \
   --actor "local:nama-developer" \
@@ -184,7 +198,7 @@ Perubahan role mewajibkan alasan dan akan ditolak dengan
 Grant demo lokal tetap dijalankan dengan:
 
 ```bash
-docker compose --profile go-target run --rm go-api \
+docker compose run --rm go-api \
   signalgen-admin grant \
   --user USER_ID_SUPABASE \
   --feature screener \

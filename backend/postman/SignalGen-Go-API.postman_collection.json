@@ -43,22 +43,21 @@
       ]
     },
     {
-      "name": "02 Supabase login",
+      "name": "02 Go authentication",
       "description": "Skip this request only when access_token was pasted manually into the selected environment.",
       "item": [
         {
-          "name": "Login with email and password",
+          "name": "Login through Go with email and password",
           "request": {
             "method": "POST",
             "header": [
-              {"key": "apikey", "value": "{{supabase_publishable_key}}", "type": "text"},
               {"key": "Content-Type", "value": "application/json", "type": "text"}
             ],
             "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"},
-            "url": "{{supabase_url}}/auth/v1/token?grant_type=password"
+            "url": "{{base_url}}/api/auth/login"
           },
           "event": [{"listen": "test", "script": {"exec": [
-            "pm.test('Supabase login succeeds', () => pm.response.to.have.status(200));",
+            "pm.test('Go authentication succeeds', () => pm.response.to.have.status(200));",
             "const body = pm.response.json();",
             "pm.test('access token returned', () => pm.expect(body.access_token).to.be.a('string').and.not.empty);",
             "if (body.access_token) pm.environment.set('access_token', body.access_token);"

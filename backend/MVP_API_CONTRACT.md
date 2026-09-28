@@ -17,7 +17,8 @@ replay rejection, session/entitlement recheck, payload limit, dan parity test.
 Ini masih kandidat eksperimen yang harus dibandingkan dengan Model B sebelum
 keputusan arsitektur final.
 
-Implementation checkpoint 22 September 2026: Go API currently implements
+Implementation checkpoint 27 September 2026: Go API currently implements
+`GET /api`, Go-owned register/login/profile/password recovery routes,
 `GET /health`, `GET /ready`, `POST /api/v1/sessions`, `GET /api/v1/capabilities`, and
 `DELETE /api/v1/sessions/current`. `GET /api/v1/account/me` is also available
 with the currently implemented profile, feature, session, and device fields.
@@ -91,13 +92,17 @@ Stable HTTP/code minimum:
 
 ## 2. Auth/account/session routes
 
-Legacy `/api/auth/*` remains unchanged during migration. Target:
+The active `/api/auth/*` implementation is Go-owned and delegates identity and
+password storage to Supabase Auth using the server's publishable key. The
+Python routes remain legacy reference code and are not used by the web runtime.
 
 | Method | Route | App session | Purpose |
 | --- | --- | :---: | --- |
 | POST | `/auth/register` | exempt | Supabase-backed register; token may be null pending confirmation |
 | POST | `/auth/login` | exempt | Supabase-backed login; returns identity token material per approved auth policy |
-| POST | `/auth/refresh` | exempt | Refresh/rotation; exact cookie/body strategy decided before P1 |
+| GET | `/auth/me` | bearer only | Server-verified public identity |
+| POST | `/auth/password/reset-request` | exempt | Send recovery email without account enumeration |
+| POST | `/auth/password/reset` | exempt, recovery tokens in body | Refresh recovery session and update password |
 | POST | `/sessions` | exempt, bearer required | Register installation/open app session |
 | POST | `/sessions/{id}/refresh` | current session | Rotate opaque app-session token |
 | DELETE | `/sessions/current` | current session | Logout/revoke current session |

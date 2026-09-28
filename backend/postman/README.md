@@ -9,8 +9,8 @@ Pastikan `backend/.env` berisi `SUPABASE_URL` dan
 `SUPABASE_PUBLISHABLE_KEY`, lalu dari root repository jalankan:
 
 ```bash
-docker compose --profile go-target up --build -d go-api
-docker compose --profile go-target ps
+docker compose up --build -d go-api
+docker compose ps go-api
 ```
 
 Container harus berstatus `healthy` dan API tersedia pada
@@ -25,14 +25,12 @@ Import dua file berikut:
 
 Pilih environment **SignalGen Local**, kemudian isi hanya di Postman:
 
-- `supabase_url`
-- `supabase_publishable_key`
 - `email`
 - `password`
 
 Jangan commit/export environment yang sudah berisi password atau token.
 Jika sudah memiliki access token, `access_token` dapat diisi manual dan folder
-`02 Supabase login` dilewati.
+`02 Go authentication` dilewati.
 
 ## 3. Urutan menjalankan test
 
@@ -40,7 +38,7 @@ Jalankan folder secara berurutan:
 
 1. `00 Public health`
 2. `01 Authorization negative checks`
-3. `02 Supabase login`
+3. `02 Go authentication`
 4. `03 App session and account`
 5. `04 Expected entitlement denial`
 
@@ -53,7 +51,7 @@ ini hanya berhasil sekali untuk database baru; lewati jika operator sudah pernah
 dibuat:
 
 ```bash
-docker compose --profile go-target exec go-api \
+docker compose exec go-api \
   signalgen-admin bootstrap-operator \
   --user USER_ID \
   --reason "initial Postman operator" \
@@ -111,7 +109,7 @@ menyimpan atau membagikan ticket tersebut.
 
 - liveness dan readiness Docker;
 - request tanpa bearer ditolak;
-- login Supabase menghasilkan access token;
+- login melalui endpoint Go menghasilkan access token Supabase;
 - app-session dibuat dan token mentah tidak muncul dalam metadata;
 - body JSON di atas 64 KiB ditolak dengan `413 PAYLOAD_TOO_LARGE`;
 - profil, entitlement, dan sesi hanya dibaca untuk pemiliknya;
