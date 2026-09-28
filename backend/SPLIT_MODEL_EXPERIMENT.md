@@ -81,16 +81,72 @@ go test ./core -run '^$' \
 
 ## Yang belum boleh disimpulkan
 
-- Belum ada klaim kapasitas 30 pengguna atau penghematan biaya production; benchmark
-  30 sesi di atas baru mengukur kernel, bukan perjalanan request secara penuh.
+- Belum ada klaim kapasitas production atau penghematan biaya production; pengujian
+  lokal belum menyertakan Supabase, SQLite, proxy/TLS, atau jaringan internet.
 - Belum ada benchmark browser/WASM dan latency jaringan.
 - Belum ada dataset IDX besar atau distribusi nilai harga nyata.
 - Belum ada keputusan final Model A; hasil ini harus dibawa ke pembimbing.
 
+## Profil WebSocket lengkap 1/10/30 sesi
+
+Tes opt-in di `internal/api/screener_load_test.go` melewati perjalanan lokal lengkap:
+
+1. membuat socket ticket melalui HTTP;
+2. membuka koneksi WebSocket dengan ticket sekali pakai;
+3. mengirim 250 feature candidate kronologis untuk satu simbol;
+4. memvalidasi dan menjalankan private decision;
+5. membaca serta memvalidasi response.
+
+Perintah:
+
+```bash
+SIGNALGEN_RUN_SCREENER_LOAD_PROFILE=1 \
+  go test ./internal/api \
+  -run '^TestScreenerWebSocketLoadProfile$' -count=1 -v
+```
+
+Snapshot lokal 28 September 2026, Apple M5, darwin/arm64, Go 1.27.1:
+
+| Sesi konkuren | Cold p50 | Cold p95 | Warm p50 | Warm p95 | Selesai/gagal |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 4,086 ms | 4,086 ms | 1,420 ms | 1,589 ms | 8 / 0 |
+| 10 | 4,019 ms | 4,643 ms | 3,063 ms | 4,461 ms | 80 / 0 |
+| 30 | 8,017 ms | 9,059 ms | 6,716 ms | 8,009 ms | 240 / 0 |
+
+Hasil warm berasal dari delapan batch setelah satu batch cold. Pada batch 30 sesi,
+proses tes mengalokasikan total sekitar 153,4 MB atau 639 KB per perjalanan sesi.
+Payload aplikasi yang tercatat sekitar 6,96 MB dikirim dan 6,27 MB diterima untuk
+240 perjalanan. Angka byte tidak menyertakan header HTTP, frame WebSocket, TCP, atau
+TLS. Angka CPU dan memori mencakup client serta server dalam satu proses tes.
+
+Dependency identity, session, entitlement, dan compute grant memakai fake in-memory
+yang aman untuk konkurensi. Oleh sebab itu, hasil ini membuktikan jalur transport dan
+decision dapat menyelesaikan 30 sesi konkuren di lingkungan lokal tanpa kegagalan,
+tetapi **bukan** bukti kapasitas production maupun jumlah pengguna yang dapat dijual.
+
+## Validasi E2E dengan Supabase Auth
+
+Pada 28 September 2026, alur hybrid juga diverifikasi manual melalui frontend web
+dan backend integrasi dengan akun Supabase nyata serta database SQLite E2E terpisah:
+
+1. login Supabase dan verifikasi bearer berhasil;
+2. app-session perangkat berhasil dibuat;
+3. entitlement `screener` sementara diberikan melalui admin CLI dengan audit trail;
+4. dataset fixture BBCA.JK terproteksi berhasil diambil;
+5. browser memverifikasi artefak lalu menghitung feature melalui Go/WASM;
+6. compute grant dan socket ticket sekali pakai berhasil dibuat;
+7. WebSocket private scoring mengembalikan `decision-1`; dan
+8. UI menampilkan hasil `No match`, 7 dari 21 kandidat cocok, serta kualitas data
+   `complete` tanpa mengklaim prediksi harga.
+
+Tidak ada password, bearer token, refresh token, atau identifier akun yang dicatat
+di laporan maupun Git. Validasi ini membuktikan vertical slice bekerja dengan Auth
+nyata pada lingkungan lokal, tetapi belum menggantikan pengujian staging/production.
+
 ## Eksperimen berikutnya
 
-1. Jalankan 1/10/30 sesi melalui WebSocket lengkap dan ukur p50/p95.
-2. Ukur WebSocket connect, JSON decode, decision, dan response secara terpisah.
-3. Uji 100, 1.000, dan 10.000 candle dengan kandidat yang dibatasi.
+1. Ukur WebSocket connect, JSON decode, decision, dan response secara terpisah.
+2. Uji payload 100 dan 1.000 kandidat dengan dataset IDX nyata.
+3. Jalankan client dan server di proses/perangkat berbeda agar CPU/RAM terpisah.
 4. Bandingkan bagian formula yang tampak di WASM dan pesan jaringan.
 5. Diskusikan hasil dengan pembimbing sebelum menetapkan split final.
