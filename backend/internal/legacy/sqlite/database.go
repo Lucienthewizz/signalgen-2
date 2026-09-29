@@ -1,4 +1,6 @@
-package storage
+// Package sqlite contains the retired local database adapter. It remains only
+// for historical tests and migration tooling; cmd/api never imports it.
+package sqlite
 
 import (
 	"context"

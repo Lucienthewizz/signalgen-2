@@ -10,6 +10,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 )
 
+// apiStatus returns public metadata used to identify the active Go API.
 func (server *Server) apiStatus(writer http.ResponseWriter, _ *http.Request) {
 	writeJSON(writer, http.StatusOK, map[string]string{
 		"name":        "SignalGen Go API",
@@ -20,6 +21,7 @@ func (server *Server) apiStatus(writer http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// register validates public input and delegates account creation to Supabase.
 func (server *Server) register(writer http.ResponseWriter, request *http.Request) {
 	if !server.allowPublicAuthRate(writer, request, "auth:register") {
 		return
@@ -66,6 +68,7 @@ func (server *Server) register(writer http.ResponseWriter, request *http.Request
 	})
 }
 
+// login exchanges email/password for a short-lived Supabase access token.
 func (server *Server) login(writer http.ResponseWriter, request *http.Request) {
 	if !server.allowPublicAuthRate(writer, request, "auth:login") {
 		return
@@ -101,6 +104,7 @@ func (server *Server) login(writer http.ResponseWriter, request *http.Request) {
 	})
 }
 
+// me verifies the bearer token and returns the authenticated identity only.
 func (server *Server) me(writer http.ResponseWriter, request *http.Request) {
 	principal, ok := server.requirePrincipal(writer, request)
 	if !ok {
@@ -110,6 +114,8 @@ func (server *Server) me(writer http.ResponseWriter, request *http.Request) {
 	writeJSON(writer, http.StatusOK, publicUser(principal))
 }
 
+// requestPasswordReset asks Supabase to email a recovery link. Its response is
+// intentionally identical for known and unknown emails to prevent enumeration.
 func (server *Server) requestPasswordReset(redirectURL string) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if !server.allowPublicAuthRate(writer, request, "auth:password-reset-request") {
@@ -143,6 +149,7 @@ func (server *Server) requestPasswordReset(redirectURL string) http.HandlerFunc 
 	}
 }
 
+// resetPassword completes a Supabase recovery flow using tokens from the email.
 func (server *Server) resetPassword(writer http.ResponseWriter, request *http.Request) {
 	if !server.allowPublicAuthRate(writer, request, "auth:password-reset") {
 		return
@@ -171,6 +178,7 @@ func (server *Server) resetPassword(writer http.ResponseWriter, request *http.Re
 	writeJSON(writer, http.StatusOK, map[string]string{"message": "Password berhasil diperbarui."})
 }
 
+// writeAuthProviderError maps provider-specific failures to a stable API error.
 func (server *Server) writeAuthProviderError(writer http.ResponseWriter, request *http.Request, err error, invalidMessage string) {
 	switch {
 	case errors.Is(err, auth.ErrCredentialsInvalid):
@@ -184,10 +192,14 @@ func (server *Server) writeAuthProviderError(writer http.ResponseWriter, request
 	}
 }
 
+// allowPublicAuthRate keys public-auth limits by remote IP because no user is
+// authenticated yet.
 func (server *Server) allowPublicAuthRate(writer http.ResponseWriter, request *http.Request, operation string) bool {
 	return server.allowRate(writer, request, operation, remoteIP(request))
 }
 
+// remoteIP extracts the direct peer address. Trusted-proxy handling can be
+// added at the deployment boundary if the API later sits behind a proxy.
 func remoteIP(request *http.Request) string {
 	host, _, err := net.SplitHostPort(request.RemoteAddr)
 	if err == nil && host != "" {

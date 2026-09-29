@@ -9,7 +9,7 @@ SignalGen 2.0 is moving to a web-first stock-analysis workspace for the Indonesi
 | Surface | Responsibility | Stack |
 | --- | --- | --- |
 | Web | Primary analysis workspace plus public/account surfaces | React, TypeScript, Vite, Go/WASM Web Worker |
-| Target API | Auth/session verification, authorization, feature grants, rules, historical data, journal/portfolio, audit | Go, SQLite, Supabase Auth |
+| Active API | Auth/session verification, authorization, feature grants, rules, protected datasets, compute grants, audit | Go, Gin, pgxpool, Supabase Auth/Postgres |
 | Legacy desktop | Reference/rollback UI; installer is not an MVP deliverable | Electron, React, TypeScript, Vite |
 | Legacy backend | Baseline/bridge while portable core and target API are verified | Python, FastAPI, Socket.IO, SQLite |
 
@@ -40,11 +40,11 @@ authentication path.
           React UI + Go/WASM worker
                   │ REST/HTTPS
                   ▼
-              Go API target
+              Active Go API
        auth/access/data/rules/journal
               │             │
               ▼             ▼
-       Supabase Auth       SQLite
+       Supabase Auth   Supabase Postgres
 
  Legacy: Electron + Python/FastAPI kept for baseline and rollback
 ```

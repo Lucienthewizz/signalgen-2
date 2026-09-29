@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/account"
+	platformdb "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/database"
 )
 
 func main() {
@@ -22,6 +24,16 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		printUsage(stderr)
 		return 2
 	}
+	if databaseURL := getenv("SUPABASE_DB_URL"); databaseURL != "" {
+		pool, err := platformdb.OpenPostgres(context.Background(), databaseURL)
+		if err != nil {
+			fmt.Fprintln(stderr, "open Postgres access storage:", err)
+			return 1
+		}
+		defer pool.Close()
+		return runWithStore(args, account.NewPostgresRepository(pool), stdout, stderr)
+	}
+	// Retained for legacy SQLite test fixtures and older local operator data.
 	databasePath := getenv("SIGNALGEN_GO_DB_PATH")
 	if databasePath == "" {
 		fmt.Fprintln(stderr, "SIGNALGEN_GO_DB_PATH is required")
@@ -33,7 +45,16 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		return 1
 	}
 	defer store.Close()
+	return runWithStore(args, store, stdout, stderr)
+}
 
+type operatorStore interface {
+	BootstrapOperator(context.Context, string, string, string, string) error
+	GrantFeatureAudited(context.Context, string, string, string, string, time.Time, string) (access.FeatureGrant, error)
+	RevokeFeatureAudited(context.Context, string, string, string, string, string) error
+}
+
+func runWithStore(args []string, store operatorStore, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "bootstrap-operator":
 		return bootstrapOperator(context.Background(), store, args[1:], stdout, stderr)
@@ -47,7 +68,7 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 	}
 }
 
-func bootstrapOperator(ctx context.Context, store *access.Store, args []string, stdout, stderr io.Writer) int {
+func bootstrapOperator(ctx context.Context, store operatorStore, args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("bootstrap-operator", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	userID := flags.String("user", "", "existing Supabase user id")
@@ -69,7 +90,7 @@ func bootstrapOperator(ctx context.Context, store *access.Store, args []string, 
 	return 0
 }
 
-func grant(ctx context.Context, store *access.Store, args []string, stdout, stderr io.Writer) int {
+func grant(ctx context.Context, store operatorStore, args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("grant", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	userID := flags.String("user", "", "Supabase user id")
@@ -98,7 +119,7 @@ func grant(ctx context.Context, store *access.Store, args []string, stdout, stde
 	return 0
 }
 
-func revoke(ctx context.Context, store *access.Store, args []string, stdout, stderr io.Writer) int {
+func revoke(ctx context.Context, store operatorStore, args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("revoke", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	userID := flags.String("user", "", "Supabase user id")

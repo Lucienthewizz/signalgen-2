@@ -12,24 +12,6 @@ import (
 	"strings"
 )
 
-var (
-	ErrCredentialsInvalid   = errors.New("email or password is invalid")
-	ErrRegistrationRejected = errors.New("registration was rejected")
-	ErrRecoveryInvalid      = errors.New("password recovery session is invalid")
-	ErrPasswordRejected     = errors.New("password was rejected")
-	ErrAuthRateLimited      = errors.New("authentication provider rate limited the request")
-)
-
-// AuthResult is the stable subset of a Supabase Auth session exposed to the
-// SignalGen frontend. Refresh tokens never pass through normal login/register
-// responses because the web app currently uses short-lived bearer sessions.
-type AuthResult struct {
-	AccessToken string
-	TokenType   string
-	ExpiresIn   int
-	User        Principal
-}
-
 type supabaseAuthResponse struct {
 	AccessToken string `json:"access_token"`
 	TokenType   string `json:"token_type"`

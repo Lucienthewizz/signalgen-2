@@ -1,3 +1,5 @@
+// Package access contains the legacy SQLite authorization model. New runtime
+// composition should use account, entitlement, and operator feature packages.
 package access
 
 import (

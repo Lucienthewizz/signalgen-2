@@ -1,6 +1,6 @@
 # SignalGen 2.0 — Project Context and Architecture
 
-Versi 2.0 · 16 September 2026. Baseline target terbaru berdasarkan revisi voice memo yang ditetapkan pengguna. Menggantikan arah desktop-first/Python-only; **bukan laporan migrasi selesai**.
+Versi 2.1 · 29 September 2026. Keputusan terbaru pengguna: SignalGen adalah aplikasi web multi-user dengan backend Go/Gin dan Supabase Postgres. **Dokumen target bukan bukti migrasi selesai**.
 
 ## 1. Acuan
 
@@ -8,7 +8,7 @@ Versi 2.0 · 16 September 2026. Baseline target terbaru berdasarkan revisi voice
 
 ## 2. Arsitektur target
 
-Web analisis utama; React + TypeScript + Vite. Fokus MVP: efisiensi komputasi dan proteksi akses/lisensi.
+Web analisis adalah produk target; React + TypeScript + Vite. Fokus MVP: efisiensi komputasi dan proteksi akses/lisensi.
 
 ```text
 Static hosting/CDN → frontend/web
@@ -16,11 +16,11 @@ Static hosting/CDN → frontend/web
                       │                           ↑ historis/cache ciphertext
                       └─ REST/HTTPS → Go API boundary
                                        ├─ Supabase Auth
-                                       ├─ SQLite: profile/session/grant/rule/jurnal/audit
+                                       ├─ Supabase Postgres: profile/session/grant/rule/jurnal/audit
                                        └─ historical provider adapter
 
-Legacy: backend/app Python/FastAPI + frontend/desktop Electron
-        dipertahankan untuk baseline/rollback, bukan deliverable installer MVP.
+Arsip historis: backend/app Python/FastAPI + frontend/desktop Electron.
+Keduanya tidak menentukan desain fitur web baru.
 ```
 
 Indikator dan komputasi historis yang berat dihitung client. Berdasarkan bimbingan
@@ -36,11 +36,11 @@ pembanding, threat model, dan urutan implementasi.
 ## 3. Monorepo dan tanggung jawab
 
 - frontend/web: public/account dan aplikasi analisis utama; tidak ada backend di folder FE.
-- frontend/desktop: legacy Electron/renderer dipertahankan; tidak dihapus/revert.
-- backend/app: legacy Python/FastAPI dan engine baseline.
-- backend: target Go API dan shared portable core dikembangkan bertahap.
+- frontend/desktop: arsip historis; bukan deliverable produk aktif.
+- backend/app: arsip Python/FastAPI untuk pembanding hasil.
+- backend: Go API/Gin, pgxpool, dan shared portable core.
 
-Struktur Go usulan, belum dibuat: backend/cmd/api, backend/cmd/wasm, backend/internal/{auth,account,data,rules,journal,storage}, backend/core. Core bebas HTTP/storage/provider/Supabase; berbagi source Go, bukan engine ganda tanpa parity.
+Struktur Go berada di backend/cmd/api, backend/cmd/wasm, backend/internal/{api,auth,access,session,rules,compute,storage}, dan backend/core. Core bebas HTTP/storage/provider/Supabase; berbagi source Go.
 
 | Bagian | Ownership |
 | --- | --- |
@@ -48,7 +48,7 @@ Struktur Go usulan, belum dibuat: backend/cmd/api, backend/cmd/wasm, backend/int
 | Go core | Indikator/rule subset, screening/backtest, trade/metrics dan versioning |
 | Go API | Principal/sesi/role/ownership/entitlement, distribusi historis, rule CRUD, jurnal/P&L, audit |
 | Supabase Auth | Password, identitas, token dan recovery sesuai konfigurasi |
-| SQLite server | Data aplikasi privat dengan proteksi at rest dan backup/recovery |
+| Supabase Postgres | Data aplikasi privat multi-user dengan ownership, RLS, backup/recovery |
 
 FE tidak menentukan izin, memegang server secrets atau mengirim order broker. Core tidak fetch provider/CRUD repository. API tidak menghitung backtest per-user pada slice web baru. Jurnal dihitung server dari transaksi terkonfirmasi; hasil client unverified.
 
@@ -64,9 +64,9 @@ ID instalasi bukan hardware ID. IP dicatat sebagai sinyal; hard-lock IP tidak me
 
 ## 5. Data dan proteksi
 
-SQLite server tetap target. Encryption at rest, key lifecycle dan backup/recovery harus diuji pada gate P1; SQLCipher adalah kandidat SQLite-compatible, bukan dependency yang sudah dipasang.
+Supabase Postgres menjadi sumber authoritative data aplikasi. Schema `signalgen` tidak diekspos ke Data API; RLS aktif di setiap tabel dan akses browser langsung dibatasi. Backend menggunakan koneksi server-side dan wajib menerapkan owner filter, role, serta entitlement pada setiap query. Migration, backup/recovery, dan pengujian dua pengguna adalah gate P1.
 
-Cache historis client ciphertext terkompresi, user/version/checksum scoped. SQLite browser versus IndexedDB ciphertext memerlukan keputusan eksplisit sebelum P1 cache selesai. P0 boleh memory-only. Browser storage dapat dihapus, bukan sumber authoritative jurnal.
+Cache historis client ciphertext terkompresi, user/version/checksum scoped. Pilihan storage ciphertext di browser memerlukan keputusan eksplisit sebelum P1 cache selesai. P0 boleh memory-only. Browser storage dapat dihapus, bukan sumber authoritative jurnal.
 
 WASM dapat dianalisis; secret provider/signing/server tidak di client. Encryption cache tidak menyembunyikan plaintext dari client saat dipakai. Entitlement membatasi layanan/data server berikutnya, tidak menarik kembali dataset/modul yang terlanjur diunduh. Data privat tidak di-public-cache CDN.
 
@@ -74,7 +74,7 @@ Normalisasi historis mencakup market/currency/UTC/adjustment/warmup. Provider se
 
 ## 6. Runtime dan realtime
 
-Frontend static assets/CDN; SSR/Next.js tidak diperlukan. Setup legacy tetap berlaku hingga Go diimplementasikan: Docker backend localhost port 3456, OpenAPI /docs, Socket.IO port 8765. Ini bukan port target Go final.
+Frontend static assets/CDN; SSR/Next.js tidak diperlukan. Go API aktif pada port 8080. Python/Socket.IO pada port lama hanya arsip untuk pembanding.
 
 Realtime production P2, bergantung provider nanti. Fixture/replay dilabel simulasi. Socket.IO bukan raw WebSocket; protokol target harus diputuskan, jangan diasumsikan kompatibel.
 
@@ -84,11 +84,11 @@ Secrets/.env/bearer/runtime DB/cache privat tidak masuk Git/log/bundle. Producti
 
 M0 fixture/kontrak → M1 core/WASM → M2 P0 akses/demo/benchmark → M3 P1 data/rule/cache/device → M4 jurnal → M5 MVP end-to-end.
 
-Refactor incremental; legacy untuk baseline/rollback. Tidak menuntut seluruh fitur desktop selesai sebelum subset web diterima. Correctness bug (misalnya look-ahead) diberi fixture/perubahan eksplisit, bukan dipertahankan demi parity.
+Refactor incremental; legacy untuk pembanding. Correctness bug (misalnya look-ahead) diberi fixture/perubahan eksplisit, bukan dipertahankan demi parity.
 
 Graph-first discovery dan coverage sesuai instruksi proyek. Pemeriksaan dokumen ini hanya simbol baseline terpilih, bukan audit lengkap authorization.
 
-Gates: parity core, API/worker contract tests, ownership/role/entitlement, migration empty/legacy DB, encryption/recovery, worker cancel, FE lint/typecheck/test/build, profiling CPU/RAM kedua sisi dan demo repeatable. Verifikasi yang belum dijalankan ditulis eksplisit.
+Gates: parity core, API/worker contract tests, ownership/role/entitlement, migration Postgres, RLS dua pengguna, backup/recovery, worker cancel, FE lint/typecheck/test/build, profiling CPU/RAM kedua sisi dan demo repeatable. Verifikasi yang belum dijalankan ditulis eksplisit.
 
 ## 8. Workflow
 

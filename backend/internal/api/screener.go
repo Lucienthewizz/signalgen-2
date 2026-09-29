@@ -14,10 +14,9 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/core"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
+	platformws "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/websocket"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
-	"github.com/coder/websocket"
-	"github.com/coder/websocket/wsjson"
 )
 
 const (
@@ -59,6 +58,8 @@ type screenerErrorMessage struct {
 	Retryable bool   `json:"retryable"`
 }
 
+// createScreenerSocketTicket converts a verified compute grant into a random,
+// short-lived, one-use credential suitable for a browser WebSocket URL.
 func (server *Server) createScreenerSocketTicket(writer http.ResponseWriter, request *http.Request) {
 	principal, appSession, _, ok := server.requireAppSession(writer, request)
 	if !ok {
@@ -111,6 +112,9 @@ func (server *Server) createScreenerSocketTicket(writer http.ResponseWriter, req
 	})
 }
 
+// screenerWebSocket consumes the ticket before upgrading, rechecks every
+// authorization binding, receives one feature batch, evaluates the private
+// rule on the server, writes one result, and closes the connection.
 func (server *Server) screenerWebSocket(writer http.ResponseWriter, request *http.Request) {
 	binding, err := server.tickets.Consume(request.Context(), request.URL.Query().Get("ticket"))
 	if err != nil {
@@ -150,23 +154,17 @@ func (server *Server) screenerWebSocket(writer http.ResponseWriter, request *htt
 		return
 	}
 
-	connection, err := websocket.Accept(writer, request, &websocket.AcceptOptions{
-		OriginPatterns:  server.originPatterns,
-		CompressionMode: websocket.CompressionDisabled,
-	})
+	connection, err := platformws.Accept(writer, request, server.originPatterns)
 	if err != nil {
 		return
 	}
-	defer connection.Close(websocket.StatusNormalClosure, "completed")
+	defer connection.CloseCompleted()
 	connection.SetReadLimit(maxScreenerMessage)
 	ctx, cancel := context.WithTimeout(context.Background(), screenerSocketTimeout)
 	defer cancel()
 
-	messageType, raw, err := connection.Read(ctx)
-	if err != nil {
-		return
-	}
-	if messageType != websocket.MessageText {
+	raw, textMessage := connection.ReadText(ctx)
+	if !textMessage {
 		writeScreenerSocketError(ctx, connection, "", "INVALID_MESSAGE", "Pesan screener harus berupa JSON text.", false)
 		return
 	}
@@ -203,13 +201,14 @@ func (server *Server) screenerWebSocket(writer http.ResponseWriter, request *htt
 			Matched: isMatch, ReasonCodes: reasons,
 		})
 	}
-	_ = wsjson.Write(ctx, connection, screenerResultMessage{
+	_ = connection.WriteJSON(ctx, screenerResultMessage{
 		Type: "screener.result", Protocol: core.PrivateProtocol,
 		RequestID: message.RequestID, DecisionVersion: decision.DecisionVersion,
 		Results: results,
 	})
 }
 
+// privateDecisionRule resolves the exact rule version/hash bound to the ticket.
 func (server *Server) privateDecisionRule(ctx context.Context, binding screener.Binding) (core.RuleSnapshot, error) {
 	if binding.RuleID == core.BaselineRuleID {
 		if binding.DefinitionHash != core.BaselineRuleHash {
@@ -242,14 +241,16 @@ func writeComputeGrantError(writer http.ResponseWriter, request *http.Request, e
 	}
 }
 
-func writeScreenerSocketError(ctx context.Context, connection *websocket.Conn, requestID, code, message string, retryable bool) {
-	_ = wsjson.Write(ctx, connection, screenerErrorMessage{
+func writeScreenerSocketError(ctx context.Context, connection *platformws.Connection, requestID, code, message string, retryable bool) {
+	_ = connection.WriteJSON(ctx, screenerErrorMessage{
 		Type: "screener.error", Protocol: core.PrivateProtocol, RequestID: requestID,
 		Code: code, Message: message, Retryable: retryable,
 	})
-	_ = connection.Close(websocket.StatusPolicyViolation, code)
+	_ = connection.ClosePolicy(code)
 }
 
+// decodeStrictJSON rejects unknown fields and multiple JSON values so protocol
+// drift or malformed WebSocket messages fail closed.
 func decodeStrictJSON(raw []byte, target interface{}) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()

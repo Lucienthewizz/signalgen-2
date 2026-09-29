@@ -25,9 +25,7 @@ FROM debian:bookworm-slim AS api-runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --uid 10001 --create-home signalgen \
-    && mkdir -p /data \
-    && chown signalgen:signalgen /data
+    && useradd --system --uid 10001 --create-home signalgen
 
 COPY --from=api-build /out/signalgen-api /usr/local/bin/signalgen-api
 COPY --from=api-build /out/signalgen-admin /usr/local/bin/signalgen-admin

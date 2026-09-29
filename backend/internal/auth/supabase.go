@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,21 +12,6 @@ import (
 )
 
 const maxUserResponseBytes = 1 << 20
-
-var (
-	ErrTokenRequired       = errors.New("access token is required")
-	ErrTokenInvalid        = errors.New("access token is invalid or expired")
-	ErrProviderUnavailable = errors.New("identity provider is unavailable")
-)
-
-// Principal is the server-confirmed identity from Supabase Auth. Authorization
-// data is intentionally absent: roles and entitlements belong to SignalGen's
-// server-side application storage, not user-editable metadata.
-type Principal struct {
-	ID       string `json:"id"`
-	Email    string `json:"email,omitempty"`
-	FullName string `json:"full_name,omitempty"`
-}
 
 type HTTPClient interface {
 	Do(request *http.Request) (*http.Response, error)

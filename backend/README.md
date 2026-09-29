@@ -1,15 +1,19 @@
 # SignalGen Backend
 
-Backend aktif SignalGen menggunakan Go, Supabase Auth, dan SQLite. Login,
+Backend aktif SignalGen menggunakan Go/Gin, Supabase Auth, dan Supabase Postgres. Login,
 register, profil, forgot password, reset password, app-session, perangkat,
 entitlement, dataset, rules, serta compute grant dilayani Go API pada port
 8080. Kode Python/FastAPI tetap disimpan hanya sebagai baseline dan jalur
-rollback melalui profile Docker `legacy`; frontend tidak lagi bergantung pada
+perbandingan melalui profile Docker `legacy`; frontend tidak lagi bergantung pada
 endpoint autentikasi Python.
 
 Untuk mempelajari pembagian screener antara Go/WASM dan backend, mulai dari
 [`HYBRID_SCREENER_DESIGN.md`](HYBRID_SCREENER_DESIGN.md). Vertical slice Model A
 sudah tersedia untuk eksperimen; pemilihan model final belum diputuskan.
+
+Untuk memahami struktur kode dari route sampai storage, baca
+[`ARCHITECTURE.md`](ARCHITECTURE.md). Dokumen tersebut juga menjelaskan data
+yang saat ini dimiliki Supabase Auth, Postgres, memory, dan fixture.
 
 ## Menjalankan backend
 
@@ -33,9 +37,10 @@ go test ./...
 Konfigurasi rahasia backend disimpan pada `backend/.env` dan tidak boleh
 dimasukkan ke Git atau ke bundle frontend.
 
-Isi nilai Supabase di `backend/.env` sebelum menjalankannya. Docker menyimpan
-SQLite Go pada volume `signalgen-go-data`. Virtual environment Python tidak
-diperlukan untuk workflow standar.
+Isi `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, dan `SUPABASE_DB_URL` pada
+`backend/.env` sebelum menjalankannya. Terapkan migration SQL di
+`supabase/migrations` dahulu. Database URL hanya boleh berada di backend.
+Petunjuk dan status migrasi ada di [`POSTGRES_MIGRATION.md`](POSTGRES_MIGRATION.md).
 
 Jika baseline lama perlu diperiksa secara eksplisit, jalankan
 `docker compose --profile legacy up backend`. Profile tersebut bukan jalur
@@ -76,7 +81,7 @@ docker compose up --build go-api
 Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 
 - `GET /health` — public health check;
-- `GET /ready` — readiness SQLite dan integritas fixture untuk Docker;
+- `GET /ready` — readiness Postgres dan integritas fixture untuk Docker;
 - `GET /api` — status yang dipakai frontend;
 - `POST /api/auth/register` — membuat akun Supabase melalui Go;
 - `POST /api/auth/login` — login Supabase melalui Go;
@@ -108,7 +113,7 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
   seluruh sesi pada perangkat tersebut;
 - `DELETE /api/v1/sessions/current` — revoke sesi aktif.
 
-Token sesi hanya dikembalikan saat dibuat. SQLite menyimpan hash token, bukan
+Token sesi hanya dikembalikan saat dibuat. Postgres menyimpan hash token, bukan
 nilai token mentah. Daftar sesi hanya mengembalikan metadata aman, status, dan
 penanda sesi aktif; ID milik pengguna lain tidak dapat dibaca atau dicabut.
 Daftar perangkat menggabungkan riwayat sesi berdasarkan `installation_id`.
@@ -121,10 +126,11 @@ endpoint rule. Query rule pribadi selalu dibatasi
 oleh pemilik; ID milik akun lain menghasilkan respons not found agar kepemilikan
 tidak bocor. Endpoint bisnis lain tetap belum diimplementasikan.
 
-Go API memakai satu koneksi SQLite bersama untuk profile, entitlement, sesi,
-dan compute grant. Koneksi mengaktifkan foreign keys, WAL, serta busy timeout
-5 detik; container tetap menyimpan file tersebut pada volume
-`signalgen-go-data`.
+Go API memakai `pgxpool` untuk profile, entitlement, sesi, rule, audit, dan
+compute grant. Schema `signalgen` mempunyai foreign key ke `auth.users`,
+ownership, dan RLS. Route bisnis tetap memverifikasi owner/role/entitlement
+di server. SQLite hanya tersisa pada arsip, adapter legacy, dan test fixture;
+`cmd/api` tidak pernah membuka database SQLite.
 
 Frontend web hanya dapat memanggil Go API dari origin yang dicantumkan secara
 eksplisit pada `SIGNALGEN_CORS_ORIGINS` (dipisahkan koma). Contoh development:
@@ -142,7 +148,7 @@ Supabase Dashboard: **Authentication → URL Configuration → Redirect URLs**.
 
 Konfigurasi ini tidak menerima wildcard. Request browser yang diizinkan dapat
 mengirim header `Authorization`, `Content-Type`, dan `X-App-Session`. Client
-Electron/server-side yang tidak mengirim header `Origin` tidak terpengaruh.
+Client server-side yang tidak mengirim header `Origin` tidak terpengaruh.
 
 Semua body JSON dibatasi maksimal 64 KiB. Request yang melewati batas ditolak
 dengan `413 PAYLOAD_TOO_LARGE`, termasuk jika JSON valid diletakkan sebelum data
@@ -204,7 +210,7 @@ docker compose run --rm go-api \
   --feature screener \
   --until 2026-10-17T00:00:00Z \
   --reason "demo pembimbing" \
-  --actor "operator-lokal"
+  --actor USER_ID_OPERATOR_SUPABASE
 ```
 
 Cabut akses dengan subcommand `revoke` dan flag `--user`, `--feature`,
