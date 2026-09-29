@@ -35,7 +35,7 @@ backend/
   internal/dataset protected dataset contract and fixture
   internal/compute short-lived compute grants
   internal/screener one-use WebSocket tickets/private scoring transport
-  internal/legacy  retired SQLite adapter for historical tests only
+  access/session/rules/compute legacy SQLite repositories for tests only
   app/             legacy Python reference, preserved during migration
 supabase/migrations versioned application schema at repository root
 ```
