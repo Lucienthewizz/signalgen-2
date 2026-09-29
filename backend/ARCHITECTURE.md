@@ -63,7 +63,6 @@ backend/
 │   ├── compute/         # Compute grants, routes, Postgres repository
 │   ├── screener/        # WebSocket ticket contract, routes, ticket store
 │   ├── ratelimit/       # Mutation/auth request throttling
-│   ├── legacy/sqlite/   # Retired SQLite adapter for historical tests only
 │   └── access/          # Compatibility types + legacy SQLite repository
 └── app/                 # Legacy Python/FastAPI baseline, not the active API
 
@@ -123,8 +122,9 @@ SignalGen stores application state in Supabase Postgres after the web migration.
 | Fixture JSON | Current synthetic OHLCV dataset |
 | WebSocket | Transport only; it stores no durable data |
 
-SQLite code remains for legacy comparisons and existing unit fixtures. The
-active Go API no longer opens a SQLite file or mounts its former volume.
+SQLite repositories remain inside selected feature packages for legacy
+comparisons and existing unit fixtures. The active Go API never constructs
+those repositories, opens a SQLite file, or mounts its former volume.
 
 ## Production storage
 
