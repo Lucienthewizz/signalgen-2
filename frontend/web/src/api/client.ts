@@ -16,6 +16,7 @@ import type {
 
 const TOKEN_KEY = "signalgen.access-token";
 const APP_SESSION_KEY = "signalgen.app-session";
+const APP_SESSION_ORIGIN_KEY = "signalgen.app-session-origin";
 const INSTALLATION_KEY = "signalgen.installation-id";
 const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN ?? "").replace(/\/$/, "");
 
@@ -32,9 +33,14 @@ export const session = {
   getToken: () => sessionStorage.getItem(TOKEN_KEY),
   setToken: (token: string) => sessionStorage.setItem(TOKEN_KEY, token),
   getAppSession: () => sessionStorage.getItem(APP_SESSION_KEY),
-  setAppSession: (token: string) =>
-    sessionStorage.setItem(APP_SESSION_KEY, token),
-  clearAppSession: () => sessionStorage.removeItem(APP_SESSION_KEY),
+  setAppSession: (token: string) => {
+    sessionStorage.setItem(APP_SESSION_KEY, token);
+    sessionStorage.setItem(APP_SESSION_ORIGIN_KEY, API_ORIGIN || "same-origin");
+  },
+  clearAppSession: () => {
+    sessionStorage.removeItem(APP_SESSION_KEY);
+    sessionStorage.removeItem(APP_SESSION_ORIGIN_KEY);
+  },
   getInstallationId: () => {
     const existing = localStorage.getItem(INSTALLATION_KEY);
     if (existing) return existing;
@@ -44,7 +50,7 @@ export const session = {
   },
   clear: () => {
     sessionStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(APP_SESSION_KEY);
+    session.clearAppSession();
   },
 };
 
@@ -160,7 +166,9 @@ export const api = {
     }),
   ensureAppSession: async () => {
     const existing = session.getAppSession();
-    if (existing) return existing;
+    const storedOrigin = sessionStorage.getItem(APP_SESSION_ORIGIN_KEY);
+    if (existing && storedOrigin === (API_ORIGIN || "same-origin")) return existing;
+    session.clearAppSession();
     const created = await api.createAppSession();
     session.setAppSession(created.session_token);
     return created.session_token;

@@ -5,10 +5,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AccountPage } from "@/pages/account-page";
 import { AuthPage, type AuthView } from "@/pages/auth-page";
 import { DemoWorkspace, type DemoView } from "@/pages/demo-workspace";
+import { CreatorsPage } from "@/pages/creators-page";
 import { PublicWorkspace } from "@/pages/public-workspace";
 import type { User } from "@/types";
 
-type Route = "home" | "account" | AuthView | `app/${DemoView}`;
+type Route = "home" | "account" | "creators" | AuthView | `app/${DemoView}`;
 
 function currentRoute(): Route {
   const queryView = new URLSearchParams(location.search).get("view");
@@ -18,6 +19,7 @@ function currentRoute(): Route {
     [
       "app/overview",
       "app/analysis",
+      "app/realtime",
       "app/rules",
       "app/journal",
       "app/access",
@@ -27,6 +29,7 @@ function currentRoute(): Route {
   }
   return [
     "account",
+    "creators",
     "login",
     "register",
     "forgot-password",
@@ -60,7 +63,10 @@ export default function App() {
       }),
       session.getToken()
         ? Promise.all([api.me(), api.ensureAppSession()]).then(([profile]) => {
-            if (active) setUser(profile);
+            if (active) {
+              setUser(profile);
+              if (currentRoute() === "home") location.hash = "app/overview";
+            }
           })
         : Promise.resolve(),
     ]).finally(() => {
@@ -79,7 +85,7 @@ export default function App() {
 
   function authenticated(nextUser: User) {
     setUser(nextUser);
-    location.hash = "account";
+    location.hash = "app/overview";
   }
 
   async function logout() {
@@ -122,12 +128,15 @@ export default function App() {
         onAuthenticated={authenticated}
       />
     );
+  if (route === "creators") return <CreatorsPage />;
   if (route.startsWith("app/")) {
     return (
       <DemoWorkspace
         view={route.replace("app/", "") as DemoView}
         backendOnline={backendOnline}
         authenticated={Boolean(user && session.getAppSession())}
+        user={user}
+        onLogout={logout}
       />
     );
   }
@@ -145,5 +154,11 @@ export default function App() {
       />
     );
   }
-  return <PublicWorkspace backendOnline={backendOnline} user={user} />;
+  return (
+    <PublicWorkspace
+      backendOnline={backendOnline}
+      user={user}
+      onLogout={logout}
+    />
+  );
 }

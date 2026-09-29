@@ -1,16 +1,13 @@
-import { useState } from "react";
+import { type PointerEvent } from "react";
 import {
   ArrowRight,
-  BarChart3,
-  BookOpenCheck,
-  Braces,
   Check,
-  Gauge,
-  ShieldCheck,
 } from "lucide-react";
+import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
 import { FeatureFigure } from "@/components/feature-figure";
 import { MarketTrace } from "@/components/market-trace";
+import { SignalLattice } from "@/components/signal-lattice";
 import {
   Accordion,
   AccordionContent,
@@ -21,35 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Pricing } from "@/components/ui/single-pricing-card-1";
 import { TestimonialsMarquee } from "@/components/ui/testimonials-columns-1";
 import { faqItems, sampleRatings } from "@/data/demo";
-import { cn } from "@/lib/utils";
 import type { User } from "@/types";
-const productViews = [
-  {
-    id: "overview",
-    label: "Overview",
-    icon: Gauge,
-  },
-  {
-    id: "analysis",
-    label: "Analysis",
-    icon: BarChart3,
-  },
-  {
-    id: "rules",
-    label: "Rules",
-    icon: Braces,
-  },
-  {
-    id: "journal",
-    label: "Journal",
-    icon: BookOpenCheck,
-  },
-  {
-    id: "access",
-    label: "Access",
-    icon: ShieldCheck,
-  },
-] as const;
 
 const capabilityViews = [
   {
@@ -77,15 +46,29 @@ const capabilityViews = [
   },
 ] as const;
 
+function setFeatureTilt(event: PointerEvent<HTMLAnchorElement>) {
+  if (event.pointerType === "touch") return;
+  const bounds = event.currentTarget.getBoundingClientRect();
+  const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+  const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+  event.currentTarget.style.setProperty("--feature-tilt-x", `${y * -7}deg`);
+  event.currentTarget.style.setProperty("--feature-tilt-y", `${x * 9}deg`);
+}
+
+function resetFeatureTilt(event: PointerEvent<HTMLAnchorElement>) {
+  event.currentTarget.style.setProperty("--feature-tilt-x", "0deg");
+  event.currentTarget.style.setProperty("--feature-tilt-y", "0deg");
+}
+
 export function PublicWorkspace({
   backendOnline,
   user,
+  onLogout,
 }: {
   backendOnline: boolean;
   user: User | null;
+  onLogout: () => void | Promise<void>;
 }) {
-  const [selectedView, setSelectedView] = useState(0);
-
   return (
     <main className="workbench landing-shell">
       <section className="workspace landing-workspace">
@@ -118,6 +101,13 @@ export function PublicWorkspace({
               >
                 {user ? "Dashboard" : "Sign in"}
               </a>
+              {user && (
+                <AccountMenu
+                  user={user}
+                  onLogout={onLogout}
+                  variant="landing"
+                />
+              )}
             </div>
           </div>
         </header>
@@ -169,64 +159,9 @@ export function PublicWorkspace({
           </section>
           <div className="landing-product-flow">
             <div className="landing-stage landing-stage--black">
-              <section className="product-tour" id="product-tour">
-                <div className="product-tour__heading">
-                  <div>
-                    <h3>See the workspace before you start.</h3>
-                    <p>
-                      Every preview comes directly from a feature you can
-                      explore now.
-                    </p>
-                  </div>
-                  <a
-                    href={`#app/${productViews[selectedView].id}`}
-                    className="text-link"
-                  >
-                    Open {productViews[selectedView].label} <ArrowRight />
-                  </a>
-                </div>
-                <div
-                  className="product-tour__tabs"
-                  role="tablist"
-                  aria-label="Web feature preview"
-                >
-                  {productViews.map((view, index) => {
-                    const Icon = view.icon;
-                    return (
-                      <button
-                        key={view.id}
-                        role="tab"
-                        aria-selected={selectedView === index}
-                        className={cn(
-                          "product-tour__tab",
-                          selectedView === index && "active",
-                        )}
-                        onClick={() => setSelectedView(index)}
-                      >
-                        <Icon aria-hidden="true" />
-                        <strong>{view.label}</strong>
-                      </button>
-                    );
-                  })}
-                </div>
-                <figure className="product-tour__frame">
-                  <div className="product-tour__image">
-                    <iframe
-                      key={productViews[selectedView].id}
-                      src={`?preview=product-tour#app/${productViews[selectedView].id}`}
-                      title={`Current ${productViews[selectedView].label} view in Signalgen web`}
-                      loading={selectedView === 0 ? "eager" : "lazy"}
-                      tabIndex={-1}
-                    />
-                  </div>
-                  <figcaption>
-                    <strong>{productViews[selectedView].label}</strong>
-                    <span>Live preview from the current workspace build.</span>
-                  </figcaption>
-                </figure>
-              </section>
+              <SignalLattice />
             </div>
-            <div className="landing-stage landing-stage--green">
+            <div className="landing-stage landing-stage--green landing-stage--footer">
               <section className="capability-section" id="capabilities">
                 <div className="section-heading split-heading">
                   <div>
@@ -246,12 +181,16 @@ export function PublicWorkspace({
                       className="feature-gallery__item"
                       href={`#app/${feature.id}`}
                       key={feature.id}
+                      onPointerMove={setFeatureTilt}
+                      onPointerLeave={resetFeatureTilt}
                     >
                       <div className="feature-gallery__figure">
                         <span className="feature-gallery__index">
                           FIG 0.{index + 1}
                         </span>
-                        <FeatureFigure kind={feature.id} />
+                        <div className="feature-gallery__depth">
+                          <FeatureFigure kind={feature.id} />
+                        </div>
                       </div>
                       <div className="feature-gallery__copy">
                         <strong>{feature.title}</strong>
@@ -301,20 +240,25 @@ export function PublicWorkspace({
                 </Accordion>
               </section>
             </div>
-            <div className="landing-stage landing-stage--green">
-              <section className="boundary-panel landing-cta">
-                <ShieldCheck />
-                <div>
-                  <h3>Analysis support, not investment advice.</h3>
-                  <p>
-                    Start with the demo, review the complete workflow, then use
-                    your account when the backend is ready.
-                  </p>
+            <div className="landing-stage landing-stage--green landing-stage--footer">
+              <footer className="landing-footer" aria-label="Signalgen footer">
+                <div className="landing-footer__main">
+                  <a href="#home" aria-label="Signalgen home"><Brand compact /></a>
+                  <nav aria-label="Footer navigation">
+                    <a href="#capabilities">Features</a>
+                    <a href="#pricing">Pricing</a>
+                    <a href="#faq">FAQ</a>
+                    <a href="#app/overview">Demo</a>
+                    <a href="#creators">Creators</a>
+                  </nav>
                 </div>
-                <a href="#app/overview">
-                  Open the demo <ArrowRight />
-                </a>
-              </section>
+                <div className="landing-footer__legal">
+                  <span>© 2026 Signalgen</span>
+                  <span>Privacy</span>
+                  <span>Terms</span>
+                  <span>Not investment advice.</span>
+                </div>
+              </footer>
             </div>
           </div>
         </div>

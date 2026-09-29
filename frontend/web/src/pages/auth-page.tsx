@@ -3,6 +3,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  Eye,
+  EyeOff,
   KeyRound,
   ShieldCheck,
   X,
@@ -16,6 +18,10 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  meetsPasswordRequirements,
+  PasswordStrengthIndicator,
+} from "@/components/ui/password-strength";
 import { Brand } from "@/components/brand";
 import { api, ApiError, session } from "@/api/client";
 import type { User } from "@/types";
@@ -40,6 +46,8 @@ export function AuthPage({
 }) {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerConfirmation, setRegisterConfirmation] = useState("");
   const recovery = useMemo(() => {
     const params = new URLSearchParams(location.hash.replace(/^#/, ""));
     return {
@@ -89,6 +97,11 @@ export function AuthPage({
         }, 900);
       } else if (view === "register") {
         const confirmation = String(data.get("confirmation") ?? "");
+        if (!meetsPasswordRequirements(password))
+          throw new ApiError(
+            "Use at least 8 characters.",
+            400,
+          );
         if (password !== confirmation)
           throw new ApiError("The passwords do not match.", 400);
         const result = await api.register(
@@ -137,8 +150,8 @@ export function AuthPage({
       "One identity for every Signalgen workspace.",
     ],
     "forgot-password": [
-      "Reset your password",
-      "We will send a recovery link to your account email.",
+      "Recover your password",
+      "Enter the email linked to your Signalgen account.",
     ],
     "reset-password": [
       "Choose a new password",
@@ -147,8 +160,8 @@ export function AuthPage({
   }[view];
 
   return (
-    <main className="auth-layout">
-      <section className="auth-story">
+    <main className={`auth-layout ${view === "forgot-password" ? "auth-layout--recovery" : ""}`}>
+      {view !== "forgot-password" && <section className="auth-story">
         <a href="#home" aria-label="Back to Signalgen">
           <Brand />
         </a>
@@ -183,14 +196,19 @@ export function AuthPage({
           <span className={`status-dot ${backendOnline ? "is-online" : ""}`} />{" "}
           Backend {backendOnline ? "verified" : "not connected"}
         </footer>
-      </section>
+      </section>}
       <section className="auth-panel">
         <div className="auth-card">
           <div className="auth-card__top">
-            <a className="mobile-logo" href="#home">
-              <Brand compact />
-            </a>
-            {view === "login" || view === "register" ? (
+            {view === "forgot-password" ? (
+              <a className="auth-recovery__brand" href="#home" aria-label="Signalgen home">
+                <Brand compact />
+              </a>
+            ) : <>
+              <a className="mobile-logo" href="#home">
+                <Brand compact />
+              </a>
+              {view === "login" || view === "register" ? (
               <div className="auth-switch" aria-label="Authentication options">
                 <a className={view === "login" ? "active" : ""} href="#login">
                   Sign in
@@ -206,7 +224,8 @@ export function AuthPage({
               <a className="back-link" href="#login">
                 <ArrowLeft /> Back to sign in
               </a>
-            )}
+              )}
+            </>}
           </div>
           <div className="auth-heading">
             <h2>{copy[0]}</h2>
@@ -233,15 +252,29 @@ export function AuthPage({
                   autoComplete="email"
                 />
               )}
-              {(view === "login" ||
-                view === "register" ||
-                view === "reset-password") && (
-                <AuthField
+              {view === "register" && (
+                <PasswordField
+                  aria-describedby="password-guidance"
+                  autoComplete="new-password"
+                  label="Password"
+                  minLength={8}
+                  name="password"
+                  onChange={(event) => setRegisterPassword(event.target.value)}
+                  placeholder="Create a password"
+                  value={registerPassword}
+                >
+                  <PasswordStrengthIndicator value={registerPassword} />
+                  <FieldDescription className="sr-only">
+                    Use at least 8 characters.
+                  </FieldDescription>
+                </PasswordField>
+              )}
+              {(view === "login" || view === "reset-password") && (
+                <PasswordField
                   label={
                     view === "reset-password" ? "New password" : "Password"
                   }
                   name="password"
-                  type="password"
                   placeholder={
                     view === "login" ? "Your password" : "At least 8 characters"
                   }
@@ -252,13 +285,21 @@ export function AuthPage({
                 />
               )}
               {(view === "register" || view === "reset-password") && (
-                <AuthField
+                <PasswordField
+                  aria-invalid={
+                    view === "register" &&
+                    registerConfirmation.length > 0 &&
+                    registerConfirmation !== registerPassword
+                  }
                   label="Confirm password"
                   name="confirmation"
-                  type="password"
+                  onChange={(event) =>
+                    view === "register" && setRegisterConfirmation(event.target.value)
+                  }
                   placeholder="Repeat your password"
                   minLength={8}
                   autoComplete="new-password"
+                  value={view === "register" ? registerConfirmation : undefined}
                 />
               )}
             </FieldGroup>
@@ -300,10 +341,19 @@ export function AuthPage({
               connection returns.
             </p>
           )}
-          <p className="auth-note">
-            Signalgen supports analysis. It does not provide personalized
-            investment advice.
-          </p>
+          {view === "forgot-password" ? <>
+            <p className="auth-recovery__note">
+              We will send a one-time reset link to your inbox.
+            </p>
+            <p className="auth-recovery__signin">
+              Remembered your password? <a href="#login">Sign in</a>
+            </p>
+          </> : (
+            <p className="auth-note">
+              Signalgen supports analysis. It does not provide personalized
+              investment advice.
+            </p>
+          )}
         </div>
       </section>
     </main>
@@ -317,6 +367,9 @@ function AuthField(props: {
   placeholder: string;
   minLength?: number;
   autoComplete: string;
+  value?: string;
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  "aria-invalid"?: boolean;
 }) {
   return (
     <Field className="auth-field">
@@ -324,6 +377,56 @@ function AuthField(props: {
       <Input id={props.name} className="auth-input" required {...props} />
       <FieldDescription className="sr-only">
         Enter {props.label.toLowerCase()}
+      </FieldDescription>
+    </Field>
+  );
+}
+
+function PasswordField({
+  label,
+  name,
+  children,
+  ...inputProps
+}: {
+  label: string;
+  name: string;
+  placeholder: string;
+  minLength?: number;
+  autoComplete: string;
+  value?: string;
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  children?: React.ReactNode;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  const inputId = name;
+
+  return (
+    <Field className="auth-field auth-password-field">
+      <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
+      <div className="auth-password-control">
+        <Input
+          {...inputProps}
+          id={inputId}
+          name={name}
+          className="auth-input auth-input--password"
+          required
+          type={visible ? "text" : "password"}
+        />
+        <button
+          aria-label={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+          aria-pressed={visible}
+          className="auth-password-toggle"
+          onClick={() => setVisible((current) => !current)}
+          type="button"
+        >
+          {visible ? <EyeOff /> : <Eye />}
+        </button>
+      </div>
+      {children}
+      <FieldDescription className="sr-only">
+        Enter {label.toLowerCase()}
       </FieldDescription>
     </Field>
   );
