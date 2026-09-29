@@ -2,8 +2,8 @@ import {
   ArrowRight,
   Check,
   ShieldCheck,
-  UserRound,
 } from "lucide-react";
+import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
 import { FeatureFigure } from "@/components/feature-figure";
 import { MarketTrace } from "@/components/market-trace";
@@ -49,13 +49,12 @@ const capabilityViews = [
 export function PublicWorkspace({
   backendOnline,
   user,
+  onLogout,
 }: {
   backendOnline: boolean;
   user: User | null;
+  onLogout: () => void | Promise<void>;
 }) {
-  const accountName = user?.full_name?.trim() || user?.email.split("@")[0] || "";
-  const initials = accountName.slice(0, 2).toUpperCase();
-
   return (
     <main className="workbench landing-shell">
       <section className="workspace landing-workspace">
@@ -89,12 +88,12 @@ export function PublicWorkspace({
                 {user ? "Dashboard" : "Sign in"}
               </a>
               {user && (
-                <a className="landing-header__profile" href="#account">
-                  <span className="landing-header__profile-avatar" aria-hidden="true">
-                    {initials || <UserRound />}
-                  </span>
-                  <span>Profile</span>
-                </a>
+                <AccountMenu
+                  user={user}
+                  onLogout={onLogout}
+                  label="Profile"
+                  variant="landing"
+                />
               )}
             </div>
           </div>

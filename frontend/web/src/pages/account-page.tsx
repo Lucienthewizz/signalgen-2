@@ -2,43 +2,24 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
-  CandlestickChart,
   ChevronRight,
-  Compass,
   KeyRound,
   LogOut,
-  Orbit,
-  Radar,
-  ScanLine,
   ShieldCheck,
-  Sparkles,
   UserRoundCheck,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  getProfileAvatar,
+  getSavedProfileAvatar,
+  profileAvatarOptions,
+  saveProfileAvatar,
+  type ProfileAvatarKey,
+} from "@/lib/profile-avatar";
 import type { User } from "@/types";
-
-const AVATAR_STORAGE_PREFIX = "signalgen.profile-avatar.";
-
-const avatarOptions = [
-  { key: "orbit", label: "Orbit", Icon: Orbit },
-  { key: "signal", label: "Signal", Icon: Radar },
-  { key: "market", label: "Market", Icon: CandlestickChart },
-  { key: "scan", label: "Scanner", Icon: ScanLine },
-  { key: "compass", label: "Compass", Icon: Compass },
-  { key: "spark", label: "Spark", Icon: Sparkles },
-] as const;
-
-type AvatarKey = (typeof avatarOptions)[number]["key"];
-
-function getSavedAvatar(userId: string): AvatarKey {
-  const saved = localStorage.getItem(`${AVATAR_STORAGE_PREFIX}${userId}`);
-  return avatarOptions.some((avatar) => avatar.key === saved)
-    ? (saved as AvatarKey)
-    : "orbit";
-}
 
 export function AccountPage({
   user,
@@ -48,18 +29,18 @@ export function AccountPage({
   onLogout: () => void;
 }) {
   const name = user.full_name?.trim() || user.email.split("@")[0];
-  const [avatarKey, setAvatarKey] = useState<AvatarKey>(() =>
-    getSavedAvatar(user.id),
+  const [avatarKey, setAvatarKey] = useState<ProfileAvatarKey>(() =>
+    getSavedProfileAvatar(user.id),
   );
-  const avatar = avatarOptions.find((item) => item.key === avatarKey)!;
+  const avatar = getProfileAvatar(avatarKey);
   const AvatarIcon = avatar.Icon;
 
   useEffect(() => {
-    setAvatarKey(getSavedAvatar(user.id));
+    setAvatarKey(getSavedProfileAvatar(user.id));
   }, [user.id]);
 
-  function chooseAvatar(nextAvatar: AvatarKey) {
-    localStorage.setItem(`${AVATAR_STORAGE_PREFIX}${user.id}`, nextAvatar);
+  function chooseAvatar(nextAvatar: ProfileAvatarKey) {
+    saveProfileAvatar(user.id, nextAvatar);
     setAvatarKey(nextAvatar);
   }
 
@@ -111,13 +92,13 @@ export function AccountPage({
             value={[avatarKey]}
             onValueChange={(value) => {
               const nextAvatar = value.at(-1);
-              if (nextAvatar) chooseAvatar(nextAvatar as AvatarKey);
+              if (nextAvatar) chooseAvatar(nextAvatar as ProfileAvatarKey);
             }}
             variant="outline"
             spacing={0}
             aria-label="Profile mark choices"
           >
-            {avatarOptions.map(({ key, label, Icon }) => (
+            {profileAvatarOptions.map(({ key, label, Icon }) => (
               <ToggleGroupItem
                 key={key}
                 className="avatar-choice"

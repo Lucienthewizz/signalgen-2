@@ -479,8 +479,7 @@ a {
   gap: 8px;
 }
 .landing-header__session,
-.landing-header__register,
-.landing-header__profile {
+.landing-header__register {
   min-height: 42px;
   display: inline-flex;
   align-items: center;
@@ -493,35 +492,6 @@ a {
     border-color 0.2s ease,
     background 0.2s ease,
     transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.landing-header__profile {
-  gap: 8px;
-  padding: 0 12px 0 8px;
-  border: 1px solid #2c3931;
-  color: #cbd4cd;
-  background: #0d1410;
-}
-.landing-header__profile:hover {
-  border-color: #52715e;
-  color: #f1f6f2;
-  background: #101b14;
-}
-.landing-header__profile-avatar {
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: 1px solid #3b7653;
-  border-radius: 8px;
-  color: #92efbb;
-  background: #13291c;
-  font-size: 9px;
-  font-weight: 750;
-  letter-spacing: 0.02em;
-}
-.landing-header__profile-avatar svg {
-  width: 14px;
-  height: 14px;
 }
 .landing-header__session {
   border: 1px solid rgba(70, 136, 96, 0.45);
@@ -542,6 +512,123 @@ a {
 .landing-header__register:hover {
   color: #edf4ef;
   background: rgba(16, 28, 20, 0.9);
+}
+.account-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #2c3931;
+  border-radius: 12px;
+  color: #cbd4cd;
+  background: #0d1410;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 680;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.account-menu__trigger:hover,
+.account-menu__trigger:focus-visible {
+  border-color: #52715e;
+  color: #f1f6f2;
+  background: #101b14;
+}
+.account-menu__trigger:focus-visible {
+  outline: 2px solid #64d795;
+  outline-offset: 3px;
+}
+.account-menu__trigger--landing {
+  min-height: 42px;
+  padding: 0 12px 0 8px;
+}
+.account-menu__trigger--workspace {
+  min-height: 36px;
+  padding: 0 11px 0 7px;
+}
+.account-menu__avatar[data-slot="avatar"] {
+  width: 26px;
+  height: 26px;
+  border: 1px solid #3b7653;
+  border-radius: 8px;
+  color: #92efbb;
+  background: #13291c;
+}
+.account-menu__avatar[data-slot="avatar"]::after,
+.account-menu__avatar [data-slot="avatar-fallback"] {
+  border-radius: 8px;
+}
+.account-menu__avatar [data-slot="avatar-fallback"] {
+  color: inherit;
+  background: transparent;
+}
+.account-menu__avatar svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.85;
+}
+.account-menu__content[data-slot="dropdown-menu-content"] {
+  width: 218px;
+  min-width: 218px;
+  padding: 5px;
+  border: 1px solid #2b3930;
+  border-radius: 12px;
+  color: #dce6df;
+  background: #0b100d;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+}
+.account-menu__identity[data-slot="dropdown-menu-label"] {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px 10px;
+}
+.account-menu__identity strong {
+  overflow: hidden;
+  color: #eaf1ec;
+  font-size: 11px;
+  font-weight: 660;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-menu__identity span {
+  overflow: hidden;
+  color: #829087;
+  font-size: 9px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-menu__item[data-slot="dropdown-menu-item"] {
+  min-height: 34px;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: #c8d3cb;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 620;
+}
+.account-menu__item[data-slot="dropdown-menu-item"]:hover,
+.account-menu__item[data-slot="dropdown-menu-item"]:focus-visible {
+  color: #edf5ef;
+  background: #16221a;
+}
+.account-menu__item[data-slot="dropdown-menu-item"] svg {
+  width: 14px;
+  height: 14px;
+}
+.account-menu__item[data-variant="destructive"]:hover,
+.account-menu__item[data-variant="destructive"]:focus-visible {
+  color: #f2b6b6;
+  background: #2a1718;
+}
+.account-menu__separator[data-slot="dropdown-menu-separator"] {
+  margin: 5px 2px;
+  background: #243029;
 }
 .breadcrumb {
   display: block;
@@ -1725,12 +1812,12 @@ a {
     min-height: 38px;
     padding: 0 8px;
   }
-  .landing-header__profile {
+  .account-menu__trigger--landing {
     min-height: 38px;
     padding: 0 8px;
     font-size: 0;
   }
-  .landing-header__profile-avatar {
+  .account-menu__avatar[data-slot="avatar"] {
     width: 24px;
     height: 24px;
   }

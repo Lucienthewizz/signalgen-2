@@ -45,6 +45,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { AccountMenu } from "@/components/account-menu";
 import { TradingViewChart } from "@/components/tradingview-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,7 @@ import {
   type DemoRule,
   type DemoTransaction,
 } from "@/data/demo";
+import type { User } from "@/types";
 import {
   runLiveScreener,
   type LiveScreenerRun,
@@ -1889,10 +1891,14 @@ export function DemoWorkspace({
   view,
   backendOnline,
   authenticated,
+  user,
+  onLogout,
 }: {
   view: DemoView;
   backendOnline: boolean;
   authenticated: boolean;
+  user: User | null;
+  onLogout: () => void | Promise<void>;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [draftSymbol, setDraftSymbol] = useState<string | null>(null);
@@ -1982,12 +1988,16 @@ export function DemoWorkspace({
             <span className="preview-chip">
               {authenticated ? "Go API connected" : "Static preview"}
             </span>
-            <a
-              className="ui-button"
-              href={authenticated ? "#account" : "#login"}
-            >
-              {authenticated ? "Account" : "Sign in"}
-            </a>
+            {authenticated && user ? (
+              <AccountMenu
+                user={user}
+                onLogout={onLogout}
+                label="Account"
+                variant="workspace"
+              />
+            ) : (
+              <a className="ui-button" href="#login">Sign in</a>
+            )}
           </div>
         </header>
         <div className="workspace__content demo-content">

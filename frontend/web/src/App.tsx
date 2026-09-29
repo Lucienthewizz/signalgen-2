@@ -61,7 +61,10 @@ export default function App() {
       }),
       session.getToken()
         ? Promise.all([api.me(), api.ensureAppSession()]).then(([profile]) => {
-            if (active) setUser(profile);
+            if (active) {
+              setUser(profile);
+              if (currentRoute() === "home") location.hash = "app/overview";
+            }
           })
         : Promise.resolve(),
     ]).finally(() => {
@@ -80,7 +83,7 @@ export default function App() {
 
   function authenticated(nextUser: User) {
     setUser(nextUser);
-    location.hash = "account";
+    location.hash = "app/overview";
   }
 
   async function logout() {
@@ -129,6 +132,8 @@ export default function App() {
         view={route.replace("app/", "") as DemoView}
         backendOnline={backendOnline}
         authenticated={Boolean(user && session.getAppSession())}
+        user={user}
+        onLogout={logout}
       />
     );
   }
@@ -146,5 +151,11 @@ export default function App() {
       />
     );
   }
-  return <PublicWorkspace backendOnline={backendOnline} user={user} />;
+  return (
+    <PublicWorkspace
+      backendOnline={backendOnline}
+      user={user}
+      onLogout={logout}
+    />
+  );
 }
