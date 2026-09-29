@@ -101,7 +101,7 @@ function errorDetail(payload: unknown, status: number): string {
     payload && typeof payload === "object" && "error" in payload
       ? (payload as { error?: { code?: string; message?: string } }).error
       : undefined;
-  if (apiError?.code === "DEVICE_SWITCH_LIMIT")
+  if (apiError?.code === "DEVICE_SWITCH_COOLDOWN")
     return "Perangkat hanya dapat dipindahkan satu kali per hari.";
   if (apiError?.code === "DEVICE_MISMATCH")
     return "Jaringan perangkat berubah. Masuk kembali dari jaringan yang terdaftar.";

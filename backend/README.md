@@ -1,47 +1,249 @@
 # SignalGen Backend
 
-Backend SignalGen menggunakan Python, FastAPI, Supabase Auth, dan SQLite.
+Backend aktif SignalGen menggunakan Go/Gin, Supabase Auth, dan Supabase Postgres. Login,
+register, profil, forgot password, reset password, app-session, perangkat,
+entitlement, dataset, rules, serta compute grant dilayani Go API pada port
+8080. Kode Python/FastAPI tetap disimpan hanya sebagai baseline dan jalur
+perbandingan melalui profile Docker `legacy`; frontend tidak lagi bergantung pada
+endpoint autentikasi Python.
+
+Untuk mempelajari pembagian screener antara Go/WASM dan backend, mulai dari
+[`HYBRID_SCREENER_DESIGN.md`](HYBRID_SCREENER_DESIGN.md). Vertical slice Model A
+sudah tersedia untuk eksperimen; pemilihan model final belum diputuskan.
+
+Untuk memahami struktur kode dari route sampai storage, baca
+[`ARCHITECTURE.md`](ARCHITECTURE.md). Dokumen tersebut juga menjelaskan data
+yang saat ini dimiliki Supabase Auth, Postgres, memory, dan fixture.
 
 ## Menjalankan backend
 
 Dari folder repository:
 
 ```bash
-cd backend
-../.venv/bin/python -m app.main
+cp backend/.env.example backend/.env
+docker compose up --build go-api
 ```
 
-API tersedia di `http://127.0.0.1:3456` dan dokumentasi OpenAPI di
-`http://127.0.0.1:3456/docs`. Socket.IO tersedia di
-`http://127.0.0.1:8765`.
+API tersedia di `http://127.0.0.1:8080`; kontrak lengkap berada di
+`backend/openapi.yaml`.
 
 ## Menjalankan test
 
 ```bash
 cd backend
-../.venv/bin/python -m pytest
+go test ./...
 ```
 
 Konfigurasi rahasia backend disimpan pada `backend/.env` dan tidak boleh
 dimasukkan ke Git atau ke bundle frontend.
 
-Set `PASSWORD_RESET_REDIRECT_URL` ke URL halaman reset web yang sudah masuk
-allowlist Redirect URLs di Supabase. Nilai development bawaan adalah
-`http://127.0.0.1:5174/?view=reset-password`.
-Untuk deployment dengan origin web terpisah, isi daftar origin eksplisit pada
-`CORS_ALLOWED_ORIGINS` (dipisahkan koma); jangan gunakan wildcard bersama
-credential.
+Isi `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, dan `SUPABASE_DB_URL` pada
+`backend/.env` sebelum menjalankannya. Terapkan migration SQL di
+`supabase/migrations` dahulu. Database URL hanya boleh berada di backend.
+Petunjuk dan status migrasi ada di [`POSTGRES_MIGRATION.md`](POSTGRES_MIGRATION.md).
 
-## Menjalankan dengan Docker
+Jika baseline lama perlu diperiksa secara eksplisit, jalankan
+`docker compose --profile legacy up backend`. Profile tersebut bukan jalur
+runtime frontend saat ini.
 
-Dari folder repository:
+## Target Go
+
+Core Go/WASM dapat diuji tanpa memasang Go lokal:
 
 ```bash
-cp backend/.env.example backend/.env
-docker compose up --build backend
+docker build -f backend/Go.Dockerfile --target test .
 ```
 
-Isi nilai Supabase di `backend/.env` sebelum menjalankannya. Docker menyimpan
-SQLite pada volume `signalgen-backend-data`. Untuk koneksi IBKR/TWS dari
-container gunakan host `host.docker.internal`, bukan `127.0.0.1`. Container
-menjalankan REST API dan Socket.IO tanpa membuka window PyWebView lama.
+Artefak browser dibangun bersama manifest checksum/versinya:
+
+```bash
+docker build -f backend/Go.Dockerfile --target wasm-artifact \
+  --output type=local,dest=frontend/web/public/wasm .
+```
+
+Frontend harus memverifikasi checksum WASM dan runtime dari
+`signalgen_core.manifest.json` sebelum menjalankan `signalgen_core.wasm`; file
+WASM dan `wasm_exec.js` wajib berasal dari build yang sama.
+
+`internal/auth` menangani register, login, recovery password, pembaruan password,
+dan verifikasi bearer ke Supabase Auth menggunakan publishable key. Package
+tersebut hanya menghasilkan identitas publik (`id`, `email`, dan nama tampilan);
+role, status akun, sesi aplikasi, dan entitlement tetap dibaca dari storage
+server SignalGen. Metadata user Supabase tidak digunakan untuk keputusan
+otorisasi.
+
+Menjalankan Go API:
+
+```bash
+docker compose up --build go-api
+```
+
+Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
+
+- `GET /health` — public health check;
+- `GET /ready` — readiness Postgres dan integritas fixture untuk Docker;
+- `GET /api` — status yang dipakai frontend;
+- `POST /api/auth/register` — membuat akun Supabase melalui Go;
+- `POST /api/auth/login` — login Supabase melalui Go;
+- `GET /api/auth/me` — membaca identitas publik dari bearer terverifikasi;
+- `POST /api/auth/password/reset-request` — mengirim email pemulihan tanpa
+  membocorkan apakah email terdaftar;
+- `POST /api/auth/password/reset` — memperbarui password dari recovery session;
+- `POST /api/v1/sessions` — membuat sesi aplikasi, membutuhkan bearer Supabase;
+- `GET /api/v1/account/me` — profil/status/feature grant server-side;
+- `GET /api/v1/account/sessions` — daftar maksimal 100 sesi milik pengguna;
+- `DELETE /api/v1/account/sessions/{id}` — mencabut sesi milik pengguna;
+- `GET /api/v1/capabilities` — membutuhkan bearer dan `X-App-Session`;
+- `GET /api/v1/rules` — system rule dan maksimal 100 rule milik pengguna;
+- `POST /api/v1/rules` — membuat rule pribadi;
+- `GET /api/v1/rules/{id}` — membaca system rule atau rule milik pengguna;
+- `PATCH /api/v1/rules/{id}` — memperbarui rule pribadi dengan cek versi;
+- `DELETE /api/v1/rules/{id}` — menghapus rule pribadi dengan cek versi;
+- `POST /api/v1/datasets/prepare` — menyiapkan manifest fixture sesuai entitlement;
+- `GET /api/v1/datasets/{id}/manifest` — metadata/checksum dataset;
+- `GET /api/v1/datasets/{id}/content` — konten OHLCV sintetis terproteksi;
+- `POST /api/v1/compute-grants` — receipt singkat yang mengikat sesi, dataset,
+  system rule atau rule pribadi, engine, dan schema sebelum eksekusi WASM;
+- `POST /api/v1/screener/socket-tickets` — menukar compute grant valid menjadi
+  ticket WebSocket sekali pakai berumur pendek;
+- `GET /api/v1/screener/ws` — upgrade WebSocket dan menjalankan private decision
+  pada batch feature, bukan pada candle OHLCV mentah;
+- `GET /api/v1/account/devices` — daftar perangkat milik akun yang sedang login;
+- `PATCH /api/v1/account/devices/{id}` — mengganti label perangkat atau mencabut
+  seluruh sesi pada perangkat tersebut;
+- `DELETE /api/v1/sessions/current` — revoke sesi aktif.
+
+Token sesi hanya dikembalikan saat dibuat. Postgres menyimpan hash token, bukan
+nilai token mentah. Daftar sesi hanya mengembalikan metadata aman, status, dan
+penanda sesi aktif; ID milik pengguna lain tidak dapat dibaca atau dicabut.
+Daftar perangkat menggabungkan riwayat sesi berdasarkan `installation_id`.
+Rename dan revoke selalu dibatasi oleh pemilik; revoke perangkat aktif akan
+membuat request berikutnya dari perangkat tersebut ditolak.
+Default satu perangkat aktif berlaku di server. Perpindahan ke installation ID
+lain mencabut sesi perangkat sebelumnya dan hanya boleh sekali per 24 jam.
+System rule tidak dapat diubah/dihapus dan definisi privatnya tidak dikirim oleh
+endpoint rule. Query rule pribadi selalu dibatasi
+oleh pemilik; ID milik akun lain menghasilkan respons not found agar kepemilikan
+tidak bocor. Endpoint bisnis lain tetap belum diimplementasikan.
+
+Go API memakai `pgxpool` untuk profile, entitlement, sesi, rule, audit, dan
+compute grant. Schema `signalgen` mempunyai foreign key ke `auth.users`,
+ownership, dan RLS. Route bisnis tetap memverifikasi owner/role/entitlement
+di server. SQLite hanya tersisa pada arsip, adapter legacy, dan test fixture;
+`cmd/api` tidak pernah membuka database SQLite.
+
+Frontend web hanya dapat memanggil Go API dari origin yang dicantumkan secara
+eksplisit pada `SIGNALGEN_CORS_ORIGINS` (dipisahkan koma). Contoh development:
+
+```env
+SIGNALGEN_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+SIGNALGEN_PASSWORD_RESET_REDIRECT_URL=http://127.0.0.1:5174/?view=reset-password
+SIGNALGEN_MAX_ACTIVE_SESSIONS=1
+SIGNALGEN_DEVICE_SWITCH_COOLDOWN_HOURS=24
+SIGNALGEN_MUTATION_RATE_LIMIT_PER_MINUTE=60
+```
+
+URL reset wajib dimasukkan juga ke daftar redirect yang diizinkan pada
+Supabase Dashboard: **Authentication → URL Configuration → Redirect URLs**.
+
+Konfigurasi ini tidak menerima wildcard. Request browser yang diizinkan dapat
+mengirim header `Authorization`, `Content-Type`, dan `X-App-Session`. Client
+Client server-side yang tidak mengirim header `Origin` tidak terpengaruh.
+
+Semua body JSON dibatasi maksimal 64 KiB. Request yang melewati batas ditolak
+dengan `413 PAYLOAD_TOO_LARGE`, termasuk jika JSON valid diletakkan sebelum data
+tambahan yang terlalu besar.
+
+Endpoint mutasi sensitif dibatasi per akun dan kelompok operasi. Nilai default
+adalah 60 request per menit dan dapat diubah melalui
+`SIGNALGEN_MUTATION_RATE_LIMIT_PER_MINUTE`. Saat batas tercapai, API mengirim
+`429 RATE_LIMITED` beserta header `Retry-After`. Limiter MVP ini tersimpan di
+memori proses, sehingga deployment multi-instance nantinya perlu limiter bersama
+seperti Redis atau rate limit pada API gateway.
+
+Batas satu perangkat aktif berlaku per pengguna. Pembuatan sesi pada
+`installation_id` yang sama mengganti dan mencabut sesi lama secara atomik.
+Perpindahan pertama ke instalasi lain mencabut sesi lama; perpindahan berikutnya
+dalam 24 jam ditolak dengan `409 DEVICE_SWITCH_COOLDOWN`.
+
+Socket ticket dan rate limiter masih disimpan di memori satu proses. Deployment
+multi-instance harus memakai shared store atau routing yang menjamin ticket masuk
+ke instance penerbitnya.
+
+Setelah pengguna login dan membuat sesi pertamanya, developer dapat memberikan
+akses demo secara lokal tanpa endpoint admin publik:
+
+Untuk instalasi baru, bootstrap operator pertama hanya dapat dijalankan satu
+kali dan target harus akun aktif yang sudah pernah membuat sesi:
+
+```bash
+docker compose run --rm go-api \
+  signalgen-admin bootstrap-operator \
+  --user USER_ID_SUPABASE \
+  --actor "local:nama-developer" \
+  --reason "initial project operator"
+```
+
+Setelah operator pertama ada, perintah bootstrap selalu ditolak. Perubahan role
+berikutnya hanya boleh melalui endpoint operator yang terproteksi, bukan melalui
+payload frontend maupun metadata user Supabase.
+
+Operator yang sudah login dan memiliki app session dapat mengelola entitlement
+melalui API berikut:
+
+- `GET /api/v1/operator/grants?user_id=USER_ID`
+- `POST /api/v1/operator/grants`
+- `DELETE /api/v1/operator/grants/{user_id}/{feature}`
+- `PATCH /api/v1/operator/accounts/{user_id}/role`
+
+Semua route tersebut mengambil actor audit dari identitas operator yang sudah
+diverifikasi. Body dari frontend tidak dapat memilih atau memalsukan actor.
+Perubahan role mewajibkan alasan dan akan ditolak dengan
+`409 LAST_OPERATOR_REQUIRED` jika menurunkan role operator aktif terakhir.
+
+Grant demo lokal tetap dijalankan dengan:
+
+```bash
+docker compose run --rm go-api \
+  signalgen-admin grant \
+  --user USER_ID_SUPABASE \
+  --feature screener \
+  --until 2026-10-17T00:00:00Z \
+  --reason "demo pembimbing" \
+  --actor USER_ID_OPERATOR_SUPABASE
+```
+
+Cabut akses dengan subcommand `revoke` dan flag `--user`, `--feature`,
+`--reason`, serta `--actor`. Setiap grant/revoke lokal disimpan bersama actor,
+request ID, alasan, dan kondisi sebelum/sesudah dalam transaksi yang sama.
+Catatan audit bersifat append-only: database menolak update dan delete. Tool
+lokal tetap tersedia untuk recovery/development; endpoint operator dan role
+guard server-side sudah tersedia untuk workflow aplikasi.
+
+Dataset P0 yang tersedia saat ini hanya fixture sintetis `BBCA.JK`, market
+`IDX`, timeframe `1d`, dan purpose `screen`. Endpoint menolak simbol/rentang
+lain serta akun tanpa grant `screener`; ini belum merupakan integrasi provider
+historis production.
+
+## Test dengan Postman
+
+Collection, environment tanpa rahasia, urutan eksekusi, dan cara memberikan
+grant lokal tersedia di [`postman/README.md`](postman/README.md). Test script
+mencakup health/readiness, auth negatif, Supabase login, app session, account,
+entitlement, CRUD rule pribadi, baseline rule, dataset fixture, compute grant,
+dan revoke sesi.
+
+## OpenAPI untuk frontend
+
+[`openapi.yaml`](openapi.yaml) adalah kontrak machine-readable untuk endpoint Go
+yang sudah tersedia. Route yang masih berupa rencana sengaja tidak dimasukkan.
+Validasi dan pembuatan type TypeScript dapat dijalankan dari root repository:
+
+```bash
+npx --yes @redocly/cli@1.34.5 lint backend/openapi.yaml --extends=minimal
+npx --yes openapi-typescript@7.9.1 backend/openapi.yaml \
+  -o frontend/web/src/api/generated/signalgen-api.d.ts
+```
+
+File generated ditempatkan oleh frontend pada folder API client-nya dan tidak
+boleh diedit manual. Perubahan kontrak perlu direview bersama FE dan BE.

@@ -8,6 +8,7 @@ import threading
 import uvicorn
 
 from .app import signalgen_app
+from .logging_utils import attach_user_log_handler
 
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ def _run_socketio(host: str, port: int) -> None:
 
 def main() -> None:
     """Run REST and Socket.IO without starting the legacy desktop window."""
+    attach_user_log_handler(signalgen_app.broadcaster)
     host = os.getenv("SIGNALGEN_HOST", "0.0.0.0")
     api_port = int(os.getenv("SIGNALGEN_API_PORT", "3456"))
     socket_port = int(os.getenv("SIGNALGEN_SOCKET_PORT", "8765"))

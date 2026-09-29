@@ -55,7 +55,11 @@ class SwingScreeningEngine:
     # date. Must match the IndicatorEngine instances created in _screen_ticker.
     INDICATOR_HISTORY = 250
 
-    def __init__(self, timeframe: str = '1d'):
+    def __init__(
+        self,
+        timeframe: str = '1d',
+        repository: Optional[SQLiteRepository] = None,
+    ):
         """
         Initialize swing screening engine.
 
@@ -63,7 +67,7 @@ class SwingScreeningEngine:
             timeframe: Candle timeframe ('1h', '4h', '1d' recommended for swing trading)
         """
         self.timeframe = timeframe
-        self.repository = SQLiteRepository()
+        self.repository = repository or SQLiteRepository()
         self.data_source = CachedDataSource(
             YahooDataSource(),
             self.repository,
@@ -84,6 +88,7 @@ class SwingScreeningEngine:
         self,
         tickers: List[str],
         rule_id: int,
+        rule: Optional[Dict[str, Any]] = None,
         lookback_days: int = 30,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
@@ -118,8 +123,9 @@ class SwingScreeningEngine:
         if not tickers:
             raise ValueError("Tickers list cannot be empty")
         
-        # Load rule
-        rule = self.repository.get_rule_by_id(rule_id)
+        # Authorized API callers pass the already ownership-checked rule.
+        # Internal/legacy callers may still load it from the repository.
+        rule = rule or self.repository.get_rule_by_id(rule_id)
         if not rule:
             raise ValueError(f"Rule with ID {rule_id} not found")
         

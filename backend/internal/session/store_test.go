@@ -1,0 +1,291 @@
+package session
+
+import (
+	"bytes"
+	"context"
+	"database/sql"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	_ "modernc.org/sqlite"
+)
+
+func testStore(t *testing.T, clock func() time.Time, ttl time.Duration) (*Store, *sql.DB) {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	randomBytes := make([]byte, 4096)
+	for index := range randomBytes {
+		randomBytes[index] = byte(index)
+	}
+	store, err := NewStore(db,
+		WithClock(clock),
+		WithTTL(ttl),
+		WithRandom(bytes.NewReader(randomBytes)),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	return store, db
+}
+
+func TestCreateAndVerifySession(t *testing.T) {
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	store, db := testStore(t, func() time.Time { return now }, 24*time.Hour)
+	created, err := store.Create(context.Background(), "user-a", "install-a", "Chrome on Mac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Token == "" || created.Session.UserID != "user-a" {
+		t.Fatalf("created = %+v", created)
+	}
+
+	var storedToken string
+	if err := db.QueryRow("SELECT hex(token_hash) FROM app_sessions WHERE id = ?", created.Session.ID).Scan(&storedToken); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(storedToken, created.Token) {
+		t.Fatal("raw session token was persisted")
+	}
+
+	verified, err := store.Verify(context.Background(), "user-a", created.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verified.ID != created.Session.ID || verified.InstallationID != "install-a" {
+		t.Fatalf("verified = %+v", verified)
+	}
+}
+
+func TestVerifyByIDRechecksTicketBoundSession(t *testing.T) {
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	created, err := store.Create(context.Background(), "user-a", "install-a", "Browser")
+	if err != nil {
+		t.Fatal(err)
+	}
+	verified, err := store.VerifyByID(context.Background(), "user-a", created.Session.ID)
+	if err != nil || verified.ID != created.Session.ID {
+		t.Fatalf("verified = %+v, error = %v", verified, err)
+	}
+	if _, err := store.VerifyByID(context.Background(), "user-b", created.Session.ID); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("cross-user error = %v, want ErrInvalid", err)
+	}
+	if err := store.RevokeByID(context.Background(), "user-a", created.Session.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.VerifyByID(context.Background(), "user-a", created.Session.ID); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("revoked error = %v, want ErrRevoked", err)
+	}
+}
+
+func TestSessionCannotCrossUsers(t *testing.T) {
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	created, _ := store.Create(context.Background(), "user-a", "install-a", "Browser")
+	if _, err := store.Verify(context.Background(), "user-b", created.Token); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("error = %v, want ErrInvalid", err)
+	}
+}
+
+func TestSessionExpires(t *testing.T) {
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	created, _ := store.Create(context.Background(), "user-a", "install-a", "Browser")
+	now = now.Add(time.Hour)
+	if _, err := store.Verify(context.Background(), "user-a", created.Token); !errors.Is(err, ErrExpired) {
+		t.Fatalf("error = %v, want ErrExpired", err)
+	}
+}
+
+func TestRevokedSessionCannotBeReused(t *testing.T) {
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	created, _ := store.Create(context.Background(), "user-a", "install-a", "Browser")
+	if err := store.Revoke(context.Background(), "user-a", created.Token); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", created.Token); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("error = %v, want ErrRevoked", err)
+	}
+}
+
+func TestCreateRejectsIncompleteRequest(t *testing.T) {
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	if _, err := store.Create(context.Background(), "user-a", "", "Browser"); !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("error = %v, want ErrInvalidRequest", err)
+	}
+}
+
+func TestStoreRejectsMultiDeviceConfiguration(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:reject_multi_device?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := NewStore(db, WithMaxActiveSessions(2)); err == nil {
+		t.Fatal("multi-device configuration should be rejected")
+	}
+}
+
+func TestListSessionsIsOwnerScoped(t *testing.T) {
+	now := time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	createdA, err := store.Create(context.Background(), "user-a", "install-a", "Chrome")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Create(context.Background(), "user-b", "install-b", "Firefox"); err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := store.List(context.Background(), "user-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 1 || sessions[0].ID != createdA.Session.ID || sessions[0].UserID != "user-a" {
+		t.Fatalf("sessions = %+v", sessions)
+	}
+}
+
+func TestRevokeByIDIsOwnerScopedAndIdempotent(t *testing.T) {
+	now := time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	created, err := store.Create(context.Background(), "user-a", "install-a", "Chrome")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RevokeByID(context.Background(), "user-b", created.Session.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cross-user error = %v, want ErrNotFound", err)
+	}
+	if err := store.RevokeByID(context.Background(), "user-a", created.Session.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RevokeByID(context.Background(), "user-a", created.Session.ID); err != nil {
+		t.Fatalf("idempotent revoke error = %v", err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", created.Token); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("verify error = %v, want ErrRevoked", err)
+	}
+}
+
+func TestCreateEnforcesOneDeviceAndSwitchCooldown(t *testing.T) {
+	now := time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, 72*time.Hour)
+	first, err := store.Create(context.Background(), "user-a", "install-a", "Chrome")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.Create(context.Background(), "user-a", "install-b", "Firefox")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", first.Token); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("previous device error = %v, want ErrRevoked", err)
+	}
+	if _, err := store.Create(context.Background(), "user-a", "install-c", "Safari"); !errors.Is(err, ErrDeviceCooldown) {
+		t.Fatalf("early switch error = %v, want ErrDeviceCooldown", err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", second.Token); err != nil {
+		t.Fatalf("rejected switch revoked current device: %v", err)
+	}
+	now = now.Add(24 * time.Hour)
+	third, err := store.Create(context.Background(), "user-a", "install-c", "Safari")
+	if err != nil {
+		t.Fatalf("switch after cooldown: %v", err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", second.Token); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("second device error = %v, want ErrRevoked", err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", third.Token); err != nil {
+		t.Fatalf("third device session: %v", err)
+	}
+	if _, err := store.Create(context.Background(), "user-b", "install-d", "Other user"); err != nil {
+		t.Fatalf("other user should have independent device state: %v", err)
+	}
+}
+
+func TestCreateReplacesSessionForSameInstallation(t *testing.T) {
+	now := time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	store.maxActiveSessions = 1
+	first, err := store.Create(context.Background(), "user-a", "install-a", "Chrome")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.Create(context.Background(), "user-a", "install-a", "Chrome renamed")
+	if err != nil {
+		t.Fatalf("replacement error = %v", err)
+	}
+	if first.Session.ID == second.Session.ID {
+		t.Fatal("replacement reused the old session id")
+	}
+	if _, err := store.Verify(context.Background(), "user-a", first.Token); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("old session error = %v, want ErrRevoked", err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", second.Token); err != nil {
+		t.Fatalf("new session error = %v", err)
+	}
+}
+
+func TestListDevicesAggregatesOwnerSessions(t *testing.T) {
+	now := time.Date(2026, 9, 22, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	if _, err := store.Create(context.Background(), "user-a", "install-a", "Chrome"); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(10 * time.Minute)
+	if _, err := store.Create(context.Background(), "user-a", "install-a", "Chrome renamed"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Create(context.Background(), "user-b", "install-b", "Firefox"); err != nil {
+		t.Fatal(err)
+	}
+	devices, err := store.ListDevices(context.Background(), "user-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(devices) != 1 || devices[0].ID != "install-a" || devices[0].Label != "Chrome renamed" || devices[0].Status != "active" {
+		t.Fatalf("devices = %+v", devices)
+	}
+}
+
+func TestRenameAndRevokeDeviceAreOwnerScoped(t *testing.T) {
+	now := time.Date(2026, 9, 22, 10, 0, 0, 0, time.UTC)
+	store, _ := testStore(t, func() time.Time { return now }, time.Hour)
+	created, err := store.Create(context.Background(), "user-a", "install-a", "Chrome")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RenameDevice(context.Background(), "user-b", "install-a", "Stolen"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cross-user rename error = %v, want ErrNotFound", err)
+	}
+	if err := store.RenameDevice(context.Background(), "user-a", "install-a", "Work Mac"); err != nil {
+		t.Fatal(err)
+	}
+	devices, err := store.ListDevices(context.Background(), "user-a")
+	if err != nil || len(devices) != 1 || devices[0].Label != "Work Mac" {
+		t.Fatalf("renamed devices = %+v, error = %v", devices, err)
+	}
+	if err := store.RevokeDevice(context.Background(), "user-b", "install-a"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cross-user revoke error = %v, want ErrNotFound", err)
+	}
+	if err := store.RevokeDevice(context.Background(), "user-a", "install-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RevokeDevice(context.Background(), "user-a", "install-a"); err != nil {
+		t.Fatalf("idempotent revoke error = %v", err)
+	}
+	if _, err := store.Verify(context.Background(), "user-a", created.Token); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("verify error = %v, want ErrRevoked", err)
+	}
+}

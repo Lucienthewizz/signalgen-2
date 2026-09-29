@@ -52,8 +52,8 @@ states, and reduced-motion behavior match the desktop application.
 
 ## Authorization contract
 
-Verified against the Go API `openapi.yaml` version 0.9.0 on
-`feature/go-wasm-baseline`:
+Verified against the Go API `openapi.yaml` version 0.9.0 and private-screener
+contract on `feature/hybrid-screener-integration`:
 
 - `POST /api/auth/login`: JSON `{ email, password }`, returns token and public user fields.
 - `POST /api/auth/register`: JSON `{ full_name, email, password }`, supports a nullable token and email confirmation.
@@ -87,8 +87,8 @@ fixture:
 2. fetch the versioned dataset and baseline rule through the Go API;
 3. verify and run the matching Go/WASM artifact in a dedicated worker;
 4. request a compute grant and one-use WebSocket ticket;
-5. send only the compact feature vector to Gin private scoring; and
-6. render the server score, decision, reason codes, feature evidence, and data
+5. send only the compact feature candidate batch to Go private scoring; and
+6. render the server decision, reason codes, feature evidence, and data
    quality without claiming a live signal.
 
 Generate `public/wasm/` from the matching Go source before running the frontend:
@@ -100,5 +100,7 @@ docker build -f backend/Go.Dockerfile --target wasm-artifact \
 
 The generated directory is intentionally ignored by Git. The worker validates
 the runtime and WASM SHA-256 values from `signalgen_core.manifest.json` before
-execution. A real run requires a Supabase user with the `screener` entitlement;
+execution. It requires `core-0.3.0`, `worker-2`, and
+`screener-features-1`; the system rule definition remains server-side. A real
+run requires a Supabase user with the `screener` entitlement;
 the guest state directs the user to sign in instead of showing fabricated data.

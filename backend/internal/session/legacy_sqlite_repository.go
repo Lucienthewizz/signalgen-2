@@ -1,0 +1,536 @@
+package session
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+	"time"
+
+	_ "modernc.org/sqlite"
+)
+
+const (
+	defaultTTL               = 24 * time.Hour
+	maxLabel                 = 100
+	defaultMaxActiveSessions = 1
+	defaultSwitchCooldown    = 24 * time.Hour
+)
+
+type Store struct {
+	db                   *sql.DB
+	now                  func() time.Time
+	random               io.Reader
+	ttl                  time.Duration
+	maxActiveSessions    int
+	deviceSwitchCooldown time.Duration
+}
+
+type Option func(*Store)
+
+func WithClock(clock func() time.Time) Option {
+	return func(store *Store) { store.now = clock }
+}
+
+func WithTTL(ttl time.Duration) Option {
+	return func(store *Store) { store.ttl = ttl }
+}
+
+func WithRandom(reader io.Reader) Option {
+	return func(store *Store) { store.random = reader }
+}
+
+func WithMaxActiveSessions(limit int) Option {
+	return func(store *Store) { store.maxActiveSessions = limit }
+}
+
+func WithDeviceSwitchCooldown(cooldown time.Duration) Option {
+	return func(store *Store) { store.deviceSwitchCooldown = cooldown }
+}
+
+func NewStore(db *sql.DB, options ...Option) (*Store, error) {
+	if db == nil {
+		return nil, fmt.Errorf("session database is required")
+	}
+	store := &Store{
+		db: db, now: time.Now, random: rand.Reader, ttl: defaultTTL,
+		maxActiveSessions: defaultMaxActiveSessions, deviceSwitchCooldown: defaultSwitchCooldown,
+	}
+	for _, option := range options {
+		option(store)
+	}
+	if store.now == nil || store.random == nil || store.ttl <= 0 || store.maxActiveSessions != 1 || store.deviceSwitchCooldown <= 0 {
+		return nil, fmt.Errorf("invalid session store configuration")
+	}
+	return store, nil
+}
+
+func (store *Store) ActiveLimit() int {
+	return store.maxActiveSessions
+}
+
+func (store *Store) DeviceSwitchCooldown() time.Duration {
+	return store.deviceSwitchCooldown
+}
+
+func (store *Store) Ready(ctx context.Context) error {
+	if err := store.db.PingContext(ctx); err != nil {
+		return fmt.Errorf("session storage readiness: %w", err)
+	}
+	return nil
+}
+
+func OpenSQLite(path string, options ...Option) (*Store, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, fmt.Errorf("session database path is required")
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, fmt.Errorf("open session database: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	store, err := NewStore(db, options...)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := store.Migrate(context.Background()); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return store, nil
+}
+
+func (store *Store) Close() error {
+	return store.db.Close()
+}
+
+func (store *Store) Migrate(ctx context.Context) error {
+	const schema = `
+CREATE TABLE IF NOT EXISTS app_sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    installation_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    token_hash BLOB NOT NULL UNIQUE,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    last_seen_at INTEGER NOT NULL,
+    revoked_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_app_sessions_user_active
+ON app_sessions(user_id, expires_at, revoked_at);
+CREATE TABLE IF NOT EXISTS account_device_state (
+    user_id TEXT PRIMARY KEY,
+    current_installation_id TEXT NOT NULL,
+    last_switched_at INTEGER,
+    updated_at INTEGER NOT NULL
+);
+`
+	if _, err := store.db.ExecContext(ctx, schema); err != nil {
+		return fmt.Errorf("migrate app sessions: %w", err)
+	}
+	return nil
+}
+
+func (store *Store) Create(ctx context.Context, userID, installationID, label string) (Created, error) {
+	userID = strings.TrimSpace(userID)
+	installationID = strings.TrimSpace(installationID)
+	label = strings.TrimSpace(label)
+	if userID == "" || installationID == "" || label == "" || len(label) > maxLabel {
+		return Created{}, ErrInvalidRequest
+	}
+
+	id, err := randomValue(store.random, "ses_", 16)
+	if err != nil {
+		return Created{}, fmt.Errorf("generate session id: %w", err)
+	}
+	token, err := randomValue(store.random, "sgs_", 32)
+	if err != nil {
+		return Created{}, fmt.Errorf("generate session token: %w", err)
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	session := Session{
+		ID:             id,
+		UserID:         userID,
+		InstallationID: installationID,
+		Label:          label,
+		CreatedAt:      now,
+		ExpiresAt:      now.Add(store.ttl),
+		LastSeenAt:     now,
+	}
+	hash := tokenHash(token)
+	transaction, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Created{}, fmt.Errorf("begin app session creation: %w", err)
+	}
+	defer transaction.Rollback()
+	var currentInstallation string
+	var lastSwitchedAt sql.NullInt64
+	err = transaction.QueryRowContext(ctx, `
+SELECT current_installation_id, last_switched_at
+FROM account_device_state WHERE user_id = ?`, userID).Scan(&currentInstallation, &lastSwitchedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = transaction.QueryRowContext(ctx, `
+SELECT installation_id FROM app_sessions
+WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+ORDER BY created_at DESC, id DESC LIMIT 1`, userID, now.Unix()).Scan(&currentInstallation)
+		if errors.Is(err, sql.ErrNoRows) {
+			currentInstallation = installationID
+		} else if err != nil {
+			return Created{}, fmt.Errorf("read current installation: %w", err)
+		}
+		if _, err := transaction.ExecContext(ctx, `
+INSERT INTO account_device_state (user_id, current_installation_id, last_switched_at, updated_at)
+VALUES (?, ?, NULL, ?)`, userID, currentInstallation, now.Unix()); err != nil {
+			return Created{}, fmt.Errorf("create device state: %w", err)
+		}
+	} else if err != nil {
+		return Created{}, fmt.Errorf("read device state: %w", err)
+	}
+
+	if currentInstallation != installationID {
+		if lastSwitchedAt.Valid && now.Before(time.Unix(lastSwitchedAt.Int64, 0).UTC().Add(store.deviceSwitchCooldown)) {
+			return Created{}, ErrDeviceCooldown
+		}
+		if _, err := transaction.ExecContext(ctx, `
+UPDATE app_sessions SET revoked_at = ?
+WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?`, now.Unix(), userID, now.Unix()); err != nil {
+			return Created{}, fmt.Errorf("revoke previous device sessions: %w", err)
+		}
+		if _, err := transaction.ExecContext(ctx, `
+UPDATE account_device_state
+SET current_installation_id = ?, last_switched_at = ?, updated_at = ?
+WHERE user_id = ?`, installationID, now.Unix(), now.Unix(), userID); err != nil {
+			return Created{}, fmt.Errorf("record device switch: %w", err)
+		}
+	} else {
+		revokeQuery := `
+UPDATE app_sessions SET revoked_at = ?
+WHERE user_id = ? AND installation_id = ? AND revoked_at IS NULL AND expires_at > ?`
+		arguments := []interface{}{now.Unix(), userID, installationID, now.Unix()}
+		if store.maxActiveSessions == 1 {
+			revokeQuery = `
+UPDATE app_sessions SET revoked_at = ?
+WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?`
+			arguments = []interface{}{now.Unix(), userID, now.Unix()}
+		}
+		if _, err := transaction.ExecContext(ctx, revokeQuery, arguments...); err != nil {
+			return Created{}, fmt.Errorf("replace installation session: %w", err)
+		}
+	}
+	var activeCount int
+	if err := transaction.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM app_sessions
+WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?`, userID, now.Unix()).Scan(&activeCount); err != nil {
+		return Created{}, fmt.Errorf("count active app sessions: %w", err)
+	}
+	if activeCount >= store.maxActiveSessions {
+		return Created{}, ErrSessionLimit
+	}
+	_, err = transaction.ExecContext(ctx, `
+INSERT INTO app_sessions (
+    id, user_id, installation_id, label, token_hash,
+    created_at, expires_at, last_seen_at, revoked_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+		session.ID, session.UserID, session.InstallationID, session.Label, hash[:],
+		session.CreatedAt.Unix(), session.ExpiresAt.Unix(), session.LastSeenAt.Unix(),
+	)
+	if err != nil {
+		return Created{}, fmt.Errorf("create app session: %w", err)
+	}
+	if err := transaction.Commit(); err != nil {
+		return Created{}, fmt.Errorf("commit app session creation: %w", err)
+	}
+	return Created{Session: session, Token: token}, nil
+}
+
+func (store *Store) Verify(ctx context.Context, userID, token string) (Session, error) {
+	userID = strings.TrimSpace(userID)
+	token = strings.TrimSpace(token)
+	if userID == "" || token == "" {
+		return Session{}, ErrInvalid
+	}
+	hash := tokenHash(token)
+	session, err := store.findByHash(ctx, hash[:])
+	if err != nil {
+		return Session{}, err
+	}
+	if session.UserID != userID {
+		return Session{}, ErrInvalid
+	}
+	if session.RevokedAt != nil {
+		return Session{}, ErrRevoked
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	if !now.Before(session.ExpiresAt) {
+		return Session{}, ErrExpired
+	}
+	if _, err := store.db.ExecContext(ctx,
+		"UPDATE app_sessions SET last_seen_at = ? WHERE id = ?", now.Unix(), session.ID,
+	); err != nil {
+		return Session{}, fmt.Errorf("update app session activity: %w", err)
+	}
+	session.LastSeenAt = now
+	return session, nil
+}
+
+// VerifyByID re-checks the session bound into a short-lived server capability,
+// such as a WebSocket ticket. It never accepts an ID supplied as standalone
+// authentication; the caller must already hold and consume that capability.
+func (store *Store) VerifyByID(ctx context.Context, userID, sessionID string) (Session, error) {
+	userID = strings.TrimSpace(userID)
+	sessionID = strings.TrimSpace(sessionID)
+	if userID == "" || sessionID == "" {
+		return Session{}, ErrInvalid
+	}
+	session, err := scanSession(store.db.QueryRowContext(ctx, `
+SELECT id, user_id, installation_id, label, created_at, expires_at, last_seen_at, revoked_at
+FROM app_sessions WHERE id = ? AND user_id = ?`, sessionID, userID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Session{}, ErrInvalid
+	}
+	if err != nil {
+		return Session{}, fmt.Errorf("read app session by id: %w", err)
+	}
+	if session.RevokedAt != nil {
+		return Session{}, ErrRevoked
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	if !now.Before(session.ExpiresAt) {
+		return Session{}, ErrExpired
+	}
+	return session, nil
+}
+
+func (store *Store) Revoke(ctx context.Context, userID, token string) error {
+	session, err := store.Verify(ctx, userID, token)
+	if err != nil {
+		return err
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	result, err := store.db.ExecContext(ctx,
+		"UPDATE app_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+		now.Unix(), session.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("revoke app session: %w", err)
+	}
+	changed, _ := result.RowsAffected()
+	if changed != 1 {
+		return ErrInvalid
+	}
+	return nil
+}
+
+func (store *Store) List(ctx context.Context, userID string) ([]Session, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, ErrInvalidRequest
+	}
+	rows, err := store.db.QueryContext(ctx, `
+SELECT id, user_id, installation_id, label, created_at, expires_at, last_seen_at, revoked_at
+FROM app_sessions
+WHERE user_id = ?
+ORDER BY created_at DESC, id DESC
+LIMIT 100`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list app sessions: %w", err)
+	}
+	defer rows.Close()
+
+	sessions := make([]Session, 0)
+	for rows.Next() {
+		session, err := scanSession(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan app session: %w", err)
+		}
+		sessions = append(sessions, session)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list app sessions: %w", err)
+	}
+	return sessions, nil
+}
+
+func (store *Store) RevokeByID(ctx context.Context, userID, sessionID string) error {
+	userID = strings.TrimSpace(userID)
+	sessionID = strings.TrimSpace(sessionID)
+	if userID == "" || sessionID == "" {
+		return ErrInvalidRequest
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	result, err := store.db.ExecContext(ctx, `
+UPDATE app_sessions
+SET revoked_at = ?
+WHERE id = ? AND user_id = ? AND revoked_at IS NULL`, now.Unix(), sessionID, userID)
+	if err != nil {
+		return fmt.Errorf("revoke app session by id: %w", err)
+	}
+	changed, _ := result.RowsAffected()
+	if changed == 1 {
+		return nil
+	}
+
+	var exists int
+	err = store.db.QueryRowContext(ctx,
+		"SELECT 1 FROM app_sessions WHERE id = ? AND user_id = ?", sessionID, userID,
+	).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read app session owner: %w", err)
+	}
+	return nil
+}
+
+func (store *Store) ListDevices(ctx context.Context, userID string) ([]Device, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, ErrInvalidRequest
+	}
+	sessions, err := store.List(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	devices := make([]Device, 0)
+	byID := make(map[string]int)
+	for _, appSession := range sessions {
+		index, exists := byID[appSession.InstallationID]
+		if !exists {
+			status := "expired"
+			if appSession.RevokedAt != nil {
+				status = "revoked"
+			} else if now.Before(appSession.ExpiresAt) {
+				status = "active"
+			}
+			byID[appSession.InstallationID] = len(devices)
+			devices = append(devices, Device{
+				ID: appSession.InstallationID, Label: appSession.Label, Status: status,
+				CreatedAt: appSession.CreatedAt, LastSeenAt: appSession.LastSeenAt,
+			})
+			continue
+		}
+		device := &devices[index]
+		if appSession.CreatedAt.Before(device.CreatedAt) {
+			device.CreatedAt = appSession.CreatedAt
+		}
+		if appSession.LastSeenAt.After(device.LastSeenAt) {
+			device.LastSeenAt = appSession.LastSeenAt
+		}
+		if appSession.RevokedAt == nil && now.Before(appSession.ExpiresAt) {
+			device.Status = "active"
+		}
+	}
+	return devices, nil
+}
+
+func (store *Store) RenameDevice(ctx context.Context, userID, installationID, label string) error {
+	userID = strings.TrimSpace(userID)
+	installationID = strings.TrimSpace(installationID)
+	label = strings.TrimSpace(label)
+	if userID == "" || installationID == "" || label == "" || len(label) > maxLabel {
+		return ErrInvalidRequest
+	}
+	result, err := store.db.ExecContext(ctx, `
+UPDATE app_sessions SET label = ?
+WHERE user_id = ? AND installation_id = ?`, label, userID, installationID)
+	if err != nil {
+		return fmt.Errorf("rename device: %w", err)
+	}
+	changed, _ := result.RowsAffected()
+	if changed == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (store *Store) RevokeDevice(ctx context.Context, userID, installationID string) error {
+	userID = strings.TrimSpace(userID)
+	installationID = strings.TrimSpace(installationID)
+	if userID == "" || installationID == "" {
+		return ErrInvalidRequest
+	}
+	now := store.now().UTC().Truncate(time.Second)
+	result, err := store.db.ExecContext(ctx, `
+UPDATE app_sessions SET revoked_at = ?
+WHERE user_id = ? AND installation_id = ? AND revoked_at IS NULL`,
+		now.Unix(), userID, installationID,
+	)
+	if err != nil {
+		return fmt.Errorf("revoke device: %w", err)
+	}
+	changed, _ := result.RowsAffected()
+	if changed > 0 {
+		return nil
+	}
+	var exists int
+	err = store.db.QueryRowContext(ctx,
+		"SELECT 1 FROM app_sessions WHERE user_id = ? AND installation_id = ? LIMIT 1",
+		userID, installationID,
+	).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read device owner: %w", err)
+	}
+	return nil
+}
+
+func (store *Store) findByHash(ctx context.Context, hash []byte) (Session, error) {
+	row := store.db.QueryRowContext(ctx, `
+SELECT id, user_id, installation_id, label, created_at, expires_at, last_seen_at, revoked_at
+FROM app_sessions WHERE token_hash = ?`, hash)
+	session, err := scanSession(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Session{}, ErrInvalid
+	}
+	if err != nil {
+		return Session{}, fmt.Errorf("read app session: %w", err)
+	}
+	return session, nil
+}
+
+type sessionScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func scanSession(scanner sessionScanner) (Session, error) {
+	var session Session
+	var createdAt, expiresAt, lastSeenAt int64
+	var revokedAt sql.NullInt64
+	if err := scanner.Scan(
+		&session.ID, &session.UserID, &session.InstallationID, &session.Label,
+		&createdAt, &expiresAt, &lastSeenAt, &revokedAt,
+	); err != nil {
+		return Session{}, err
+	}
+	session.CreatedAt = time.Unix(createdAt, 0).UTC()
+	session.ExpiresAt = time.Unix(expiresAt, 0).UTC()
+	session.LastSeenAt = time.Unix(lastSeenAt, 0).UTC()
+	if revokedAt.Valid {
+		value := time.Unix(revokedAt.Int64, 0).UTC()
+		session.RevokedAt = &value
+	}
+	return session, nil
+}
+
+func randomValue(reader io.Reader, prefix string, size int) (string, error) {
+	raw := make([]byte, size)
+	if _, err := io.ReadFull(reader, raw); err != nil {
+		return "", err
+	}
+	return prefix + base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func tokenHash(token string) [sha256.Size]byte {
+	return sha256.Sum256([]byte(token))
+}

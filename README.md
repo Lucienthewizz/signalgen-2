@@ -9,23 +9,26 @@ SignalGen 2.0 is moving to a web-first stock-analysis workspace for the Indonesi
 | Surface | Responsibility | Stack |
 | --- | --- | --- |
 | Web | Primary analysis workspace plus public/account surfaces | React, TypeScript, Vite, Go/WASM Web Worker |
-| Target API | Auth/session verification, authorization, feature grants, rules, historical data, journal/portfolio, audit | Go, SQLite, Supabase Auth |
+| Active API | Auth/session verification, authorization, feature grants, rules, protected datasets, compute grants, audit | Go, Gin, pgxpool, Supabase Auth/Postgres |
 | Legacy desktop | Reference/rollback UI; installer is not an MVP deliverable | Electron, React, TypeScript, Vite |
 | Legacy backend | Baseline/bridge while portable core and target API are verified | Python, FastAPI, Socket.IO, SQLite |
 
 The target keeps one API boundary. Historical computation moves to the browser worker; credentials, feature decisions, ownership, and journal authority remain on the server. Go/WASM is not absolute code protection.
 
-## Current implementation (legacy/baseline, not revised-MVP completion)
+## Current implementation
 
+- Go-owned register, login, profile, password recovery, and password update flows backed by Supabase Auth.
+- Go app sessions, owner-scoped devices, feature grants, rules, protected fixture data, and compute grants.
 - Secure Electron shell with context isolation, sandboxing, and a restricted preload bridge.
-- Login and registration flows backed by the FastAPI authentication endpoints.
 - Local session restoration with automatic handling for invalid or expired tokens.
 - Responsive desktop workspace with navigation for rules, watchlists, screening, backtesting, realtime signals, and settings.
 - Market-oriented dashboard with backend health, active-rule, watchlist, and signal summaries.
 - Centralized API client and Vite development proxies for REST and Socket.IO traffic.
 - Docker-based backend workflow compatible with Docker Desktop and OrbStack.
 
-The dashboard currently contains explicitly labeled interface data while feature screens are migrated incrementally. This does not prove the target Go API, WASM core, entitlement/device controls, or journal are complete.
+The Python/FastAPI service remains available only through the explicit Docker
+`legacy` profile for baseline comparison and rollback. It is not the active web
+authentication path.
 
 ## Target architecture
 
@@ -37,11 +40,11 @@ The dashboard currently contains explicitly labeled interface data while feature
           React UI + Go/WASM worker
                   │ REST/HTTPS
                   ▼
-              Go API target
+              Active Go API
        auth/access/data/rules/journal
               │             │
               ▼             ▼
-       Supabase Auth       SQLite
+       Supabase Auth   Supabase Postgres
 
  Legacy: Electron + Python/FastAPI kept for baseline and rollback
 ```
@@ -52,7 +55,7 @@ Canonical scope and architecture are documented in [PRD.md](./PRD.md) and [PROJE
 
 ```text
 signalgen-2/
-├── backend/                 FastAPI application and analysis engines
+├── backend/                 Go API/core plus legacy Python reference
 ├── frontend/
 │   ├── desktop/             Electron desktop application
 │   └── web/                 Public and account web application
@@ -81,11 +84,9 @@ docker compose ps
 
 The backend exposes:
 
-- REST API: `http://127.0.0.1:3456/api`
-- OpenAPI documentation: `http://127.0.0.1:3456/docs`
-- Socket.IO transport: `http://127.0.0.1:8765/socket.io`
-
-Port `8765` is a realtime transport endpoint, not a website. Opening its root URL directly may return `Not Found`.
+- REST/API status: `http://127.0.0.1:8080/api`
+- Health: `http://127.0.0.1:8080/health`
+- Machine-readable contract: `backend/openapi.yaml`
 
 ### 2. Start the current legacy Electron application
 
@@ -128,7 +129,7 @@ npm run build
 - [Backend MVP PRD](./backend/BACKEND_MVP_PRD.md)
 - [Target API and worker contract](./backend/MVP_API_CONTRACT.md)
 - [Architecture and project context](./PROJECT_CONTEXT.md)
-- OpenAPI after startup: `http://127.0.0.1:3456/docs`
+- OpenAPI contract: [`backend/openapi.yaml`](./backend/openapi.yaml)
 
 ## License and ownership
 

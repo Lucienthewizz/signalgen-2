@@ -40,6 +40,7 @@ from ..core.indicator_engine import IndicatorEngine
 from ..core.state_machine import StateMachine, EngineState
 from ..storage.sqlite_repo import SQLiteRepository
 from ..ws.broadcaster import SocketIOBroadcaster
+from ..logging_utils import UserContextLoggerAdapter
 
 class ScalpingEngine:
     """
@@ -77,6 +78,7 @@ class ScalpingEngine:
         self.is_connected = False
         self.active_watchlist: List[str] = []
         self.active_rule: Optional[Dict] = None
+        self.current_user_id: Optional[str] = None
         
         # IBKR subscription tracking
         self.subscribed_contracts: Dict[str, Contract] = {}  # symbol -> contract mapping
@@ -102,7 +104,10 @@ class ScalpingEngine:
         # Event loop for async operations
         self.event_loop: Optional[asyncio.AbstractEventLoop] = None
         
-        self.logger = logging.getLogger(__name__)
+        self.logger = UserContextLoggerAdapter(
+            logging.getLogger(__name__),
+            lambda: self.current_user_id,
+        )
     
     async def connect_to_ibkr(self) -> bool:
         """
@@ -663,18 +668,19 @@ class ScalpingEngine:
         except Exception as e:
             self.logger.error(f"Failed to unsubscribe from symbols {symbols}: {e}")
     
-    async def set_active_rule(self, rule_id: int) -> bool:
+    async def set_active_rule(self, rule_id: int, user_id: str) -> bool:
         """
         Set the active rule for signal generation.
         
         Args:
             rule_id: ID of the rule to set as active
+            user_id: Supabase ID used to authorize access to the rule
             
         Returns:
             bool: True if rule set successfully, False otherwise
         """
         try:
-            rule = self.repository.get_rule(rule_id)
+            rule = self.repository.get_rule_for_user(rule_id, user_id)
             if not rule:
                 self.logger.error(f"Rule with ID {rule_id} not found")
                 return False
@@ -689,28 +695,43 @@ class ScalpingEngine:
             self.logger.error(f"Failed to set active rule {rule_id}: {e}")
             return False
     
-    async def start_engine(self, watchlist: List[str], rule_id: int) -> bool:
+    async def start_engine(
+        self,
+        watchlist: List[str],
+        rule_id: int,
+        user_id: str,
+    ) -> bool:
         """
         Start the scalping engine with specified watchlist and rule.
         
         Args:
             watchlist: List of symbols to monitor
             rule_id: ID of the rule to use for signal generation
+            user_id: Supabase ID that owns the engine session
             
         Returns:
             bool: True if engine started successfully, False otherwise
         """
-        if not await self.start():
+        if self.is_running:
+            self.logger.warning("Engine is already running")
             return False
-        
+
+        self.current_user_id = user_id
+
+        if not await self.start():
+            self.current_user_id = None
+            return False
+
         # Set active rule
-        if not await self.set_active_rule(rule_id):
+        if not await self.set_active_rule(rule_id, user_id):
             await self.stop()
+            self.current_user_id = None
             return False
         
         # Subscribe to market data
         if not await self.subscribe_symbols(watchlist):
             await self.stop()
+            self.current_user_id = None
             return False
         
         self.logger.info(f"Engine started with watchlist: {watchlist}, rule: {self.active_rule['name']}")
@@ -729,7 +750,12 @@ class ScalpingEngine:
     # DEMO MODE (no IBKR) - synthetic data through the real pipeline
     # ============================================================
 
-    async def start_demo_engine(self, watchlist: List[str], rule_id: int) -> bool:
+    async def start_demo_engine(
+        self,
+        watchlist: List[str],
+        rule_id: int,
+        user_id: str,
+    ) -> bool:
         """
         Start the engine in DEMO mode: generate synthetic candles locally and
         push them through the exact same IndicatorEngine -> RuleEngine ->
@@ -741,6 +767,7 @@ class ScalpingEngine:
         Args:
             watchlist: List of symbols to simulate
             rule_id: ID of the rule to use for signal generation
+            user_id: Supabase ID that owns the engine session
 
         Returns:
             bool: True if the demo engine started successfully
@@ -752,6 +779,8 @@ class ScalpingEngine:
         if not watchlist:
             self.logger.error("Cannot start demo engine with an empty watchlist")
             return False
+
+        self.current_user_id = user_id
 
         # Capture the event loop this coroutine runs on (used for broadcasts)
         try:
@@ -767,10 +796,11 @@ class ScalpingEngine:
         self._demo_state.clear()
 
         # Configure the active rule (also narrows indicator computation)
-        if not await self.set_active_rule(rule_id):
+        if not await self.set_active_rule(rule_id, user_id):
             self.demo_mode = False
             self.is_running = False
             self.is_connected = False
+            self.current_user_id = None
             return False
 
         rule_to_evaluate = self.active_rule or {}
@@ -1135,6 +1165,7 @@ class ScalpingEngine:
                 'signal_type': signal_type,
                 'price': price,
                 'rule_id': self.active_rule['id'],
+                'user_id': self.current_user_id,
                 'timestamp': datetime.fromtimestamp(timestamp).isoformat(),
                 'indicators': indicators.copy()  # Include all indicator values
             }
@@ -1174,6 +1205,8 @@ class ScalpingEngine:
                 self.logger.info(f"   PRICE = {indicators['PRICE']:.4f}")
             
             # Store signal in database
+            if not self.current_user_id:
+                raise RuntimeError("Cannot save a signal without an engine owner")
             signal_id = self.repository.save_signal(signal_data)
             
             # Add signal ID to data for broadcasting

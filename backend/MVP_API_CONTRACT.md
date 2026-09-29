@@ -1,6 +1,55 @@
 # SignalGen MVP — Target API & Worker Contract
 
-Versi desain 0.1 · 16 September 2026 · **Proposed contract, not implemented API.** Backend publishes OpenAPI/generated types after implementation; runtime OpenAPI wins for what exists. Changes require FE+BE review and versioning.
+Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** [`openapi.yaml`](openapi.yaml) documents only the implemented Go surface and wins for current runtime integration; this file retains proposed routes and policy decisions. Changes require FE+BE review and versioning.
+
+Addendum 27 September 2026: bimbingan terbaru meminta pemisahan screener hybrid.
+Kontrak eksperimen socket ticket dan private decision tersedia di
+[`HYBRID_SCREENER_DESIGN.md`](HYBRID_SCREENER_DESIGN.md) dan schema
+[`contracts/hybrid-screener.schema.json`](contracts/hybrid-screener.schema.json).
+OpenAPI tetap menjadi sumber kebenaran endpoint yang sudah tersedia; pilihan Model
+A sebagai arsitektur final masih proposed sampai eksperimen pembanding selesai.
+
+Implementation checkpoint 27 September 2026: Model A kini memiliki vertical
+slice backend awal. `core-0.3.0` memisahkan feature calculation dan private
+decision; WASM hanya mengekspor feature calculation. Endpoint socket-ticket dan
+WebSocket private scoring sudah diimplementasikan dengan binding, TTL, single-use,
+replay rejection, session/entitlement recheck, payload limit, dan parity test.
+Ini masih kandidat eksperimen yang harus dibandingkan dengan Model B sebelum
+keputusan arsitektur final.
+
+Implementation checkpoint 27 September 2026: Go API currently implements
+`GET /api`, Go-owned register/login/profile/password recovery routes,
+`GET /health`, `GET /ready`, `POST /api/v1/sessions`, `GET /api/v1/capabilities`, and
+`DELETE /api/v1/sessions/current`. `GET /api/v1/account/me` is also available
+with the currently implemented profile, feature, session, and device fields.
+`GET /api/v1/account/sessions` and `DELETE /api/v1/account/sessions/{id}`
+provide an owner-scoped session list and idempotent revoke; cursor pagination
+remains future work. Active-session limits are configurable and enforced
+transactionally; creating a new session for the same installation replaces the
+previous one.
+`GET /api/v1/account/devices` aggregates the account's session history by
+installation. `PATCH /api/v1/account/devices/{id}` performs exactly one
+owner-scoped action: rename the installation or revoke all of its sessions.
+Dataset routes currently serve only the checksum-verified synthetic
+`BBCA.JK` screening fixture to accounts with an active `screener` grant.
+`POST /api/v1/compute-grants` is implemented for the frozen screening baseline
+and owner-scoped user rules. It rejects inaccessible rules and mismatched
+dataset, definition hash, engine, or schema versions.
+`GET /api/v1/rules` and `GET /api/v1/rules/{id}` expose the frozen baseline
+plus private user rules to accounts with `screener`. User rule
+create/update/delete is implemented with owner-scoped queries, a 100-rule
+limit, and optimistic version checks. The system baseline remains read-only.
+Browser integration supports an exact-origin CORS allowlist configured through
+`SIGNALGEN_CORS_ORIGINS`; wildcard origins are rejected.
+The server-side operator role guard is implemented and composes bearer,
+app-session, active-account, and database-role checks. Operator-only grant
+list/create/revoke routes are implemented and derive their audit actor from the
+authenticated principal. Role promotion/demotion is also implemented with an
+atomic guard that preserves at least one active operator. The first active operator can be bootstrapped exactly once
+through local CLI tooling; the role change and its actor/reason/before/after
+state are recorded atomically in the append-only audit table.
+This checkpoint is a subset, not a claim
+that the remaining proposed routes are available.
 
 ## 1. Conventions
 
@@ -12,6 +61,8 @@ Versi desain 0.1 · 16 September 2026 · **Proposed contract, not implemented AP
 - Money/quantity: decimal string. OHLC values: decimal string on wire; conversion to core format is versioned and tested.
 - Unknown enum/field policy is schema-specific; writes reject unknown fields. IDs opaque; clients do not infer ownership.
 - Protected/private responses: `Cache-Control: private, no-store`. Versioned WASM public asset may use immutable cache.
+- JSON request bodies are limited to 64 KiB and oversized bodies fail with `413 PAYLOAD_TOO_LARGE`.
+- Sensitive mutations are rate-limited per authenticated account and operation group. A rejected request returns `429 RATE_LIMITED` with `Retry-After` in seconds. The MVP limiter is process-local; multi-instance deployment requires a shared limiter or API gateway.
 
 Success envelope is resource-specific. Error envelope:
 
@@ -31,22 +82,27 @@ Stable HTTP/code minimum:
 | HTTP | Codes |
 | --- | --- |
 | 400/422 | `INVALID_REQUEST`, `INVALID_RULE`, `INVALID_RANGE`, `UNSUPPORTED_CAPABILITY` |
+| 403 (preflight) | `ORIGIN_NOT_ALLOWED` |
 | 401 | `AUTH_REQUIRED`, `AUTH_INVALID`, `AUTH_EXPIRED` |
 | 403 | `ACCOUNT_SUSPENDED`, `SESSION_REVOKED`, `SESSION_EXPIRED`, `ENTITLEMENT_REQUIRED`, `ROLE_REQUIRED` |
 | 404 | `RESOURCE_NOT_FOUND` (consistent for non-owner/private missing) |
-| 409 | `VERSION_CONFLICT`, `DEVICE_LIMIT_REACHED`, `IDEMPOTENCY_CONFLICT`, `POSITION_INSUFFICIENT` |
-| 413/429 | `DATASET_LIMIT_EXCEEDED`, `RATE_LIMITED` |
+| 409 | `VERSION_CONFLICT`, `DEVICE_LIMIT_REACHED`, `DEVICE_SWITCH_COOLDOWN`, `IDEMPOTENCY_CONFLICT`, `POSITION_INSUFFICIENT` |
+| 413/429 | `PAYLOAD_TOO_LARGE`, `DATASET_LIMIT_EXCEEDED`, `RATE_LIMITED` |
 | 502/503 | `PROVIDER_UNAVAILABLE`, `SERVICE_UNAVAILABLE` |
 
 ## 2. Auth/account/session routes
 
-Legacy `/api/auth/*` remains unchanged during migration. Target:
+The active `/api/auth/*` implementation is Go-owned and delegates identity and
+password storage to Supabase Auth using the server's publishable key. The
+Python routes remain legacy reference code and are not used by the web runtime.
 
 | Method | Route | App session | Purpose |
 | --- | --- | :---: | --- |
 | POST | `/auth/register` | exempt | Supabase-backed register; token may be null pending confirmation |
 | POST | `/auth/login` | exempt | Supabase-backed login; returns identity token material per approved auth policy |
-| POST | `/auth/refresh` | exempt | Refresh/rotation; exact cookie/body strategy decided before P1 |
+| GET | `/auth/me` | bearer only | Server-verified public identity |
+| POST | `/auth/password/reset-request` | exempt | Send recovery email without account enumeration |
+| POST | `/auth/password/reset` | exempt, recovery tokens in body | Refresh recovery session and update password |
 | POST | `/sessions` | exempt, bearer required | Register installation/open app session |
 | POST | `/sessions/{id}/refresh` | current session | Rotate opaque app-session token |
 | DELETE | `/sessions/current` | current session | Logout/revoke current session |
@@ -89,13 +145,15 @@ Response returns `session.id`, one-time `session_token`, `expires_at`, device su
 | GET | `/datasets/{id}/content` | matching feature | Canonical compressed payload; bounded/range-checked; no server compute |
 | POST | `/compute-grants` | purpose feature | Short-lived coordination receipt for a run; not DRM or proof result correctness |
 
-Rule snapshot minimum:
+Private user-rule snapshot minimum:
 
 ```json
 {"id":"rule_opaque","name":"Baseline RSI","owner_type":"user","schema_version":"rule-1","engine_version":"core-1","definition":{},"definition_hash":"sha256:...","version":3,"updated_at":"..."}
 ```
 
-`definition` is intentionally not invented in this document. It is frozen at M0 from selected baseline and represented by JSON Schema in `/capabilities`; FE and Go core consume the same fixtures.
+For a private user rule, `definition` is returned only to its owner. The frozen
+system rule returns metadata and `definition_hash`, but deliberately omits
+`definition`; the private decision kernel remains on the server.
 
 Prepare request:
 
@@ -155,39 +213,53 @@ Missing quote uses null price/P&L and warning, not zero.
 
 ## 5. Restricted operator contract (P1)
 
-CLI/local operator tooling is sufficient for P0 seed. P1 may expose protected `/operator/grants` list/create/revoke only after role guard, bootstrap, audit and last-operator safety are implemented. Creation requires user, feature allowlist, valid_until and reason. Actor/request ID/before/after stored atomically. Operator cannot read private rule/journal bodies solely by role.
+CLI/local operator tooling is sufficient for P0 seed. Local grant/revoke now
+requires actor, reason, and expiry where applicable; actor/request ID/before/after
+are stored atomically in an append-only audit table. Protected
+`/operator/grants` list/create/revoke is now implemented behind the role guard;
+the list requires an explicit target user and does not expose unrelated users.
+Operator cannot read private rule/journal bodies solely by role. General role
+management is limited to role changes and protects the final active operator;
+account status management remains unavailable.
 
 Payment status is not part of manual grant. Full admin user management, billing webhooks, release management and metrics dashboard are P2 per revised priorities.
 
-## 6. Worker protocol (P0)
+## 6. Worker dan private-scoring protocol (P0)
 
-Dedicated ES module Worker owns Go runtime/WASM. Message schema versioned and validated both sides.
+Dedicated ES module Worker owns Go runtime/WASM. Mulai `core-0.3.0`, WASM hanya
+menghitung feature; rule decision privat tidak diberikan kepada worker.
 
 Main → worker:
 
 ```ts
 type WorkerRequest =
-  | { type: "init"; protocol: "worker-1"; wasmUrl: string; wasmSha256: string }
-  | { type: "run"; protocol: "worker-1"; jobId: string; purpose: "screen" | "backtest";
-      engineVersion: string; dataset: ArrayBuffer; datasetManifest: object;
-      ruleSnapshot: object; config: object }
-  | { type: "cancel"; protocol: "worker-1"; jobId: string }
+  | { type: "init"; protocol: "worker-2"; wasmUrl: string; wasmSha256: string }
+  | { type: "features"; protocol: "worker-2"; jobId: string; purpose: "screen";
+      engineVersion: "core-0.3.0"; dataset: ArrayBuffer; datasetManifest: object }
+  | { type: "cancel"; protocol: "worker-2"; jobId: string }
 ```
 
 Worker → main:
 
 ```ts
 type WorkerEvent =
-  | { type: "ready"; protocol: "worker-1"; engineVersion: string; capabilitiesVersion: string }
-  | { type: "progress"; jobId: string; stage: "decode"|"validate"|"indicators"|"evaluate"|"metrics"; completed?: number; total?: number }
-  | { type: "result"; jobId: string; execution: "client_wasm"; result: object; warnings: object[]; timings: object }
+  | { type: "ready"; protocol: "worker-2"; engineVersion: string; capabilitiesVersion: string }
+  | { type: "progress"; jobId: string; stage: "decode"|"validate"|"indicators"; completed?: number; total?: number }
+  | { type: "features"; jobId: string; execution: "client_wasm_features"; result: object; warnings: object[]; timings: object }
   | { type: "cancelled"; jobId: string }
   | { type: "error"; jobId?: string; code: string; message: string; retryable: boolean; details?: object }
 ```
 
-The dataset buffer is transferred, not cloned. Only one job per worker. FE throttles progress rendering; worker emits meaningful counts/stages, not fake percentages. Cancel may be implemented by terminating/recreating worker if cooperative cancel cannot interrupt Go/WASM reliably; terminal cancelled state must be deterministic. Late events for old jobId ignored.
+The dataset buffer is transferred, not cloned. Only one job per worker. Feature
+result kemudian dikirim ke private-scoring WebSocket memakai
+`screener-private-1`. Kontrak HTTP ticket dan pesan socket ada pada OpenAPI dan
+`contracts/hybrid-screener.schema.json`. Ticket sekali pakai, terikat user,
+session, compute grant, rule hash, dan versi.
 
-Result minimum: protocol/engine/schema/data/rule/config hashes, purpose, execution, signals/matches or trades, supported metrics, assumptions, warnings and stage timings. Exact trade/config/result schema is frozen M0 from baseline; do not invent metrics the selected engine cannot produce.
+WASM result minimum: protocol/engine/feature schema, candidate timestamp/symbol,
+feature numerik, warnings, dan stage timings. Server result minimum: request ID,
+decision version, match, dan reason code. Server tidak menerima OHLCV mentah pada
+private-scoring socket.
 
 ## 7. Limits, versions and compatibility
 

@@ -49,7 +49,12 @@ class BacktestingEngine:
     through the indicator and rule engines to generate signals.
     """
     
-    def __init__(self, data_source: BaseDataSource, timeframe: str = '1d'):
+    def __init__(
+        self,
+        data_source: BaseDataSource,
+        timeframe: str = '1d',
+        repository: Optional[SQLiteRepository] = None,
+    ):
         """
         Initialize backtesting engine.
         
@@ -61,7 +66,7 @@ class BacktestingEngine:
         self.timeframe = timeframe
         self.indicator_engine = IndicatorEngine(timeframe=timeframe)
         self.rule_engine = RuleEngine()
-        self.repository = SQLiteRepository()
+        self.repository = repository or SQLiteRepository()
         self.logger = logging.getLogger(__name__)
         
         # Backtest state
@@ -76,7 +81,8 @@ class BacktestingEngine:
         rule_id: int,
         start_date: datetime,
         end_date: datetime,
-        data_source_name: str
+        data_source_name: str,
+        user_id: str,
     ) -> Dict[str, Any]:
         """
         Run backtest for given symbols and date range.
@@ -111,7 +117,7 @@ class BacktestingEngine:
             raise ValueError("Symbols list cannot be empty")
         
         # Load rule from database
-        self.current_rule = self.repository.get_rule_by_id(rule_id)
+        self.current_rule = self.repository.get_rule_for_user(rule_id, user_id)
         if not self.current_rule:
             raise ValueError(f"Rule with ID {rule_id} not found")
         
@@ -166,6 +172,7 @@ class BacktestingEngine:
         
         # Save backtest run to database
         backtest_run_id = self.repository.create_backtest_run(
+            user_id=user_id,
             name=name,
             mode=mode,
             rule_id=rule_id,

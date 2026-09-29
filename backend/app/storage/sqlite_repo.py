@@ -20,7 +20,7 @@ Key Features:
 
 Implementation Notes:
 - Single SQLite file (no client-server architecture)
-- One active watchlist at a time
+- One active watchlist per user
 
 Typical Usage:
     repo = SQLiteRepository()
@@ -68,10 +68,20 @@ class SQLiteRepository:
                     type TEXT CHECK(type IN ('system', 'custom')) NOT NULL,
                     definition TEXT NOT NULL,
                     is_system BOOLEAN DEFAULT FALSE,
+                    user_id TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+
+            # Databases created before multi-user authorization do not have an
+            # owner column yet. Keep those databases usable without assigning
+            # legacy custom rules to an arbitrary user.
+            cursor.execute("PRAGMA table_info(rules)")
+            rule_columns = [column[1] for column in cursor.fetchall()]
+            if 'user_id' not in rule_columns:
+                cursor.execute('ALTER TABLE rules ADD COLUMN user_id TEXT')
+                self.logger.info("Added user_id column to rules table")
             
             # Create watchlists table
             cursor.execute('''
@@ -79,10 +89,19 @@ class SQLiteRepository:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     is_active BOOLEAN DEFAULT FALSE,
+                    user_id TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+
+            # Preserve legacy databases without assigning old watchlists to an
+            # arbitrary account. Unowned legacy rows are hidden from user APIs.
+            cursor.execute("PRAGMA table_info(watchlists)")
+            watchlist_columns = [column[1] for column in cursor.fetchall()]
+            if 'user_id' not in watchlist_columns:
+                cursor.execute('ALTER TABLE watchlists ADD COLUMN user_id TEXT')
+                self.logger.info("Added user_id column to watchlists table")
             
             # Create watchlist_items table
             cursor.execute('''
@@ -103,6 +122,7 @@ class SQLiteRepository:
                     symbol TEXT NOT NULL,
                     price REAL NOT NULL,
                     rule_id INTEGER,
+                    user_id TEXT,
                     indicators TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (rule_id) REFERENCES rules(id) ON DELETE SET NULL
@@ -115,6 +135,9 @@ class SQLiteRepository:
             if 'indicators' not in columns:
                 cursor.execute('ALTER TABLE signals ADD COLUMN indicators TEXT')
                 self.logger.info("Added indicators column to signals table")
+            if 'user_id' not in columns:
+                cursor.execute('ALTER TABLE signals ADD COLUMN user_id TEXT')
+                self.logger.info("Added user_id column to signals table")
             
             # Create settings table
             cursor.execute('''
@@ -124,16 +147,34 @@ class SQLiteRepository:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+
+            # User-owned preferences are intentionally separate from legacy
+            # application settings. The composite key prevents one account's
+            # value from overwriting another account's value.
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_settings (
+                    user_id TEXT NOT NULL,
+                    key TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, key)
+                )
+            ''')
             
             # Create indexes for performance
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_signals_time ON signals(time)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_signals_user_id ON signals(user_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_watchlist_items_watchlist_id ON watchlist_items(watchlist_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_rules_user_id ON rules(user_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_watchlists_user_id ON watchlists(user_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id)')
             
             # Create backtest_runs table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS backtest_runs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT,
                     name TEXT NOT NULL,
                     mode TEXT CHECK(mode IN ('scalping', 'swing')) NOT NULL,
                     rule_id INTEGER NOT NULL,
@@ -148,6 +189,11 @@ class SQLiteRepository:
                     FOREIGN KEY (rule_id) REFERENCES rules(id) ON DELETE CASCADE
                 )
             ''')
+            cursor.execute("PRAGMA table_info(backtest_runs)")
+            backtest_run_columns = [column[1] for column in cursor.fetchall()]
+            if 'user_id' not in backtest_run_columns:
+                cursor.execute('ALTER TABLE backtest_runs ADD COLUMN user_id TEXT')
+                self.logger.info("Added user_id column to backtest_runs table")
             
             # Create backtest_signals table
             cursor.execute('''
@@ -167,6 +213,7 @@ class SQLiteRepository:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS backtest_screen_runs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT,
                     created_at TEXT NOT NULL,
                     mode TEXT NOT NULL,
                     timeframe TEXT NOT NULL,
@@ -176,16 +223,98 @@ class SQLiteRepository:
                     summary TEXT
                 )
             ''')
+            cursor.execute("PRAGMA table_info(backtest_screen_runs)")
+            screen_run_columns = [column[1] for column in cursor.fetchall()]
+            if 'user_id' not in screen_run_columns:
+                cursor.execute('ALTER TABLE backtest_screen_runs ADD COLUMN user_id TEXT')
+                self.logger.info("Added user_id column to backtest_screen_runs table")
+
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_backtest_runs_user_id ON backtest_runs(user_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_backtest_screen_runs_user_id ON backtest_screen_runs(user_id)')
 
             # Create ticker_universes table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS ticker_universes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,
                     tickers TEXT NOT NULL,
                     description TEXT,
+                    is_system BOOLEAN DEFAULT FALSE,
+                    user_id TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
+                )
+            ''')
+
+            cursor.execute("PRAGMA table_info(ticker_universes)")
+            universe_columns = [column[1] for column in cursor.fetchall()]
+            if 'is_system' not in universe_columns:
+                cursor.execute(
+                    'ALTER TABLE ticker_universes '
+                    'ADD COLUMN is_system BOOLEAN DEFAULT FALSE'
+                )
+                self.logger.info("Added is_system column to ticker_universes table")
+            if 'user_id' not in universe_columns:
+                cursor.execute(
+                    'ALTER TABLE ticker_universes ADD COLUMN user_id TEXT'
+                )
+                self.logger.info("Added user_id column to ticker_universes table")
+
+            # Older databases enforced a globally unique name. Rebuild that
+            # table so different users may use the same personal universe name.
+            cursor.execute('''
+                SELECT sql FROM sqlite_master
+                WHERE type = 'table' AND name = 'ticker_universes'
+            ''')
+            universe_table_sql = cursor.fetchone()[0]
+            normalized_universe_sql = ' '.join(universe_table_sql.upper().split())
+            if 'NAME TEXT NOT NULL UNIQUE' in normalized_universe_sql:
+                cursor.execute(
+                    'ALTER TABLE ticker_universes '
+                    'RENAME TO ticker_universes_legacy'
+                )
+                cursor.execute('''
+                    CREATE TABLE ticker_universes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        tickers TEXT NOT NULL,
+                        description TEXT,
+                        is_system BOOLEAN DEFAULT FALSE,
+                        user_id TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                ''')
+                cursor.execute('''
+                    INSERT INTO ticker_universes (
+                        id, name, tickers, description, is_system, user_id,
+                        created_at, updated_at
+                    )
+                    SELECT
+                        id, name, tickers, description, is_system, user_id,
+                        created_at, updated_at
+                    FROM ticker_universes_legacy
+                ''')
+                cursor.execute('DROP TABLE ticker_universes_legacy')
+                self.logger.info(
+                    "Rebuilt ticker_universes for per-user name uniqueness"
+                )
+
+            # These exact rows were seeded by older SignalGen versions and are
+            # reference data, so they remain readable by every authenticated user.
+            cursor.execute('''
+                UPDATE ticker_universes
+                SET is_system = TRUE
+                WHERE user_id IS NULL AND (
+                    (name = 'Tech Giants' AND description = 'Major technology stocks')
+                    OR (
+                        name = 'S&P 100 Top 20'
+                        AND description = 'Top 20 holdings in S&P 100 index'
+                    )
+                    OR (
+                        name = 'Popular Traders'
+                        AND description = 'Most actively traded stocks and ETFs'
+                    )
                 )
             ''')
 
@@ -221,6 +350,20 @@ class SQLiteRepository:
             cursor.execute('''
                 CREATE INDEX IF NOT EXISTS idx_price_candles_lookup
                 ON price_candles(data_source, symbol, timeframe, timestamp)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_ticker_universes_user_id
+                ON ticker_universes(user_id)
+            ''')
+            cursor.execute('''
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_ticker_universes_user_name
+                ON ticker_universes(user_id, name)
+                WHERE is_system = FALSE AND user_id IS NOT NULL
+            ''')
+            cursor.execute('''
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_ticker_universes_system_name
+                ON ticker_universes(name)
+                WHERE is_system = TRUE
             ''')
             
             conn.commit()
@@ -439,7 +582,14 @@ class SQLiteRepository:
         return len(rows)
     
     # Rules operations
-    def create_rule(self, name: str, rule_type: str, definition: Dict, is_system: bool = False) -> int:
+    def create_rule(
+        self,
+        name: str,
+        rule_type: str,
+        definition: Dict,
+        is_system: bool = False,
+        user_id: Optional[str] = None,
+    ) -> int:
         """
         Create a new trading rule.
         
@@ -448,18 +598,61 @@ class SQLiteRepository:
             rule_type: Rule type ('system' or 'custom')
             definition: Rule definition as dictionary
             is_system: Whether this is a system rule
+            user_id: Supabase user ID that owns a custom rule
             
         Returns:
             int: ID of created rule
         """
+        if not is_system and not user_id:
+            raise ValueError("Custom rules require a user_id")
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO rules (name, type, definition, is_system)
-                VALUES (?, ?, ?, ?)
-            ''', (name, rule_type, json.dumps(definition), is_system))
+                INSERT INTO rules (name, type, definition, is_system, user_id)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (name, rule_type, json.dumps(definition), is_system, user_id))
             conn.commit()
             return cursor.lastrowid
+
+    def get_rules_for_user(self, user_id: str) -> List[Dict]:
+        """Get shared system rules and custom rules owned by one user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM rules
+                WHERE is_system = TRUE
+                   OR (is_system = FALSE AND user_id = ?)
+                ORDER BY created_at
+            ''', (user_id,))
+            rows = cursor.fetchall()
+
+            rules = []
+            for row in rows:
+                rule = dict(row)
+                rule['definition'] = json.loads(rule['definition'])
+                rules.append(rule)
+            return rules
+
+    def get_rule_for_user(self, rule_id: int, user_id: str) -> Optional[Dict]:
+        """Get a system rule or a custom rule owned by one user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM rules
+                WHERE id = ?
+                  AND (
+                      is_system = TRUE
+                      OR (is_system = FALSE AND user_id = ?)
+                  )
+            ''', (rule_id, user_id))
+            row = cursor.fetchone()
+
+            if row:
+                rule = dict(row)
+                rule['definition'] = json.loads(rule['definition'])
+                return rule
+            return None
     
     def get_rule(self, rule_id: int) -> Optional[Dict]:
         """
@@ -539,6 +732,40 @@ class SQLiteRepository:
             ''', params)
             conn.commit()
             return cursor.rowcount > 0
+
+    def update_rule_for_user(
+        self,
+        rule_id: int,
+        user_id: str,
+        name: str = None,
+        definition: Dict = None,
+    ) -> bool:
+        """Update a custom rule only when it belongs to the supplied user."""
+        updates = []
+        params = []
+
+        if name is not None:
+            updates.append("name = ?")
+            params.append(name)
+
+        if definition is not None:
+            updates.append("definition = ?")
+            params.append(json.dumps(definition))
+
+        if not updates:
+            return False
+
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        params.extend((rule_id, user_id))
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f'''
+                UPDATE rules SET {', '.join(updates)}
+                WHERE id = ? AND is_system = FALSE AND user_id = ?
+            ''', params)
+            conn.commit()
+            return cursor.rowcount > 0
     
     def delete_rule(self, rule_id: int) -> bool:
         """
@@ -561,9 +788,33 @@ class SQLiteRepository:
             cursor.execute('DELETE FROM rules WHERE id = ? AND is_system = FALSE', (rule_id,))
             conn.commit()
             return cursor.rowcount > 0
+
+    def delete_rule_for_user(self, rule_id: int, user_id: str) -> bool:
+        """Delete a custom rule only when it belongs to the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT 1 FROM rules
+                WHERE id = ? AND is_system = FALSE AND user_id = ?
+            ''', (rule_id, user_id))
+            if cursor.fetchone() is None:
+                return False
+
+            cursor.execute('UPDATE signals SET rule_id = NULL WHERE rule_id = ?', (rule_id,))
+            cursor.execute('''
+                DELETE FROM rules
+                WHERE id = ? AND is_system = FALSE AND user_id = ?
+            ''', (rule_id, user_id))
+            conn.commit()
+            return cursor.rowcount > 0
     
     # Watchlist operations
-    def create_watchlist(self, name: str, symbols: List[str]) -> int:
+    def create_watchlist(
+        self,
+        name: str,
+        symbols: List[str],
+        user_id: Optional[str] = None,
+    ) -> int:
         """
         Create a new watchlist.
         
@@ -578,7 +829,10 @@ class SQLiteRepository:
             cursor = conn.cursor()
             
             # Create watchlist
-            cursor.execute('INSERT INTO watchlists (name) VALUES (?)', (name,))
+            cursor.execute(
+                'INSERT INTO watchlists (name, user_id) VALUES (?, ?)',
+                (name, user_id),
+            )
             watchlist_id = cursor.lastrowid
             
             # Add symbols
@@ -641,6 +895,164 @@ class SQLiteRepository:
                 watchlists.append(watchlist)
             
             return watchlists
+
+    def get_watchlist_for_user(
+        self,
+        watchlist_id: int,
+        user_id: str,
+    ) -> Optional[Dict]:
+        """Get a watchlist only when it belongs to the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT * FROM watchlists WHERE id = ? AND user_id = ?',
+                (watchlist_id, user_id),
+            )
+            watchlist_row = cursor.fetchone()
+            if watchlist_row is None:
+                return None
+
+            watchlist = dict(watchlist_row)
+            cursor.execute(
+                'SELECT symbol FROM watchlist_items WHERE watchlist_id = ?',
+                (watchlist_id,),
+            )
+            watchlist['symbols'] = [row['symbol'] for row in cursor.fetchall()]
+            return watchlist
+
+    def get_watchlists_for_user(self, user_id: str) -> List[Dict]:
+        """List only watchlists owned by the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                SELECT * FROM watchlists
+                WHERE user_id = ?
+                ORDER BY created_at
+                ''',
+                (user_id,),
+            )
+
+            watchlists = []
+            for watchlist_row in cursor.fetchall():
+                watchlist = dict(watchlist_row)
+                cursor.execute(
+                    'SELECT symbol FROM watchlist_items WHERE watchlist_id = ?',
+                    (watchlist['id'],),
+                )
+                watchlist['symbols'] = [row['symbol'] for row in cursor.fetchall()]
+                watchlists.append(watchlist)
+            return watchlists
+
+    def update_watchlist_for_user(
+        self,
+        watchlist_id: int,
+        user_id: str,
+        update_data: Dict[str, Any],
+    ) -> bool:
+        """Update a watchlist only when it belongs to the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT 1 FROM watchlists WHERE id = ? AND user_id = ?',
+                (watchlist_id, user_id),
+            )
+            if cursor.fetchone() is None:
+                return False
+
+            if 'name' in update_data:
+                cursor.execute(
+                    '''
+                    UPDATE watchlists
+                    SET name = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_id = ?
+                    ''',
+                    (update_data['name'], watchlist_id, user_id),
+                )
+
+            if 'symbols' in update_data:
+                cursor.execute(
+                    'DELETE FROM watchlist_items WHERE watchlist_id = ?',
+                    (watchlist_id,),
+                )
+                cursor.executemany(
+                    '''
+                    INSERT INTO watchlist_items (watchlist_id, symbol)
+                    VALUES (?, ?)
+                    ''',
+                    [
+                        (watchlist_id, symbol)
+                        for symbol in update_data['symbols']
+                    ],
+                )
+                cursor.execute(
+                    '''
+                    UPDATE watchlists
+                    SET updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_id = ?
+                    ''',
+                    (watchlist_id, user_id),
+                )
+
+            conn.commit()
+            return True
+
+    def delete_watchlist_for_user(self, watchlist_id: int, user_id: str) -> bool:
+        """Delete a watchlist only when it belongs to the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'DELETE FROM watchlists WHERE id = ? AND user_id = ?',
+                (watchlist_id, user_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def set_active_watchlist_for_user(
+        self,
+        watchlist_id: int,
+        user_id: str,
+    ) -> bool:
+        """Activate one owned watchlist without changing another user's state."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT 1 FROM watchlists WHERE id = ? AND user_id = ?',
+                (watchlist_id, user_id),
+            )
+            if cursor.fetchone() is None:
+                return False
+
+            cursor.execute(
+                'UPDATE watchlists SET is_active = FALSE WHERE user_id = ?',
+                (user_id,),
+            )
+            cursor.execute(
+                '''
+                UPDATE watchlists
+                SET is_active = TRUE, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+                ''',
+                (watchlist_id, user_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_active_watchlist_for_user(self, user_id: str) -> Optional[Dict]:
+        """Get the active watchlist for one user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                SELECT id FROM watchlists
+                WHERE user_id = ? AND is_active = TRUE
+                ''',
+                (user_id,),
+            )
+            watchlist_row = cursor.fetchone()
+            if watchlist_row is None:
+                return None
+            return self.get_watchlist_for_user(watchlist_row['id'], user_id)
     
     def update_watchlist(self, watchlist_id: int, update_data: Dict[str, Any]) -> bool:
         """
@@ -754,6 +1166,10 @@ class SQLiteRepository:
         Returns:
             int: ID of saved signal
         """
+        user_id = signal_data.get('user_id')
+        if not isinstance(user_id, str) or not user_id.strip():
+            raise ValueError("Signal user_id is required")
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             
@@ -763,25 +1179,34 @@ class SQLiteRepository:
                 indicators_json = json.dumps(signal_data['indicators'])
             
             cursor.execute('''
-                INSERT INTO signals (time, symbol, price, rule_id, indicators)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO signals (
+                    time, symbol, price, rule_id, user_id, indicators
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', (
                 signal_data['timestamp'],
                 signal_data['symbol'],
                 signal_data['price'],
                 signal_data.get('rule_id'),
+                user_id,
                 indicators_json
             ))
             conn.commit()
             return cursor.lastrowid
     
-    def get_signals(self, limit: int = 100, symbol: str = None) -> List[Dict]:
+    def get_signals_for_user(
+        self,
+        user_id: str,
+        limit: int = 100,
+        symbol: str = None,
+    ) -> List[Dict]:
         """
         Get recent signals.
         
         Args:
             limit: Maximum number of signals to return
             symbol: Filter by symbol (optional)
+            user_id: Supabase ID of the signal owner
             
         Returns:
             List[Dict]: List of signals with parsed indicators
@@ -792,16 +1217,17 @@ class SQLiteRepository:
             if symbol:
                 cursor.execute('''
                     SELECT * FROM signals 
-                    WHERE symbol = ? 
+                    WHERE user_id = ? AND symbol = ?
                     ORDER BY time DESC 
                     LIMIT ?
-                ''', (symbol, limit))
+                ''', (user_id, symbol, limit))
             else:
                 cursor.execute('''
-                    SELECT * FROM signals 
+                    SELECT * FROM signals
+                    WHERE user_id = ?
                     ORDER BY time DESC 
                     LIMIT ?
-                ''', (limit,))
+                ''', (user_id, limit))
             
             rows = cursor.fetchall()
             signals = []
@@ -816,23 +1242,27 @@ class SQLiteRepository:
                 signals.append(signal)
             return signals
     
-    def delete_signal(self, signal_id: int) -> bool:
+    def delete_signal_for_user(self, signal_id: int, user_id: str) -> bool:
         """
         Delete a signal.
         
         Args:
             signal_id: Signal ID
+            user_id: Supabase ID of the signal owner
             
         Returns:
             bool: True if deletion successful, False otherwise
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM signals WHERE id = ?', (signal_id,))
+            cursor.execute(
+                'DELETE FROM signals WHERE id = ? AND user_id = ?',
+                (signal_id, user_id),
+            )
             conn.commit()
             return cursor.rowcount > 0
 
-    def delete_all_signals(self) -> int:
+    def delete_all_signals_for_user(self, user_id: str) -> int:
         """
         Delete all live signals.
 
@@ -841,7 +1271,10 @@ class SQLiteRepository:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM signals')
+            cursor.execute(
+                'DELETE FROM signals WHERE user_id = ?',
+                (user_id,),
+            )
             conn.commit()
             return cursor.rowcount
 
@@ -891,6 +1324,61 @@ class SQLiteRepository:
                 VALUES (?, ?)
             ''', (key, value_str))
             conn.commit()
+
+    def get_user_setting(
+        self,
+        user_id: str,
+        key: str,
+        default: Any = None,
+    ) -> Any:
+        """Get one setting owned by a specific authenticated user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT value FROM user_settings WHERE user_id = ? AND key = ?',
+                (user_id, key),
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            return default
+        try:
+            return json.loads(row['value'])
+        except json.JSONDecodeError:
+            return row['value']
+
+    def set_user_setting(self, user_id: str, key: str, value: Any) -> None:
+        """Create or replace one setting within a user's ownership scope."""
+        value_str = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                INSERT INTO user_settings (user_id, key, value)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id, key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = CURRENT_TIMESTAMP
+                ''',
+                (user_id, key, value_str),
+            )
+            conn.commit()
+
+    def get_user_settings(self, user_id: str) -> Dict[str, Any]:
+        """Return all settings owned by one authenticated user."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                'SELECT key, value FROM user_settings WHERE user_id = ?',
+                (user_id,),
+            ).fetchall()
+
+        settings: Dict[str, Any] = {}
+        for row in rows:
+            try:
+                settings[row['key']] = json.loads(row['value'])
+            except json.JSONDecodeError:
+                settings[row['key']] = row['value']
+        return settings
     
     # MVP-specific methods
     def get_system_rules(self) -> List[Dict]:
@@ -1131,6 +1619,7 @@ class SQLiteRepository:
     # Backtesting operations
     def create_backtest_run(
         self,
+        user_id: str,
         name: str,
         mode: str,
         rule_id: int,
@@ -1164,10 +1653,11 @@ class SQLiteRepository:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO backtest_runs 
-                (name, mode, rule_id, symbols, timeframe, start_date, end_date, 
+                (user_id, name, mode, rule_id, symbols, timeframe, start_date, end_date,
                  data_source, created_at, total_signals, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
+                user_id,
                 name,
                 mode,
                 rule_id,
@@ -1208,7 +1698,7 @@ class SQLiteRepository:
                 ))
             conn.commit()
     
-    def get_backtest_run(self, run_id: int) -> Optional[Dict]:
+    def get_backtest_run(self, run_id: int, user_id: str) -> Optional[Dict]:
         """
         Get backtest run by ID.
         
@@ -1220,7 +1710,10 @@ class SQLiteRepository:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM backtest_runs WHERE id = ?', (run_id,))
+            cursor.execute(
+                'SELECT * FROM backtest_runs WHERE id = ? AND user_id = ?',
+                (run_id, user_id),
+            )
             row = cursor.fetchone()
             
             if row:
@@ -1230,7 +1723,7 @@ class SQLiteRepository:
                 return run
             return None
     
-    def get_all_backtest_runs(self) -> List[Dict]:
+    def get_all_backtest_runs(self, user_id: str) -> List[Dict]:
         """
         Get all backtest runs.
         
@@ -1239,7 +1732,10 @@ class SQLiteRepository:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM backtest_runs ORDER BY created_at DESC')
+            cursor.execute(
+                'SELECT * FROM backtest_runs WHERE user_id = ? ORDER BY created_at DESC',
+                (user_id,),
+            )
             rows = cursor.fetchall()
             
             runs = []
@@ -1251,7 +1747,7 @@ class SQLiteRepository:
             
             return runs
     
-    def get_backtest_signals(self, run_id: int) -> List[Dict]:
+    def get_backtest_signals(self, run_id: int, user_id: str) -> List[Dict]:
         """
         Get all signals for a backtest run.
         
@@ -1264,10 +1760,11 @@ class SQLiteRepository:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT * FROM backtest_signals 
-                WHERE backtest_run_id = ? 
+                SELECT signals.* FROM backtest_signals AS signals
+                JOIN backtest_runs AS runs ON runs.id = signals.backtest_run_id
+                WHERE signals.backtest_run_id = ? AND runs.user_id = ?
                 ORDER BY timestamp
-            ''', (run_id,))
+            ''', (run_id, user_id))
             rows = cursor.fetchall()
             
             signals = []
@@ -1278,7 +1775,7 @@ class SQLiteRepository:
             
             return signals
     
-    def delete_backtest_run(self, run_id: int) -> bool:
+    def delete_backtest_run(self, run_id: int, user_id: str) -> bool:
         """
         Delete a backtest run and its signals.
 
@@ -1290,7 +1787,10 @@ class SQLiteRepository:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM backtest_runs WHERE id = ?', (run_id,))
+            cursor.execute(
+                'DELETE FROM backtest_runs WHERE id = ? AND user_id = ?',
+                (run_id, user_id),
+            )
             conn.commit()
             return cursor.rowcount > 0
 
@@ -1299,6 +1799,7 @@ class SQLiteRepository:
     # ------------------------------------------------------------------
     def create_backtest_screen_run(
         self,
+        user_id: str,
         mode: str,
         timeframe: str,
         exit_strategy: str,
@@ -1315,9 +1816,10 @@ class SQLiteRepository:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO backtest_screen_runs
-                (created_at, mode, timeframe, exit_strategy, row_count, config, summary)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, created_at, mode, timeframe, exit_strategy, row_count, config, summary)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
+                user_id,
                 datetime.now().isoformat(),
                 mode,
                 timeframe,
@@ -1329,13 +1831,13 @@ class SQLiteRepository:
             conn.commit()
             return cursor.lastrowid
 
-    def get_backtest_screen_runs(self, limit: int = 50) -> List[Dict]:
+    def get_backtest_screen_runs(self, user_id: str, limit: int = 50) -> List[Dict]:
         """Return recent backtest screen runs (newest first), config/summary parsed."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT * FROM backtest_screen_runs ORDER BY created_at DESC LIMIT ?',
-                (int(limit),)
+                'SELECT * FROM backtest_screen_runs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
+                (user_id, int(limit))
             )
             runs = []
             for row in cursor.fetchall():
@@ -1345,11 +1847,14 @@ class SQLiteRepository:
                 runs.append(run)
             return runs
 
-    def get_backtest_screen_run(self, run_id: int) -> Optional[Dict]:
+    def get_backtest_screen_run(self, run_id: int, user_id: str) -> Optional[Dict]:
         """Return a single backtest screen run by ID with config/summary parsed."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM backtest_screen_runs WHERE id = ?', (run_id,))
+            cursor.execute(
+                'SELECT * FROM backtest_screen_runs WHERE id = ? AND user_id = ?',
+                (run_id, user_id),
+            )
             row = cursor.fetchone()
             if not row:
                 return None
@@ -1358,19 +1863,25 @@ class SQLiteRepository:
             run['summary'] = json.loads(run['summary']) if run['summary'] else {}
             return run
 
-    def delete_backtest_screen_run(self, run_id: int) -> bool:
+    def delete_backtest_screen_run(self, run_id: int, user_id: str) -> bool:
         """Delete a backtest screen run. Returns True if a row was removed."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM backtest_screen_runs WHERE id = ?', (run_id,))
+            cursor.execute(
+                'DELETE FROM backtest_screen_runs WHERE id = ? AND user_id = ?',
+                (run_id, user_id),
+            )
             conn.commit()
             return cursor.rowcount > 0
 
-    def delete_all_backtest_screen_runs(self) -> int:
+    def delete_all_backtest_screen_runs(self, user_id: str) -> int:
         """Delete all backtest screen runs. Returns the number of rows removed."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM backtest_screen_runs')
+            cursor.execute(
+                'DELETE FROM backtest_screen_runs WHERE user_id = ?',
+                (user_id,),
+            )
             conn.commit()
             return cursor.rowcount
 
@@ -1379,7 +1890,9 @@ class SQLiteRepository:
         self,
         name: str,
         tickers: List[str],
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        user_id: Optional[str] = None,
+        is_system: bool = False,
     ) -> int:
         """
         Create a new ticker universe.
@@ -1396,9 +1909,20 @@ class SQLiteRepository:
             cursor = conn.cursor()
             now = datetime.now().isoformat()
             cursor.execute('''
-                INSERT INTO ticker_universes (name, tickers, description, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (name, json.dumps(tickers), description, now, now))
+                INSERT INTO ticker_universes (
+                    name, tickers, description, is_system, user_id,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                name,
+                json.dumps(tickers),
+                description,
+                is_system,
+                user_id,
+                now,
+                now,
+            ))
             conn.commit()
             return cursor.lastrowid
     
@@ -1442,6 +1966,99 @@ class SQLiteRepository:
                 universes.append(universe)
             
             return universes
+
+    def get_ticker_universe_for_user(
+        self,
+        universe_id: int,
+        user_id: str,
+    ) -> Optional[Dict]:
+        """Get a shared system universe or one owned by the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM ticker_universes
+                WHERE id = ? AND (is_system = TRUE OR user_id = ?)
+            ''', (universe_id, user_id))
+            row = cursor.fetchone()
+            if row is None:
+                return None
+
+            universe = dict(row)
+            universe['tickers'] = json.loads(universe['tickers'])
+            return universe
+
+    def get_ticker_universes_for_user(self, user_id: str) -> List[Dict]:
+        """List shared system universes and personal universes for one user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM ticker_universes
+                WHERE is_system = TRUE OR user_id = ?
+                ORDER BY is_system DESC, name
+            ''', (user_id,))
+
+            universes = []
+            for row in cursor.fetchall():
+                universe = dict(row)
+                universe['tickers'] = json.loads(universe['tickers'])
+                universes.append(universe)
+            return universes
+
+    def update_ticker_universe_for_user(
+        self,
+        universe_id: int,
+        user_id: str,
+        name: Optional[str] = None,
+        tickers: Optional[List[str]] = None,
+        description: Optional[str] = None,
+    ) -> bool:
+        """Update only a personal universe owned by the supplied user."""
+        updates = []
+        params = []
+
+        if name is not None:
+            updates.append("name = ?")
+            params.append(name)
+        if tickers is not None:
+            updates.append("tickers = ?")
+            params.append(json.dumps(tickers))
+        if description is not None:
+            updates.append("description = ?")
+            params.append(description)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if not updates:
+                cursor.execute('''
+                    SELECT 1 FROM ticker_universes
+                    WHERE id = ? AND user_id = ? AND is_system = FALSE
+                ''', (universe_id, user_id))
+                return cursor.fetchone() is not None
+
+            updates.append("updated_at = ?")
+            params.append(datetime.now().isoformat())
+            params.extend([universe_id, user_id])
+            cursor.execute(f'''
+                UPDATE ticker_universes SET {', '.join(updates)}
+                WHERE id = ? AND user_id = ? AND is_system = FALSE
+            ''', params)
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_ticker_universe_for_user(
+        self,
+        universe_id: int,
+        user_id: str,
+    ) -> bool:
+        """Delete only a personal universe owned by the supplied user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM ticker_universes
+                WHERE id = ? AND user_id = ? AND is_system = FALSE
+            ''', (universe_id, user_id))
+            conn.commit()
+            return cursor.rowcount > 0
     
     def update_ticker_universe(
         self,

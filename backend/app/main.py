@@ -43,7 +43,7 @@ from pathlib import Path
 
 from app.app import signalgen_app
 from app.storage.sqlite_repo import SQLiteRepository
-from app.logging_utils import log_handler
+from app.logging_utils import attach_user_log_handler, log_handler
 
 def setup_logging() -> None:
     """Configure application logging."""
@@ -57,7 +57,7 @@ def setup_logging() -> None:
         ]
     )
     # Push new log lines to connected WebSocket clients in real time.
-    log_handler.broadcaster = signalgen_app.broadcaster
+    attach_user_log_handler(signalgen_app.broadcaster)
 
 def seed_default_data(repository: SQLiteRepository) -> None:
     """

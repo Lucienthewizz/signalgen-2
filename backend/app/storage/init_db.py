@@ -206,44 +206,46 @@ def _seed_ticker_universes(repo: SQLiteRepository) -> None:
     Args:
         repo: SQLiteRepository instance
     """
-    existing_universes = repo.get_all_ticker_universes()
-    if existing_universes:
-        logger.info("Ticker universes already exist, skipping seeding")
-        return
-    
-    # Tech Giants
-    repo.create_ticker_universe(
-        name="Tech Giants",
-        tickers=["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA"],
-        description="Major technology stocks"
-    )
-    
-    # S&P 100 Top Holdings
-    repo.create_ticker_universe(
-        name="S&P 100 Top 20",
-        tickers=[
-            "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "META", "TSLA", "BRK.B",
-            "LLY", "AVGO", "JPM", "WMT", "V", "UNH", "XOM", "ORCL", "MA", "HD",
-            "PG", "COST"
-        ],
-        description="Top 20 holdings in S&P 100 index"
-    )
-    
-    # Popular Trading Stocks
-    repo.create_ticker_universe(
-        name="Popular Traders",
-        tickers=["SPY", "QQQ", "TSLA", "AAPL", "NVDA", "AMD", "AMZN", "MSFT", "META", "GOOGL"],
-        description="Most actively traded stocks and ETFs"
-    )
-    
-    # Custom (empty for user to fill)
-    repo.create_ticker_universe(
-        name="Custom",
-        tickers=[],
-        description="User-defined ticker universe"
-    )
-    
-    logger.info("Seeded default ticker universes")
+    seeds = [
+        {
+            "name": "Tech Giants",
+            "tickers": [
+                "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
+            ],
+            "description": "Major technology stocks",
+        },
+        {
+            "name": "S&P 100 Top 20",
+            "tickers": [
+                "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "META", "TSLA",
+                "BRK.B", "LLY", "AVGO", "JPM", "WMT", "V", "UNH", "XOM",
+                "ORCL", "MA", "HD", "PG", "COST",
+            ],
+            "description": "Top 20 holdings in S&P 100 index",
+        },
+        {
+            "name": "Popular Traders",
+            "tickers": [
+                "SPY", "QQQ", "TSLA", "AAPL", "NVDA", "AMD", "AMZN",
+                "MSFT", "META", "GOOGL",
+            ],
+            "description": "Most actively traded stocks and ETFs",
+        },
+    ]
+    existing_system_names = {
+        universe["name"]
+        for universe in repo.get_all_ticker_universes()
+        if universe.get("is_system")
+    }
+
+    created_count = 0
+    for seed in seeds:
+        if seed["name"] in existing_system_names:
+            continue
+        repo.create_ticker_universe(**seed, is_system=True)
+        created_count += 1
+
+    logger.info("Seeded %s default ticker universes", created_count)
 
 if __name__ == "__main__":
     # Configure logging

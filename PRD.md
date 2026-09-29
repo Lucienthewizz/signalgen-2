@@ -1,6 +1,6 @@
 # SignalGen 2.0 — Product Requirements Document
 
-Versi 2.0 · 16 September 2026 · Baseline kebutuhan terbaru atas revisi voice memo yang ditetapkan pengguna. Status implementasi: belum selesai.
+Versi 2.1 · 29 September 2026 · Keputusan produk terbaru: aplikasi web multi-user dengan Supabase Postgres sebagai penyimpanan aplikasi. Status implementasi: migrasi berlangsung.
 
 ## 1. Otoritas dan revisi
 
@@ -12,7 +12,8 @@ Acuan: [konteks arsitektur](PROJECT_CONTEXT.md), [PRD frontend](frontend/FRONTEN
 | --- | --- |
 | Electron desktop utama; web portal/download | Web analisis utama; desktop legacy bukan deliverable MVP |
 | Engine Python di server | Shared core Go; screening/backtest historis di client Go/WASM |
-| FastAPI target permanen | API target Go; FastAPI legacy/baseline selama migrasi |
+| FastAPI target permanen | API Go dengan Gin; FastAPI hanya baseline historis |
+| SQLite data aplikasi aktif | Supabase Postgres untuk data aplikasi multi-user |
 | Realtime, installer dan payment di delivery awal | Correctness, efisiensi dan proteksi didahulukan |
 | Paket belum dikunci | Entitlement berbasis fitur; grant manual untuk MVP |
 
@@ -57,8 +58,9 @@ P0 selesai bukan berarti MVP selesai. Target satu minggu demo adalah estimasi aw
 | MVP-RULE-02 | P1 | CRUD rule subset tanpa kode | Operand/operator didukung core; backend/WASM menolak yang unsupported |
 | MVP-DATA-01 | P0 | Fixture historis berversi | Sumber, market, currency, UTC, warmup, adjustment dan checksum tercatat |
 | MVP-DATA-02 | P1 | Provider historis melalui server | IDX dahulu; hak penggunaan/redistribusi diperiksa; timeout/rate limit/missing data ditangani |
-| MVP-SCREEN-01 | P0 | Screening historis lokal | Fixture universe kecil menghasilkan match dengan alasan; bukan live signal |
-| MVP-WASM-01 | P0 | Backtest Go/WASM di worker | Jalur web baru tanpa backtest compute server; run/status/result/error/cancel tersedia |
+| MVP-SCREEN-01 | P0 | Screening historis hybrid | Client menghitung fitur berat; server decision kernel kecil menilai batch kandidat; fixture menghasilkan match dengan alasan; bukan live signal |
+| MVP-SCREEN-02 | P0 | Eksperimen batas client/server | Model decision-kernel dan satu alternatif dibandingkan pada fixture yang sama untuk correctness, beban, network, failure, dan exposure logika sebelum split difinalkan |
+| MVP-WASM-01 | P0 | Go/WASM di worker | Indikator/fitur berat berjalan di client; worker run/status/result/error/cancel tersedia; keputusan kritis boleh memakai kernel server yang ringan |
 | MVP-PARITY-01 | P0 | Kesetaraan hasil | Signal/trade sesuai baseline; toleransi metrik disepakati sebelum tes |
 | MVP-RESULT-01 | P0 | Hasil dapat dijelaskan | Metrik, signal/trade dan asumsi tervalidasi; unsupported ditandai, bukan dipalsukan |
 | MVP-CACHE-01 | P1 | Cache terkompresi/terenkripsi | Tidak ada plaintext persisten; user/version/checksum terpisah; clear cache tersedia |
@@ -95,7 +97,7 @@ Frontend static hosting/CDN tanpa SSR runtime. WASM/chart di-lazy-load; worker t
 
 Supabase Auth tetap identitas/password. Server memvalidasi sesi aplikasi, status, ownership, role dan entitlement. Secrets tidak di client/log/demo.
 
-SQLite tetap target server dengan encryption at rest nyata, key lifecycle dan recovery teruji sebelum P1 selesai. Cache client ciphertext terkompresi; SQLite browser versus storage ciphertext alternatif harus diputuskan pada gate P1. P0 boleh in-memory.
+Supabase Postgres adalah penyimpanan authoritative profil, sesi, entitlement, rule, compute grant, dan audit. Semua tabel aplikasi mempunyai ownership yang jelas dan RLS; backend tetap memeriksa owner/role/entitlement di setiap operasi. Database URL hanya berada di backend. Cache client ciphertext terkompresi; pilihan storage browser diputuskan pada gate P1. P0 boleh in-memory.
 
 WASM bukan enkripsi kode; ID instalasi browser bukan hardware ID; IP bukan identitas tetap. Hard-lock IP bukan default MVP. Hasil WASM unverified, tidak menentukan izin/payment; draft jurnal butuh konfirmasi.
 
@@ -103,7 +105,7 @@ Provider diakses server. Hak distribusi/cache diperiksa. Data fixture/replay dib
 
 ## 8. Non-goals / P2
 
-Realtime production/broadcast dan API yang diberikan belakangan; integrasi IBKR baru; semua bursa sekaligus; Telegram tambahan; full admin dashboard; billing/payment/webhook otomatis; OCR; auto-trading; native mobile; installer/code signing/updater; full engine parity; jaminan anti-reverse-engineering. Tidak otomatis migrasi database ke PostgreSQL atau membuat backend di frontend.
+Realtime production/broadcast dan API yang diberikan belakangan; integrasi IBKR baru; semua bursa sekaligus; Telegram tambahan; full admin dashboard; billing/payment/webhook otomatis; OCR; auto-trading; native mobile; installer/code signing/updater; full engine parity; jaminan anti-reverse-engineering. Backend tetap terpisah dari frontend.
 
 Legacy tetap tersedia untuk baseline/rollback. Perubahan behavior correctness dipisahkan dari migrasi; jangan mempertahankan bug look-ahead hanya demi parity.
 
@@ -122,7 +124,7 @@ Benchmark membandingkan kerja sama pada baseline Python vs Go/WASM. Pisahkan fet
 
 P0 selesai: screening/backtest subset repeatable, parity/access/isolation lulus, UI responsif, benchmark dan batas proteksi jelas.
 
-MVP selesai: **seluruh P0/P1** lulus; slice API target Go teruji; provider berizin, SQLite/cache protection/recovery, grant/sesi/perangkat dan jurnal bekerja; lint/typecheck/build/tests terkait lulus; setup dapat diulang tanpa edit kode; tidak ada blocker keamanan tinggi. P2 dilaporkan sebagai remaining work.
+MVP selesai: **seluruh P0/P1** lulus; slice API Go teruji; provider berizin, migrasi/schema Postgres dan recovery, grant/sesi/perangkat dan jurnal bekerja; lint/typecheck/build/tests terkait lulus; setup dapat diulang tanpa edit kode; tidak ada blocker keamanan tinggi. P2 dilaporkan sebagai remaining work.
 
 ## 10. Open decisions dan change control
 
@@ -130,8 +132,8 @@ MVP selesai: **seluruh P0/P1** lulus; slice API target Go teruji; provider beriz
 | --- | --- | --- |
 | Strategi, indikator, exit/sizing, fees dan baseline engine path | BE/core + pembimbing | M0 |
 | Provider/hak distribusi data | Product + BE | P1 data |
-| SQLite encryption server, key storage/recovery | BE/security | P1 storage |
-| SQLite browser terenkripsi vs alternatif ciphertext | FE + BE + product/pembimbing | P1 cache |
+| Supabase Postgres backup/recovery, least privilege dan RLS | BE/security | P1 storage |
+| Pilihan storage ciphertext browser | FE + BE + product/pembimbing | P1 cache |
 | Device/session/grant limits dan IP policy | Product + BE/security | P1 device |
 | Browser/perangkat target dan budget final | FE + BE | M0 |
 | Benefit/harga/provider pembayaran | Product | P2 komersial; tidak memblokir grant MVP |

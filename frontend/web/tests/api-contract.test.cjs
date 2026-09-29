@@ -193,7 +193,13 @@ test("hybrid screener calls use the implemented Go API contract", async () => {
       return response({ dataset_id: "fixture-1" });
     if (url.endsWith("/compute-grants")) return response({ id: "cgr_1" }, 201);
     return response(
-      { ticket: "wst_1", websocket_path: "/api/v1/screener/ws" },
+      {
+        ticket: "sgt_1",
+        websocket_path: "/api/v1/screener/ws",
+        protocol: "screener-private-1",
+        feature_schema_version: "screener-features-1",
+        max_candidates: 1000,
+      },
       201,
     );
   });
@@ -207,7 +213,7 @@ test("hybrid screener calls use the implemented Go API contract", async () => {
   const rule = {
     id: "default-scalping-v1",
     definition_hash: "sha256:rule",
-    engine_version: "core-0.2.0",
+    engine_version: "core-0.3.0",
     schema_version: "signal-baseline-1",
   };
   await c.api.prepareDataset();
@@ -228,12 +234,29 @@ test("hybrid screener calls use the implemented Go API contract", async () => {
   });
 });
 
-test("websocket URL upgrades HTTPS and keeps credentials out of the query", () => {
+test("websocket URL upgrades HTTPS and only carries the one-use ticket", () => {
   const c = client(() => response({}));
   assert.equal(
     c.websocketURL("/api/v1/screener/ws", "wst_once"),
     "wss://api.example.test/api/v1/screener/ws?ticket=wst_once",
   );
+});
+
+test("worker and socket orchestration use the current private-screener contract", () => {
+  const worker = fs.readFileSync(
+    path.join(__dirname, "../src/workers/screener.worker.ts"),
+    "utf8",
+  );
+  const orchestration = fs.readFileSync(
+    path.join(__dirname, "../src/analysis/screener.ts"),
+    "utf8",
+  );
+  assert.match(worker, /worker-2/);
+  assert.match(worker, /signalgenComputeFeatures/);
+  assert.doesNotMatch(worker, /signalgenExtractLatestFeatures/);
+  assert.match(orchestration, /screener-private-1/);
+  assert.match(orchestration, /feature_schema_version/);
+  assert.match(orchestration, /candidates: featureResult\.candidates/);
 });
 
 test("Go error envelopes produce a readable entitlement message", async () => {
