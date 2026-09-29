@@ -30,7 +30,11 @@ export function getPasswordStrength(value: string): PasswordStrength {
     value.length === 0 ? 0 : score
   ];
 
-  return { score: value.length === 0 ? 0 : Math.max(score, 1), label, requirements };
+  return {
+    score: value.length === 0 ? 0 : Math.max(score, 1),
+    label,
+    requirements,
+  };
 }
 
 export function meetsPasswordRequirements(value: string) {
@@ -39,7 +43,14 @@ export function meetsPasswordRequirements(value: string) {
 
 export function PasswordStrengthIndicator({ value }: { value: string }) {
   const { score, label, requirements } = getPasswordStrength(value);
-  const tone = score <= 1 ? "weak" : score === 2 ? "fair" : score === 3 ? "good" : "strong";
+  const tone =
+    score <= 1
+      ? "weak"
+      : score === 2
+        ? "fair"
+        : score === 3
+          ? "good"
+          : "strong";
 
   return (
     <div className="password-strength" data-tone={tone} id="password-guidance">

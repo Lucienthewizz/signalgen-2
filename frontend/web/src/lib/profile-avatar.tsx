@@ -43,7 +43,9 @@ export function saveProfileAvatar(userId: string, avatar: ProfileAvatarKey) {
 
 export function getSavedProfileName(userId: string, fallback: string): string {
   if (typeof window === "undefined") return fallback;
-  const saved = localStorage.getItem(`${PROFILE_NAME_STORAGE_PREFIX}${userId}`)?.trim();
+  const saved = localStorage
+    .getItem(`${PROFILE_NAME_STORAGE_PREFIX}${userId}`)
+    ?.trim();
   return saved || fallback;
 }
 

@@ -1,8 +1,5 @@
 import { type PointerEvent } from "react";
-import {
-  ArrowRight,
-  Check,
-} from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
 import { FeatureFigure } from "@/components/feature-figure";
@@ -243,7 +240,9 @@ export function PublicWorkspace({
             <div className="landing-stage landing-stage--green landing-stage--footer">
               <footer className="landing-footer" aria-label="Signalgen footer">
                 <div className="landing-footer__main">
-                  <a href="#home" aria-label="Signalgen home"><Brand compact /></a>
+                  <a href="#home" aria-label="Signalgen home">
+                    <Brand compact />
+                  </a>
                   <nav aria-label="Footer navigation">
                     <a href="#capabilities">Features</a>
                     <a href="#pricing">Pricing</a>

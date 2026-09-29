@@ -64,7 +64,10 @@ export function AccountMenu({
           />
         }
       >
-        <Avatar className={`account-menu__avatar account-avatar--${avatarKey}`} size="sm">
+        <Avatar
+          className={`account-menu__avatar account-avatar--${avatarKey}`}
+          size="sm"
+        >
           <AvatarFallback>
             <AvatarIcon aria-hidden="true" />
           </AvatarFallback>
