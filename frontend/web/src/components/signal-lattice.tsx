@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { ArrowRight } from "lucide-react";
 
-const RESTING_ORBIT = { x: 58, y: -16 };
+const RESTING_ORBIT = { x: 0, y: 0 };
 
 export function SignalLattice() {
   const sceneRef = useRef<HTMLDivElement>(null);

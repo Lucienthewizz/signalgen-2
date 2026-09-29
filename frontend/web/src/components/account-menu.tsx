@@ -6,41 +6,52 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getProfileAvatar, getSavedProfileAvatar, type ProfileAvatarKey } from "@/lib/profile-avatar";
+import {
+  getProfileAvatar,
+  getSavedProfileAvatar,
+  getSavedProfileName,
+  type ProfileAvatarKey,
+} from "@/lib/profile-avatar";
 import type { User } from "@/types";
 
 export function AccountMenu({
   user,
   onLogout,
-  label,
   variant,
 }: {
   user: User;
   onLogout: () => void | Promise<void>;
-  label: "Profile" | "Account";
-  variant: "landing" | "workspace";
+  variant: "landing" | "workspace" | "sidebar";
 }) {
   const [avatarKey, setAvatarKey] = useState<ProfileAvatarKey>(() =>
     getSavedProfileAvatar(user.id),
   );
   const avatar = getProfileAvatar(avatarKey);
   const AvatarIcon = avatar.Icon;
-  const name = user.full_name?.trim() || user.email.split("@")[0];
+  const fallbackName = user.full_name?.trim() || user.email.split("@")[0];
+  const [name, setName] = useState(() =>
+    getSavedProfileName(user.id, fallbackName),
+  );
+  const triggerLabel = name;
+  const isSidebarMenu = variant === "sidebar";
 
   useEffect(() => {
     const syncAvatar = () => setAvatarKey(getSavedProfileAvatar(user.id));
+    const syncName = () => setName(getSavedProfileName(user.id, fallbackName));
     syncAvatar();
+    syncName();
     addEventListener("signalgen:profile-avatar", syncAvatar);
+    addEventListener("signalgen:profile-name", syncName);
     addEventListener("storage", syncAvatar);
     return () => {
       removeEventListener("signalgen:profile-avatar", syncAvatar);
+      removeEventListener("signalgen:profile-name", syncName);
       removeEventListener("storage", syncAvatar);
     };
-  }, [user.id]);
+  }, [fallbackName, user.id]);
 
   return (
     <DropdownMenu>
@@ -49,7 +60,7 @@ export function AccountMenu({
           <button
             type="button"
             className={`account-menu__trigger account-menu__trigger--${variant}`}
-            aria-label={`Open ${label.toLowerCase()} menu`}
+            aria-label={`Open ${triggerLabel} menu`}
           />
         }
       >
@@ -58,18 +69,15 @@ export function AccountMenu({
             <AvatarIcon aria-hidden="true" />
           </AvatarFallback>
         </Avatar>
-        <span>{label}</span>
+        <span>{triggerLabel}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="account-menu__content"
-        align="end"
-        sideOffset={8}
+        className={`account-menu__content${isSidebarMenu ? " account-menu__content--sidebar" : ""}`}
+        align={isSidebarMenu ? "start" : "end"}
+        side={isSidebarMenu ? "top" : "bottom"}
+        sideOffset={isSidebarMenu ? 0 : 8}
       >
         <DropdownMenuGroup>
-          <DropdownMenuLabel className="account-menu__identity">
-            <strong>{name}</strong>
-            <span>{user.email}</span>
-          </DropdownMenuLabel>
           <DropdownMenuItem
             className="account-menu__item"
             onClick={() => {

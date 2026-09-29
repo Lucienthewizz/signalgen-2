@@ -1956,10 +1956,17 @@ export function DemoWorkspace({
           </div>
         </nav>
         <div className="sidebar__footer">
-          <a className="back-home" href="#home">
-            <ArrowLeft /> Back to landing page
-          </a>
-          <small>Signalgen web · local UX fixture</small>
+          {authenticated && user ? (
+            <AccountMenu
+              user={user}
+              onLogout={onLogout}
+              variant="sidebar"
+            />
+          ) : (
+            <a className="back-home" href="#login">
+              <KeyRound /> Sign in
+            </a>
+          )}
         </div>
       </aside>
       {menuOpen && (
@@ -1988,16 +1995,9 @@ export function DemoWorkspace({
             <span className="preview-chip">
               {authenticated ? "Go API connected" : "Static preview"}
             </span>
-            {authenticated && user ? (
-              <AccountMenu
-                user={user}
-                onLogout={onLogout}
-                label="Account"
-                variant="workspace"
-              />
-            ) : (
-              <a className="ui-button" href="#login">Sign in</a>
-            )}
+            <a className="topbar-link" href="#home">
+              <ArrowLeft /> Back to landing page
+            </a>
           </div>
         </header>
         <div className="workspace__content demo-content">

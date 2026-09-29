@@ -1,7 +1,7 @@
+import { type PointerEvent } from "react";
 import {
   ArrowRight,
   Check,
-  ShieldCheck,
 } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
@@ -45,6 +45,20 @@ const capabilityViews = [
     description: "Review access, active devices, session controls, and cache.",
   },
 ] as const;
+
+function setFeatureTilt(event: PointerEvent<HTMLAnchorElement>) {
+  if (event.pointerType === "touch") return;
+  const bounds = event.currentTarget.getBoundingClientRect();
+  const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+  const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+  event.currentTarget.style.setProperty("--feature-tilt-x", `${y * -7}deg`);
+  event.currentTarget.style.setProperty("--feature-tilt-y", `${x * 9}deg`);
+}
+
+function resetFeatureTilt(event: PointerEvent<HTMLAnchorElement>) {
+  event.currentTarget.style.setProperty("--feature-tilt-x", "0deg");
+  event.currentTarget.style.setProperty("--feature-tilt-y", "0deg");
+}
 
 export function PublicWorkspace({
   backendOnline,
@@ -91,7 +105,6 @@ export function PublicWorkspace({
                 <AccountMenu
                   user={user}
                   onLogout={onLogout}
-                  label="Profile"
                   variant="landing"
                 />
               )}
@@ -148,7 +161,7 @@ export function PublicWorkspace({
             <div className="landing-stage landing-stage--black">
               <SignalLattice />
             </div>
-            <div className="landing-stage landing-stage--green">
+            <div className="landing-stage landing-stage--green landing-stage--footer">
               <section className="capability-section" id="capabilities">
                 <div className="section-heading split-heading">
                   <div>
@@ -168,12 +181,16 @@ export function PublicWorkspace({
                       className="feature-gallery__item"
                       href={`#app/${feature.id}`}
                       key={feature.id}
+                      onPointerMove={setFeatureTilt}
+                      onPointerLeave={resetFeatureTilt}
                     >
                       <div className="feature-gallery__figure">
                         <span className="feature-gallery__index">
                           FIG 0.{index + 1}
                         </span>
-                        <FeatureFigure kind={feature.id} />
+                        <div className="feature-gallery__depth">
+                          <FeatureFigure kind={feature.id} />
+                        </div>
                       </div>
                       <div className="feature-gallery__copy">
                         <strong>{feature.title}</strong>
@@ -223,20 +240,25 @@ export function PublicWorkspace({
                 </Accordion>
               </section>
             </div>
-            <div className="landing-stage landing-stage--green">
-              <section className="boundary-panel landing-cta">
-                <ShieldCheck />
-                <div>
-                  <h3>Analysis support, not investment advice.</h3>
-                  <p>
-                    Start with the demo, review the complete workflow, then use
-                    your account when the backend is ready.
-                  </p>
+            <div className="landing-stage landing-stage--green landing-stage--footer">
+              <footer className="landing-footer" aria-label="Signalgen footer">
+                <div className="landing-footer__main">
+                  <a href="#home" aria-label="Signalgen home"><Brand compact /></a>
+                  <nav aria-label="Footer navigation">
+                    <a href="#capabilities">Features</a>
+                    <a href="#pricing">Pricing</a>
+                    <a href="#faq">FAQ</a>
+                    <a href="#app/overview">Demo</a>
+                    <a href="#creators">Creators</a>
+                  </nav>
                 </div>
-                <a href="#app/overview">
-                  Open the demo <ArrowRight />
-                </a>
-              </section>
+                <div className="landing-footer__legal">
+                  <span>© 2026 Signalgen</span>
+                  <span>Privacy</span>
+                  <span>Terms</span>
+                  <span>Not investment advice.</span>
+                </div>
+              </footer>
             </div>
           </div>
         </div>

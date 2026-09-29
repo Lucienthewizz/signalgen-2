@@ -150,8 +150,8 @@ export function AuthPage({
       "One identity for every Signalgen workspace.",
     ],
     "forgot-password": [
-      "Reset your password",
-      "We will send a recovery link to your account email.",
+      "Recover your password",
+      "Enter the email linked to your Signalgen account.",
     ],
     "reset-password": [
       "Choose a new password",
@@ -160,8 +160,8 @@ export function AuthPage({
   }[view];
 
   return (
-    <main className="auth-layout">
-      <section className="auth-story">
+    <main className={`auth-layout ${view === "forgot-password" ? "auth-layout--recovery" : ""}`}>
+      {view !== "forgot-password" && <section className="auth-story">
         <a href="#home" aria-label="Back to Signalgen">
           <Brand />
         </a>
@@ -196,14 +196,19 @@ export function AuthPage({
           <span className={`status-dot ${backendOnline ? "is-online" : ""}`} />{" "}
           Backend {backendOnline ? "verified" : "not connected"}
         </footer>
-      </section>
+      </section>}
       <section className="auth-panel">
         <div className="auth-card">
           <div className="auth-card__top">
-            <a className="mobile-logo" href="#home">
-              <Brand compact />
-            </a>
-            {view === "login" || view === "register" ? (
+            {view === "forgot-password" ? (
+              <a className="auth-recovery__brand" href="#home" aria-label="Signalgen home">
+                <Brand compact />
+              </a>
+            ) : <>
+              <a className="mobile-logo" href="#home">
+                <Brand compact />
+              </a>
+              {view === "login" || view === "register" ? (
               <div className="auth-switch" aria-label="Authentication options">
                 <a className={view === "login" ? "active" : ""} href="#login">
                   Sign in
@@ -219,7 +224,8 @@ export function AuthPage({
               <a className="back-link" href="#login">
                 <ArrowLeft /> Back to sign in
               </a>
-            )}
+              )}
+            </>}
           </div>
           <div className="auth-heading">
             <h2>{copy[0]}</h2>
@@ -335,10 +341,19 @@ export function AuthPage({
               connection returns.
             </p>
           )}
-          <p className="auth-note">
-            Signalgen supports analysis. It does not provide personalized
-            investment advice.
-          </p>
+          {view === "forgot-password" ? <>
+            <p className="auth-recovery__note">
+              We will send a one-time reset link to your inbox.
+            </p>
+            <p className="auth-recovery__signin">
+              Remembered your password? <a href="#login">Sign in</a>
+            </p>
+          </> : (
+            <p className="auth-note">
+              Signalgen supports analysis. It does not provide personalized
+              investment advice.
+            </p>
+          )}
         </div>
       </section>
     </main>

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 export const AVATAR_STORAGE_PREFIX = "signalgen.profile-avatar.";
+export const PROFILE_NAME_STORAGE_PREFIX = "signalgen.profile-name.";
 
 export const profileAvatarOptions = [
   { key: "orbit", label: "Orbit", Icon: Orbit },
@@ -38,6 +39,22 @@ export function getSavedProfileAvatar(userId: string): ProfileAvatarKey {
 export function saveProfileAvatar(userId: string, avatar: ProfileAvatarKey) {
   localStorage.setItem(`${AVATAR_STORAGE_PREFIX}${userId}`, avatar);
   window.dispatchEvent(new Event("signalgen:profile-avatar"));
+}
+
+export function getSavedProfileName(userId: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const saved = localStorage.getItem(`${PROFILE_NAME_STORAGE_PREFIX}${userId}`)?.trim();
+  return saved || fallback;
+}
+
+export function saveProfileName(userId: string, name: string) {
+  const normalized = name.trim().slice(0, 48);
+  if (normalized) {
+    localStorage.setItem(`${PROFILE_NAME_STORAGE_PREFIX}${userId}`, normalized);
+  } else {
+    localStorage.removeItem(`${PROFILE_NAME_STORAGE_PREFIX}${userId}`);
+  }
+  window.dispatchEvent(new Event("signalgen:profile-name"));
 }
 
 export function getProfileAvatar(key: ProfileAvatarKey) {
