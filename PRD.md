@@ -54,6 +54,7 @@ P0 selesai bukan berarti MVP selesai. Target satu minggu demo adalah estimasi aw
 | MVP-OWN-01 | P0 | Isolasi resource privat | A tidak dapat list/detail/mutate rule/data B melalui request langsung |
 | MVP-ENT-01 | P0 | Entitlement screener/backtest | Layanan/data server terkait memvalidasi hak; client tidak menjadi otoritas |
 | MVP-ENT-02 | P1 | Grant manual berwenang | Features, expiry, reason dan actor diaudit; bukan payment status palsu |
+| MVP-SUB-01 | P1 | Fondasi subscription provider-neutral | Paket memetakan fitur; state owner-scoped; operator dapat aktivasi MVP; cancel dan event diaudit; checkout/webhook belum diklaim |
 | MVP-RULE-01 | P0 | Satu strategi baseline | Snapshot, fixture, engine version dan asumsi eksekusi dibekukan untuk parity |
 | MVP-RULE-02 | P1 | CRUD rule subset tanpa kode | Operand/operator didukung core; backend/WASM menolak yang unsupported |
 | MVP-DATA-01 | P0 | Fixture historis berversi | Sumber, market, currency, UTC, warmup, adjustment dan checksum tercatat |
@@ -97,7 +98,13 @@ Frontend static hosting/CDN tanpa SSR runtime. WASM/chart di-lazy-load; worker t
 
 Supabase Auth tetap identitas/password. Server memvalidasi sesi aplikasi, status, ownership, role dan entitlement. Secrets tidak di client/log/demo.
 
-Supabase Postgres adalah penyimpanan authoritative profil, sesi, entitlement, rule, compute grant, dan audit. Semua tabel aplikasi mempunyai ownership yang jelas dan RLS; backend tetap memeriksa owner/role/entitlement di setiap operasi. Database URL hanya berada di backend. Cache client ciphertext terkompresi; pilihan storage browser diputuskan pada gate P1. P0 boleh in-memory.
+Supabase Postgres adalah penyimpanan authoritative profil, sesi, manual grant,
+subscription, rule, compute grant, dan audit. Effective entitlement berasal dari
+manual grant aktif atau subscription aktif yang memuat fitur tersebut. Semua
+tabel aplikasi mempunyai ownership yang jelas dan RLS; backend tetap memeriksa
+owner/role/entitlement di setiap operasi. Database URL hanya berada di backend.
+Cache client ciphertext terkompresi; pilihan storage browser diputuskan pada
+gate P1. P0 boleh in-memory.
 
 WASM bukan enkripsi kode; ID instalasi browser bukan hardware ID; IP bukan identitas tetap. Hard-lock IP bukan default MVP. Hasil WASM unverified, tidak menentukan izin/payment; draft jurnal butuh konfirmasi.
 
@@ -105,7 +112,7 @@ Provider diakses server. Hak distribusi/cache diperiksa. Data fixture/replay dib
 
 ## 8. Non-goals / P2
 
-Realtime production/broadcast dan API yang diberikan belakangan; integrasi IBKR baru; semua bursa sekaligus; Telegram tambahan; full admin dashboard; billing/payment/webhook otomatis; OCR; auto-trading; native mobile; installer/code signing/updater; full engine parity; jaminan anti-reverse-engineering. Backend tetap terpisah dari frontend.
+Realtime production/broadcast dan API yang diberikan belakangan; integrasi IBKR baru; semua bursa sekaligus; Telegram tambahan; full admin dashboard; payment checkout/provider/webhook otomatis; OCR; auto-trading; native mobile; installer/code signing/updater; full engine parity; jaminan anti-reverse-engineering. Fondasi state subscription tidak berarti payment sudah tersedia. Backend tetap terpisah dari frontend.
 
 Legacy tetap tersedia untuk baseline/rollback. Perubahan behavior correctness dipisahkan dari migrasi; jangan mempertahankan bug look-ahead hanya demi parity.
 

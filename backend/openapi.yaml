@@ -21,6 +21,8 @@ tags:
     description: Current-account and owner-scoped session metadata.
   - name: Analysis
     description: Capabilities, rules, protected datasets, and compute coordination.
+  - name: Subscription
+    description: Provider-neutral plans and owner-scoped subscription lifecycle.
   - name: Operator
     description: Server-role protected entitlement administration.
 
@@ -802,6 +804,130 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "422":
           $ref: "#/components/responses/InvalidRequest"
+  /api/v1/subscription/plans:
+    get:
+      tags: [Subscription]
+      operationId: listSubscriptionPlans
+      summary: List active product plans and their feature mapping
+      description: Prices and checkout are intentionally excluded until commercial terms and a payment provider are approved.
+      security: []
+      responses:
+        "200":
+          description: Active plans. This response does not activate access.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPlanList"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/subscription:
+    get:
+      tags: [Subscription]
+      operationId: getCurrentSubscription
+      summary: Read the current account subscription
+      description: The account owner is derived from the verified bearer and app-session credentials.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Current subscription, or null when this account has none.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentSubscriptionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/subscription/cancel:
+    post:
+      tags: [Subscription]
+      operationId: cancelCurrentSubscription
+      summary: Cancel the current account subscription now or at period end
+      security:
+        - supabaseBearer: []
+          appSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionCancelRequest"
+      responses:
+        "200":
+          description: Updated owner-scoped subscription.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Subscription is already canceled or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/operator/subscriptions:
+    post:
+      tags: [Operator]
+      operationId: activateOperatorSubscription
+      summary: Activate or change a subscription through a trusted operator
+      description: Temporary MVP path. The actor is derived from authenticated operator context; browser checkout data cannot activate access.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperatorSubscriptionActivateRequest"
+      responses:
+        "201":
+          description: Subscription activated or changed with an append-only event.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api/v1/operator/grants:
     get:
       tags: [Operator]
@@ -1306,6 +1432,74 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FeatureGrant"
+    SubscriptionPlan:
+      type: object
+      required: [code, name, description, features]
+      properties:
+        code: {type: string, enum: [free, analyst, pro]}
+        name: {type: string}
+        description: {type: string}
+        features:
+          type: array
+          items: {type: string, enum: [screener, backtest]}
+    SubscriptionPlanList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubscriptionPlan"
+    Subscription:
+      type: object
+      required: [id, plan_code, plan_name, status, features, current_period_start, current_period_end, cancel_at_period_end, source, created_at, updated_at]
+      properties:
+        id: {type: string, pattern: "^sub_"}
+        user_id:
+          type: string
+          description: Returned only by the operator mutation response.
+        plan_code: {type: string, enum: [free, analyst, pro]}
+        plan_name: {type: string}
+        status: {type: string, enum: [trialing, active, past_due, canceled, expired]}
+        features:
+          type: array
+          items: {type: string, enum: [screener, backtest]}
+        current_period_start: {type: string, format: date-time}
+        current_period_end: {type: string, format: date-time}
+        cancel_at_period_end: {type: boolean}
+        source: {type: string, enum: [manual, payment_provider]}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    CurrentSubscriptionResponse:
+      type: object
+      required: [subscription]
+      properties:
+        subscription:
+          allOf:
+            - $ref: "#/components/schemas/Subscription"
+          nullable: true
+    SubscriptionResponse:
+      type: object
+      required: [subscription]
+      properties:
+        subscription:
+          $ref: "#/components/schemas/Subscription"
+    SubscriptionCancelRequest:
+      type: object
+      additionalProperties: false
+      required: [at_period_end]
+      properties:
+        at_period_end: {type: boolean}
+        reason: {type: string, maxLength: 500}
+    OperatorSubscriptionActivateRequest:
+      type: object
+      additionalProperties: false
+      required: [user_id, plan_code, current_period_end, reason]
+      properties:
+        user_id: {type: string, minLength: 1}
+        plan_code: {type: string, enum: [free, analyst, pro]}
+        current_period_end: {type: string, format: date-time}
+        reason: {type: string, minLength: 1, maxLength: 500}
     SessionListItem:
       allOf:
         - $ref: "#/components/schemas/AppSession"

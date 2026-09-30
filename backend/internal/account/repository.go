@@ -77,8 +77,17 @@ func (store *PostgresRepository) RequireOperator(ctx context.Context, userID str
 }
 
 func (store *PostgresRepository) Features(ctx context.Context, userID string) ([]string, error) {
-	rows, err := store.db.Query(ctx, `select feature from signalgen.feature_grants
-where user_id=$1::uuid and revoked_at is null and valid_until>now() order by feature`, userID)
+	rows, err := store.db.Query(ctx, `
+select feature from (
+  select feature from signalgen.feature_grants
+  where user_id=$1::uuid and revoked_at is null and valid_until>now()
+  union
+  select feature.feature from signalgen.subscriptions subscription
+  join signalgen.subscription_plan_features feature on feature.plan_code=subscription.plan_code
+  where subscription.user_id=$1::uuid
+    and subscription.status in ('trialing','active')
+    and subscription.current_period_end>now()
+) effective_features order by feature`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list Postgres features: %w", err)
 	}
@@ -129,8 +138,15 @@ func (store *PostgresRepository) RequireFeature(ctx context.Context, userID, fea
 		return access.ErrInvalidValue
 	}
 	var enabled bool
-	err := store.db.QueryRow(ctx, `select exists(select 1 from signalgen.feature_grants
-where user_id=$1::uuid and feature=$2 and revoked_at is null and valid_until>now())`, userID, feature).Scan(&enabled)
+	err := store.db.QueryRow(ctx, `select
+  exists(select 1 from signalgen.feature_grants
+    where user_id=$1::uuid and feature=$2 and revoked_at is null and valid_until>now())
+  or
+  exists(select 1 from signalgen.subscriptions subscription
+    join signalgen.subscription_plan_features plan_feature on plan_feature.plan_code=subscription.plan_code
+    where subscription.user_id=$1::uuid and plan_feature.feature=$2
+      and subscription.status in ('trialing','active')
+      and subscription.current_period_end>now())`, userID, feature).Scan(&enabled)
 	if err != nil {
 		return fmt.Errorf("check Postgres feature: %w", err)
 	}

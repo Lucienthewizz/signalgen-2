@@ -51,6 +51,15 @@ state are recorded atomically in the append-only audit table.
 This checkpoint is a subset, not a claim
 that the remaining proposed routes are available.
 
+Implementation checkpoint 30 September 2026: fondasi subscription
+provider-neutral tersedia. Paket publik hanya mengembalikan code/name/description
+dan feature mapping; harga belum menjadi kontrak backend. Pengguna dapat membaca
+dan membatalkan subscription miliknya. Operator tepercaya dapat mengaktifkan
+atau mengganti paket untuk MVP dan setiap perubahan menghasilkan event
+append-only. Effective entitlement menggabungkan manual grant aktif dengan fitur
+dari subscription aktif. Payment checkout, provider adapter, dan verified webhook
+belum diimplementasikan.
+
 ## 1. Conventions
 
 - Base target: `/api/v1`; JSON UTF-8; HTTPS production; UTC RFC 3339 timestamps.
@@ -119,6 +128,20 @@ Session creation request:
 ```
 
 Response returns `session.id`, one-time `session_token`, `expires_at`, device summary and feature grants. Never return token hash. Limits/expiry are server configuration exposed only as safe capability values.
+
+### Subscription foundation
+
+| Method | Route | App session | Purpose |
+| --- | --- | :---: | --- |
+| GET | `/subscription/plans` | exempt | Active plan and feature mapping; no price or checkout claim |
+| GET | `/subscription` | required | Current owner subscription or `null` |
+| POST | `/subscription/cancel` | required | Owner cancels now or schedules cancellation at period end |
+| POST | `/operator/subscriptions` | operator required | Trusted MVP activation/change with an append-only event |
+
+An active, unexpired `analyst` or `pro` subscription currently enables
+`screener` and `backtest`. This is a server-owned access mapping, not proof of a
+payment. A future provider webhook must be verified server-side before it may
+call the same activation service.
 
 `GET /account/me` target:
 
