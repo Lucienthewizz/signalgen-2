@@ -49,10 +49,17 @@ export function AuthPage({
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerConfirmation, setRegisterConfirmation] = useState("");
   const recovery = useMemo(() => {
-    const params = new URLSearchParams(location.hash.replace(/^#/, ""));
+    const hashParams = new URLSearchParams(location.hash.replace(/^#/, ""));
+    const searchParams = new URLSearchParams(location.search);
     return {
-      accessToken: params.get("access_token") ?? "",
-      refreshToken: params.get("refresh_token") ?? "",
+      accessToken:
+        hashParams.get("access_token") ??
+        searchParams.get("access_token") ??
+        "",
+      refreshToken:
+        hashParams.get("refresh_token") ??
+        searchParams.get("refresh_token") ??
+        "",
     };
   }, []);
 

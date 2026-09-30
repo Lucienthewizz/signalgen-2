@@ -52,6 +52,28 @@ func TestSupabaseRegisterSupportsEmailConfirmation(t *testing.T) {
 	}
 }
 
+func TestSupabaseRegisterSupportsRootUserResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writeTestJSON(writer, http.StatusOK, map[string]interface{}{
+			"id": "user-root-123", "email": "user@example.com",
+			"user_metadata": map[string]string{"full_name": "Root User"},
+		})
+	}))
+	defer server.Close()
+
+	provider, err := NewSupabaseVerifier(server.URL, "publishable-key", server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := provider.Register(context.Background(), "user@example.com", "password-123", "Root User")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AccessToken != "" || result.User.ID != "user-root-123" || result.User.FullName != "Root User" {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
 func TestSupabaseLoginReturnsSession(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/auth/v1/token" || request.URL.Query().Get("grant_type") != "password" {
