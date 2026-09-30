@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -18,6 +19,7 @@ import (
 	platformdb "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/database"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 // An opt-in API contract check backed by an isolated loopback Postgres.
@@ -74,10 +76,12 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	subscriptions := subscription.NewPostgresRepository(db)
 	newServer := func(id string) *Server {
 		server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: id, Email: id + "@test.invalid"}},
 			sessions, accounts, &fakeDatasets{}, compute.NewPostgresRepository(db),
-			WithRuleStore(rules.NewPostgresRepository(db)))
+			WithRuleStore(rules.NewPostgresRepository(db)),
+			WithSubscriptionService(subscriptions))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -159,5 +163,30 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 	}
 	if err := accounts.RequireFeature(ctx, userB, access.FeatureScreener); err != access.ErrEntitlementMissing {
 		t.Fatalf("revoked grant remained usable: %v", err)
+	}
+
+	// A trusted operator can activate a plan for another account. That plan's
+	// feature mapping becomes an effective entitlement without recreating a
+	// manual feature-grant row.
+	response = call(serverA, http.MethodPost, "/api/v1/operator/subscriptions",
+		fmt.Sprintf(`{"user_id":%q,"plan_code":"analyst","current_period_end":%q,"reason":"integration test"}`,
+			userB, time.Now().Add(time.Hour).UTC().Format(time.RFC3339)), tokenA)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("operator subscription activation = %d: %s", response.Code, response.Body.String())
+	}
+	if err := accounts.RequireFeature(ctx, userB, access.FeatureScreener); err != nil {
+		t.Fatalf("active subscription did not enable screener: %v", err)
+	}
+	response = call(serverB, http.MethodGet, "/api/v1/subscription", "", tokenB)
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"plan_code":"analyst"`)) {
+		t.Fatalf("owner subscription = %d: %s", response.Code, response.Body.String())
+	}
+	response = call(serverB, http.MethodPost, "/api/v1/subscription/cancel",
+		`{"at_period_end":false,"reason":"integration test"}`, tokenB)
+	if response.Code != http.StatusOK {
+		t.Fatalf("owner cancellation = %d: %s", response.Code, response.Body.String())
+	}
+	if err := accounts.RequireFeature(ctx, userB, access.FeatureScreener); err != access.ErrEntitlementMissing {
+		t.Fatalf("canceled subscription remained usable: %v", err)
 	}
 }

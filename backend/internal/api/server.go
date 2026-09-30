@@ -19,6 +19,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 // These aliases keep the public API constructor readable while each feature
@@ -30,6 +31,7 @@ type DatasetStore = dataset.Repository
 type ComputeStore = compute.Repository
 type ScreenerTicketStore = screener.TicketRepository
 type RuleStore = rules.Repository
+type SubscriptionService = subscription.Service
 
 // AccessStore is the server-owned authorization source for account status,
 // roles, feature entitlements, and audited operator mutations. It composes the
@@ -60,6 +62,23 @@ func (noUserRuleStore) Delete(context.Context, string, string, int) error {
 	return errRuleStoreUnavailable
 }
 
+var errSubscriptionUnavailable = errors.New("subscription service is unavailable")
+
+type noSubscriptionService struct{}
+
+func (noSubscriptionService) Plans(context.Context) ([]subscription.Plan, error) {
+	return nil, errSubscriptionUnavailable
+}
+func (noSubscriptionService) Current(context.Context, string) (subscription.Subscription, error) {
+	return subscription.Subscription{}, errSubscriptionUnavailable
+}
+func (noSubscriptionService) ActivateManual(context.Context, subscription.ActivateRequest) (subscription.Subscription, error) {
+	return subscription.Subscription{}, errSubscriptionUnavailable
+}
+func (noSubscriptionService) Cancel(context.Context, subscription.CancelRequest) (subscription.Subscription, error) {
+	return subscription.Subscription{}, errSubscriptionUnavailable
+}
+
 // ReadinessChecker lets each infrastructure dependency report whether the API
 // is ready for traffic, independently from the lightweight liveness endpoint.
 type ReadinessChecker interface {
@@ -85,6 +104,7 @@ type Server struct {
 	datasets       DatasetStore
 	compute        ComputeStore
 	rules          RuleStore
+	subscriptions  SubscriptionService
 	limiter        RateLimiter
 	tickets        ScreenerTicketStore
 	originPatterns []string
@@ -110,6 +130,7 @@ type serverConfig struct {
 	ticketStore     ScreenerTicketStore
 	originPatterns  []string
 	authService     AuthService
+	subscriptions   SubscriptionService
 	resetRedirect   string
 }
 
@@ -162,6 +183,18 @@ func WithRuleStore(store RuleStore) ServerOption {
 			return fmt.Errorf("rule store is required")
 		}
 		config.ruleStore = store
+		return nil
+	}
+}
+
+// WithSubscriptionService enables provider-neutral subscription lifecycle
+// endpoints. Paid activation remains operator/server controlled.
+func WithSubscriptionService(service SubscriptionService) ServerOption {
+	return func(config *serverConfig) error {
+		if service == nil {
+			return fmt.Errorf("subscription service is required")
+		}
+		config.subscriptions = service
 		return nil
 	}
 }
@@ -232,6 +265,9 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	if config.rateLimiter == nil {
 		config.rateLimiter = unlimitedRateLimiter{}
 	}
+	if config.subscriptions == nil {
+		config.subscriptions = noSubscriptionService{}
+	}
 	if config.ticketStore == nil {
 		var err error
 		config.ticketStore, err = screener.NewTicketStore()
@@ -241,7 +277,7 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	}
 	server := &Server{
 		identity: identity, auth: config.authService, sessions: sessions, access: accessStore,
-		datasets: datasets, compute: computeStore, rules: config.ruleStore, limiter: config.rateLimiter,
+		datasets: datasets, compute: computeStore, rules: config.ruleStore, subscriptions: config.subscriptions, limiter: config.rateLimiter,
 		tickets: config.ticketStore, originPatterns: append([]string(nil), config.originPatterns...),
 	}
 	// Route registration is isolated in routes.go so this constructor only wires dependencies.

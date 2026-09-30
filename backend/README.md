@@ -3,7 +3,8 @@
 Backend aktif SignalGen menggunakan Go/Gin, Supabase Auth, dan Supabase Postgres. Login,
 register, profil, forgot password, reset password, app-session, perangkat,
 entitlement, dataset, rules, serta compute grant dilayani Go API pada port
-8080. Kode Python/FastAPI tetap disimpan hanya sebagai baseline dan jalur
+8080. Fondasi subscription juga tersedia secara provider-neutral; aktivasi MVP
+masih melalui operator tepercaya dan belum merupakan payment checkout. Kode Python/FastAPI tetap disimpan hanya sebagai baseline dan jalur
 perbandingan melalui profile Docker `legacy`; frontend tidak lagi bergantung pada
 endpoint autentikasi Python.
 
@@ -112,6 +113,11 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `PATCH /api/v1/account/devices/{id}` — mengganti label perangkat atau mencabut
   seluruh sesi pada perangkat tersebut;
 - `DELETE /api/v1/sessions/current` — revoke sesi aktif.
+- `GET /api/v1/subscription/plans` — daftar paket dan mapping fitur tanpa harga;
+- `GET /api/v1/subscription` — subscription milik akun yang sedang login;
+- `POST /api/v1/subscription/cancel` — batalkan sekarang atau akhir periode;
+- `POST /api/v1/operator/subscriptions` — aktivasi/perubahan paket oleh operator
+  tepercaya selama payment provider belum dipilih.
 
 Token sesi hanya dikembalikan saat dibuat. Postgres menyimpan hash token, bukan
 nilai token mentah. Daftar sesi hanya mengembalikan metadata aman, status, dan
@@ -126,8 +132,9 @@ endpoint rule. Query rule pribadi selalu dibatasi
 oleh pemilik; ID milik akun lain menghasilkan respons not found agar kepemilikan
 tidak bocor. Endpoint bisnis lain tetap belum diimplementasikan.
 
-Go API memakai `pgxpool` untuk profile, entitlement, sesi, rule, audit, dan
-compute grant. Schema `signalgen` mempunyai foreign key ke `auth.users`,
+Go API memakai `pgxpool` untuk profile, entitlement, subscription, sesi, rule,
+audit, dan compute grant. Fitur efektif merupakan gabungan manual grant aktif
+dan fitur dari subscription `trialing`/`active` yang belum kedaluwarsa. Schema `signalgen` mempunyai foreign key ke `auth.users`,
 ownership, dan RLS. Route bisnis tetap memverifikasi owner/role/entitlement
 di server. SQLite hanya tersisa pada arsip, adapter legacy, dan test fixture;
 `cmd/api` tidak pernah membuka database SQLite.

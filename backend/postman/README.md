@@ -47,6 +47,8 @@ Selalu jalankan folder berikut lebih dulu:
 2. `01 Authorization negative checks`
 3. `02 Go authentication`
 4. `03 App session and account`
+5. `03A Subscription status` untuk membaca paket publik dan status subscription
+   akun; folder ini tidak mengaktifkan akses atau melakukan payment.
 
 Setelah itu pilih alur yang sesuai:
 
@@ -55,7 +57,8 @@ Setelah itu pilih alur yang sesuai:
   `403 ENTITLEMENT_REQUIRED`; ini membuktikan authorization bekerja.
 - **Akun sudah punya entitlement screener:** lewati folder 04.
 - **Sedang login sebagai operator:** folder `05 Operator entitlement` dapat
-  memberi/memperpanjang grant. Isi `operator_target_user_id` untuk user lain;
+  memberi/memperpanjang grant atau mengaktifkan subscription MVP. Isi
+  `operator_target_user_id` untuk user lain;
   jika kosong, collection otomatis memakai `user_id` akun yang sedang login.
 - **Sedang login sebagai user biasa:** jangan menjalankan folder 05. Mintalah
   operator memberi grant, lalu login lagi sebagai user tersebut.
@@ -173,6 +176,15 @@ Respons sukses bertipe `screener.result` dan contoh fixture menghasilkan
 | `POST /api/v1/operator/grants` | Memberi atau memperpanjang entitlement `screener`/`backtest` beserta alasan audit. | Operator |
 | `DELETE /api/v1/operator/grants/:user_id/:feature` | Mencabut entitlement dan menulis audit event. | Operator |
 | `PATCH /api/v1/operator/accounts/:user_id/role` | Promote user menjadi operator atau demote menjadi user. Operator aktif terakhir tidak boleh didemote. | Operator |
+| `POST /api/v1/operator/subscriptions` | Mengaktifkan/mengganti paket secara manual untuk MVP. Actor berasal dari sesi operator dan event tersimpan; ini bukan bukti payment. | Operator |
+
+### Subscription
+
+| Method dan path | Fungsi | Akses |
+|---|---|---|
+| `GET /api/v1/subscription/plans` | Daftar paket aktif dan mapping fitur. Harga tidak dikirim sebelum keputusan komersial final. | Publik |
+| `GET /api/v1/subscription` | Membaca subscription milik akun saat ini; hasil `null` bila belum ada. | Bearer + app session |
+| `POST /api/v1/subscription/cancel` | Membatalkan subscription sendiri sekarang atau menjadwalkan akhir periode. | Bearer + app session |
 
 ## 7. Folder opsional
 

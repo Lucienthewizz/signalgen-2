@@ -56,6 +56,7 @@ backend/
 │   ├── auth/            # Supabase identity provider, service, feature routes
 │   ├── account/         # Profiles/status and Postgres repository
 │   ├── entitlement/     # Feature-access contract and model
+│   ├── subscription/    # Plans, lifecycle, audit events, feature mapping
 │   ├── operator/        # Audited privileged mutations and routes
 │   ├── session/         # App sessions, device ownership, routes, repository
 │   ├── rules/           # Owner rules, routes, Postgres repository
@@ -83,6 +84,7 @@ is an application resource shared by backend deployment and local tooling.
 - `dataset_handlers.go`: protected dataset and compute-grant issuance.
 - `screener.go`: socket ticket and one-request WebSocket evaluation.
 - `operator_handlers.go`: privileged audited access-management endpoints.
+- `subscription_handlers.go`: public plans, owner state/cancel, operator activation.
 - `system_handlers.go`: engine/protocol capability reporting.
 - `http_helpers.go`: authentication/authorization guards and compatibility
   wrappers; generic JSON, CORS, request IDs live in `platform/http`.
@@ -102,7 +104,7 @@ Indicator formulas, authorization policy, and SQL do not belong in handlers.
 Supabase bearer token -> proves identity
 X-App-Session token    -> proves an allowed SignalGen installation
 account status         -> proves the account is active
-feature entitlement    -> proves the feature is purchased/enabled
+effective entitlement  -> manual grant or active subscription enables a feature
 compute grant          -> approves one exact computation context
 socket ticket          -> opens one short-lived WebSocket connection
 ```
@@ -117,7 +119,7 @@ SignalGen stores application state in Supabase Postgres after the web migration.
 | Storage | Current responsibility |
 |---|---|
 | Supabase Auth | User ID, email/password identity, access/recovery tokens |
-| Supabase Postgres (`signalgen` schema) | Profiles, roles, account status, entitlements, audit events, app sessions, device state, user rules, compute grants |
+| Supabase Postgres (`signalgen` schema) | Profiles, roles, account status, manual grants, subscriptions, audit events, app sessions, device state, user rules, compute grants |
 | Process memory | One-use screener tickets and rate-limit counters |
 | Fixture JSON | Current synthetic OHLCV dataset |
 | WebSocket | Transport only; it stores no durable data |
@@ -143,7 +145,7 @@ The market-data fixture will later be replaced by an authorized provider.
 ## Why interfaces matter for migration
 
 Handlers use feature-owned interfaces such as `account.Service`,
-`session.Repository`, and `rules.Repository`, not concrete SQL calls. The API
+`session.Repository`, `subscription.Service`, and `rules.Repository`, not concrete SQL calls. The API
 composition layer uses readable aliases for those contracts and the active
 runtime composes them with Postgres implementations:
 

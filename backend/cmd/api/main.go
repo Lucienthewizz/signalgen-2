@@ -21,6 +21,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/ratelimit"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 func main() {
@@ -68,6 +69,9 @@ func main() {
 	computeStore := compute.NewPostgresRepository(database)
 	// Custom rules are owner-scoped; the baseline rule remains in backend/core.
 	ruleStore := rules.NewPostgresRepository(database)
+	// Subscription state is provider-neutral. Manual operator activation is the
+	// only trusted MVP source; payment webhooks will be added behind this service.
+	subscriptionStore := subscription.NewPostgresRepository(database)
 	// Rate limiting protects public auth and state-changing endpoints.
 	mutationLimiter, err := ratelimit.New(mutationRatePerMinute, time.Minute)
 	if err != nil {
@@ -80,6 +84,7 @@ func main() {
 		apihttp.WithAuthService(identity),
 		apihttp.WithPasswordResetRedirectURL(passwordResetRedirectURL),
 		apihttp.WithRuleStore(ruleStore),
+		apihttp.WithSubscriptionService(subscriptionStore),
 		apihttp.WithRateLimiter(mutationLimiter),
 		apihttp.WithCORSOrigins(allowedOrigins),
 		apihttp.WithReadinessChecks(platformdb.PostgresReadiness{Pool: database}, datasets),

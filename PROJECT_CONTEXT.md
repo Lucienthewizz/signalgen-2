@@ -16,7 +16,7 @@ Static hosting/CDN → frontend/web
                       │                           ↑ historis/cache ciphertext
                       └─ REST/HTTPS → Go API boundary
                                        ├─ Supabase Auth
-                                       ├─ Supabase Postgres: profile/session/grant/rule/jurnal/audit
+                                       ├─ Supabase Postgres: profile/session/grant/subscription/rule/jurnal/audit
                                        └─ historical provider adapter
 
 Arsip historis: backend/app Python/FastAPI + frontend/desktop Electron.
@@ -40,7 +40,9 @@ pembanding, threat model, dan urutan implementasi.
 - backend/app: arsip Python/FastAPI untuk pembanding hasil.
 - backend: Go API/Gin, pgxpool, dan shared portable core.
 
-Struktur Go berada di backend/cmd/api, backend/cmd/wasm, backend/internal/{api,auth,access,session,rules,compute,storage}, dan backend/core. Core bebas HTTP/storage/provider/Supabase; berbagi source Go.
+Struktur Go berada di backend/cmd/api, backend/cmd/wasm,
+backend/internal/{api,auth,account,subscription,session,rules,dataset,compute,screener},
+dan backend/core. Core bebas HTTP/storage/provider/Supabase; berbagi source Go.
 
 | Bagian | Ownership |
 | --- | --- |
@@ -60,7 +62,11 @@ Legacy auth /api/auth/register, /api/auth/login, /api/auth/me tetap kompatibel; 
 
 Supabase bearer membuktikan identitas. Sesi aplikasi terikat instalasi browser menyediakan revoke/limit. Setup/refresh sesi dikecualikan dari kewajiban sesi yang belum ada, tetapi bearer tetap diverifikasi. Route bisnis privat memerlukan bearer + sesi sesuai kontrak. Role/entitlement/status dibaca server, bukan user metadata.
 
-ID instalasi bukan hardware ID. IP dicatat sebagai sinyal; hard-lock IP tidak menjadi default. Grant manual memakai fitur/expiry/alasan/audit, bukan payment state palsu.
+ID instalasi bukan hardware ID. IP dicatat sebagai sinyal; hard-lock IP tidak
+menjadi default. Grant manual memakai fitur/expiry/alasan/audit. Fondasi
+subscription menyimpan paket, periode, status, feature mapping, dan event;
+aktivasi MVP dilakukan operator tepercaya. Harga, checkout, dan webhook tetap
+menunggu keputusan provider dan tidak boleh disimulasikan sebagai payment sukses.
 
 ## 5. Data dan proteksi
 

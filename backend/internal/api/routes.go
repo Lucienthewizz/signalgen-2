@@ -12,6 +12,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 // routes is the application composition point. Each feature package owns its
@@ -36,6 +37,10 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	account.RegisterRoutes(router, account.RouteHandlers{
 		Me: server.accountMe, Sessions: server.accountSessions,
 		Devices: server.accountDevices, Device: server.updateAccountDevice,
+	})
+	subscription.RegisterRoutes(router, subscription.RouteHandlers{
+		Plans: server.listSubscriptionPlans, Current: server.currentSubscription,
+		Cancel: server.cancelCurrentSubscription, OperatorUpsert: server.activateOperatorSubscription,
 	})
 	rules.RegisterRoutes(router, rules.RouteHandlers{
 		List: server.listRules, Create: server.createRule, Get: server.getRule,

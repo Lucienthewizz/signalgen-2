@@ -229,6 +229,41 @@
       ]
     },
     {
+      "name": "03A Subscription status",
+      "description": "Read the provider-neutral plan catalog and the signed-in account's current subscription. These requests do not perform payment or activate access.",
+      "item": [
+        {
+          "name": "List public subscription plans",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/subscription/plans"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('plans expose features but no unapproved price', () => { pm.expect(body.items).to.be.an('array').that.is.not.empty; pm.expect(body.items[0]).to.have.keys(['code', 'name', 'description', 'features']); pm.expect(pm.response.text()).not.to.include('price'); });"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Get current subscription",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/subscription"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('owner response is nullable and private', () => { pm.expect(body).to.have.property('subscription'); pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'); });"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
       "name": "04 Optional entitlement denial - new user only",
       "description": "Run only for an account that does not yet have screener entitlement. Skip for an already-entitled account.",
       "item": [
@@ -306,6 +341,34 @@
               "const body = pm.response.json();",
               "pm.test('screener grant is visible', () => pm.expect(body.items.some(item => item.feature === 'screener' && item.active)).to.eql(true));",
               "pm.test('response is private', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));"
+            ], "type": "text/javascript"}}
+          ]
+        },
+        {
+          "name": "Activate analyst subscription for target user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"user_id\": \"{{grant_target_user_id}}\",\n  \"plan_code\": \"{{subscription_plan_code}}\",\n  \"current_period_end\": \"{{subscription_period_end}}\",\n  \"reason\": \"Postman supervised subscription test\"\n}"},
+            "url": "{{base_url}}/api/v1/operator/subscriptions",
+            "description": "Trusted MVP activation only. This is not a payment checkout or webhook."
+          },
+          "event": [
+            {"listen": "prerequest", "script": {"exec": [
+              "const explicitTarget = (pm.environment.get('operator_target_user_id') || '').trim();",
+              "const signedInUser = (pm.environment.get('user_id') || '').trim();",
+              "const target = explicitTarget || signedInUser;",
+              "if (!target) throw new Error('Isi operator_target_user_id atau jalankan Current account agar user_id tersimpan.');",
+              "pm.variables.set('grant_target_user_id', target);"
+            ], "type": "text/javascript"}},
+            {"listen": "test", "script": {"exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('active subscription returned', () => { pm.expect(body.subscription.user_id).to.eql(pm.variables.get('grant_target_user_id')); pm.expect(body.subscription.plan_code).to.eql(pm.environment.get('subscription_plan_code')); pm.expect(body.subscription.status).to.eql('active'); });"
             ], "type": "text/javascript"}}
           ]
         }

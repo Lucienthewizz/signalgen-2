@@ -56,7 +56,11 @@ func (check PostgresReadiness) Ready(ctx context.Context) error {
   to_regclass('signalgen.account_device_state') is not null and
   to_regclass('signalgen.user_rules') is not null and
   to_regclass('signalgen.compute_grants') is not null and
-  to_regclass('signalgen.audit_events') is not null`).Scan(&migrated)
+  to_regclass('signalgen.audit_events') is not null and
+  to_regclass('signalgen.subscription_plans') is not null and
+  to_regclass('signalgen.subscription_plan_features') is not null and
+  to_regclass('signalgen.subscriptions') is not null and
+  to_regclass('signalgen.subscription_events') is not null`).Scan(&migrated)
 	if err != nil {
 		return fmt.Errorf("Postgres readiness: %w", err)
 	}
