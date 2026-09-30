@@ -2,13 +2,22 @@
   "info": {
     "_postman_id": "96af2d46-aef6-4a90-a2fd-f8d095a31e8a",
     "name": "SignalGen Go API",
-    "description": "Automated checks for the incremental SignalGen Go API. Run folders in numeric order. Folder 05 requires the signed-in account to be bootstrapped as operator; run folder 08 last because it revokes the current app session.",
+    "description": "Automated checks for the implemented SignalGen Go API. Run 00-03 first. Run 04 only for an account without screener entitlement, 05 only while signed in as operator, then 06-07 for an entitled account. Run 99 only when finished. Folders 90-92 are optional/destructive and must be run request-by-request.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
       "name": "00 Public health",
       "item": [
+        {
+          "name": "API status",
+          "request": {"method": "GET", "url": "{{base_url}}/api"},
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('Go API identity is returned', () => { pm.expect(body.status).to.eql('ok'); pm.expect(body.name).to.eql('SignalGen Go API'); pm.expect(body.version).to.be.a('string').and.not.empty; });"
+          ], "type": "text/javascript"}}]
+        },
         {
           "name": "Health",
           "request": {"method": "GET", "url": "{{base_url}}/health"},
@@ -44,7 +53,7 @@
     },
     {
       "name": "02 Go authentication",
-      "description": "Skip this request only when access_token was pasted manually into the selected environment.",
+      "description": "Login stores access_token automatically. Skip login only when a valid access_token was pasted manually into the selected environment.",
       "item": [
         {
           "name": "Login through Go with email and password",
@@ -61,6 +70,22 @@
             "const body = pm.response.json();",
             "pm.test('access token returned', () => pm.expect(body.access_token).to.be.a('string').and.not.empty);",
             "if (body.access_token) pm.environment.set('access_token', body.access_token);"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Current Supabase identity",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/auth/me"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('verified identity matches login email', () => pm.expect(body.email.toLowerCase()).to.eql(pm.environment.get('email').toLowerCase()));",
+            "pm.test('auth profile does not expose tokens', () => { pm.expect(body).not.to.have.property('access_token'); pm.expect(body).not.to.have.property('refresh_token'); });"
           ], "type": "text/javascript"}}]
         }
       ]
@@ -165,6 +190,23 @@
           ], "type": "text/javascript"}}]
         },
         {
+          "name": "Rename current device",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"label\": \"{{device_label}}\"\n}"},
+            "url": "{{base_url}}/api/v1/account/devices/{{installation_id}}"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 204', () => pm.response.to.have.status(204));",
+            "pm.test('empty response body', () => pm.expect(pm.response.text()).to.eql(''));"
+          ], "type": "text/javascript"}}]
+        },
+        {
           "name": "Capabilities",
           "request": {
             "method": "GET",
@@ -187,8 +229,8 @@
       ]
     },
     {
-      "name": "04 Expected entitlement denial",
-      "description": "Run before granting screener. A new account is intentionally denied.",
+      "name": "04 Optional entitlement denial - new user only",
+      "description": "Run only for an account that does not yet have screener entitlement. Skip for an already-entitled account.",
       "item": [
         {
           "name": "Prepare dataset without grant is rejected",
@@ -211,10 +253,10 @@
     },
     {
       "name": "05 Operator entitlement",
-      "description": "Bootstrap the signed-in account once with signalgen-admin before running this folder.",
+      "description": "Run only while signed in as an operator. Set operator_target_user_id for another user; when it is empty, the requests safely fall back to the signed-in user_id saved by Current account.",
       "item": [
         {
-          "name": "Grant screener to current user",
+          "name": "Grant screener entitlement",
           "request": {
             "method": "POST",
             "header": [
@@ -222,31 +264,50 @@
               {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
               {"key": "Content-Type", "value": "application/json", "type": "text"}
             ],
-            "body": {"mode": "raw", "raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"feature\": \"screener\",\n  \"valid_until\": \"2027-12-31T00:00:00Z\",\n  \"reason\": \"Postman supervised test\"\n}"},
-            "url": "{{base_url}}/api/v1/operator/grants"
+            "body": {"mode": "raw", "raw": "{\n  \"user_id\": \"{{grant_target_user_id}}\",\n  \"feature\": \"screener\",\n  \"valid_until\": \"2027-12-31T00:00:00Z\",\n  \"reason\": \"Postman supervised test\"\n}"},
+            "url": "{{base_url}}/api/v1/operator/grants",
+            "description": "Grant or renew screener access. The pre-request script uses operator_target_user_id when supplied, otherwise it grants the signed-in user_id."
           },
-          "event": [{"listen": "test", "script": {"exec": [
-            "pm.test('status 201', () => pm.response.to.have.status(201));",
-            "const body = pm.response.json();",
-            "pm.test('active grant returned', () => { pm.expect(body.user_id).to.eql(pm.environment.get('user_id')); pm.expect(body.feature).to.eql('screener'); pm.expect(body.active).to.eql(true); });"
-          ], "type": "text/javascript"}}]
+          "event": [
+            {"listen": "prerequest", "script": {"exec": [
+              "const explicitTarget = (pm.environment.get('operator_target_user_id') || '').trim();",
+              "const signedInUser = (pm.environment.get('user_id') || '').trim();",
+              "const target = explicitTarget || signedInUser;",
+              "if (!target) throw new Error('Isi operator_target_user_id atau jalankan Current account agar user_id tersimpan.');",
+              "pm.variables.set('grant_target_user_id', target);"
+            ], "type": "text/javascript"}},
+            {"listen": "test", "script": {"exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('active grant returned', () => { pm.expect(body.user_id).to.eql(pm.variables.get('grant_target_user_id')); pm.expect(body.feature).to.eql('screener'); pm.expect(body.active).to.eql(true); });"
+            ], "type": "text/javascript"}}
+          ]
         },
         {
-          "name": "List current user grants as operator",
+          "name": "List target user grants as operator",
           "request": {
             "method": "GET",
             "header": [
               {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
               {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
             ],
-            "url": "{{base_url}}/api/v1/operator/grants?user_id={{user_id}}"
+            "url": "{{base_url}}/api/v1/operator/grants?user_id={{grant_target_user_id}}"
           },
-          "event": [{"listen": "test", "script": {"exec": [
-            "pm.test('status 200', () => pm.response.to.have.status(200));",
-            "const body = pm.response.json();",
-            "pm.test('screener grant is visible', () => pm.expect(body.items.some(item => item.feature === 'screener' && item.active)).to.eql(true));",
-            "pm.test('response is private', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));"
-          ], "type": "text/javascript"}}]
+          "event": [
+            {"listen": "prerequest", "script": {"exec": [
+              "const explicitTarget = (pm.environment.get('operator_target_user_id') || '').trim();",
+              "const signedInUser = (pm.environment.get('user_id') || '').trim();",
+              "const target = explicitTarget || signedInUser;",
+              "if (!target) throw new Error('Isi operator_target_user_id atau jalankan Current account agar user_id tersimpan.');",
+              "pm.variables.set('grant_target_user_id', target);"
+            ], "type": "text/javascript"}},
+            {"listen": "test", "script": {"exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('screener grant is visible', () => pm.expect(body.items.some(item => item.feature === 'screener' && item.active)).to.eql(true));",
+              "pm.test('response is private', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));"
+            ], "type": "text/javascript"}}
+          ]
         }
       ]
     },
@@ -476,7 +537,145 @@
       ]
     },
     {
-      "name": "08 Logout - run last",
+      "name": "90 Optional authentication lifecycle",
+      "description": "Run requests individually. Registration needs a fresh email. Password reset sends email and the confirm request changes the password.",
+      "item": [
+        {
+          "name": "Register a new account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"full_name\": \"{{register_full_name}}\",\n  \"email\": \"{{register_email}}\",\n  \"password\": \"{{register_password}}\"\n}"},
+            "url": "{{base_url}}/api/auth/register",
+            "description": "Creates a Supabase Auth identity through the Go API. Use a fresh email. The access token may be null when email confirmation is enabled."
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('registration contract is returned', () => { pm.expect(body.message).to.be.a('string'); pm.expect(body.requires_email_confirmation).to.be.a('boolean'); pm.expect(body.user.email.toLowerCase()).to.eql(pm.environment.get('register_email').toLowerCase()); });"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Request password reset email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{reset_email}}\"\n}"},
+            "url": "{{base_url}}/api/auth/password/reset-request",
+            "description": "Requests a recovery email. The response is deliberately identical for known and unknown addresses."
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('generic recovery acknowledgement', () => pm.expect(pm.response.json().message).to.be.a('string').and.not.empty);"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Confirm password reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"access_token\": \"{{recovery_access_token}}\",\n  \"refresh_token\": \"{{recovery_refresh_token}}\",\n  \"password\": \"{{new_password}}\"\n}"},
+            "url": "{{base_url}}/api/auth/password/reset",
+            "description": "Consumes recovery-session tokens from the reset redirect and changes the password. Do not run with empty variables."
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('password updated', () => pm.expect(pm.response.json().message).to.eql('Password berhasil diperbarui.'));"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "91 Optional account revocation",
+      "description": "Destructive owner-scoped requests. Fill target_session_id or target_device_id from the list endpoints, then run only the intended request.",
+      "item": [
+        {
+          "name": "Revoke an owner session by ID",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"}
+            ],
+            "url": "{{base_url}}/api/v1/account/sessions/{{target_session_id}}",
+            "description": "Revokes one session owned by the signed-in account. If this is the current session, later protected requests will fail."
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 204', () => pm.response.to.have.status(204));",
+            "pm.test('empty response body', () => pm.expect(pm.response.text()).to.eql(''));"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Revoke all sessions for an owner device",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"status\": \"revoked\"\n}"},
+            "url": "{{base_url}}/api/v1/account/devices/{{target_device_id}}",
+            "description": "Revokes every app session associated with an installation. If this is the current device, later protected requests will fail."
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 204', () => pm.response.to.have.status(204));",
+            "pm.test('empty response body', () => pm.expect(pm.response.text()).to.eql(''));"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "92 Optional operator administration",
+      "description": "Destructive operator-only requests. Fill operator_target_user_id and run requests individually.",
+      "item": [
+        {
+          "name": "Revoke an entitlement",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"reason\": \"{{operator_reason}}\"\n}"},
+            "url": "{{base_url}}/api/v1/operator/grants/{{operator_target_user_id}}/{{operator_target_feature}}",
+            "description": "Revokes one feature entitlement and writes an audit event using the authenticated operator as actor."
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 204', () => pm.response.to.have.status(204));",
+            "pm.test('empty response body', () => pm.expect(pm.response.text()).to.eql(''));"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Change an application role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"role\": \"{{target_role}}\",\n  \"reason\": \"{{operator_reason}}\"\n}"},
+            "url": "{{base_url}}/api/v1/operator/accounts/{{operator_target_user_id}}/role",
+            "description": "Promotes a user to operator or demotes an operator to user. The final active operator cannot be demoted."
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('requested role is active', () => { pm.expect(body.user_id).to.eql(pm.environment.get('operator_target_user_id')); pm.expect(body.role).to.eql(pm.environment.get('target_role')); });"
+          ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "99 Logout - run last",
       "item": [
         {
           "name": "Revoke current session",
