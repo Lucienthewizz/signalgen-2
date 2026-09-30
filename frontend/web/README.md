@@ -1,9 +1,9 @@
 # Signalgen Web
 
 React + TypeScript + Vite web application. It currently contains public/account
-work and will become the primary analysis surface under `../FRONTEND_MVP_PRD.md`.
+work and will become the primary analysis surface under `../../docs/frontend/FRONTEND_MVP_PRD.md`.
 FastAPI is the current legacy backend; the revised target is the versioned Go API
-and Go/WASM worker defined in `../../backend/MVP_API_CONTRACT.md`.
+and Go/WASM worker defined in `../../docs/backend/MVP_API_CONTRACT.md`.
 
 ```sh
 npm ci

@@ -34,9 +34,8 @@ func TestFixturePrepareAndContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest, err := store.Prepare(PrepareRequest{
-		Purpose: "screen", Market: "IDX", Symbols: []string{"BBCA.JK"}, Timeframe: "1d",
-		DateFrom: "2026-01-01", DateTo: "2026-02-09",
+	manifest, err := store.Prepare(context.Background(), "user-1", PrepareRequest{
+		Purpose: "screen", RuleID: "default-scalping-v1", UniverseID: "univ-1",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +43,7 @@ func TestFixturePrepareAndContent(t *testing.T) {
 	if manifest.CandleCount != 40 || manifest.Provider != "fixture" {
 		t.Fatalf("manifest = %+v", manifest)
 	}
-	content, _, err := store.Content(manifest.DatasetID)
+	content, _, err := store.Content(context.Background(), "user-1", manifest.DatasetID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,22 +59,22 @@ func TestFixturePrepareAndContent(t *testing.T) {
 	}
 }
 
-func TestFixtureRejectsUnsupportedAndOutOfRangeRequests(t *testing.T) {
+func TestFixtureRejectsInvalidContractRequests(t *testing.T) {
 	store, err := NewFixtureStore(fixturePath(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	requests := []PrepareRequest{
-		{Purpose: "backtest", Market: "IDX", Symbols: []string{"BBCA.JK"}, Timeframe: "1d", DateFrom: "2026-01-01", DateTo: "2026-02-09"},
-		{Purpose: "screen", Market: "IDX", Symbols: []string{"TLKM.JK"}, Timeframe: "1d", DateFrom: "2026-01-01", DateTo: "2026-02-09"},
-		{Purpose: "screen", Market: "IDX", Symbols: []string{"BBCA.JK"}, Timeframe: "1d", DateFrom: "2025-01-01", DateTo: "2026-02-09"},
+		{Purpose: "backtest", RuleID: "rule-1", UniverseID: "univ-1"},
+		{Purpose: "screen", UniverseID: "univ-1"},
+		{Purpose: "screen", RuleID: "rule-1"},
 	}
 	for _, request := range requests {
-		if _, err := store.Prepare(request); !errors.Is(err, ErrInvalidRequest) {
+		if _, err := store.Prepare(context.Background(), "user-1", request); !errors.Is(err, ErrInvalidRequest) {
 			t.Errorf("request %+v error = %v", request, err)
 		}
 	}
-	if _, _, err := store.Content("unknown"); !errors.Is(err, ErrNotFound) {
+	if _, _, err := store.Content(context.Background(), "user-1", "unknown"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing content error = %v", err)
 	}
 }

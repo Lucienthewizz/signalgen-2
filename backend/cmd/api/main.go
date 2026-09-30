@@ -17,11 +17,13 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/marketdata"
 	platformdb "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/database"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/ratelimit"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
 )
 
 func main() {
@@ -30,7 +32,7 @@ func main() {
 	projectURL := requiredEnvironment("SUPABASE_URL")
 	publishableKey := requiredEnvironment("SUPABASE_PUBLISHABLE_KEY")
 	databaseURL := requiredEnvironment("SUPABASE_DB_URL")
-	fixturePath := environment("SIGNALGEN_FIXTURE_PATH", "/usr/share/signalgen/fixtures/default_scalping_v1.json")
+	yahooFinanceBaseURL := environment("YAHOO_FINANCE_BASE_URL", "https://query1.finance.yahoo.com")
 	address := environment("SIGNALGEN_GO_API_ADDR", ":8080")
 	allowedOrigins := commaSeparatedEnvironment("SIGNALGEN_CORS_ORIGINS")
 	passwordResetRedirectURL := environment("SIGNALGEN_PASSWORD_RESET_REDIRECT_URL", "http://127.0.0.1:5174/?view=reset-password")
@@ -59,9 +61,16 @@ func main() {
 	}
 	// Access state is server-owned: profile, role, status, entitlement, audit.
 	accessStore := account.NewPostgresRepository(database)
-	// The P0 dataset source is a versioned fixture. It can later be replaced by
-	// an authoritative market-data adapter without changing HTTP handlers.
-	datasets, err := dataset.NewFixtureStore(fixturePath)
+	// Stock universes are durable owner-scoped bundles. Provider symbols remain
+	// server-only metadata so clients cannot request an arbitrary instrument.
+	universeStore := universe.NewPostgresRepository(database)
+	provider, err := marketdata.NewYahooFinance(yahooFinanceBaseURL, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Dynamic datasets contain up to three universe members. Date boundaries are
+	// calculated from provider candles and exposed only as response metadata.
+	datasets, err := dataset.NewDynamicStore(provider, universeStore)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -85,6 +94,7 @@ func main() {
 		apihttp.WithPasswordResetRedirectURL(passwordResetRedirectURL),
 		apihttp.WithRuleStore(ruleStore),
 		apihttp.WithSubscriptionService(subscriptionStore),
+		apihttp.WithUniverseStore(universeStore),
 		apihttp.WithRateLimiter(mutationLimiter),
 		apihttp.WithCORSOrigins(allowedOrigins),
 		apihttp.WithReadinessChecks(platformdb.PostgresReadiness{Pool: database}, datasets),

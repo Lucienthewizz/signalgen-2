@@ -9,12 +9,12 @@ perbandingan melalui profile Docker `legacy`; frontend tidak lagi bergantung pad
 endpoint autentikasi Python.
 
 Untuk mempelajari pembagian screener antara Go/WASM dan backend, mulai dari
-[`HYBRID_SCREENER_DESIGN.md`](HYBRID_SCREENER_DESIGN.md). Vertical slice Model A
+[`HYBRID_SCREENER_DESIGN.md`](../docs/backend/HYBRID_SCREENER_DESIGN.md). Vertical slice Model A
 sudah tersedia untuk eksperimen; pemilihan model final belum diputuskan.
 
 Untuk memahami struktur kode dari route sampai storage, baca
-[`ARCHITECTURE.md`](ARCHITECTURE.md). Dokumen tersebut juga menjelaskan data
-yang saat ini dimiliki Supabase Auth, Postgres, memory, dan fixture.
+[`ARCHITECTURE.md`](../docs/backend/ARCHITECTURE.md). Dokumen tersebut juga menjelaskan data
+yang saat ini dimiliki Supabase Auth, Postgres, memory, dan Yahoo Finance.
 
 ## Menjalankan backend
 
@@ -39,9 +39,10 @@ Konfigurasi rahasia backend disimpan pada `backend/.env` dan tidak boleh
 dimasukkan ke Git atau ke bundle frontend.
 
 Isi `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, dan `SUPABASE_DB_URL` pada
-`backend/.env` sebelum menjalankannya. Terapkan migration SQL di
+`backend/.env` sebelum menjalankannya. Opsional `YAHOO_FINANCE_BASE_URL`
+dipakai untuk mock/provider-compatible testing. Terapkan migration SQL di
 `supabase/migrations` dahulu. Database URL hanya boleh berada di backend.
-Petunjuk dan status migrasi ada di [`POSTGRES_MIGRATION.md`](POSTGRES_MIGRATION.md).
+Petunjuk dan status migrasi ada di [`POSTGRES_MIGRATION.md`](../docs/backend/POSTGRES_MIGRATION.md).
 
 Jika baseline lama perlu diperiksa secara eksplisit, jalankan
 `docker compose --profile legacy up backend`. Profile tersebut bukan jalur
@@ -82,7 +83,7 @@ docker compose up --build go-api
 Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 
 - `GET /health` — public health check;
-- `GET /ready` — readiness Postgres dan integritas fixture untuk Docker;
+- `GET /ready` — readiness Postgres dan penyimpanan dataset untuk Docker;
 - `GET /api` — status yang dipakai frontend;
 - `POST /api/auth/register` — membuat akun Supabase melalui Go;
 - `POST /api/auth/login` — login Supabase melalui Go;
@@ -100,7 +101,10 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `GET /api/v1/rules/{id}` — membaca system rule atau rule milik pengguna;
 - `PATCH /api/v1/rules/{id}` — memperbarui rule pribadi dengan cek versi;
 - `DELETE /api/v1/rules/{id}` — menghapus rule pribadi dengan cek versi;
-- `POST /api/v1/datasets/prepare` — menyiapkan manifest fixture sesuai entitlement;
+- `GET /api/v1/stocks` — membaca katalog tiga emiten IDX yang disetujui server;
+- `GET/POST /api/v1/stock-universes` — membaca/membuat bundle saham milik user;
+- `GET/PATCH/DELETE /api/v1/stock-universes/{id}` — detail dan mutasi owner-only;
+- `POST /api/v1/datasets/prepare` — mengambil OHLCV berdasarkan `rule_id + universe_id`;
 - `GET /api/v1/datasets/{id}/manifest` — metadata/checksum dataset;
 - `GET /api/v1/datasets/{id}/content` — konten OHLCV sintetis terproteksi;
 - `POST /api/v1/compute-grants` — receipt singkat yang mengikat sesi, dataset,
@@ -227,10 +231,11 @@ Catatan audit bersifat append-only: database menolak update dan delete. Tool
 lokal tetap tersedia untuk recovery/development; endpoint operator dan role
 guard server-side sudah tersedia untuk workflow aplikasi.
 
-Dataset P0 yang tersedia saat ini hanya fixture sintetis `BBCA.JK`, market
-`IDX`, timeframe `1d`, dan purpose `screen`. Endpoint menolak simbol/rentang
-lain serta akun tanpa grant `screener`; ini belum merupakan integrasi provider
-historis production.
+Dataset screening aktif diambil server-side dari Yahoo Finance untuk maksimum
+tiga emiten katalog: `BBCA.JK`, `BBRI.JK`, dan `TLKM.JK`. Client mengirim
+`rule_id + universe_id`; simbol dan rentang tanggal diturunkan backend dari
+universe milik user serta candle provider. Integrasi ini ditujukan untuk MVP
+akademik, bersifat unofficial/personal-use, dan bukan feed resmi realtime IDX.
 
 ## Test dengan Postman
 

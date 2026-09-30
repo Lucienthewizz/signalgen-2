@@ -11,6 +11,7 @@ declare
   owner_id uuid;
   other_id uuid;
   test_rule_id text := 'rls_test_' || replace(gen_random_uuid()::text, '-', '');
+  test_universe_id text;
   visible_count integer;
   changed_count integer;
 begin
@@ -27,6 +28,10 @@ begin
      schema_version, engine_version)
   values (test_rule_id, owner_id, 'RLS test', '{}'::jsonb,
           'sha256:test', 'test', 'test');
+  insert into signalgen.stock_universes (owner_user_id, name)
+  values (owner_id, 'RLS universe test') returning id into test_universe_id;
+  insert into signalgen.stock_universe_members (universe_id, symbol, position)
+  values (test_universe_id, 'BBCA.JK', 0);
 
   perform set_config('request.jwt.claim.sub', other_id::text, true);
   select count(*) into visible_count from signalgen.user_rules where id = test_rule_id;
@@ -43,11 +48,23 @@ begin
   if changed_count <> 0 then
     raise exception 'another user can delete an owner rule';
   end if;
+  select count(*) into visible_count from signalgen.stock_universes where id = test_universe_id;
+  if visible_count <> 0 then
+    raise exception 'another user can read an owner stock universe';
+  end if;
+  select count(*) into visible_count from signalgen.stock_universe_members where universe_id = test_universe_id;
+  if visible_count <> 0 then
+    raise exception 'another user can read owner stock universe members';
+  end if;
 
   perform set_config('request.jwt.claim.sub', owner_id::text, true);
   select count(*) into visible_count from signalgen.user_rules where id = test_rule_id;
   if visible_count <> 1 then
     raise exception 'owner cannot read own rule';
+  end if;
+  select count(*) into visible_count from signalgen.stock_universes where id = test_universe_id;
+  if visible_count <> 1 then
+    raise exception 'owner cannot read own stock universe';
   end if;
 end;
 $$;

@@ -103,39 +103,23 @@ func NewFixtureStore(path string) (*FixtureStore, error) {
 	}, nil
 }
 
-func (store *FixtureStore) Prepare(request PrepareRequest) (Manifest, error) {
-	if request.Purpose != store.manifest.Purpose || request.Market != store.manifest.Market ||
-		request.Timeframe != store.manifest.Timeframe || len(request.Symbols) != 1 ||
-		request.Symbols[0] != store.manifest.Symbols[0] {
+func (store *FixtureStore) Prepare(_ context.Context, owner string, request PrepareRequest) (Manifest, error) {
+	if strings.TrimSpace(owner) == "" || request.Purpose != store.manifest.Purpose ||
+		strings.TrimSpace(request.RuleID) == "" || strings.TrimSpace(request.UniverseID) == "" {
 		return Manifest{}, ErrInvalidRequest
 	}
-	from, err := parseDate(request.DateFrom)
-	if err != nil {
-		return Manifest{}, ErrInvalidRequest
-	}
-	to, err := parseDate(request.DateTo)
-	if err != nil || to.Before(from) {
-		return Manifest{}, ErrInvalidRequest
-	}
-	availableFrom, _ := parseDate(store.manifest.AvailableRange.From)
-	availableTo, _ := parseDate(store.manifest.AvailableRange.To)
-	if from.Before(availableFrom) || to.After(availableTo) {
-		return Manifest{}, ErrInvalidRequest
-	}
-	manifest := store.manifest
-	manifest.RequestedRange = Range{From: request.DateFrom, To: request.DateTo}
-	return manifest, nil
+	return store.manifest, nil
 }
 
-func (store *FixtureStore) Manifest(id string) (Manifest, error) {
-	if strings.TrimSpace(id) != store.manifest.DatasetID {
+func (store *FixtureStore) Manifest(_ context.Context, owner, id string) (Manifest, error) {
+	if strings.TrimSpace(owner) == "" || strings.TrimSpace(id) != store.manifest.DatasetID {
 		return Manifest{}, ErrNotFound
 	}
 	return store.manifest, nil
 }
 
-func (store *FixtureStore) Content(id string) ([]byte, Manifest, error) {
-	manifest, err := store.Manifest(id)
+func (store *FixtureStore) Content(ctx context.Context, owner, id string) ([]byte, Manifest, error) {
+	manifest, err := store.Manifest(ctx, owner, id)
 	if err != nil {
 		return nil, Manifest{}, err
 	}
@@ -153,8 +137,4 @@ func (store *FixtureStore) Ready(ctx context.Context) error {
 		return ErrIntegrity
 	}
 	return nil
-}
-
-func parseDate(value string) (time.Time, error) {
-	return time.Parse("2006-01-02", value)
 }

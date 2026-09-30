@@ -37,9 +37,19 @@ func (server *Server) prepareDataset(writer http.ResponseWriter, request *http.R
 		writeAccessError(writer, request, err)
 		return
 	}
-	manifest, err := server.datasets.Prepare(input)
+	if input.RuleID != core.BaselineRuleID {
+		if _, err := server.rules.Get(request.Context(), principal.ID, input.RuleID); err != nil {
+			writeRuleError(writer, request, err)
+			return
+		}
+	}
+	manifest, err := server.datasets.Prepare(request.Context(), principal.ID, input)
 	if errors.Is(err, dataset.ErrInvalidRequest) {
-		writeError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "Market, simbol, timeframe, atau rentang dataset tidak didukung.")
+		writeError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "Rule atau stock universe tidak valid.")
+		return
+	}
+	if errors.Is(err, dataset.ErrNotFound) {
+		writeError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Stock universe tidak ditemukan.")
 		return
 	}
 	if err != nil {
@@ -56,7 +66,7 @@ func (server *Server) datasetManifest(writer http.ResponseWriter, request *http.
 	if !ok {
 		return
 	}
-	manifest, err := server.datasets.Manifest(request.PathValue("id"))
+	manifest, err := server.datasets.Manifest(request.Context(), principal.ID, request.PathValue("id"))
 	if errors.Is(err, dataset.ErrNotFound) {
 		writeError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Dataset tidak ditemukan.")
 		return
@@ -79,7 +89,7 @@ func (server *Server) datasetContent(writer http.ResponseWriter, request *http.R
 	if !ok {
 		return
 	}
-	content, manifest, err := server.datasets.Content(request.PathValue("id"))
+	content, manifest, err := server.datasets.Content(request.Context(), principal.ID, request.PathValue("id"))
 	if errors.Is(err, dataset.ErrNotFound) {
 		writeError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Dataset tidak ditemukan.")
 		return
@@ -132,7 +142,7 @@ func (server *Server) createComputeGrant(writer http.ResponseWriter, request *ht
 		writeAccessError(writer, request, err)
 		return
 	}
-	manifest, err := server.datasets.Manifest(input.DatasetID)
+	manifest, err := server.datasets.Manifest(request.Context(), principal.ID, input.DatasetID)
 	if errors.Is(err, dataset.ErrNotFound) {
 		writeError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Dataset tidak ditemukan.")
 		return

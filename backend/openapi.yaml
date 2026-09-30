@@ -608,6 +608,139 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/stocks:
+    get:
+      tags: [Analysis]
+      operationId: listStockCatalog
+      summary: List the three server-approved IDX instruments
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Stock catalog.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/StockInstrument"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "503": {$ref: "#/components/responses/ServiceUnavailable"}
+  /api/v1/stock-universes:
+    get:
+      tags: [Analysis]
+      operationId: listStockUniverses
+      summary: List stock universes owned by the current user
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Owner-scoped universe list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/StockUniverse"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "503": {$ref: "#/components/responses/ServiceUnavailable"}
+    post:
+      tags: [Analysis]
+      operationId: createStockUniverse
+      summary: Create an owner-scoped stock universe
+      security:
+        - supabaseBearer: []
+          appSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/StockUniverseWrite"}
+      responses:
+        "201":
+          description: Universe created.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/StockUniverse"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "422": {$ref: "#/components/responses/InvalidRequest"}
+        "503": {$ref: "#/components/responses/ServiceUnavailable"}
+  /api/v1/stock-universes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [Analysis]
+      operationId: getStockUniverse
+      summary: Read an owner-scoped stock universe
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Universe detail.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/StockUniverse"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+    patch:
+      tags: [Analysis]
+      operationId: updateStockUniverse
+      summary: Replace name and members using optimistic versioning
+      security:
+        - supabaseBearer: []
+          appSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: "#/components/schemas/StockUniverseWrite"}
+                - type: object
+                  required: [version]
+                  properties:
+                    version: {type: integer, minimum: 1}
+      responses:
+        "200":
+          description: Universe updated.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/StockUniverse"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {description: Version conflict.}
+        "422": {$ref: "#/components/responses/InvalidRequest"}
+    delete:
+      tags: [Analysis]
+      operationId: deleteStockUniverse
+      summary: Delete an owner-scoped stock universe
+      security:
+        - supabaseBearer: []
+          appSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: {type: integer, minimum: 1}
+      responses:
+        "204": {description: Universe deleted.}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {description: Version conflict.}
   /api/v1/datasets/prepare:
     post:
       tags: [Analysis]
@@ -624,7 +757,7 @@ paths:
               $ref: "#/components/schemas/DatasetPrepareRequest"
       responses:
         "200":
-          description: Prepared manifest. Current implementation supports one synthetic fixture.
+          description: Prepared owner-scoped Yahoo Finance manifest. Date metadata is derived by the server.
           headers:
             Cache-Control:
               $ref: "#/components/headers/PrivateNoStore"
@@ -1668,22 +1801,44 @@ components:
           items:
             $ref: "#/components/schemas/RuleResource"
         next_cursor: {type: string, nullable: true}
-    DatasetPrepareRequest:
+    StockInstrument:
+      type: object
+      required: [symbol, name, exchange, currency]
+      properties:
+        symbol: {type: string, enum: [BBCA.JK, BBRI.JK, TLKM.JK]}
+        name: {type: string}
+        exchange: {type: string, enum: [XIDX]}
+        currency: {type: string, enum: [IDR]}
+    StockUniverseWrite:
       type: object
       additionalProperties: false
-      required: [purpose, market, symbols, timeframe, date_from, date_to]
+      required: [name, symbols]
       properties:
-        purpose: {type: string, enum: [screen]}
-        market: {type: string, enum: [IDX]}
+        name: {type: string, minLength: 1, maxLength: 100}
         symbols:
           type: array
           minItems: 1
-          maxItems: 1
-          items: {type: string, enum: [BBCA.JK]}
-        timeframe: {type: string, enum: [1d]}
-        date_from: {type: string, format: date}
-        date_to: {type: string, format: date}
+          maxItems: 3
+          uniqueItems: true
+          items: {type: string, enum: [BBCA.JK, BBRI.JK, TLKM.JK]}
+    StockUniverse:
+      allOf:
+        - $ref: "#/components/schemas/StockUniverseWrite"
+        - type: object
+          required: [id, version, created_at, updated_at]
+          properties:
+            id: {type: string, pattern: "^univ_"}
+            version: {type: integer, minimum: 1}
+            created_at: {type: string, format: date-time}
+            updated_at: {type: string, format: date-time}
+    DatasetPrepareRequest:
+      type: object
+      additionalProperties: false
+      required: [purpose, rule_id, universe_id]
+      properties:
+        purpose: {type: string, enum: [screen]}
         rule_id: {type: string}
+        universe_id: {type: string, pattern: "^univ_"}
     DateRange:
       type: object
       required: [from, to]
@@ -1704,8 +1859,8 @@ components:
       properties:
         dataset_id: {type: string}
         version: {type: string}
-        schema_version: {type: string, enum: [ohlcv-1]}
-        provider: {type: string, enum: [fixture]}
+        schema_version: {type: string, enum: [ohlcv-multi-1]}
+        provider: {type: string, enum: [yahoo_finance]}
         purpose: {type: string, enum: [screen]}
         market: {type: string, enum: [IDX]}
         currency: {type: string, enum: [IDR]}

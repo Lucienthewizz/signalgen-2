@@ -9,13 +9,9 @@ var (
 )
 
 type PrepareRequest struct {
-	Purpose   string   `json:"purpose"`
-	Market    string   `json:"market"`
-	Symbols   []string `json:"symbols"`
-	Timeframe string   `json:"timeframe"`
-	DateFrom  string   `json:"date_from"`
-	DateTo    string   `json:"date_to"`
-	RuleID    string   `json:"rule_id,omitempty"`
+	Purpose    string `json:"purpose"`
+	RuleID     string `json:"rule_id"`
+	UniverseID string `json:"universe_id"`
 }
 
 type Range struct {

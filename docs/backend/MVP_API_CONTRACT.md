@@ -1,11 +1,11 @@
 # SignalGen MVP — Target API & Worker Contract
 
-Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** [`openapi.yaml`](openapi.yaml) documents only the implemented Go surface and wins for current runtime integration; this file retains proposed routes and policy decisions. Changes require FE+BE review and versioning.
+Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** [`openapi.yaml`](../../backend/openapi.yaml) documents only the implemented Go surface and wins for current runtime integration; this file retains proposed routes and policy decisions. Changes require FE+BE review and versioning.
 
 Addendum 27 September 2026: bimbingan terbaru meminta pemisahan screener hybrid.
 Kontrak eksperimen socket ticket dan private decision tersedia di
 [`HYBRID_SCREENER_DESIGN.md`](HYBRID_SCREENER_DESIGN.md) dan schema
-[`contracts/hybrid-screener.schema.json`](contracts/hybrid-screener.schema.json).
+[`backend/contracts/hybrid-screener.schema.json`](../../backend/contracts/hybrid-screener.schema.json).
 OpenAPI tetap menjadi sumber kebenaran endpoint yang sudah tersedia; pilihan Model
 A sebagai arsitektur final masih proposed sampai eksperimen pembanding selesai.
 
@@ -163,6 +163,9 @@ call the same activation service.
 | GET | `/capabilities` | authenticated | Supported schema versions, markets, timeframes, operands/operators, limits, engine version |
 | GET/POST | `/rules` | screener | List/create system-visible + owner rules |
 | GET/PATCH/DELETE | `/rules/{id}` | screener | Owner/system policies + optimistic concurrency |
+| GET | `/stocks` | app session | Three server-approved IDX catalog instruments |
+| GET/POST | `/stock-universes` | app session | List/create owner stock bundles (maximum three members) |
+| GET/PATCH/DELETE | `/stock-universes/{id}` | app session | Owner-only bundle detail and optimistic mutation |
 | POST | `/datasets/prepare` | screener/backtest by purpose | Validate scope; fetch/normalize/cache server-side; returns metadata/handle |
 | GET | `/datasets/{id}/manifest` | matching feature | Version/hash/quality/warmup/range/size, no candle body |
 | GET | `/datasets/{id}/content` | matching feature | Canonical compressed payload; bounded/range-checked; no server compute |
@@ -181,14 +184,14 @@ system rule returns metadata and `definition_hash`, but deliberately omits
 Prepare request:
 
 ```json
-{"purpose":"backtest","market":"IDX","symbols":["BBCA.JK"],"timeframe":"1d","date_from":"2023-01-01","date_to":"2025-12-31","rule_id":"rule_opaque"}
+{"purpose":"screen","rule_id":"rule_opaque","universe_id":"univ_opaque"}
 ```
 
 Manifest minimum:
 
 ```json
 {
-  "dataset_id":"ds_opaque","version":"ds-v1","schema_version":"ohlcv-1","provider":"fixture",
+  "dataset_id":"ds_opaque","version":"ds-v1","schema_version":"ohlcv-multi-1","provider":"yahoo_finance",
   "market":"IDX","currency":"IDR","symbols":["BBCA.JK"],"timeframe":"1d","timezone":"UTC",
   "requested_range":{"from":"2023-01-01","to":"2025-12-31"},
   "available_range":{"from":"2022-10-01","to":"2025-12-31"},

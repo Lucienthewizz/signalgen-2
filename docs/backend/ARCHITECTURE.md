@@ -131,12 +131,20 @@ those repositories, opens a SQLite file, or mounts its former volume.
 ## Production storage
 
 Supabase Auth owns identity. Supabase Postgres schema `signalgen` owns durable
-application data. The schema is not exposed through Supabase Data API; its
-tables have RLS and selected owner-read policies as defense in depth. The Go
-API verifies identity, session, role, ownership, and entitlement at its own
-boundary. The Postgres connection user can bypass RLS, so SQL owner filters
-remain mandatory. A future dedicated least-privilege database role should be
-tested before production deployment.
+application data. The private `legacy` schema contains only the lossless
+SQLite archive, while application tables must not be created in `public`.
+The `signalgen` and `legacy` schemas are not exposed through Supabase Data API;
+the browser accesses application data through the Go API.
+
+The grants and owner-scoped RLS policies on selected `signalgen` tables do not
+expose the custom schema by themselves. They are a separately tested
+defense-in-depth boundary if direct Data API access is ever approved later.
+Changing the Supabase exposed-schema setting is therefore an architecture and
+security change, not a frontend convenience setting. The Go API verifies
+identity, session, role, ownership, and entitlement at its own boundary. The
+current Postgres connection user can bypass RLS, so SQL owner filters remain
+mandatory. A future dedicated least-privilege database role should be tested
+before production deployment.
 
 Socket tickets and rate limits remain process memory. Multiple API replicas
 need shared TTL state before they can serve the same WebSocket ticket flow.

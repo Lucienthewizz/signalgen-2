@@ -20,6 +20,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
 )
 
 // An opt-in API contract check backed by an isolated loopback Postgres.
@@ -77,11 +78,13 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	subscriptions := subscription.NewPostgresRepository(db)
+	universes := universe.NewPostgresRepository(db)
 	newServer := func(id string) *Server {
 		server, err := NewServer(fakeIdentity{principal: auth.Principal{ID: id, Email: id + "@test.invalid"}},
 			sessions, accounts, &fakeDatasets{}, compute.NewPostgresRepository(db),
 			WithRuleStore(rules.NewPostgresRepository(db)),
-			WithSubscriptionService(subscriptions))
+			WithSubscriptionService(subscriptions),
+			WithUniverseStore(universes))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -135,6 +138,21 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 	response = call(serverA, http.MethodGet, "/api/v1/rules/"+createdRule.ID, "", tokenA)
 	if response.Code != http.StatusOK {
 		t.Fatalf("owner read rule = %d: %s", response.Code, response.Body.String())
+	}
+	response = call(serverA, http.MethodPost, "/api/v1/stock-universes",
+		`{"name":"Three IDX","symbols":["BBCA.JK","BBRI.JK","TLKM.JK"]}`, tokenA)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("create universe = %d: %s", response.Code, response.Body.String())
+	}
+	var createdUniverse universe.Universe
+	if err := json.Unmarshal(response.Body.Bytes(), &createdUniverse); err != nil {
+		t.Fatal(err)
+	}
+	response = call(serverB, http.MethodGet, "/api/v1/stock-universes/"+createdUniverse.ID, "", tokenB)
+	assertErrorCode(t, response, http.StatusNotFound, "RESOURCE_NOT_FOUND")
+	response = call(serverA, http.MethodGet, "/api/v1/stock-universes/"+createdUniverse.ID, "", tokenA)
+	if response.Code != http.StatusOK {
+		t.Fatalf("owner read universe = %d: %s", response.Code, response.Body.String())
 	}
 	response = call(serverA, http.MethodGet, "/api/v1/account/me", "", tokenA)
 	if response.Code != http.StatusOK {

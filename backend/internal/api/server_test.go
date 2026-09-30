@@ -93,9 +93,11 @@ func (fake *fakeAccess) RequireFeature(_ context.Context, _ string, feature stri
 }
 
 type fakeDatasets struct {
-	manifest dataset.Manifest
-	content  []byte
-	err      error
+	manifest     dataset.Manifest
+	content      []byte
+	err          error
+	preparedBy   string
+	prepareInput dataset.PrepareRequest
 }
 
 type fakeCompute struct {
@@ -123,15 +125,17 @@ func (fake *fakeCompute) Verify(_ context.Context, userID, sessionID, grantID st
 	return fake.grant, fake.err
 }
 
-func (fake *fakeDatasets) Prepare(_ dataset.PrepareRequest) (dataset.Manifest, error) {
+func (fake *fakeDatasets) Prepare(_ context.Context, owner string, request dataset.PrepareRequest) (dataset.Manifest, error) {
+	fake.preparedBy = owner
+	fake.prepareInput = request
 	return fake.manifest, fake.err
 }
 
-func (fake *fakeDatasets) Manifest(_ string) (dataset.Manifest, error) {
+func (fake *fakeDatasets) Manifest(_ context.Context, _, _ string) (dataset.Manifest, error) {
 	return fake.manifest, fake.err
 }
 
-func (fake *fakeDatasets) Content(_ string) ([]byte, dataset.Manifest, error) {
+func (fake *fakeDatasets) Content(_ context.Context, _, _ string) ([]byte, dataset.Manifest, error) {
 	return fake.content, fake.manifest, fake.err
 }
 
@@ -1084,13 +1088,36 @@ func TestPrepareDatasetRequiresFeatureEntitlement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := bytes.NewBufferString(`{"purpose":"screen","market":"IDX","symbols":["BBCA.JK"],"timeframe":"1d","date_from":"2026-01-01","date_to":"2026-02-09"}`)
+	body := bytes.NewBufferString(`{"purpose":"screen","rule_id":"default-scalping-v1","universe_id":"univ-1"}`)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/datasets/prepare", body)
 	request.Header.Set("Authorization", "Bearer user-token")
 	request.Header.Set("X-App-Session", "sgs_session")
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 	assertErrorCode(t, response, http.StatusForbidden, "ENTITLEMENT_REQUIRED")
+}
+
+func TestPrepareDatasetUsesRuleAndUniverseContract(t *testing.T) {
+	datasets := &fakeDatasets{manifest: dataset.Manifest{DatasetID: "dataset-1", Purpose: "screen"}}
+	server, err := NewServer(
+		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, &fakeSessions{},
+		&fakeAccess{features: []string{access.FeatureScreener}}, datasets, &fakeCompute{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/datasets/prepare",
+		bytes.NewBufferString(`{"purpose":"screen","rule_id":"default-scalping-v1","universe_id":"univ-a"}`))
+	request.Header.Set("Authorization", "Bearer user-token")
+	request.Header.Set("X-App-Session", "sgs_session")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if datasets.preparedBy != "user-a" || datasets.prepareInput.RuleID != core.BaselineRuleID || datasets.prepareInput.UniverseID != "univ-a" {
+		t.Fatalf("prepare owner = %q, request = %+v", datasets.preparedBy, datasets.prepareInput)
+	}
 }
 
 func TestDatasetContentUsesPrivateCacheAndChecksum(t *testing.T) {
@@ -1492,7 +1519,7 @@ func TestSessionLifecycleWithSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	prepareRequest := httptest.NewRequest(http.MethodPost, "/api/v1/datasets/prepare",
-		bytes.NewBufferString(`{"purpose":"screen","market":"IDX","symbols":["BBCA.JK"],"timeframe":"1d","date_from":"2026-01-01","date_to":"2026-02-09"}`))
+		bytes.NewBufferString(`{"purpose":"screen","rule_id":"default-scalping-v1","universe_id":"univ-1"}`))
 	prepareRequest.Header.Set("Authorization", "Bearer user-token")
 	prepareRequest.Header.Set("X-App-Session", created.Token)
 	prepareResponse := httptest.NewRecorder()
