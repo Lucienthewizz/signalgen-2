@@ -13,10 +13,15 @@ import (
 )
 
 type supabaseAuthResponse struct {
-	AccessToken string `json:"access_token"`
-	TokenType   string `json:"token_type"`
-	ExpiresIn   int    `json:"expires_in"`
-	User        struct {
+	AccessToken  string `json:"access_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int    `json:"expires_in"`
+	ID           string `json:"id"`
+	Email        string `json:"email"`
+	UserMetadata struct {
+		FullName string `json:"full_name"`
+	} `json:"user_metadata"`
+	User struct {
 		ID           string `json:"id"`
 		Email        string `json:"email"`
 		UserMetadata struct {
@@ -26,14 +31,22 @@ type supabaseAuthResponse struct {
 }
 
 func (response supabaseAuthResponse) result() AuthResult {
+	id := response.User.ID
+	email := response.User.Email
+	fullName := response.User.UserMetadata.FullName
+	if id == "" {
+		id = response.ID
+		email = response.Email
+		fullName = response.UserMetadata.FullName
+	}
 	return AuthResult{
 		AccessToken: response.AccessToken,
 		TokenType:   response.TokenType,
 		ExpiresIn:   response.ExpiresIn,
 		User: Principal{
-			ID:       response.User.ID,
-			Email:    response.User.Email,
-			FullName: response.User.UserMetadata.FullName,
+			ID:       id,
+			Email:    email,
+			FullName: fullName,
 		},
 	}
 }
@@ -55,13 +68,14 @@ func (verifier *SupabaseVerifier) Register(ctx context.Context, email, password,
 	if status == http.StatusTooManyRequests {
 		return AuthResult{}, ErrAuthRateLimited
 	}
-	if status < 200 || status >= 300 || strings.TrimSpace(response.User.ID) == "" {
+	result := response.result()
+	if status < 200 || status >= 300 || strings.TrimSpace(result.User.ID) == "" {
 		if status >= 400 && status < 500 {
 			return AuthResult{}, ErrRegistrationRejected
 		}
 		return AuthResult{}, fmt.Errorf("%w: signup status %d", ErrProviderUnavailable, status)
 	}
-	return response.result(), nil
+	return result, nil
 }
 
 // Login exchanges email/password credentials for a Supabase access token.
