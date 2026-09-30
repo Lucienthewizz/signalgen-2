@@ -2,14 +2,14 @@
 
 These instructions apply to everything inside `frontend/`.
 
-1. Read `../PROJECT_CONTEXT.md`, `../PRD.md`, and the README of the target
+1. Read `../docs/PROJECT_CONTEXT.md`, `../docs/PRD.md`, and the README of the target
    application before changing frontend code. Treat the context and PRD as the
    canonical architecture and product scope.
 2. Treat `web/` as the only active frontend product. `desktop/` is an archived
    legacy reference and is out of scope unless the user explicitly asks to work
    on it. Do not create a backend inside the web application.
 3. Treat runtime OpenAPI/current implementation as truth for endpoints that
-   exist. `../backend/MVP_API_CONTRACT.md` defines proposed target behavior only;
+   exist. `../docs/backend/MVP_API_CONTRACT.md` defines proposed target behavior only;
    do not call proposed routes until the backend implements and publishes them.
    FastAPI is the legacy bridge; Go is the revised target API/core.
 4. Keep API base URLs and Socket.IO URLs in centralized runtime configuration.

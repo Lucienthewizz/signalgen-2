@@ -14,8 +14,8 @@ key, provider key, signing key, atau isi `backend/.env` di frontend/WASM.
 ## Mulai dari sini
 
 Sebelum mengembangkan frontend, baca
-[`../PROJECT_CONTEXT.md`](../PROJECT_CONTEXT.md), [`../PRD.md`](../PRD.md), dan
-[`FRONTEND_MVP_PRD.md`](FRONTEND_MVP_PRD.md). Dokumen tersebut menetapkan target;
+[`../docs/PROJECT_CONTEXT.md`](../docs/PROJECT_CONTEXT.md), [`../docs/PRD.md`](../docs/PRD.md), dan
+[`FRONTEND_MVP_PRD.md`](../docs/frontend/FRONTEND_MVP_PRD.md). Dokumen tersebut menetapkan target;
 kode/OpenAPI runtime menetapkan apa yang sudah tersedia.
 
 Backend Docker saat ini adalah legacy sampai Go API diimplementasikan. Frontend

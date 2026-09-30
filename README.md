@@ -49,7 +49,7 @@ authentication path.
  Legacy: Electron + Python/FastAPI kept for baseline and rollback
 ```
 
-Canonical scope and architecture are documented in [PRD.md](./PRD.md) and [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md).
+Canonical scope and architecture are documented in [docs/PRD.md](./docs/PRD.md) and [docs/PROJECT_CONTEXT.md](./docs/PROJECT_CONTEXT.md).
 
 ## Repository structure
 
@@ -60,8 +60,8 @@ signalgen-2/
 │   ├── desktop/             Electron desktop application
 │   └── web/                 Public and account web application
 ├── docker-compose.yml       Local backend orchestration
-├── PRD.md                   Product requirements and acceptance criteria
-└── PROJECT_CONTEXT.md       Canonical architecture and engineering boundaries
+├── docs/                    Product, architecture, experiment, and handoff documents
+└── README.md                Repository entry point and local setup
 ```
 
 ## Quick start
@@ -124,11 +124,12 @@ npm run build
 ## Documentation
 
 - [Desktop frontend guide](./frontend/desktop/README.md)
-- [Product requirements](./PRD.md)
-- [Frontend MVP PRD](./frontend/FRONTEND_MVP_PRD.md)
-- [Backend MVP PRD](./backend/BACKEND_MVP_PRD.md)
-- [Target API and worker contract](./backend/MVP_API_CONTRACT.md)
-- [Architecture and project context](./PROJECT_CONTEXT.md)
+- [Documentation index](./docs/README.md)
+- [Product requirements](./docs/PRD.md)
+- [Frontend MVP PRD](./docs/frontend/FRONTEND_MVP_PRD.md)
+- [Backend MVP PRD](./docs/backend/BACKEND_MVP_PRD.md)
+- [Target API and worker contract](./docs/backend/MVP_API_CONTRACT.md)
+- [Architecture and project context](./docs/PROJECT_CONTEXT.md)
 - OpenAPI contract: [`backend/openapi.yaml`](./backend/openapi.yaml)
 
 ## License and ownership

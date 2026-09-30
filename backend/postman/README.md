@@ -80,7 +80,7 @@ ada operator, gunakan akun operator tersebut; jangan mencoba bootstrap lagi.
 Setelah akun pengujian mempunyai entitlement:
 
 1. Jalankan `06 User rule CRUD`.
-2. Jalankan `07 Authorized screening fixture`.
+2. Jalankan `07 Authorized screening Yahoo Finance`.
 3. Uji WebSocket secara manual seperti bagian berikut.
 4. Jalankan `99 Logout - run last` hanya setelah seluruh test selesai.
 
@@ -116,8 +116,8 @@ Kirim satu frame:
 }
 ```
 
-Respons sukses bertipe `screener.result` dan contoh fixture menghasilkan
-`matched: true`. Ticket hanya dapat dipakai sekali dan berumur singkat.
+Respons sukses bertipe `screener.result`. Nilai `matched` bergantung pada candle
+dari Yahoo Finance. Ticket hanya dapat dipakai sekali dan berumur singkat.
 
 ## 6. Penjelasan setiap endpoint
 
@@ -127,7 +127,7 @@ Respons sukses bertipe `screener.result` dan contoh fixture menghasilkan
 |---|---|---|
 | `GET /api` | Identitas dan status ringkas Go API untuk frontend. | Publik |
 | `GET /health` | Memastikan proses API hidup; belum menjamin dependency siap. | Publik |
-| `GET /ready` | Memastikan storage dan fixture yang dibutuhkan sudah siap. | Publik |
+| `GET /ready` | Memastikan storage yang dibutuhkan sudah siap. | Publik |
 
 ### Authentication
 
@@ -161,7 +161,10 @@ Respons sukses bertipe `screener.result` dan contoh fixture menghasilkan
 | `GET /api/v1/rules/:id` | Membaca satu rule yang boleh dilihat user. Definisi privat rule sistem tidak dibocorkan. | Sesi + entitlement screener |
 | `PATCH /api/v1/rules/:id` | Memperbarui rule pribadi dengan version check agar update bersamaan tidak menimpa data diam-diam. | Sesi + entitlement screener |
 | `DELETE /api/v1/rules/:id` | Menghapus rule pribadi dengan version check. | Sesi + entitlement screener |
-| `POST /api/v1/datasets/prepare` | Menyiapkan dataset OHLCV untuk screening dan menghasilkan ID, versi, serta checksum. | Sesi + entitlement screener |
+| `GET /api/v1/stocks` | Membaca katalog tiga emiten IDX yang didukung. | Bearer + app session |
+| `GET/POST /api/v1/stock-universes` | Membaca/membuat bundle saham milik user (maksimal tiga emiten). | Bearer + app session |
+| `GET/PATCH/DELETE /api/v1/stock-universes/:id` | Membaca/mengubah/menghapus bundle owner dengan version check. | Bearer + app session |
+| `POST /api/v1/datasets/prepare` | Menyiapkan snapshot Yahoo Finance dari `rule_id + universe_id`; tanggal dihitung backend. | Sesi + entitlement screener |
 | `GET /api/v1/datasets/:id/manifest` | Membaca metadata dan binding dataset tanpa seluruh candle. | Sesi + entitlement screener |
 | `GET /api/v1/datasets/:id/content` | Mengambil isi OHLCV yang akan dihitung menjadi fitur di client/WASM. | Sesi + entitlement screener |
 | `POST /api/v1/compute-grants` | Membuat izin komputasi singkat yang mengikat user, dataset, rule, engine, dan schema. | Sesi + entitlement screener |

@@ -13,6 +13,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
 )
 
 // routes is the application composition point. Each feature package owns its
@@ -45,6 +46,11 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	rules.RegisterRoutes(router, rules.RouteHandlers{
 		List: server.listRules, Create: server.createRule, Get: server.getRule,
 		Update: server.updateRule, Delete: server.deleteRule,
+	})
+	universe.RegisterRoutes(router, universe.RouteHandlers{
+		Catalog: server.listStockCatalog, List: server.listStockUniverses,
+		Create: server.createStockUniverse, Get: server.getStockUniverse,
+		Update: server.updateStockUniverse, Delete: server.deleteStockUniverse,
 	})
 	dataset.RegisterRoutes(router, dataset.RouteHandlers{
 		Prepare: server.prepareDataset, Manifest: server.datasetManifest,

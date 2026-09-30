@@ -139,7 +139,7 @@ kali, dan tidak boleh berlaku untuk user/session/grant lain.
 
 ## 6. Kontrak pesan yang diusulkan
 
-Schema mesin tersedia di [`contracts/hybrid-screener.schema.json`](contracts/hybrid-screener.schema.json).
+Schema mesin tersedia di [`backend/contracts/hybrid-screener.schema.json`](../../backend/contracts/hybrid-screener.schema.json).
 
 Contoh permintaan ticket:
 

@@ -276,7 +276,7 @@
               {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
               {"key": "Content-Type", "value": "application/json", "type": "text"}
             ],
-            "body": {"mode": "raw", "raw": "{\n  \"purpose\": \"screen\",\n  \"market\": \"IDX\",\n  \"symbols\": [\"BBCA.JK\"],\n  \"timeframe\": \"1d\",\n  \"date_from\": \"2026-01-01\",\n  \"date_to\": \"2026-02-09\"\n}"},
+            "body": {"mode": "raw", "raw": "{\n  \"purpose\": \"screen\",\n  \"rule_id\": \"{{rule_id}}\",\n  \"universe_id\": \"{{universe_id}}\"\n}"},
             "url": "{{base_url}}/api/v1/datasets/prepare"
           },
           "event": [{"listen": "test", "script": {"exec": [
@@ -467,7 +467,7 @@
       ]
     },
     {
-      "name": "07 Authorized screening fixture",
+      "name": "07 Authorized screening Yahoo Finance",
       "description": "Requires the screener grant created in folder 05.",
       "item": [
         {
@@ -506,7 +506,7 @@
           ], "type": "text/javascript"}}]
         },
         {
-          "name": "Prepare fixture dataset",
+          "name": "Create three-stock universe",
           "request": {
             "method": "POST",
             "header": [
@@ -514,13 +514,33 @@
               {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
               {"key": "Content-Type", "value": "application/json", "type": "text"}
             ],
-            "body": {"mode": "raw", "raw": "{\n  \"purpose\": \"screen\",\n  \"market\": \"IDX\",\n  \"symbols\": [\"BBCA.JK\"],\n  \"timeframe\": \"1d\",\n  \"date_from\": \"2026-01-01\",\n  \"date_to\": \"2026-02-09\"\n}"},
+            "body": {"mode": "raw", "raw": "{\n  \"name\": \"IDX bank and telco\",\n  \"symbols\": [\"BBCA.JK\", \"BBRI.JK\", \"TLKM.JK\"]\n}"},
+            "url": "{{base_url}}/api/v1/stock-universes"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('status 201', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.test('universe has at most three symbols', () => pm.expect(body.symbols.length).to.be.within(1, 3));",
+            "pm.environment.set('universe_id', body.id);",
+            "pm.environment.set('universe_version', String(body.version));"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Prepare Yahoo Finance dataset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}", "type": "text"},
+              {"key": "X-App-Session", "value": "{{app_session_token}}", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"purpose\": \"screen\",\n  \"rule_id\": \"{{rule_id}}\",\n  \"universe_id\": \"{{universe_id}}\"\n}"},
             "url": "{{base_url}}/api/v1/datasets/prepare"
           },
           "event": [{"listen": "test", "script": {"exec": [
             "pm.test('status 200', () => pm.response.to.have.status(200));",
             "const body = pm.response.json();",
-            "pm.test('synthetic fixture is explicit', () => { pm.expect(body.provider).to.eql('fixture'); pm.expect(body.quality.warnings.join(' ')).to.include('synthetic'); });",
+            "pm.test('Yahoo Finance provider is explicit', () => { pm.expect(body.provider).to.eql('yahoo_finance'); pm.expect(body.symbols.length).to.be.within(1, 3); });",
             "pm.environment.set('dataset_id', body.dataset_id);",
             "pm.environment.set('dataset_version', body.version);",
             "pm.environment.set('dataset_checksum', body.checksum);"

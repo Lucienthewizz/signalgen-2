@@ -20,6 +20,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
 )
 
 // These aliases keep the public API constructor readable while each feature
@@ -32,6 +33,7 @@ type ComputeStore = compute.Repository
 type ScreenerTicketStore = screener.TicketRepository
 type RuleStore = rules.Repository
 type SubscriptionService = subscription.Service
+type UniverseStore = universe.Repository
 
 // AccessStore is the server-owned authorization source for account status,
 // roles, feature entitlements, and audited operator mutations. It composes the
@@ -69,6 +71,32 @@ type noSubscriptionService struct{}
 func (noSubscriptionService) Plans(context.Context) ([]subscription.Plan, error) {
 	return nil, errSubscriptionUnavailable
 }
+
+var errUniverseUnavailable = errors.New("stock universe store is unavailable")
+
+type noUniverseStore struct{}
+
+func (noUniverseStore) Catalog(context.Context) ([]universe.Instrument, error) {
+	return nil, errUniverseUnavailable
+}
+func (noUniverseStore) List(context.Context, string) ([]universe.Universe, error) {
+	return nil, errUniverseUnavailable
+}
+func (noUniverseStore) Get(context.Context, string, string) (universe.Universe, error) {
+	return universe.Universe{}, universe.ErrNotFound
+}
+func (noUniverseStore) Instruments(context.Context, string, string) ([]universe.Instrument, error) {
+	return nil, universe.ErrNotFound
+}
+func (noUniverseStore) Create(context.Context, string, string, []string) (universe.Universe, error) {
+	return universe.Universe{}, errUniverseUnavailable
+}
+func (noUniverseStore) Update(context.Context, string, string, string, []string, int) (universe.Universe, error) {
+	return universe.Universe{}, errUniverseUnavailable
+}
+func (noUniverseStore) Delete(context.Context, string, string, int) error {
+	return errUniverseUnavailable
+}
 func (noSubscriptionService) Current(context.Context, string) (subscription.Subscription, error) {
 	return subscription.Subscription{}, errSubscriptionUnavailable
 }
@@ -105,6 +133,7 @@ type Server struct {
 	compute        ComputeStore
 	rules          RuleStore
 	subscriptions  SubscriptionService
+	universes      UniverseStore
 	limiter        RateLimiter
 	tickets        ScreenerTicketStore
 	originPatterns []string
@@ -131,6 +160,7 @@ type serverConfig struct {
 	originPatterns  []string
 	authService     AuthService
 	subscriptions   SubscriptionService
+	universeStore   UniverseStore
 	resetRedirect   string
 }
 
@@ -195,6 +225,17 @@ func WithSubscriptionService(service SubscriptionService) ServerOption {
 			return fmt.Errorf("subscription service is required")
 		}
 		config.subscriptions = service
+		return nil
+	}
+}
+
+// WithUniverseStore enables owner-scoped stock catalog and universe routes.
+func WithUniverseStore(store UniverseStore) ServerOption {
+	return func(config *serverConfig) error {
+		if store == nil {
+			return fmt.Errorf("universe store is required")
+		}
+		config.universeStore = store
 		return nil
 	}
 }
@@ -268,6 +309,9 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	if config.subscriptions == nil {
 		config.subscriptions = noSubscriptionService{}
 	}
+	if config.universeStore == nil {
+		config.universeStore = noUniverseStore{}
+	}
 	if config.ticketStore == nil {
 		var err error
 		config.ticketStore, err = screener.NewTicketStore()
@@ -277,7 +321,7 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	}
 	server := &Server{
 		identity: identity, auth: config.authService, sessions: sessions, access: accessStore,
-		datasets: datasets, compute: computeStore, rules: config.ruleStore, subscriptions: config.subscriptions, limiter: config.rateLimiter,
+		datasets: datasets, compute: computeStore, rules: config.ruleStore, subscriptions: config.subscriptions, universes: config.universeStore, limiter: config.rateLimiter,
 		tickets: config.ticketStore, originPatterns: append([]string(nil), config.originPatterns...),
 	}
 	// Route registration is isolated in routes.go so this constructor only wires dependencies.

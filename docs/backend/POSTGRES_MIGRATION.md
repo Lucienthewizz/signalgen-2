@@ -19,12 +19,21 @@ project on 29 September 2026. Their remote versions are `20260929041140`,
   the one-time first-operator setup.
 
 Every application table has RLS enabled. The `signalgen` schema is not exposed
-by the Supabase Data API. Authenticated database users may read only their own
-profile/grants and CRUD only their own rules. Session tokens, operator state,
-and audit events have no direct client policies. The Go API uses its verified
-principal for every owner filter and checks role/entitlement before serving
-private requests. A privileged backend connection can bypass RLS, so the API
-checks remain essential.
+by the Supabase Data API, and the browser must use the Go API rather than call
+`.schema("signalgen")` directly. PostgreSQL grants do not expose a custom schema
+to the Data API on their own. The selected grants and policies keep the
+owner-scoped RLS contract testable as defense in depth: if direct access is
+approved later, authenticated users can read only their own profile/grants and
+CRUD only their own rules. Session tokens, operator state, and audit events
+have no direct client policies. The Go API uses its verified principal for
+every owner filter and checks role/entitlement before serving private
+requests. A privileged backend connection can bypass RLS, so the API checks
+remain essential.
+
+Schema boundaries are verified by `supabase/tests/schema_boundaries.sql`.
+Active application tables belong in `signalgen`; the `legacy` schema remains a
+client-inaccessible archive; SignalGen application tables must not be added to
+`public`.
 
 ## Development
 

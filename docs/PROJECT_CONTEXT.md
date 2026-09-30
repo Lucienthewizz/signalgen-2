@@ -70,7 +70,7 @@ menunggu keputusan provider dan tidak boleh disimulasikan sebagai payment sukses
 
 ## 5. Data dan proteksi
 
-Supabase Postgres menjadi sumber authoritative data aplikasi. Schema `signalgen` tidak diekspos ke Data API; RLS aktif di setiap tabel dan akses browser langsung dibatasi. Backend menggunakan koneksi server-side dan wajib menerapkan owner filter, role, serta entitlement pada setiap query. Migration, backup/recovery, dan pengujian dua pengguna adalah gate P1.
+Supabase Postgres menjadi sumber authoritative data aplikasi. Schema `signalgen` menyimpan data aktif, schema `legacy` hanya arsip SQLite, dan tabel aplikasi tidak dibuat di `public`. Kedua custom schema tersebut tidak diekspos ke Data API; browser mengakses data aplikasi melalui Go API. Grant dan policy RLS terpilih pada `signalgen` adalah defense in depth dan tidak mengekspos schema dengan sendirinya. Backend menggunakan koneksi server-side dan wajib menerapkan owner filter, role, serta entitlement pada setiap query. Perubahan daftar exposed schema di Supabase adalah perubahan arsitektur/security yang wajib direview. Migration, backup/recovery, dan pengujian dua pengguna adalah gate P1.
 
 Cache historis client ciphertext terkompresi, user/version/checksum scoped. Pilihan storage ciphertext di browser memerlukan keputusan eksplisit sebelum P1 cache selesai. P0 boleh memory-only. Browser storage dapat dihapus, bukan sumber authoritative jurnal.
 

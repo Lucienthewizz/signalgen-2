@@ -144,4 +144,4 @@ Vite proxies requests so the renderer can use relative URLs in development:
 
 The legacy renderer remains in `renderer/` until the React/Electron application reaches feature parity. New functionality should be delivered as small vertical slices against the current OpenAPI contract rather than by inventing frontend-only endpoints.
 
-See the repository [PRD](../../PRD.md) and [project context](../../PROJECT_CONTEXT.md) before changing product scope or architecture.
+See the repository [PRD](../../docs/PRD.md) and [project context](../../docs/PROJECT_CONTEXT.md) before changing product scope or architecture.
