@@ -1,0 +1,58 @@
+name: Backend
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "supabase/**"
+      - ".github/workflows/backend.yml"
+  push:
+    paths:
+      - "backend/**"
+      - "supabase/**"
+      - ".github/workflows/backend.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: signalgen_test
+          POSTGRES_PASSWORD: signalgen_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d signalgen_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      SIGNALGEN_TEST_PG_URL: postgres://postgres:signalgen_test_password@127.0.0.1:5432/signalgen_test?sslmode=disable
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Apply migrations and verify schema boundaries and RLS
+        working-directory: backend
+        run: go run ./cmd/schematest -repo-root ..
+
+      - name: Run backend tests
+        working-directory: backend
+        run: go test ./...
+
+      - name: Run Go static analysis
+        working-directory: backend
+        run: go vet ./...
