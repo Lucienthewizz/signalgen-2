@@ -14,6 +14,13 @@ type Route = "home" | "account" | "creators" | AuthView | `app/${DemoView}`;
 function currentRoute(): Route {
   const queryView = new URLSearchParams(location.search).get("view");
   if (queryView === "reset-password") return "reset-password";
+  const hashParams = new URLSearchParams(location.hash.replace(/^#/, ""));
+  if (
+    hashParams.get("type") === "recovery" ||
+    (hashParams.get("access_token") && hashParams.get("refresh_token"))
+  ) {
+    return "reset-password";
+  }
   const route = location.hash.slice(1).split("&")[0];
   if (
     [

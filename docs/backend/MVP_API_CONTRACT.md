@@ -2,6 +2,15 @@
 
 Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** [`openapi.yaml`](../../backend/openapi.yaml) documents only the implemented Go surface and wins for current runtime integration; this file retains proposed routes and policy decisions. Changes require FE+BE review and versioning.
 
+Checkpoint 5 October 2026 (supersedes historical fixture/split notes below):
+the user selected Model A for active implementation. Dynamic preparation now
+requires an owned `universe_id`; content returns `series[]` for up to three
+symbols. `/api/v1/capabilities` declares the Model A orchestration and batch
+limits separately from the single-symbol portable core. See
+[the current frontend handoff](MODEL_A_FRONTEND_HANDOFF.md) for exact calls,
+known connector mismatches, and actual-WASM test commands. Model B is test-only;
+backtest/P&L and journal remain unimplemented pending final financial policy.
+
 Addendum 27 September 2026: bimbingan terbaru meminta pemisahan screener hybrid.
 Kontrak eksperimen socket ticket dan private decision tersedia di
 [`HYBRID_SCREENER_DESIGN.md`](HYBRID_SCREENER_DESIGN.md) dan schema
@@ -105,10 +114,19 @@ The active `/api/auth/*` implementation is Go-owned and delegates identity and
 password storage to Supabase Auth using the server's publishable key. The
 Python routes remain legacy reference code and are not used by the web runtime.
 
+Identity refresh is implemented at `POST /api/auth/refresh`. Login returns
+both `access_token` and `refresh_token`; replace both after successful refresh.
+It does not renew app sessions, grants, or entitlements. See
+[AUTH_REFRESH.md](AUTH_REFRESH.md) for client coordination and error handling.
+Opaque app-session rotation is now implemented separately at
+`POST /api/v1/sessions/{id}/refresh`. It replaces only the current session's
+secret, not its ID/device/expiry. Supabase refresh must not be confused with it.
+
 | Method | Route | App session | Purpose |
 | --- | --- | :---: | --- |
 | POST | `/auth/register` | exempt | Supabase-backed register; token may be null pending confirmation |
 | POST | `/auth/login` | exempt | Supabase-backed login; returns identity token material per approved auth policy |
+| POST | `/auth/refresh` | exempt, refresh token in body | Rotate Supabase identity tokens only; not app-session expiry or entitlement |
 | GET | `/auth/me` | bearer only | Server-verified public identity |
 | POST | `/auth/password/reset-request` | exempt | Send recovery email without account enumeration |
 | POST | `/auth/password/reset` | exempt, recovery tokens in body | Refresh recovery session and update password |

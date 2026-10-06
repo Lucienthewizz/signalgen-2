@@ -167,7 +167,8 @@ export const api = {
   ensureAppSession: async () => {
     const existing = session.getAppSession();
     const storedOrigin = sessionStorage.getItem(APP_SESSION_ORIGIN_KEY);
-    if (existing && storedOrigin === (API_ORIGIN || "same-origin")) return existing;
+    if (existing && storedOrigin === (API_ORIGIN || "same-origin"))
+      return existing;
     session.clearAppSession();
     const created = await api.createAppSession();
     session.setAppSession(created.session_token);

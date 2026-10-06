@@ -23,7 +23,10 @@ export function SignalLattice() {
     current.y += (target.y - current.y) * 0.085;
     paintOrbit();
 
-    if (Math.abs(target.x - current.x) + Math.abs(target.y - current.y) > 0.08) {
+    if (
+      Math.abs(target.x - current.x) + Math.abs(target.y - current.y) >
+      0.08
+    ) {
       frameRef.current = requestAnimationFrame(animateOrbit);
       return;
     }
@@ -85,7 +88,11 @@ export function SignalLattice() {
         onPointerMove={tilt}
       >
         <div className="signal-lattice__halo" aria-hidden="true" />
-        <div className="signal-lattice__scene" ref={sceneRef} aria-hidden="true">
+        <div
+          className="signal-lattice__scene"
+          ref={sceneRef}
+          aria-hidden="true"
+        >
           <div className="signal-lattice__floor" />
           <svg
             className="signal-lattice__trace"
@@ -93,7 +100,10 @@ export function SignalLattice() {
             preserveAspectRatio="none"
           >
             <path d="M0 278 C74 268 103 238 167 247 S255 179 314 193 S396 121 452 147 S551 71 607 97 S687 45 740 62" />
-            <path className="signal-lattice__trace-glow" d="M0 278 C74 268 103 238 167 247 S255 179 314 193 S396 121 452 147 S551 71 607 97 S687 45 740 62" />
+            <path
+              className="signal-lattice__trace-glow"
+              d="M0 278 C74 268 103 238 167 247 S255 179 314 193 S396 121 452 147 S551 71 607 97 S687 45 740 62"
+            />
           </svg>
           <span className="signal-candle signal-candle--one" />
           <span className="signal-candle signal-candle--two" />

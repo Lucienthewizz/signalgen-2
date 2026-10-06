@@ -4,7 +4,7 @@ services:
       - legacy
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: legacy/python/Dockerfile
       target: runtime
     env_file:
       - backend/.env
@@ -34,7 +34,7 @@ services:
       - legacy-test
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: legacy/python/Dockerfile
       target: test
     env_file:
       - backend/.env

@@ -20,13 +20,19 @@ export function CreatorsPage() {
   return (
     <main className="creators-page">
       <header className="creators-topbar">
-        <a href="#home" aria-label="Signalgen home"><Brand compact /></a>
-        <a href="#home"><ArrowLeft aria-hidden="true" /> Back to home</a>
+        <a href="#home" aria-label="Signalgen home">
+          <Brand compact />
+        </a>
+        <a href="#home">
+          <ArrowLeft aria-hidden="true" /> Back to home
+        </a>
       </header>
       <section className="creators-directory">
         <header>
           <h1>Creators</h1>
-          <p>The people building Signalgen’s web workspace and service layer.</p>
+          <p>
+            The people building Signalgen’s web workspace and service layer.
+          </p>
         </header>
         <div className="creators-directory__list">
           {creators.map(({ name, role, github, handle }) => (
@@ -46,7 +52,10 @@ export function CreatorsPage() {
             </article>
           ))}
         </div>
-        <p className="creators-directory__note">Signalgen is a research workspace for IDX analysis. Not investment advice.</p>
+        <p className="creators-directory__note">
+          Signalgen is a research workspace for IDX analysis. Not investment
+          advice.
+        </p>
       </section>
     </main>
   );

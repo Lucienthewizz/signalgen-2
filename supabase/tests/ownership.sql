@@ -34,6 +34,10 @@ begin
   values (test_universe_id, 'BBCA.JK', 0);
 
   perform set_config('request.jwt.claim.sub', other_id::text, true);
+  select count(*) into visible_count from signalgen.account_profiles where user_id = owner_id;
+  if visible_count <> 0 then
+    raise exception 'another user can read owner profile';
+  end if;
   select count(*) into visible_count from signalgen.user_rules where id = test_rule_id;
   if visible_count <> 0 then
     raise exception 'another user can read an owner rule';
@@ -58,6 +62,10 @@ begin
   end if;
 
   perform set_config('request.jwt.claim.sub', owner_id::text, true);
+  select count(*) into visible_count from signalgen.account_profiles where user_id = owner_id;
+  if visible_count <> 1 then
+    raise exception 'owner cannot read own profile';
+  end if;
   select count(*) into visible_count from signalgen.user_rules where id = test_rule_id;
   if visible_count <> 1 then
     raise exception 'owner cannot read own rule';

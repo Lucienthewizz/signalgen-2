@@ -2,6 +2,11 @@
 .venv
 **/__pycache__
 **/.pytest_cache
+**/node_modules
+**/dist
+**/.env
+**/*.db
+**/*.log
 **/*.pyc
 backend/.env
 backend/*.db

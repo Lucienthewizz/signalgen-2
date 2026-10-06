@@ -5,6 +5,7 @@ import "errors"
 var (
 	ErrTokenRequired        = errors.New("access token is required")
 	ErrTokenInvalid         = errors.New("access token is invalid or expired")
+	ErrRefreshInvalid       = errors.New("refresh token is invalid or revoked")
 	ErrProviderUnavailable  = errors.New("identity provider is unavailable")
 	ErrCredentialsInvalid   = errors.New("email or password is invalid")
 	ErrRegistrationRejected = errors.New("registration was rejected")
@@ -24,8 +25,9 @@ type Principal struct {
 // AuthResult is the stable subset of a Supabase Auth session exposed to the
 // frontend. SignalGen never adds roles or entitlements to this identity result.
 type AuthResult struct {
-	AccessToken string
-	TokenType   string
-	ExpiresIn   int
-	User        Principal
+	AccessToken  string
+	RefreshToken string
+	TokenType    string
+	ExpiresIn    int
+	User         Principal
 }

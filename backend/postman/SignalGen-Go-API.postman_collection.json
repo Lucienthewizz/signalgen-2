@@ -53,7 +53,7 @@
     },
     {
       "name": "02 Go authentication",
-      "description": "Login stores access_token automatically. Skip login only when a valid access_token was pasted manually into the selected environment.",
+      "description": "Login stores both identity tokens. Refresh replaces both; no app-session token is changed. Do not run concurrent refresh requests.",
       "item": [
         {
           "name": "Login through Go with email and password",
@@ -69,7 +69,25 @@
             "pm.test('Go authentication succeeds', () => pm.response.to.have.status(200));",
             "const body = pm.response.json();",
             "pm.test('access token returned', () => pm.expect(body.access_token).to.be.a('string').and.not.empty);",
-            "if (body.access_token) pm.environment.set('access_token', body.access_token);"
+            "pm.test('refresh token returned', () => pm.expect(body.refresh_token).to.be.a('string').and.not.empty);",
+            "if (pm.response.code === 200 && body.access_token && body.refresh_token) { pm.environment.set('access_token', body.access_token); pm.environment.set('refresh_token', body.refresh_token); }"
+          ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Refresh identity token pair",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+            "body": {"mode": "raw", "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"},
+            "url": "{{base_url}}/api/auth/refresh"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('refresh succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('complete identity pair', () => { pm.expect(body.access_token).to.be.a('string').and.not.empty; pm.expect(body.refresh_token).to.be.a('string').and.not.empty; pm.expect(body.expires_in).to.be.above(0); });",
+            "pm.test('tokens are not cached', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));",
+            "pm.test('refresh does not create app session', () => pm.expect(body).not.to.have.property('session_token'));",
+            "if (pm.response.code === 200 && body.access_token && body.refresh_token) { pm.environment.set('access_token', body.access_token); pm.environment.set('refresh_token', body.refresh_token); }"
           ], "type": "text/javascript"}}]
         },
         {
@@ -112,6 +130,27 @@
             "if (body.session_token) pm.environment.set('app_session_token', body.session_token);",
             "if (body.session && body.session.id) pm.environment.set('current_session_id', body.session.id);"
           ], "type": "text/javascript"}}]
+        },
+        {
+          "name": "Rotate current app-session secret",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{access_token}}","type":"text"},
+              {"key":"X-App-Session","value":"{{app_session_token}}","type":"text"},
+              {"key":"Content-Type","value":"application/json","type":"text"}
+            ],
+            "body":{"mode":"raw","raw":"{}"},
+            "url":"{{base_url}}/api/v1/sessions/{{current_session_id}}/refresh"
+          },
+          "event":[{"listen":"test","script":{"exec":[
+            "pm.test('rotation succeeds', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('session identity preserved', () => pm.expect(body.session.id).to.eql(pm.environment.get('current_session_id')));",
+            "pm.test('replacement secret returned', () => { pm.expect(body.session_token).to.be.a('string').and.not.empty; pm.expect(body.session_token).not.to.eql(pm.environment.get('app_session_token')); });",
+            "pm.test('no-store', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));",
+            "if (pm.response.code === 200 && body.session_token) pm.environment.set('app_session_token',body.session_token);"
+          ],"type":"text/javascript"}}]
         },
         {
           "name": "Current account",
@@ -260,6 +299,35 @@
             "const body = pm.response.json();",
             "pm.test('owner response is nullable and private', () => { pm.expect(body).to.have.property('subscription'); pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'); });"
           ], "type": "text/javascript"}}]
+        }
+      ]
+    },
+    {
+      "name": "03B Editable profile (after app session)",
+      "description": "Run after login and app-session creation. PATCH changes the current user's presentation data, not Supabase login identity.",
+      "item": [
+        {
+          "name": "Read editable profile",
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/v1/account/profile",
+            "header": [{"key":"Authorization","value":"Bearer {{access_token}}"},{"key":"X-App-Session","value":"{{app_session_token}}"}]
+          },
+          "event": [{"listen":"test","script":{"type":"text/javascript","exec":[
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { const p = pm.response.json(); pm.environment.set('profile_version', p.version); pm.test('profile belongs to signed-in user', () => pm.expect(p.user_id).to.eql(pm.environment.get('user_id'))); }"
+          ]}}]
+        },
+        {
+          "name": "Update editable profile",
+          "request": {
+            "method":"PATCH", "url":"{{base_url}}/api/v1/account/profile",
+            "header":[{"key":"Authorization","value":"Bearer {{access_token}}"},{"key":"X-App-Session","value":"{{app_session_token}}"},{"key":"Content-Type","value":"application/json"}],
+            "body":{"mode":"raw","raw":"{\"display_name\":\"{{profile_display_name}}\",\"bio\":\"{{profile_bio}}\",\"version\":{{profile_version}}}","options":{"raw":{"language":"json"}}}
+          },
+          "event":[{"listen":"test","script":{"type":"text/javascript","exec":[
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) { const p = pm.response.json(); pm.test('version increments', () => pm.expect(p.version).to.eql(Number(pm.environment.get('profile_version')) + 1)); pm.environment.set('profile_version', p.version); }"
+          ]}}]
         }
       ]
     },
@@ -575,7 +643,8 @@
           "event": [{"listen": "test", "script": {"exec": [
             "pm.test('status 200', () => pm.response.to.have.status(200));",
             "const body = pm.response.json();",
-            "pm.test('OHLCV fixture is complete', () => { pm.expect(body.symbol).to.eql('BBCA.JK'); pm.expect(body.candles).to.have.lengthOf(40); });",
+            "pm.test('multi-symbol OHLCV is complete', () => { pm.expect(body.schema_version).to.eql('ohlcv-multi-1'); pm.expect(body.series.length).to.be.within(1, 3); body.series.forEach(series => { pm.expect(series.timezone).to.eql('UTC'); pm.expect(series.candles.length).to.be.within(20, 100); }); });",
+            "if (body.series && body.series[0]) { const series = body.series[0]; pm.environment.set('dataset_symbol', series.symbol); pm.environment.set('dataset_latest_timestamp', series.candles[series.candles.length - 1].timestamp); }",
             "pm.test('content is private and versioned', () => { pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'); pm.expect(pm.response.headers.get('ETag')).to.include(pm.environment.get('dataset_checksum')); });"
           ], "type": "text/javascript"}}]
         },

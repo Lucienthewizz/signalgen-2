@@ -53,7 +53,7 @@ client-inaccessible archive; SignalGen application tables must not be added to
    `supabase/tests/local_auth_stub.sql`, and both migration files. Set
    `SIGNALGEN_TEST_PG_URL` to a dedicated loopback PostgreSQL database named
    `signalgen_test` before running
-   `go test ./internal/api -run '^TestPostgresAPIContractsAndOwnership$'`.
+   `go test ./internal/api/tests -run '^TestPostgresAPIContractsAndOwnership$'`.
    The test refuses other hosts/database names and clears only that dedicated
    test database.
 

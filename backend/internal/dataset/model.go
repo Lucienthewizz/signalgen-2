@@ -6,6 +6,7 @@ var (
 	ErrInvalidRequest = errors.New("invalid dataset request")
 	ErrNotFound       = errors.New("dataset not found")
 	ErrIntegrity      = errors.New("dataset fixture integrity check failed")
+	ErrCapacity       = errors.New("dataset snapshot capacity reached")
 )
 
 type PrepareRequest struct {
@@ -25,6 +26,7 @@ type Quality struct {
 }
 
 type Manifest struct {
+	ExpiresAt      string   `json:"expires_at,omitempty"`
 	DatasetID      string   `json:"dataset_id"`
 	Version        string   `json:"version"`
 	SchemaVersion  string   `json:"schema_version"`

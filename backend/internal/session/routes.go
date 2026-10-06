@@ -8,12 +8,14 @@ type RouteRegistrar interface {
 
 type RouteHandlers struct {
 	Create        http.HandlerFunc
+	Rotate        http.HandlerFunc
 	RevokeCurrent http.HandlerFunc
 	RevokeByID    http.HandlerFunc
 }
 
 func RegisterRoutes(router RouteRegistrar, handlers RouteHandlers) {
 	router.Handle(http.MethodPost, "/api/v1/sessions", handlers.Create)
+	router.Handle(http.MethodPost, "/api/v1/sessions/:id/refresh", handlers.Rotate)
 	router.Handle(http.MethodDelete, "/api/v1/sessions/current", handlers.RevokeCurrent)
 	router.Handle(http.MethodDelete, "/api/v1/account/sessions/:id", handlers.RevokeByID)
 }

@@ -20,9 +20,15 @@ type TicketStore struct {
 	now     func() time.Time
 	random  io.Reader
 	ttl     time.Duration
+	max     int
+	perUser int
 }
 
 type TicketOption func(*TicketStore)
+
+func WithTicketCapacity(max, perUser int) TicketOption {
+	return func(store *TicketStore) { store.max = max; store.perUser = perUser }
+}
 
 func WithTicketClock(clock func() time.Time) TicketOption {
 	return func(store *TicketStore) { store.now = clock }
@@ -42,11 +48,13 @@ func NewTicketStore(options ...TicketOption) (*TicketStore, error) {
 		now:     time.Now,
 		random:  rand.Reader,
 		ttl:     defaultTicketTTL,
+		max:     1024,
+		perUser: 16,
 	}
 	for _, option := range options {
 		option(store)
 	}
-	if store.now == nil || store.random == nil || store.ttl <= 0 {
+	if store.now == nil || store.random == nil || store.ttl <= 0 || store.max < 1 || store.perUser < 1 || store.perUser > store.max {
 		return nil, fmt.Errorf("invalid socket ticket store configuration")
 	}
 	return store, nil
@@ -68,6 +76,18 @@ func (store *TicketStore) Create(_ context.Context, binding Binding) (CreatedTic
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	store.deleteExpiredLocked(now)
+	if len(store.entries) >= store.max {
+		return CreatedTicket{}, ErrCapacity
+	}
+	owned := 0
+	for _, entry := range store.entries {
+		if entry.UserID == binding.UserID {
+			owned++
+		}
+	}
+	if owned >= store.perUser {
+		return CreatedTicket{}, ErrCapacity
+	}
 	store.entries[hash] = binding
 	return CreatedTicket{Token: token, ExpiresAt: binding.ExpiresAt}, nil
 }

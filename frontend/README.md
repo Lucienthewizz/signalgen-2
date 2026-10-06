@@ -1,10 +1,10 @@
 # SignalGen Frontend
 
-Frontend saat ini memiliki dua aplikasi yang dipertahankan selama migrasi:
+Frontend aktif hanya memiliki satu aplikasi:
 
 - `web/`: target aplikasi utama — public/account, screening, Go/WASM backtesting,
   hasil, sesi/perangkat, dan jurnal.
-- `desktop/`: legacy Electron renderer/shell untuk baseline dan rollback; bukan
+- `../legacy/desktop/`: arsip Electron renderer/shell untuk baseline dan rollback; bukan
   deliverable installer MVP terbaru.
 
 Gunakan satu API boundary. Target API adalah Go dan FastAPI merupakan legacy
@@ -18,5 +18,5 @@ Sebelum mengembangkan frontend, baca
 [`FRONTEND_MVP_PRD.md`](../docs/frontend/FRONTEND_MVP_PRD.md). Dokumen tersebut menetapkan target;
 kode/OpenAPI runtime menetapkan apa yang sudah tersedia.
 
-Backend Docker saat ini adalah legacy sampai Go API diimplementasikan. Frontend
-web dan Electron tetap memakai toolchain JavaScript masing-masing saat development.
+Backend Docker default menjalankan Go API pada port 8080. Python hanya berjalan
+melalui profile `legacy` yang dipilih eksplisit. Web memakai Vite saat development.

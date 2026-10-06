@@ -5,7 +5,7 @@ These instructions apply to everything inside `frontend/`.
 1. Read `../docs/PROJECT_CONTEXT.md`, `../docs/PRD.md`, and the README of the target
    application before changing frontend code. Treat the context and PRD as the
    canonical architecture and product scope.
-2. Treat `web/` as the only active frontend product. `desktop/` is an archived
+2. Treat `web/` as the only active frontend product. `../legacy/desktop/` is an archived
    legacy reference and is out of scope unless the user explicitly asks to work
    on it. Do not create a backend inside the web application.
 3. Treat runtime OpenAPI/current implementation as truth for endpoints that

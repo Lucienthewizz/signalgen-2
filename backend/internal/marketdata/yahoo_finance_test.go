@@ -3,8 +3,11 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,6 +46,66 @@ func TestYahooFinanceNormalizesDailyCandles(t *testing.T) {
 	}
 	if len(series) != 1 || len(series[0].Candles) != 20 || series[0].Candles[0].Timestamp != "2026-01-01T00:00:00Z" {
 		t.Fatalf("series = %+v", series)
+	}
+}
+
+func TestYahooRetryPolicyAndResponseLimit(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		status     int
+		retryAfter string
+		response   string
+		wantCalls  int
+		wantError  error
+	}{
+		{"transient", 503, "0", `{}`, 2, ErrInvalidData},
+		{"not-found", 404, "", `{}`, 1, ErrUnavailable},
+		{"rate-limit-long", 429, "60", `{}`, 1, ErrUnavailable},
+		{"invalid-json", 200, "", `{`, 1, ErrInvalidData},
+		{"oversize", 200, "", strings.Repeat(" ", maxYahooResponseBytes+1), 1, ErrInvalidData},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+				call := calls.Add(1)
+				if call == 1 && test.status != 200 {
+					writer.Header().Set("Retry-After", test.retryAfter)
+					writer.WriteHeader(test.status)
+					return
+				}
+				_, _ = writer.Write([]byte(test.response))
+			}))
+			defer server.Close()
+			provider, _ := NewYahooFinance(server.URL, server.Client())
+			_, err := provider.Daily(context.Background(), cacheInstruments, 20)
+			if !errors.Is(err, test.wantError) || int(calls.Load()) != test.wantCalls {
+				t.Fatalf("error=%v calls=%d", err, calls.Load())
+			}
+		})
+	}
+}
+
+func TestYahooRetryWaitHonorsCancellation(t *testing.T) {
+	started := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Retry-After", "1")
+		writer.WriteHeader(503)
+		started <- struct{}{}
+	}))
+	defer server.Close()
+	provider, _ := NewYahooFinance(server.URL, server.Client())
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() { _, err := provider.Daily(ctx, cacheInstruments, 20); result <- err }()
+	<-started
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("error=%v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("cancelled retry did not stop")
 	}
 }
 

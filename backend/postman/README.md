@@ -30,14 +30,39 @@ harus diisi manual sebelum request dijalankan.
 
 ## 3. Tiga tingkat akses
 
+Setelah login dan membuat app session, gunakan folder **03B Editable profile**:
+GET `http://127.0.0.1:8080/api/v1/account/profile`, kemudian PATCH URL yang sama.
+Keduanya membutuhkan bearer dan `X-App-Session`. GET menyimpan `profile_version`;
+PATCH mengubah nama/bio dan memperbarui version. Nama/bio ini terpisah dari
+metadata Supabase Auth dan tidak mengubah email/password/role.
+Jalankan GET ulang jika mendapat 409. Migration `editable_account_profile`
+harus diterapkan lebih dahulu; keberadaan file SQL bukan bukti cloud sudah siap.
+
 | Tingkat | Header | Digunakan untuk |
 |---|---|---|
-| Publik | Tidak ada | status, health, register, login, recovery |
+| Publik | Tidak ada | status, health, register, login, refresh (token di body), recovery |
 | Identitas Supabase | `Authorization: Bearer {{access_token}}` | `/api/auth/me` dan membuat app session |
 | Sesi aplikasi | Bearer + `X-App-Session: {{app_session_token}}` | account, entitlement, rule, dataset, compute, dan operator |
 
 Bearer token membuktikan identitas Supabase. `X-App-Session` adalah sesi milik
 SignalGen yang mengikat user ke instalasi/perangkat dan bisa dicabut oleh backend.
+
+Login sekarang mengembalikan `access_token`, `refresh_token`, `token_type`, dan
+`expires_in`. Request **Refresh identity token pair** memakai
+`POST {{base_url}}/api/auth/refresh` dengan body
+`{"refresh_token":"{{refresh_token}}"}`, tanpa bearer yang masih berlaku.
+Saat sukses, script mengganti kedua token. Jangan refresh bersamaan dari beberapa
+request/tab; Supabase mengelola rotasi dan reuse detection. Refresh tidak mengubah
+`app_session_token`, expiry sesi aplikasi, role, atau entitlement.
+Pada 401 login kembali; pada 429/503 jangan otomatis menghapus sesi sebagai logout.
+
+Folder **03 App session and account** juga menguji
+`POST /api/v1/sessions/{{current_session_id}}/refresh`. Ini hanya mengganti
+token `X-App-Session` dan tidak memperpanjang expiry. Script menyimpan token
+penggantinya; token lama langsung tidak berlaku. Serialisasikan rotasi, jangan
+retry otomatis setelah respons hilang. Login/setup sesi kembali jika token baru
+tidak berhasil disimpan. Rotasi bukan revoke: grant/ticket yang sudah terikat ke
+ID sesi tetap tunduk pada expiry dan pemeriksaan server masing-masing.
 
 ## 4. Alur test utama
 
@@ -108,16 +133,31 @@ Kirim satu frame:
   "feature_schema_version": "screener-features-1",
   "candidates": [
     {
-      "symbol": "BBCA.JK",
-      "timestamp": "2026-02-07T00:00:00Z",
+      "symbol": "{{dataset_symbol}}",
+      "timestamp": "{{dataset_latest_timestamp}}",
       "features": {"price": 128, "ema9": 125, "ema20": 121, "rsi14": 72}
     }
   ]
 }
 ```
 
-Respons sukses bertipe `screener.result`. Nilai `matched` bergantung pada candle
-dari Yahoo Finance. Ticket hanya dapat dipakai sekali dan berumur singkat.
+Contoh angka feature di atas hanya untuk mengecek transport/protokol. Untuk
+screening yang bermakna, ganti dengan hasil Go/WASM dari candle dataset tersebut.
+Request **Dataset content** mengisi simbol dan timestamp contoh dari dataset
+aktif; simbol di luar universe dan tanggal di luar rentang dataset ditolak.
+
+Respons sukses bertipe `screener.result`. Kandidat boleh mencakup maksimum tiga
+simbol dari manifest; urutan hasil mengikuti urutan kandidat, dan cooldown
+dihitung terpisah per saham. Ticket hanya dapat dipakai sekali dan berumur singkat.
+Snapshot berlaku 15 menit. Jika dataset kedaluwarsa atau backend restart,
+siapkan dataset, grant, dan ticket baru.
+
+Server memeriksa ulang izin setelah batch diterima, bukan hanya saat upgrade.
+Jika sesi/entitlement dicabut saat client menunggu, respons menjadi
+`screener.error`, bukan hasil screening. Batas default per proses adalah 32
+koneksi total dan 2 per pengguna. Kapasitas penuh menghasilkan HTTP 429
+`SOCKET_CAPACITY_REACHED`; ticket sudah dikonsumsi, jadi buat ticket baru setelah
+`Retry-After`. Ticket pending dibatasi 1.024 total dan 16 per pengguna.
 
 ## 6. Penjelasan setiap endpoint
 
@@ -135,6 +175,7 @@ dari Yahoo Finance. Ticket hanya dapat dipakai sekali dan berumur singkat.
 |---|---|---|
 | `POST /api/auth/register` | Membuat user Supabase dari `full_name`, `email`, dan `password`. Bisa meminta konfirmasi email. | Publik |
 | `POST /api/auth/login` | Memvalidasi email/password melalui Supabase dan mengembalikan bearer access token. | Publik |
+| `POST /api/auth/refresh` | Menukar refresh token menjadi pasangan access/refresh terbaru; tidak memperpanjang sesi aplikasi. | Refresh token di body |
 | `GET /api/auth/me` | Memverifikasi bearer token di server dan mengembalikan identitas publik user. Ini bukan login ulang. | Bearer |
 | `POST /api/auth/password/reset-request` | Meminta email recovery. Respons dibuat sama untuk email terdaftar/tidak agar akun tidak mudah ditebak. | Publik |
 | `POST /api/auth/password/reset` | Memakai recovery access token + refresh token untuk menetapkan password baru. | Publik dengan token recovery di body |

@@ -3,6 +3,10 @@
 Tanggal: 27 September 2026
 Status: microbenchmark lokal untuk bahan diskusi pembimbing, bukan benchmark production.
 
+Update 5 Oktober 2026: Model A dipilih pengguna untuk implementasi produk aktif.
+Hasil lama di bawah tetap menjadi evidence lokal; belum membuktikan efisiensi
+production atau keputusan pembimbing. Model B tetap eksperimen test-only.
+
 ## Tujuan
 
 Membandingkan dua cara menyimpan bagian kritis screener di server tanpa memindahkan
@@ -85,11 +89,12 @@ go test ./core -run '^$' \
   lokal belum menyertakan Supabase, SQLite, proxy/TLS, atau jaringan internet.
 - Belum ada benchmark browser/WASM dan latency jaringan.
 - Belum ada dataset IDX besar atau distribusi nilai harga nyata.
-- Belum ada keputusan final Model A; hasil ini harus dibawa ke pembimbing.
+- Pengguna telah memilih Model A untuk implementasi; hasil efisiensi dan batas
+  proteksinya tetap harus dibawa ke pembimbing.
 
 ## Profil WebSocket lengkap 1/10/30 sesi
 
-Tes opt-in di `internal/api/screener_load_test.go` melewati perjalanan lokal lengkap:
+Tes opt-in di `internal/api/tests/screener_load_test.go` melewati perjalanan lokal lengkap:
 
 1. membuat socket ticket melalui HTTP;
 2. membuka koneksi WebSocket dengan ticket sekali pakai;
@@ -101,7 +106,7 @@ Perintah:
 
 ```bash
 SIGNALGEN_RUN_SCREENER_LOAD_PROFILE=1 \
-  go test ./internal/api \
+  go test ./internal/api/tests \
   -run '^TestScreenerWebSocketLoadProfile$' -count=1 -v
 ```
 

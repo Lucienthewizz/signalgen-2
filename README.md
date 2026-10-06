@@ -17,14 +17,22 @@ The target keeps one API boundary. Historical computation moves to the browser w
 
 ## Current implementation
 
+The latest backend branch checkpoint and remaining MVP gates are tracked in
+[docs/backend/BACKEND_PROGRESS.md](docs/backend/BACKEND_PROGRESS.md). The list
+below also includes historical UI work; it is not an end-to-end verification
+claim for the active web screening flow.
+
 - Go-owned register, login, profile, password recovery, and password update flows backed by Supabase Auth.
-- Go app sessions, owner-scoped devices, feature grants, rules, protected fixture data, and compute grants.
-- Secure Electron shell with context isolation, sandboxing, and a restricted preload bridge.
-- Local session restoration with automatic handling for invalid or expired tokens.
-- Responsive desktop workspace with navigation for rules, watchlists, screening, backtesting, realtime signals, and settings.
-- Market-oriented dashboard with backend health, active-rule, watchlist, and signal summaries.
-- Centralized API client and Vite development proxies for REST and Socket.IO traffic.
+- Go app sessions, owner-scoped devices/universes, feature grants, rules,
+  protected market-data snapshots, and compute grants.
+- Identity refresh and current app-session secret rotation.
+- Historical screening WebSocket flow with private server-side decisions,
+  permission rechecks and bounded resources.
 - Docker-based backend workflow compatible with Docker Desktop and OrbStack.
+
+Historical desktop work remains under `legacy/desktop` and the Python
+baseline under `legacy/python`. These are legacy references, not the active
+web-only product or evidence that every current PRD feature is complete.
 
 The Python/FastAPI service remains available only through the explicit Docker
 `legacy` profile for baseline comparison and rollback. It is not the active web
@@ -55,10 +63,10 @@ Canonical scope and architecture are documented in [docs/PRD.md](./docs/PRD.md) 
 
 ```text
 signalgen-2/
-├── backend/                 Go API/core plus legacy Python reference
+├── backend/                 Active Go API/core
 ├── frontend/
-│   ├── desktop/             Electron desktop application
-│   └── web/                 Public and account web application
+│   └── web/                 Active web application
+├── legacy/                  Python and Electron comparison source
 ├── docker-compose.yml       Local backend orchestration
 ├── docs/                    Product, architecture, experiment, and handoff documents
 └── README.md                Repository entry point and local setup
@@ -88,10 +96,21 @@ The backend exposes:
 - Health: `http://127.0.0.1:8080/health`
 - Machine-readable contract: `backend/openapi.yaml`
 
-### 2. Start the current legacy Electron application
+### 2. Start the active web frontend
 
 ```bash
-cd frontend/desktop
+cd frontend/web
+npm install
+npm run dev
+```
+
+Use the URL printed by Vite and allow that exact origin in the backend CORS
+configuration. Frontend setup is documented in `frontend/web/README.md`.
+
+### Optional: inspect the legacy Electron reference
+
+```bash
+cd legacy/desktop
 npm install
 npm run electron:dev
 ```
@@ -104,10 +123,10 @@ npm run dev
 
 Then open `http://127.0.0.1:5173`.
 
-### 3. Verify a production build
+### 3. Verify the web build
 
 ```bash
-cd frontend/desktop
+cd frontend/web
 npm run typecheck
 npm run build
 ```
@@ -115,15 +134,16 @@ npm run build
 ## Development principles
 
 - Treat the backend OpenAPI contract as the source of truth for request and response shapes.
-- Keep API and Socket.IO base URLs in centralized runtime configuration.
+- Keep API and WebSocket base URLs in centralized runtime configuration.
 - Never place Supabase secret keys, service-role keys, passwords, or backend environment values in frontend code.
 - Handle loading, empty, success, error, offline, and unauthorized states explicitly.
-- Preserve the legacy renderer until the Electron replacement reaches feature parity.
+- Preserve legacy references for comparison; do not add new desktop features to the web MVP.
 - Keep changes scoped and verify type checking and production builds before review.
 
 ## Documentation
 
-- [Desktop frontend guide](./frontend/desktop/README.md)
+- [Legacy comparison guide](./legacy/README.md)
+- [Desktop frontend guide](./legacy/desktop/README.md)
 - [Documentation index](./docs/README.md)
 - [Product requirements](./docs/PRD.md)
 - [Frontend MVP PRD](./docs/frontend/FRONTEND_MVP_PRD.md)

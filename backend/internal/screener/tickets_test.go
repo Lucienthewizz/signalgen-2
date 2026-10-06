@@ -90,3 +90,37 @@ func TestTicketRejectsIncompleteBinding(t *testing.T) {
 		t.Fatalf("error = %v, want ErrInvalid", err)
 	}
 }
+
+func TestTicketCapacityDoesNotEvictValidTickets(t *testing.T) {
+	now := time.Now()
+	store, err := NewTicketStore(WithTicketClock(func() time.Time { return now }), WithTicketCapacity(2, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := store.Create(context.Background(), testBinding())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Create(context.Background(), testBinding()); !errors.Is(err, ErrCapacity) {
+		t.Fatal("owner limit bypassed")
+	}
+	binding := testBinding()
+	binding.UserID = "user-b"
+	if _, err := store.Create(context.Background(), binding); err != nil {
+		t.Fatal(err)
+	}
+	binding.UserID = "user-c"
+	if _, err := store.Create(context.Background(), binding); !errors.Is(err, ErrCapacity) {
+		t.Fatal("global limit bypassed")
+	}
+	if _, err := store.Consume(context.Background(), a.Token); err != nil {
+		t.Fatal("valid ticket was evicted")
+	}
+	if _, err := store.Create(context.Background(), binding); err != nil {
+		t.Fatal("consumption did not release capacity")
+	}
+	now = now.Add(time.Minute)
+	if _, err := store.Create(context.Background(), testBinding()); err != nil {
+		t.Fatal("expiry did not release capacity")
+	}
+}
