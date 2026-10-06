@@ -30,6 +30,9 @@ function currentRoute(): Route {
       "app/rules",
       "app/journal",
       "app/access",
+      "app/universes",
+      "app/subscription",
+      "app/operator",
     ].includes(route)
   ) {
     return route as Route;

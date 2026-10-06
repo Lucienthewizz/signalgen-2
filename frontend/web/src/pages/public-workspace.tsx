@@ -5,6 +5,7 @@ import { Brand } from "@/components/brand";
 import { FeatureFigure } from "@/components/feature-figure";
 import { MarketTrace } from "@/components/market-trace";
 import { SignalLattice } from "@/components/signal-lattice";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Accordion,
   AccordionContent,
@@ -87,6 +88,7 @@ export function PublicWorkspace({
               <a href="#app/overview">Demo</a>
             </nav>
             <div className="landing-header__actions">
+              <ThemeToggle compact />
               {!user && (
                 <a className="landing-header__register" href="#register">
                   Register

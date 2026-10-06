@@ -17,12 +17,17 @@ export type LiveScreenerRun = {
   features: ScreenerFeatureVector;
   manifest: DatasetManifest;
   latestClose: number;
+  rows: Array<{
+    decision: ScreenerDecision;
+    features: ScreenerFeatureVector;
+    latestClose: number;
+  }>;
   execution: "client_wasm+server_private_scoring";
 };
 
-const BASELINE_RULE_ID = "default-scalping-v1";
-
 export async function runLiveScreener(
+  ruleId: string,
+  universeId: string,
   signal: AbortSignal,
   onStage: (stage: ScreenerStage) => void,
 ): Promise<LiveScreenerRun> {
@@ -31,49 +36,94 @@ export async function runLiveScreener(
 
   onStage("preparing_data");
   const [manifest, rule] = await Promise.all([
-    api.prepareDataset(),
-    api.getRule(BASELINE_RULE_ID),
+    api.prepareDataset(ruleId, universeId),
+    api.getRule(ruleId),
   ]);
   const dataset = await api.getDatasetContent(manifest.dataset_id);
+  if (!dataset.series.length)
+    throw new ApiError(
+      "Dataset tidak memiliki seri saham yang dapat dianalisis.",
+      0,
+    );
 
   onStage("loading_engine");
-  const featureResult = await extractFeaturesWithWasm(dataset, signal);
-  const latestCandidate = featureResult.candidates.at(-1);
-  if (!latestCandidate)
-    throw new ApiError("WASM tidak menghasilkan kandidat yang dapat dinilai.", 0);
+  const featureRuns = await Promise.all(
+    dataset.series.map(async (series) => ({
+      series,
+      result: await extractFeaturesWithWasm(
+        series.symbol,
+        series.candles,
+        signal,
+      ),
+    })),
+  );
 
   onStage("private_scoring");
-  const grant = await api.createComputeGrant(manifest, rule);
-  const ticket = await api.createScreenerSocketTicket(grant.id);
-  if (
-    featureResult.feature_schema_version !== ticket.feature_schema_version ||
-    featureResult.candidates.length > ticket.max_candidates
-  )
-    throw new ApiError("Hasil WASM tidak cocok dengan batas private scoring.", 0);
-  const result = await evaluateOverSocket(
-    ticket.websocket_path,
-    ticket.ticket,
-    ticket.protocol,
-    ticket.feature_schema_version,
-    featureResult,
-    signal,
+  const scored = await Promise.all(
+    featureRuns.map(async ({ series, result: featureResult }) => {
+      const latestCandidate = featureResult.candidates.at(-1);
+      if (!latestCandidate)
+        throw new ApiError(
+          `WASM tidak menghasilkan kandidat untuk ${series.symbol}.`,
+          0,
+        );
+      const grant = await api.createComputeGrant(manifest, rule);
+      const ticket = await api.createScreenerSocketTicket(grant.id);
+      if (
+        featureResult.feature_schema_version !==
+          ticket.feature_schema_version ||
+        featureResult.candidates.length > ticket.max_candidates
+      )
+        throw new ApiError(
+          "Hasil WASM tidak cocok dengan batas private scoring.",
+          0,
+        );
+      const result = await evaluateOverSocket(
+        ticket.websocket_path,
+        ticket.ticket,
+        ticket.protocol,
+        ticket.feature_schema_version,
+        featureResult,
+        signal,
+      );
+      const decision = result.results.at(-1);
+      if (!decision)
+        throw new ApiError(
+          `Server tidak mengembalikan hasil untuk ${series.symbol}.`,
+          0,
+        );
+      return {
+        result,
+        decision,
+        features: latestCandidate.features,
+        latestClose: series.candles.at(-1)?.close ?? 0,
+      };
+    }),
   );
-  const latestDecision = result.results.at(-1);
-  if (!latestDecision)
-    throw new ApiError("Server tidak mengembalikan hasil private scoring.", 0);
+  const primary = scored[0];
+  const result: ScreenerResult = {
+    ...primary.result,
+    results: scored.flatMap((entry) => entry.result.results),
+  };
 
   return {
     result,
-    latestDecision,
-    features: latestCandidate.features,
+    latestDecision: primary.decision,
+    features: primary.features,
     manifest,
-    latestClose: dataset.candles.at(-1)?.close ?? 0,
+    latestClose: primary.latestClose,
+    rows: scored.map(({ decision, features, latestClose }) => ({
+      decision,
+      features,
+      latestClose,
+    })),
     execution: "client_wasm+server_private_scoring",
   };
 }
 
 function extractFeaturesWithWasm(
-  dataset: DatasetContent,
+  symbol: string,
+  candles: DatasetContent["series"][number]["candles"],
   signal: AbortSignal,
 ): Promise<ScreenerFeatureResult> {
   return new Promise((resolve, reject) => {
@@ -119,8 +169,8 @@ function extractFeaturesWithWasm(
     worker.postMessage({
       type: "extract",
       jobId,
-      symbol: dataset.symbol,
-      candles: dataset.candles,
+      symbol,
+      candles,
     });
   });
 }
@@ -182,7 +232,8 @@ function evaluateOverSocket(
       );
     };
     socket.onmessage = (event) => {
-      let payload: ScreenerResult | { type: "screener.error"; message?: string };
+      let payload:
+        ScreenerResult | { type: "screener.error"; message?: string };
       try {
         payload = JSON.parse(String(event.data));
       } catch {

@@ -2,7 +2,7 @@ export type User = {
   id: string;
   email: string;
   full_name?: string | null;
-  role?: "user" | "admin";
+  role?: "user" | "admin" | "operator";
   status?: "active" | "suspended";
   entitlement?: {
     plan_code: string;
@@ -52,8 +52,8 @@ export type AppSessionResponse = {
 export type DatasetManifest = {
   dataset_id: string;
   version: string;
-  schema_version: "ohlcv-1";
-  provider: "fixture";
+  schema_version: "ohlcv-multi-1";
+  provider: "yahoo_finance";
   purpose: "screen";
   market: "IDX";
   currency: "IDR";
@@ -80,25 +80,106 @@ export type Candle = {
 };
 
 export type DatasetContent = {
-  schema_version: "ohlcv-1";
+  schema_version: "ohlcv-multi-1";
   purpose: "screen";
   market: "IDX";
   currency: "IDR";
-  symbol: string;
   timeframe: "1d";
   timezone: "UTC";
   adjustment: string;
-  candles: Candle[];
+  series: Array<{
+    symbol: string;
+    timezone: "UTC";
+    candles: Candle[];
+  }>;
+};
+
+export type RuleCondition = {
+  left: "PRICE" | "EMA9" | "EMA20" | "RSI14";
+  op: "<" | "<=" | ">" | ">=";
+  right: string | number;
+};
+
+export type UserRuleDefinition = {
+  name: string;
+  logic: "AND";
+  signal_type: "BUY";
+  cooldown_sec: number;
+  conditions: RuleCondition[];
 };
 
 export type RuleResource = {
   id: string;
   name: string;
+  owner_type: "system" | "user";
+  read_only: boolean;
   definition_hash: string;
   schema_version: string;
   engine_version: string;
   version: number;
-  definition?: Record<string, unknown>;
+  definition?: UserRuleDefinition;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type RuleListResponse = {
+  items: RuleResource[];
+  next_cursor: string | null;
+};
+
+export type StockInstrument = {
+  symbol: "BBCA.JK" | "BBRI.JK" | "TLKM.JK";
+  name: string;
+  exchange: "XIDX";
+  currency: "IDR";
+};
+
+export type StockUniverse = {
+  id: string;
+  name: string;
+  symbols: StockInstrument["symbol"][];
+  version: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SubscriptionPlan = {
+  code: "free" | "analyst" | "pro";
+  name: string;
+  description: string;
+  features: Array<"screener" | "backtest">;
+};
+
+export type Subscription = {
+  id: string;
+  user_id?: string;
+  plan_code: SubscriptionPlan["code"];
+  plan_name: string;
+  status: "trialing" | "active" | "past_due" | "canceled" | "expired";
+  features: Array<"screener" | "backtest">;
+  current_period_start: string;
+  current_period_end: string;
+  cancel_at_period_end: boolean;
+  source: "manual" | "payment_provider";
+  created_at: string;
+  updated_at: string;
+};
+
+export type FeatureGrant = {
+  user_id: string;
+  feature: "screener" | "backtest";
+  valid_until: string;
+  reason: string;
+  revoked_at: string | null;
+  updated_at: string;
+  active: boolean;
+};
+
+export type AccountRole = {
+  user_id: string;
+  role: "user" | "operator";
+  status: "active" | "suspended";
+  updated_at: string;
 };
 
 export type ComputeGrant = {
@@ -190,6 +271,21 @@ export type AccountDevice = {
   current: boolean;
 };
 
+export type AccountSession = {
+  id: string;
+  installation_id: string;
+  label: string;
+  created_at: string;
+  expires_at: string;
+  last_seen_at: string;
+  status: "active" | "expired" | "revoked";
+  current: boolean;
+};
+
 export type DeviceListResponse = {
   items: AccountDevice[];
+};
+
+export type SessionListResponse = {
+  items: AccountSession[];
 };

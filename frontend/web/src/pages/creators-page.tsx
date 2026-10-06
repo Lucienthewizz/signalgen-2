@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowUpRight, Github, UserRound } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const creators = [
   {
@@ -20,12 +21,17 @@ export function CreatorsPage() {
   return (
     <main className="creators-page">
       <header className="creators-topbar">
-        <a href="#home" aria-label="Signalgen home">
-          <Brand compact />
-        </a>
-        <a href="#home">
-          <ArrowLeft aria-hidden="true" /> Back to home
-        </a>
+        <div className="creators-topbar__inner">
+          <a href="#home" aria-label="Signalgen home">
+            <Brand compact />
+          </a>
+          <div className="creators-topbar__actions">
+            <ThemeToggle compact />
+            <a href="#home">
+              <ArrowLeft aria-hidden="true" /> Back to home
+            </a>
+          </div>
+        </div>
       </header>
       <section className="creators-directory">
         <header>

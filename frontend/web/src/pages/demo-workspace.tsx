@@ -3,23 +3,24 @@ import {
   type FormEvent,
   type SetStateAction,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import {
   Activity,
-  ArrowLeft,
   ArrowDownRight,
   ArrowUpRight,
+  BadgeCheck,
   BarChart3,
   BookOpenCheck,
+  Boxes,
   Braces,
   CalendarRange,
   Check,
   ChevronRight,
   CircleAlert,
-  CircleHelp,
   CircleDot,
   Database,
   ExternalLink,
@@ -36,22 +37,23 @@ import {
   SearchCheck,
   ShieldCheck,
   SlidersHorizontal,
-  Sparkles,
   Tag,
-  Target,
   Trash2,
   TrendingUp,
+  UsersRound,
   X,
   XCircle,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { AccountMenu } from "@/components/account-menu";
 import { TradingViewChart } from "@/components/tradingview-chart";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -74,7 +76,16 @@ import {
   type ScreenerStage,
 } from "@/analysis/screener";
 import { api } from "@/api/client";
-import type { AccountDevice, AccountState } from "@/types";
+import type { AccountDevice, AccountSession, AccountState } from "@/types";
+import {
+  OperatorPanel,
+  StockUniversesPanel,
+  SubscriptionPanel,
+} from "@/pages/workspace-resource-panels";
+import { ServerRulesPanel } from "@/pages/workspace-rules-panel";
+import { WorkspaceScreenerPanel } from "@/pages/workspace-screener-panel";
+import { WorkspaceOverviewPanel } from "@/pages/workspace-overview-panel";
+import { journalPerformance, localJournalDate } from "@/lib/journal";
 
 export type DemoView =
   | "overview"
@@ -82,46 +93,110 @@ export type DemoView =
   | "realtime"
   | "rules"
   | "journal"
-  | "access";
+  | "universes"
+  | "access"
+  | "subscription"
+  | "operator";
 
 type JobState =
   "idle" | "preparing" | "running" | "completed" | "cancelled" | "failed";
 
-const viewMeta: Record<DemoView, { title: string; description: string }> = {
+const viewMeta: Record<
+  DemoView,
+  { title: string; description: string; icon: typeof Gauge }
+> = {
   overview: {
     title: "Workspace overview",
     description: "A map of MVP features and their current integration status.",
+    icon: Gauge,
   },
   analysis: {
     title: "Market screener",
-    description: "Start from a goal, then inspect the evidence behind each result.",
+    description:
+      "Start from a goal, then inspect the evidence behind each result.",
+    icon: SearchCheck,
   },
   realtime: {
     title: "Realtime market",
     description:
       "Move through an IDX watchlist and inspect the selected market on TradingView.",
+    icon: Activity,
   },
   rules: {
     title: "Rule management",
     description: "Manage system and private rules within the MVP scope.",
+    icon: ListChecks,
   },
   journal: {
     title: "Trade journal",
     description: "Record trades and review positions in one workflow.",
+    icon: NotebookTabs,
   },
   access: {
     title: "Access & devices",
     description: "Review entitlements, sessions, devices, and user cache.",
+    icon: SlidersHorizontal,
+  },
+  universes: {
+    title: "Stock universes",
+    description: "Group IDX instruments into reusable screening scopes.",
+    icon: Boxes,
+  },
+  subscription: {
+    title: "Plan & access",
+    description: "Review your current subscription and server capabilities.",
+    icon: BadgeCheck,
+  },
+  operator: {
+    title: "Operator console",
+    description: "Administer feature grants, subscriptions, and account roles.",
+    icon: UsersRound,
   },
 };
 
-const navItems: Array<{ view: DemoView; label: string; icon: typeof Gauge }> = [
-  { view: "overview", label: "Overview", icon: Gauge },
-  { view: "analysis", label: "Screener", icon: BarChart3 },
-  { view: "realtime", label: "Realtime", icon: LineChart },
-  { view: "rules", label: "Rules", icon: Braces },
-  { view: "journal", label: "Journal", icon: BookOpenCheck },
-  { view: "access", label: "Access", icon: ShieldCheck },
+const navGroups: Array<{
+  label?: string;
+  items: Array<{
+    view: DemoView;
+    label: string;
+    icon: typeof Gauge;
+    operatorOnly?: boolean;
+  }>;
+}> = [
+  {
+    items: [{ view: "overview", label: "Dashboard", icon: Gauge }],
+  },
+  {
+    label: "Analysis",
+    items: [
+      { view: "analysis", label: "Screener", icon: SearchCheck },
+      { view: "journal", label: "Trade journal", icon: NotebookTabs },
+    ],
+  },
+  {
+    label: "Configuration",
+    items: [
+      { view: "rules", label: "Rules", icon: ListChecks },
+      { view: "universes", label: "Stock universes", icon: Boxes },
+      { view: "access", label: "Access & devices", icon: SlidersHorizontal },
+      { view: "subscription", label: "Plan & access", icon: BadgeCheck },
+    ],
+  },
+  {
+    label: "Live",
+    items: [{ view: "realtime", label: "Realtime signal", icon: Activity }],
+  },
+  {
+    label: "Administration",
+    items: [
+      {
+        view: "operator",
+        label: "Operator console",
+        icon: UsersRound,
+        operatorOnly: true,
+      },
+    ],
+  },
 ];
 
 type JournalRecord = {
@@ -219,50 +294,23 @@ const journalRecords: JournalRecord[] = [
 ];
 
 function formatRupiah(value: number) {
-  return `Rp ${Math.abs(value).toLocaleString("id-ID")}`;
+  return `Rp ${Math.abs(value).toLocaleString("id-ID", { maximumFractionDigits: 0 })}`;
 }
 
-function DemoNotice({
-  authenticated,
-  view,
-}: {
-  authenticated: boolean;
-  view: DemoView;
-}) {
-  if (view === "realtime") {
-    return (
-      <div className="demo-notice demo-notice--market" role="note">
-        <Activity />
-        <div>
-          <strong>TradingView market preview</strong>
-          <span>
-            The chart uses TradingView&apos;s external widget. Exchange delay and
-            availability follow TradingView&apos;s market coverage.
-          </span>
-        </div>
-        <Badge variant="outline">External feed</Badge>
-      </div>
-    );
-  }
+function DemoNotice({ view }: { view: DemoView }) {
+  if (view !== "realtime") return null;
 
   return (
-    <div className="demo-notice" role="note">
-      <Database />
+    <div className="demo-notice demo-notice--market" role="note">
+      <Activity />
       <div>
-        <strong>
-          {authenticated
-            ? "Go-connected features are ready"
-            : "Demo data is active"}
-        </strong>
+        <strong>TradingView market preview</strong>
         <span>
-          {authenticated
-            ? "Analysis and account access use the Go API; rules and journal remain previews."
-            : "Sign in to use Go-connected analysis and owner-scoped device controls."}
+          The chart uses TradingView&apos;s external widget. Exchange delay and
+          availability follow TradingView&apos;s market coverage.
         </span>
       </div>
-      <Badge variant="outline">
-        {authenticated ? "Hybrid POC" : "Local data"}
-      </Badge>
+      <Badge variant="outline">External feed</Badge>
     </div>
   );
 }
@@ -333,16 +381,12 @@ function RealtimePanel() {
         <header className="market-watchlist__header">
           <div>
             <h3>Market watchlist</h3>
-            <span>{realtimeWatchlist.length} IDX assets</span>
+            <span>Select an IDX stock to update the daily chart.</span>
           </div>
           <span className="market-watchlist__pulse">
             <i /> Chart feed
           </span>
         </header>
-        <div className="market-watchlist__columns" aria-hidden="true">
-          <span>Asset</span>
-          <span>Reference close</span>
-        </div>
         <div className="market-watchlist__items">
           {realtimeWatchlist.map((asset) => {
             const active = asset.symbol === selected.symbol;
@@ -354,7 +398,6 @@ function RealtimePanel() {
                 aria-pressed={active}
                 onClick={() => setSelectedSymbol(asset.symbol)}
               >
-                <i className="market-watchlist__rail" aria-hidden="true" />
                 <span className="market-watchlist__identity">
                   <strong>{asset.ticker}</strong>
                   <small>{asset.name}</small>
@@ -370,15 +413,10 @@ function RealtimePanel() {
                     {asset.referenceChange}
                   </small>
                 </span>
-                <ChevronRight className="market-watchlist__open" />
               </button>
             );
           })}
         </div>
-        <footer>
-          Watchlist values are illustrative snapshots. Use the TradingView
-          chart for the available market feed.
-        </footer>
       </aside>
 
       <div className="realtime-chart-panel">
@@ -391,7 +429,7 @@ function RealtimePanel() {
             </div>
           </div>
           <div className="realtime-chart-panel__actions">
-            <span>15 min</span>
+            <span>1D</span>
             <a
               href={`https://www.tradingview.com/symbols/${selected.symbol.replace(":", "-")}/`}
               target="_blank"
@@ -652,15 +690,17 @@ function AnalysisPanel({
   onDraft,
   authenticated,
   backendOnline,
+  rules,
 }: {
   onDraft: (symbol: string) => void;
   authenticated: boolean;
   backendOnline: boolean;
+  rules: DemoRule[];
 }) {
   const [job, setJob] = useState<JobState>("idle");
-  const [preset, setPreset] = useState("Momentum confirmation");
+  const [selectedRuleId, setSelectedRuleId] = useState("r-momentum");
   const [progress, setProgress] = useState(0);
-  const [stage, setStage] = useState("Siap memulai");
+  const [stage, setStage] = useState("Ready to screen");
   const [error, setError] = useState<string | null>(null);
   const [liveRun, setLiveRun] = useState<LiveScreenerRun | null>(null);
   const controller = useRef<AbortController | null>(null);
@@ -676,8 +716,8 @@ function AnalysisPanel({
     const stages: Record<ScreenerStage, [string, number]> = {
       validating_access: ["Checking screener access", 20],
       preparing_data: ["Preparing the IDX fixture", 45],
-      loading_engine: ["Computing features through Go/WASM", 70],
-      private_scoring: ["Requesting the private server decision", 88],
+      loading_engine: ["Calculating indicators", 70],
+      private_scoring: ["Evaluating the selected rule", 88],
     };
     setStage(stages[next][0]);
     setProgress(stages[next][1]);
@@ -699,6 +739,13 @@ function AnalysisPanel({
       setJob("failed");
       return;
     }
+    if (!selectedRule?.backendRuleId) {
+      setError("This rule is not available to the screening engine yet.");
+      setStage("Rule not ready");
+      setProgress(0);
+      setJob("failed");
+      return;
+    }
     controller.current?.abort();
     controller.current = new AbortController();
     setError(null);
@@ -706,11 +753,13 @@ function AnalysisPanel({
     setJob("preparing");
     try {
       const result = await runLiveScreener(
+        selectedRule.backendRuleId,
+        "unused-demo-universe",
         controller.current.signal,
         updateStage,
       );
       setLiveRun(result);
-      setStage("Hybrid screen complete");
+      setStage("Screen complete");
       setProgress(100);
       setJob("completed");
     } catch (caught) {
@@ -721,6 +770,7 @@ function AnalysisPanel({
           : "The screen could not be completed.",
       );
       setStage("Screen failed");
+      setProgress(0);
       setJob("failed");
     }
   }
@@ -736,127 +786,115 @@ function AnalysisPanel({
   const reasons = liveRun?.latestDecision.reason_codes
     .map((reason) => reason.toLowerCase().replaceAll("_", " "))
     .join(", ");
-  const presets = [
-    {
-      name: "Momentum confirmation",
-      description: "For stocks already moving with confirmed volume.",
-      checks: "Trend · RSI · volume",
-    },
-    {
-      name: "Quiet breakout",
-      description: "For a price leaving a narrow range with growing interest.",
-      checks: "Range · ATR · volume",
-    },
-    {
-      name: "Pullback test",
-      description: "For an uptrend returning to a planned entry area.",
-      checks: "Trend · EMA20 · close",
-    },
-  ];
+  const availableRules = rules.filter(
+    (rule) => rule.enabled && rule.backendRuleId,
+  );
+  const selectedRule =
+    availableRules.find((rule) => rule.id === selectedRuleId) ??
+    availableRules[0];
+  const selectedConditions = selectedRule?.logic.split(" · ") ?? [];
+
+  useEffect(() => {
+    if (selectedRule && selectedRule.id !== selectedRuleId) {
+      setSelectedRuleId(selectedRule.id);
+    }
+  }, [selectedRule, selectedRuleId]);
 
   return (
     <div className="analysis-layout">
       <section className="panel configure-panel">
-        <div className="panel-heading">
+        <div className="panel-heading panel-heading--feature">
+          <span className="panel-heading__icon" aria-hidden="true">
+            <SearchCheck />
+          </span>
           <div>
-            <h3>Start with a screening goal</h3>
-            <p>Choose a ready-made checklist. You can inspect every condition before running it.</p>
+            <h3>Choose a rule to screen the market</h3>
+            <p>Signalgen will check every condition in the selected rule.</p>
           </div>
-          <Badge variant="outline">Go/WASM + Gin</Badge>
+          <span className="panel-heading__status">
+            {availableRules.length} ready{" "}
+            {availableRules.length === 1 ? "rule" : "rules"}
+          </span>
         </div>
-        <div className="screener-presets" aria-label="Screener presets">
-          {presets.map((item) => (
-            <button
-              key={item.name}
-              type="button"
-              className={preset === item.name ? "is-active" : undefined}
-              onClick={() => setPreset(item.name)}
-              aria-current={preset === item.name ? "true" : undefined}
+        <div className="screener-setup">
+          <label className="screener-rule-control" htmlFor="screening-rule">
+            <span>Screening rule</span>
+            <select
+              id="screening-rule"
+              value={selectedRule?.id ?? ""}
+              onChange={(event) => {
+                setSelectedRuleId(event.target.value);
+                setJob("idle");
+                setLiveRun(null);
+                setError(null);
+                setProgress(0);
+                setStage("Ready to screen");
+              }}
             >
-              <Sparkles />
-              <span>
-                <strong>{item.name}</strong>
-                <small>{item.description}</small>
-              </span>
-              <em>{item.checks}</em>
-            </button>
-          ))}
-        </div>
-        <div className="screener-guide">
-          <Target />
-          <div>
-            <strong>What this preset checks</strong>
-            <span>{preset === "Momentum confirmation" ? "Price is above its trend line, RSI is in a constructive range, and volume supports the move." : preset === "Quiet breakout" ? "Price exits a compact range, volatility is controlled, and participation starts to improve." : "The larger trend is intact, price revisits EMA20, then closes back above its open."}</span>
+              {availableRules.map((rule) => (
+                <option key={rule.id} value={rule.id}>
+                  {rule.name}
+                </option>
+              ))}
+            </select>
+            <small>
+              Only active rules connected to the screening engine appear here.
+            </small>
+          </label>
+          <div className="screener-rule-summary">
+            <ListChecks />
+            <div>
+              <span>Checks in this run</span>
+              <strong>{selectedRule?.name ?? "No rule is ready"}</strong>
+              {selectedRule ? (
+                <div className="screener-condition-list">
+                  {selectedConditions.map((condition) => (
+                    <span key={condition}>{condition}</span>
+                  ))}
+                </div>
+              ) : (
+                <span>Enable a server-ready rule before running a screen.</span>
+              )}
+            </div>
           </div>
-          <button type="button" aria-label="Learn how Signalgen uses this preset">
-            <CircleHelp />
-          </button>
-        </div>
-        <div className="control-grid">
-          <label>
-            Scan mode
-            <select value="Screening" disabled>
-              <option>Screening</option>
-            </select>
-          </label>
-          <label>
-            Timeframe
-            <select value="1D" disabled>
-              <option>1D</option>
-            </select>
-          </label>
-          <label className="control-wide">
-            Sample instrument
-            <Input value="BBCA.JK" disabled />
-          </label>
-          <label>
-            Selected preset
-            <select value={preset} disabled>
-              <option>{preset}</option>
-            </select>
-          </label>
-          <label>
-            Fixture window
-            <select value="01 Jan—09 Feb 2026" disabled>
-              <option>01 Jan—09 Feb 2026</option>
-            </select>
-          </label>
-        </div>
-        <div className="dataset-readout">
-          <Database />
-          <div>
-            <strong>IDX daily fixture · 1 instrument · 40 candles</strong>
+          <div className="run-controls">
             <span>
-              Versioned synthetic data · verified hash · not live market data
+              {selectedRule
+                ? "Ready to analyze the IDX daily fixture."
+                : "No executable rule selected."}
             </span>
+            <div>
+              <Button
+                className="ui-button ui-button--primary"
+                onClick={run}
+                disabled={
+                  !selectedRule || job === "running" || job === "preparing"
+                }
+              >
+                {job === "completed" ? (
+                  <RefreshCw data-icon="inline-start" />
+                ) : (
+                  <BarChart3 data-icon="inline-start" />
+                )}
+                {job === "completed" ? "Run again" : "Run screen"}
+              </Button>
+              {(job === "running" || job === "preparing") && (
+                <Button className="ui-button" onClick={cancel}>
+                  <XCircle data-icon="inline-start" /> Cancel
+                </Button>
+              )}
+            </div>
           </div>
         </div>
-        <div className="run-controls">
-          <Button
-            className="ui-button ui-button--primary"
-            onClick={run}
-            disabled={job === "running" || job === "preparing"}
-          >
-            {job === "completed" ? <RefreshCw data-icon="inline-start" /> : <BarChart3 data-icon="inline-start" />}
-            {job === "completed" ? "Run again" : "Run this screen"}
-          </Button>
-          {(job === "running" || job === "preparing") && (
-            <Button className="ui-button" onClick={cancel}>
-              <XCircle data-icon="inline-start" /> Cancel
-            </Button>
-          )}
-        </div>
-        {job !== "idle" && (
+        {(job === "preparing" || job === "running" || job === "completed") && (
           <div className={`job-status is-${job}`} role="status">
             <div>
               <span>{stage}</span>
-              <strong>
-                {job === "cancelled" ? "Configuration saved" : `${progress}%`}
-              </strong>
+              <strong>{progress}%</strong>
             </div>
             <i
               style={{
-                transform: `scaleX(${job === "cancelled" ? 0 : progress / 100})`,
+                transform: `scaleX(${progress / 100})`,
               }}
             />
           </div>
@@ -868,27 +906,62 @@ function AnalysisPanel({
               <strong>Screening did not complete</strong>
               {error}
             </span>
-            {!authenticated && <a href="#login">Sign in</a>}
+            <div className="analysis-error__actions">
+              {!authenticated ? (
+                <a href="#login">Sign in</a>
+              ) : (
+                <Button className="ui-button" onClick={run}>
+                  <RefreshCw data-icon="inline-start" /> Try again
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </section>
       <section className="panel results-panel">
-        <div className="panel-heading">
+        <div className="panel-heading panel-heading--feature">
+          <span className="panel-heading__icon" aria-hidden="true">
+            <BarChart3 />
+          </span>
           <div>
             <h3>Results and evidence</h3>
+            <p>Matched stocks, indicator values, and decision evidence.</p>
           </div>
-          <span className="muted-meta">default-scalping-v1 · synthetic</span>
+          <span className="panel-heading__status">
+            {job === "completed" ? "Screen complete" : "Waiting to run"}
+          </span>
         </div>
         {job === "preparing" || job === "running" ? (
           <AnalysisSkeleton />
         ) : job !== "completed" || !liveRun ? (
           <div className="results-empty">
-            <BarChart3 />
-            <strong>Your matches will appear here</strong>
-            <p>
-              Run the selected screen to see browser-computed features, the
-              server score, decision evidence, and the data version used.
-            </p>
+            <div className="results-empty__message">
+              <BarChart3 />
+              <div>
+                <strong>Ready when you are</strong>
+                <p>
+                  Run the selected rule to review its match and the evidence
+                  behind the decision.
+                </p>
+              </div>
+            </div>
+            <div
+              className="results-empty__facts"
+              aria-label="Screening configuration"
+            >
+              <span>
+                <small>Rule</small>
+                <strong>{selectedRule?.name ?? "Not selected"}</strong>
+              </span>
+              <span>
+                <small>Market</small>
+                <strong>IDX · BBCA</strong>
+              </span>
+              <span>
+                <small>Interval</small>
+                <strong>Daily</strong>
+              </span>
+            </div>
           </div>
         ) : (
           <div className="results-loaded">
@@ -935,7 +1008,11 @@ function AnalysisPanel({
                         liveRun.latestClose,
                       )}
                     </TableCell>
-                    <TableCell>{liveRun.latestDecision.matched ? "Matched" : "Not matched"}</TableCell>
+                    <TableCell>
+                      {liveRun.latestDecision.matched
+                        ? "Matched"
+                        : "Not matched"}
+                    </TableCell>
                     <TableCell>
                       {reasons || "No required conditions were met"}
                     </TableCell>
@@ -954,15 +1031,14 @@ function AnalysisPanel({
             <div className="assumption-line">
               <CircleAlert />
               <span>
-                <strong>How it works:</strong> indicators are calculated by
-                Go/WASM in the browser, while the final decision is calculated
-                by private Gin scoring. This fixture is not a price prediction
-                or a trading recommendation.
+                <strong>How it works:</strong> Signalgen calculates the
+                indicators and evaluates the selected rule. Results are analysis
+                support, not investment advice.
               </span>
             </div>
             <div
               className="feature-evidence"
-              aria-label="Go WebAssembly feature vector"
+              aria-label="Calculated indicator values"
             >
               <span>
                 RSI14 <strong>{liveRun.features.rsi14.toFixed(2)}</strong>
@@ -974,7 +1050,8 @@ function AnalysisPanel({
                 EMA20 <strong>{liveRun.features.ema20.toFixed(2)}</strong>
               </span>
               <span>
-                Latest price <strong>{liveRun.features.price.toFixed(2)}</strong>
+                Latest price{" "}
+                <strong>{liveRun.features.price.toFixed(2)}</strong>
               </span>
             </div>
           </div>
@@ -987,120 +1064,359 @@ function AnalysisPanel({
 function RulesPanel({
   rules,
   setRules,
+  onRun,
 }: {
   rules: DemoRule[];
   setRules: Dispatch<SetStateAction<DemoRule[]>>;
+  onRun: () => void;
 }) {
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string>("new");
+  const [editorRevision, setEditorRevision] = useState(0);
+  const [feedback, setFeedback] = useState("");
   const ruleBlueprints = [
     {
       key: "momentum",
       name: "Momentum confirmation",
+      description:
+        "Look for stocks with a healthy trend, constructive momentum, and supporting volume.",
       logic: "Close > EMA20 · RSI(14) 52–68 · Volume > SMA20",
-      price: "Price stays above the 20-day trend line",
-      confirmation: "RSI is constructive and volume confirms",
+      conditions: [
+        { metric: "Closing price", operator: "is above", value: "EMA 20" },
+        { metric: "RSI (14)", operator: "is between", value: "52 and 68" },
+        { metric: "Volume", operator: "is above", value: "20-day average" },
+      ],
     },
     {
       key: "breakout",
       name: "Quiet breakout",
+      description:
+        "Find stocks leaving a recent range after volatility contracts and volume expands.",
       logic: "Close > High(20) · ATR contraction · Volume 1.5×",
-      price: "Price closes above the 20-day high",
-      confirmation: "Volatility contracts before volume expands",
+      conditions: [
+        { metric: "Closing price", operator: "is above", value: "20-day high" },
+        { metric: "ATR", operator: "is below", value: "20-day average" },
+        { metric: "Volume", operator: "is above", value: "1.5× average" },
+      ],
     },
     {
       key: "pullback",
       name: "Pullback continuation",
+      description:
+        "Watch an established trend retest its average before buyers regain control.",
       logic: "Trend up · Low ≤ EMA20 · Close > Open",
-      price: "Price revisits the 20-day trend line",
-      confirmation: "The candle closes back above its open",
+      conditions: [
+        { metric: "Trend direction", operator: "equals", value: "Uptrend" },
+        { metric: "Daily low", operator: "touches", value: "EMA 20" },
+        {
+          metric: "Closing price",
+          operator: "is above",
+          value: "Opening price",
+        },
+      ],
     },
   ];
-  const [blueprintKey, setBlueprintKey] = useState("momentum");
-  const selectedBlueprint =
-    ruleBlueprints.find((blueprint) => blueprint.key === blueprintKey) ??
-    ruleBlueprints[0];
   const [draft, setDraft] = useState({
-    name: selectedBlueprint.name,
-    logic: selectedBlueprint.logic,
+    name: "",
+    description: "",
+    universe: "IHSG",
   });
-  function applyBlueprint(key: string) {
-    const blueprint = ruleBlueprints.find((item) => item.key === key);
-    if (!blueprint) return;
-    setBlueprintKey(key);
-    setDraft({ name: blueprint.name, logic: blueprint.logic });
-  }
-  function openNew(nextDraft: { name: string; logic: string } = selectedBlueprint) {
-    setDraft(nextDraft);
+  const [conditions, setConditions] = useState([
+    { metric: "Closing price", operator: "is above", value: "" },
+  ]);
+  const generatedLogic = conditions
+    .map((condition) =>
+      `${condition.metric} ${condition.operator} ${condition.value}`.trim(),
+    )
+    .join(" · ");
+
+  function openNew() {
+    setDraft({
+      name: "",
+      description: "",
+      universe: "IHSG",
+    });
+    setConditions([
+      { metric: "Closing price", operator: "is above", value: "" },
+    ]);
     setEditingId("new");
+    setEditorRevision((current) => current + 1);
+    setFeedback("");
+    window.requestAnimationFrame(() => {
+      document.querySelector(".rule-builder")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
   }
+
   function openEdit(rule: DemoRule) {
     const matchingBlueprint = ruleBlueprints.find(
       (blueprint) => blueprint.logic === rule.logic,
     );
-    if (matchingBlueprint) setBlueprintKey(matchingBlueprint.key);
-    setDraft({ name: rule.name, logic: rule.logic });
+    if (matchingBlueprint) {
+      setConditions(
+        matchingBlueprint.conditions.map((condition) => ({ ...condition })),
+      );
+    } else {
+      setConditions([
+        { metric: "Custom rule", operator: "uses", value: rule.logic },
+      ]);
+    }
+    setDraft({
+      name: rule.name,
+      description:
+        matchingBlueprint?.description ??
+        "Review and update the conditions for this private rule.",
+      universe: "IHSG",
+    });
     setEditingId(rule.id);
+    setEditorRevision((current) => current + 1);
+    setFeedback("");
   }
+
+  function updateCondition(
+    index: number,
+    field: "metric" | "operator" | "value",
+    value: string,
+  ) {
+    setConditions(
+      conditions.map((condition, conditionIndex) =>
+        conditionIndex === index ? { ...condition, [field]: value } : condition,
+      ),
+    );
+    setFeedback("");
+  }
+
   function saveRule(event: FormEvent) {
     event.preventDefault();
-    if (!draft.name.trim() || !draft.logic.trim()) return;
+    if (
+      !draft.name.trim() ||
+      conditions.some((condition) => !condition.value.trim())
+    ) {
+      setFeedback("Add a rule name and complete every condition.");
+      return;
+    }
     if (editingId === "new") {
+      const nextId = crypto.randomUUID();
       setRules([
         ...rules,
         {
-          id: crypto.randomUUID(),
+          id: nextId,
           name: draft.name,
-          logic: draft.logic,
+          logic: generatedLogic,
           version: "draft 01",
           scope: "Yours",
           enabled: true,
         },
       ]);
+      setEditingId(nextId);
     } else {
       setRules(
         rules.map((rule) =>
           rule.id === editingId
-            ? { ...rule, name: draft.name, logic: draft.logic }
+            ? { ...rule, name: draft.name, logic: generatedLogic }
             : rule,
         ),
       );
     }
-    setDraft({ name: "", logic: "Close > EMA20" });
-    setEditingId(null);
+    setFeedback(
+      editingId === "new" ? "Rule saved to your library." : "Changes saved.",
+    );
   }
   return (
     <div className="rules-workspace">
-      <section className="rules-starter">
-        <div>
-          <h3>Build from a known pattern</h3>
-          <p>Start with a clear market behaviour. You can change the rule logic after the first draft is created.</p>
-        </div>
-        <div className="rules-starter__templates">
-          {[
-            ["Momentum", "Trend is confirmed before entry", "Close > EMA20 · RSI(14) 52–68 · Volume > SMA20"],
-            ["Breakout", "Price leaves a defined range", "Close > High(20) · ATR contraction · Volume 1.5×"],
-            ["Pullback", "Trend resumes after a controlled retest", "Trend up · Low ≤ EMA20 · Close > Open"],
-          ].map(([name, description, logic]) => (
-            <button key={name} type="button" onClick={() => {
-              const blueprint = ruleBlueprints.find((item) => item.logic === logic);
-              if (blueprint) applyBlueprint(blueprint.key);
-              openNew({ name: `${name} setup`, logic });
-            }}>
-              <ListChecks />
-              <span><strong>{name}</strong><small>{description}</small></span>
-              <ChevronRight />
+      <section className="panel rule-builder">
+        <header className="rule-builder__header">
+          <div>
+            <h3>
+              {editingId === "new"
+                ? "Create a screening rule"
+                : "Edit your screening rule"}
+            </h3>
+            <p>
+              Build the rule one condition at a time. Saved rules stay in the
+              library below.
+            </p>
+          </div>
+        </header>
+
+        <form
+          key={editorRevision}
+          className="rule-builder__form"
+          onSubmit={saveRule}
+        >
+          <div className="rule-field-grid">
+            <label className="rule-field">
+              <span>Rule name</span>
+              <Input
+                value={draft.name}
+                onChange={(event) => {
+                  setDraft({ ...draft, name: event.target.value });
+                  setFeedback("");
+                }}
+                placeholder="Example: Healthy momentum"
+                required
+              />
+              <small>
+                Use a name you will recognize when reviewing results.
+              </small>
+            </label>
+            <label className="rule-field">
+              <span>Stock universe</span>
+              <select
+                value={draft.universe}
+                onChange={(event) =>
+                  setDraft({ ...draft, universe: event.target.value })
+                }
+              >
+                <option value="IHSG">IHSG · All listed stocks</option>
+                <option value="LQ45">LQ45 · Highly liquid stocks</option>
+                <option value="IDX30">IDX30 · Large and liquid stocks</option>
+              </select>
+              <small>This determines which stocks will be checked.</small>
+            </label>
+            <label className="rule-field rule-field--wide">
+              <span>Description</span>
+              <Textarea
+                value={draft.description}
+                onChange={(event) =>
+                  setDraft({ ...draft, description: event.target.value })
+                }
+                rows={2}
+                placeholder="What market setup should this rule find?"
+              />
+            </label>
+          </div>
+
+          <fieldset className="rule-conditions">
+            <legend>Screening conditions</legend>
+            <p>Every condition below must be true for a stock to match.</p>
+            <div className="rule-conditions__list">
+              {conditions.map((condition, index) => (
+                <div
+                  className="rule-condition"
+                  key={`${index}-${condition.metric}`}
+                >
+                  <span className="rule-condition__index">{index + 1}</span>
+                  <label>
+                    <span className="sr-only">
+                      Indicator for condition {index + 1}
+                    </span>
+                    <select
+                      value={condition.metric}
+                      onChange={(event) =>
+                        updateCondition(index, "metric", event.target.value)
+                      }
+                    >
+                      <option>Closing price</option>
+                      <option>Opening price</option>
+                      <option>Daily low</option>
+                      <option>Daily high</option>
+                      <option>RSI (14)</option>
+                      <option>Volume</option>
+                      <option>ATR</option>
+                      <option>Trend direction</option>
+                      <option>Custom rule</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span className="sr-only">
+                      Comparison for condition {index + 1}
+                    </span>
+                    <select
+                      value={condition.operator}
+                      onChange={(event) =>
+                        updateCondition(index, "operator", event.target.value)
+                      }
+                    >
+                      <option>is above</option>
+                      <option>is below</option>
+                      <option>is between</option>
+                      <option>equals</option>
+                      <option>touches</option>
+                      <option>uses</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span className="sr-only">
+                      Value for condition {index + 1}
+                    </span>
+                    <Input
+                      value={condition.value}
+                      onChange={(event) =>
+                        updateCondition(index, "value", event.target.value)
+                      }
+                      placeholder="Value or indicator"
+                      required
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="icon-action rule-condition__remove"
+                    onClick={() =>
+                      conditions.length > 1 &&
+                      setConditions(
+                        conditions.filter(
+                          (_, conditionIndex) => conditionIndex !== index,
+                        ),
+                      )
+                    }
+                    disabled={conditions.length === 1}
+                    aria-label={`Remove condition ${index + 1}`}
+                  >
+                    <X />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="rule-add-condition"
+              onClick={() => {
+                setConditions([
+                  ...conditions,
+                  { metric: "Closing price", operator: "is above", value: "" },
+                ]);
+                setFeedback("");
+              }}
+            >
+              <Plus /> Add condition
             </button>
-          ))}
-        </div>
+          </fieldset>
+
+          <footer className="rule-builder__footer">
+            <div aria-live="polite">
+              {feedback ||
+                `${conditions.length} conditions · ${draft.universe} universe`}
+            </div>
+            <div>
+              {editingId !== "new" && (
+                <Button className="ui-button" type="button" onClick={openNew}>
+                  Create new
+                </Button>
+              )}
+              <Button className="ui-button" type="button" onClick={onRun}>
+                <BarChart3 data-icon="inline-start" /> Run screener
+              </Button>
+              <Button className="ui-button ui-button--primary" type="submit">
+                <Save data-icon="inline-start" />
+                {editingId === "new" ? "Save rule" : "Save changes"}
+              </Button>
+            </div>
+          </footer>
+        </form>
       </section>
-      <div className="two-column-page">
+
       <section className="panel rule-list">
         <div className="panel-heading">
           <div>
-            <h3>Your rule library</h3>
-            <p>{rules.length} saved rules. System rules stay visible so each screen has an explainable basis.</p>
+            <h3>Saved rules</h3>
+            <p>
+              {rules.length} rules are available. System rules are read-only;
+              your rules can be edited.
+            </p>
           </div>
-          <Button className="ui-button ui-button--primary" onClick={() => openNew()}>
+          <Button className="ui-button" type="button" onClick={openNew}>
             <Plus data-icon="inline-start" /> New rule
           </Button>
         </div>
@@ -1128,7 +1444,8 @@ function RulesPanel({
               </div>
               <p>{rule.logic}</p>
               <small>
-                {rule.version} · {rule.scope === "System" ? "read-only" : "editable"}
+                {rule.version} ·{" "}
+                {rule.scope === "System" ? "read-only" : "editable"}
               </small>
             </div>
             {rule.scope === "Yours" && (
@@ -1154,76 +1471,6 @@ function RulesPanel({
           </article>
         ))}
       </section>
-      <aside className="panel side-explainer">
-        {editingId ? (
-          <form onSubmit={saveRule}>
-            <div className="panel-heading">
-              <div>
-                <h3>
-                  {editingId === "new"
-                    ? "New private rule"
-                    : "Edit private rule"}
-                </h3>
-              </div>
-              <button
-                type="button"
-                className="icon-action"
-                onClick={() => setEditingId(null)}
-                aria-label="Close rule builder"
-              >
-                <X />
-              </button>
-            </div>
-            <div className="rule-picker">
-              <label>
-                Strategy
-                <select
-                  value={blueprintKey}
-                  onChange={(event) => applyBlueprint(event.target.value)}
-                >
-                  {ruleBlueprints.map((blueprint) => (
-                    <option key={blueprint.key} value={blueprint.key}>{blueprint.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Price behaviour
-                <select value={selectedBlueprint.price} disabled>
-                  <option>{selectedBlueprint.price}</option>
-                </select>
-              </label>
-              <label>
-                Confirmation
-                <select value={selectedBlueprint.confirmation} disabled>
-                  <option>{selectedBlueprint.confirmation}</option>
-                </select>
-              </label>
-            </div>
-            <div className="rule-preview">
-              <span>Rule preview</span>
-              <strong>{draft.logic}</strong>
-            </div>
-            <p className="form-help">
-              Pick a pattern first. You can review the exact conditions before saving this local preview rule.
-            </p>
-            <Button className="ui-button ui-button--primary" type="submit">
-              <Save data-icon="inline-start" /> {editingId === "new" ? "Save rule" : "Save changes"}
-            </Button>
-          </form>
-        ) : (
-          <button
-            className="rule-create-orb"
-            type="button"
-          onClick={() => openNew()}
-          aria-label="Create a new rule"
-        >
-            <ListChecks />
-            <span>Create a rule</span>
-            <small>Pick a simple pattern to begin.</small>
-          </button>
-        )}
-      </aside>
-      </div>
     </div>
   );
 }
@@ -1239,19 +1486,20 @@ function JournalPanel({
   transactions: DemoTransaction[];
   setTransactions: Dispatch<SetStateAction<DemoTransaction[]>>;
 }) {
-  const [journal, setJournal] = useState<"All journals" | JournalRecord["journal"]>(
-    "All journals",
-  );
+  const [journal, setJournal] = useState<
+    "All journals" | JournalRecord["journal"]
+  >("All journals");
   const [instrument, setInstrument] = useState("All instruments");
   const [selectedId, setSelectedId] = useState(journalRecords[0].id);
   const [captureOpen, setCaptureOpen] = useState(Boolean(draftSymbol));
+  const [captureError, setCaptureError] = useState<string | null>(null);
   const [form, setForm] = useState({
-    symbol: draftSymbol ?? "BBCA",
+    symbol: draftSymbol ?? "",
     side: "BUY" as "BUY" | "SELL",
-    quantity: "10",
-    price: "9675",
-    fee: "145",
-    date: "2026-09-16",
+    quantity: "",
+    price: "",
+    fee: "0",
+    date: localJournalDate(),
   });
   useEffect(() => {
     if (draftSymbol) {
@@ -1270,43 +1518,58 @@ function JournalPanel({
     [instrument, journal],
   );
   const selectedRecord =
-    visibleRecords.find((record) => record.id === selectedId) ?? visibleRecords[0];
-  const totalPnl = visibleRecords.reduce((total, record) => total + record.pnl, 0);
-  const wins = visibleRecords.filter((record) => record.pnl > 0);
-  const losses = visibleRecords.filter((record) => record.pnl < 0);
-  const profitRatio = losses.length ? wins.length / losses.length : wins.length;
-  const winRate = visibleRecords.length
-    ? Math.round((wins.length / visibleRecords.length) * 100)
-    : 0;
+    visibleRecords.find((record) => record.id === selectedId) ??
+    visibleRecords[0];
+  const { totalPnl, winRate, averageWin, profitFactor, chartCoordinates } =
+    journalPerformance(visibleRecords);
 
   function addTransaction(event: FormEvent) {
     event.preventDefault();
-    setTransactions([
+    const symbol = form.symbol.trim().toUpperCase();
+    const quantity = Number(form.quantity);
+    const price = Number(form.price);
+    const fee = Number(form.fee);
+    if (
+      !/^[A-Z][A-Z0-9.:-]{0,19}$/.test(symbol) ||
+      !Number.isInteger(quantity) ||
+      quantity < 1 ||
+      !Number.isFinite(price) ||
+      price <= 0 ||
+      !Number.isFinite(fee) ||
+      fee < 0 ||
+      !form.date
+    ) {
+      setCaptureError(
+        "Enter a valid symbol, whole lots, a positive entry price, and a date. Fees cannot be negative.",
+      );
+      return;
+    }
+    setTransactions((current) => [
       {
         id: crypto.randomUUID(),
-        symbol: form.symbol.toUpperCase(),
+        symbol,
         side: form.side,
         quantity: Number(form.quantity),
         price: Number(form.price),
         fee: Number(form.fee),
         date: form.date,
       },
-      ...transactions,
+      ...current,
     ]);
+    setCaptureError(null);
+    setForm({
+      symbol: "",
+      side: "BUY",
+      quantity: "",
+      price: "",
+      fee: "0",
+      date: localJournalDate(),
+    });
     clearDraft();
     setCaptureOpen(false);
   }
 
-  const chartPoints = [
-    [3, 84],
-    [18, 77],
-    [31, 80],
-    [45, 59],
-    [58, 51],
-    [72, 57],
-    [84, 33],
-    [97, 25],
-  ]
+  const chartPoints = chartCoordinates
     .map((point) => point.join(","))
     .join(" ");
 
@@ -1344,10 +1607,10 @@ function JournalPanel({
               <option>BMRI</option>
             </select>
           </label>
-          <button className="journal-date" type="button">
+          <span className="journal-date">
             <CalendarRange />
             01–16 Sep 2026
-          </button>
+          </span>
         </div>
         <div className="journal-toolbar__actions">
           <span>
@@ -1368,15 +1631,25 @@ function JournalPanel({
           <div className="panel-heading">
             <div>
               <h3>Capture a trade draft</h3>
-              <p>Store the entry locally first; close data can be added later.</p>
+              <p>
+                Save an entry in this browser. Drafts stay separate from sample
+                closed trades.
+              </p>
             </div>
             {draftSymbol && <Badge variant="outline">From analysis</Badge>}
           </div>
           <form onSubmit={addTransaction} className="control-grid">
+            {captureError && (
+              <p className="control-wide negative" role="alert">
+                {captureError}
+              </p>
+            )}
             <label>
               Symbol
               <Input
                 value={form.symbol}
+                placeholder="e.g. BBCA"
+                maxLength={20}
                 onChange={(e) => setForm({ ...form, symbol: e.target.value })}
                 required
               />
@@ -1431,7 +1704,10 @@ function JournalPanel({
                 required
               />
             </label>
-            <Button className="ui-button ui-button--primary control-wide" type="submit">
+            <Button
+              className="ui-button ui-button--primary control-wide"
+              type="submit"
+            >
               <Save data-icon="inline-start" /> Save local draft
             </Button>
           </form>
@@ -1454,12 +1730,14 @@ function JournalPanel({
               <dd>{winRate}%</dd>
             </div>
             <div>
-              <dt>Profit ratio</dt>
-              <dd>{profitRatio.toFixed(1)}×</dd>
+              <dt>Profit factor</dt>
+              <dd>
+                {profitFactor === null ? "—" : `${profitFactor.toFixed(1)}×`}
+              </dd>
             </div>
             <div>
               <dt>Average win</dt>
-              <dd>{formatRupiah(wins.reduce((sum, record) => sum + record.pnl, 0) / wins.length)}</dd>
+              <dd>{formatRupiah(averageWin)}</dd>
             </div>
           </dl>
         </div>
@@ -1468,14 +1746,15 @@ function JournalPanel({
             <span>Realized P&amp;L sequence</span>
             <small>Ordered by closed trade, not a live price chart.</small>
           </figcaption>
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Illustrative realized profit and loss sequence">
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-label="Illustrative realized profit and loss sequence"
+          >
             <line x1="0" x2="100" y1="25" y2="25" />
             <line x1="0" x2="100" y1="50" y2="50" />
             <line x1="0" x2="100" y1="75" y2="75" />
             <polyline points={chartPoints} />
-            {[[3, 84], [18, 77], [31, 80], [45, 59], [58, 51], [72, 57], [84, 33], [97, 25]].map(([cx, cy]) => (
-              <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.8" />
-            ))}
           </svg>
         </figure>
       </section>
@@ -1484,9 +1763,15 @@ function JournalPanel({
         <header>
           <div>
             <h3>Closed trades</h3>
-            <p>Newest closed positions first. Select a row to inspect the trade note.</p>
+            <p>
+              Newest closed positions first. Select a row to inspect the trade
+              note.
+            </p>
           </div>
-          <span>{visibleRecords.length} records</span>
+          <span>
+            {visibleRecords.length}{" "}
+            {visibleRecords.length === 1 ? "record" : "records"}
+          </span>
         </header>
         <div className="journal-ledger__table">
           <Table>
@@ -1504,7 +1789,9 @@ function JournalPanel({
               {visibleRecords.map((record) => (
                 <TableRow
                   key={record.id}
-                  className={record.id === selectedRecord?.id ? "is-selected" : undefined}
+                  className={
+                    record.id === selectedRecord?.id ? "is-selected" : undefined
+                  }
                   onClick={() => setSelectedId(record.id)}
                 >
                   <TableCell>
@@ -1512,27 +1799,46 @@ function JournalPanel({
                       className="journal-trade-select"
                       type="button"
                       onClick={() => setSelectedId(record.id)}
-                      aria-current={record.id === selectedRecord?.id ? "true" : undefined}
+                      aria-current={
+                        record.id === selectedRecord?.id ? "true" : undefined
+                      }
                     >
                       {record.exitAt}
                     </button>
                   </TableCell>
-                  <TableCell><strong>{record.symbol}</strong></TableCell>
                   <TableCell>
-                    <span className={`journal-direction is-${record.direction.toLowerCase()}`}>
-                      {record.direction === "Long" ? <ArrowUpRight /> : <ArrowDownRight />}
+                    <strong>{record.symbol}</strong>
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className={`journal-direction is-${record.direction.toLowerCase()}`}
+                    >
+                      {record.direction === "Long" ? (
+                        <ArrowUpRight />
+                      ) : (
+                        <ArrowDownRight />
+                      )}
                       {record.direction}
                     </span>
                     <small>{record.size}</small>
                   </TableCell>
-                  <TableCell>{record.entry.toLocaleString("id-ID")} / {record.exit.toLocaleString("id-ID")}</TableCell>
+                  <TableCell>
+                    {record.entry.toLocaleString("id-ID")} /{" "}
+                    {record.exit.toLocaleString("id-ID")}
+                  </TableCell>
                   <TableCell>
                     <b className={record.pnl > 0 ? "positive" : "negative"}>
-                      {record.pnl > 0 ? "+" : "-"}{formatRupiah(record.pnl)}
+                      {record.pnl > 0 ? "+" : "-"}
+                      {formatRupiah(record.pnl)}
                     </b>
-                    <small>{record.pnlPercent > 0 ? "+" : ""}{record.pnlPercent.toFixed(2)}%</small>
+                    <small>
+                      {record.pnlPercent > 0 ? "+" : ""}
+                      {record.pnlPercent.toFixed(2)}%
+                    </small>
                   </TableCell>
-                  <TableCell>{record.mfe.toFixed(2)}% / {record.mae.toFixed(2)}%</TableCell>
+                  <TableCell>
+                    {record.mfe.toFixed(2)}% / {record.mae.toFixed(2)}%
+                  </TableCell>
                 </TableRow>
               ))}
               {visibleRecords.length === 0 && (
@@ -1552,7 +1858,10 @@ function JournalPanel({
           <div className="journal-detail__title">
             <div>
               <span>{selectedRecord.journal}</span>
-              <h3>{selectedRecord.symbol} {selectedRecord.direction.toLowerCase()} review</h3>
+              <h3>
+                {selectedRecord.symbol} {selectedRecord.direction.toLowerCase()}{" "}
+                review
+              </h3>
             </div>
             <TrendingUp />
           </div>
@@ -1564,30 +1873,47 @@ function JournalPanel({
             </div>
             <div>
               <span>Entry / exit</span>
-              <strong>{selectedRecord.entryAt} → {selectedRecord.exitAt}</strong>
+              <strong>
+                {selectedRecord.entryAt} → {selectedRecord.exitAt}
+              </strong>
             </div>
           </div>
           <div className="journal-tags" aria-label="Trade tags">
             <Tag />
-            {selectedRecord.tags.map((tag) => <span key={tag}>{tag}</span>)}
+            {selectedRecord.tags.map((tag) => (
+              <span key={tag}>{tag}</span>
+            ))}
           </div>
         </aside>
       )}
 
       {transactions.length > 0 && (
-        <section className="journal-drafts" aria-label="Locally captured trade drafts">
+        <section
+          className="journal-drafts"
+          aria-label="Locally captured trade drafts"
+        >
           <div>
             <span>Local drafts</span>
-            <p>{transactions.length} entries are waiting for an exit price and remain only in this browser preview.</p>
+            <p>
+              {transactions.length} entries are waiting for an exit price and
+              remain only in this browser preview.
+            </p>
           </div>
           <div className="journal-drafts__items">
             {transactions.map((tx) => (
               <article key={tx.id}>
                 <strong>{tx.symbol}</strong>
-                <span>{tx.side} · {tx.quantity} lots at {tx.price.toLocaleString("id-ID")}</span>
+                <span>
+                  {tx.side} · {tx.quantity} lots at{" "}
+                  {tx.price.toLocaleString("id-ID")}
+                </span>
                 <button
                   className="icon-action"
-                  onClick={() => setTransactions(transactions.filter((item) => item.id !== tx.id))}
+                  onClick={() =>
+                    setTransactions(
+                      transactions.filter((item) => item.id !== tx.id),
+                    )
+                  }
                   aria-label={`Remove ${tx.symbol} local draft`}
                 >
                   <Trash2 />
@@ -1614,6 +1940,7 @@ function AccessPanel({
 }) {
   const [account, setAccount] = useState<AccountState | null>(null);
   const [devices, setDevices] = useState<AccountDevice[]>([]);
+  const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1625,12 +1952,14 @@ function AccessPanel({
     setLoading(true);
     setError(null);
     try {
-      const [nextAccount, response] = await Promise.all([
+      const [nextAccount, response, sessionResponse] = await Promise.all([
         api.account(),
         api.listDevices(),
+        api.listSessions(),
       ]);
       setAccount(nextAccount);
       setDevices(response.items);
+      setSessions(sessionResponse.items);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -1682,6 +2011,22 @@ function AccessPanel({
         caught instanceof Error
           ? caught.message
           : "Perangkat belum dapat dicabut.",
+      );
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function revokeSession(item: AccountSession) {
+    if (!window.confirm(`Akhiri sesi “${item.label}”?`)) return;
+    setSavingId(item.id);
+    setError(null);
+    try {
+      await api.revokeSession(item.id);
+      await loadAccess();
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Sesi belum dapat diakhiri.",
       );
     } finally {
       setSavingId(null);
@@ -1859,6 +2204,50 @@ function AccessPanel({
           </div>
         )}
       </section>
+      <section className="panel account-sessions-panel">
+        <div className="panel-heading">
+          <div>
+            <span>SESI WEB</span>
+            <h3>Login aktif</h3>
+          </div>
+          <span className="muted-meta">{sessions.length} sesi</span>
+        </div>
+        {sessions.length === 0 ? (
+          <div className="device-empty">
+            <KeyRound />
+            <strong>Belum ada sesi yang dapat ditampilkan</strong>
+            <span>Sesi aktif akan muncul setelah autentikasi berhasil.</span>
+          </div>
+        ) : (
+          <div className="account-session-ledger">
+            {sessions.map((item) => (
+              <article key={item.id}>
+                <div>
+                  <strong>{item.label}</strong>
+                  <span>
+                    {item.status} · terakhir aktif{" "}
+                    {formatDeviceTime(item.last_seen_at)}
+                  </span>
+                </div>
+                {item.current ? (
+                  <Badge variant="outline">Sesi ini</Badge>
+                ) : item.status === "active" ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={savingId === item.id}
+                    onClick={() => void revokeSession(item)}
+                  >
+                    Akhiri sesi
+                  </Button>
+                ) : (
+                  <Badge variant="secondary">{item.status}</Badge>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
       <section className="panel cache-panel">
         <div>
           <Database />
@@ -1887,6 +2276,31 @@ function formatDeviceTime(value: string): string {
   }).format(parsed);
 }
 
+function readJournalDrafts(key: string): DemoTransaction[] {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return initialTransactions;
+    const value: unknown = JSON.parse(raw);
+    if (!Array.isArray(value)) return initialTransactions;
+    return value.filter(
+      (item): item is DemoTransaction =>
+        item &&
+        typeof item.id === "string" &&
+        typeof item.symbol === "string" &&
+        (item.side === "BUY" || item.side === "SELL") &&
+        Number.isInteger(item.quantity) &&
+        item.quantity > 0 &&
+        Number.isFinite(item.price) &&
+        item.price > 0 &&
+        Number.isFinite(item.fee) &&
+        item.fee >= 0 &&
+        typeof item.date === "string",
+    );
+  } catch {
+    return initialTransactions;
+  }
+}
+
 export function DemoWorkspace({
   view,
   backendOnline,
@@ -1901,67 +2315,140 @@ export function DemoWorkspace({
   onLogout: () => void | Promise<void>;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const workspaceRef = useRef<HTMLElement>(null);
+  const workspaceMotion = useRef<Animation | null>(null);
+  const previousWorkspaceLeft = useRef<number | null>(null);
+
+  function rememberWorkspacePosition() {
+    if (
+      !window.matchMedia("(min-width: 861px)").matches ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      return;
+    previousWorkspaceLeft.current =
+      workspaceRef.current?.getBoundingClientRect().left ?? null;
+    workspaceMotion.current?.cancel();
+  }
+
+  useLayoutEffect(() => {
+    const element = workspaceRef.current;
+    const previousLeft = previousWorkspaceLeft.current;
+    previousWorkspaceLeft.current = null;
+    if (!element || previousLeft === null) return;
+    const delta = previousLeft - element.getBoundingClientRect().left;
+    if (Math.abs(delta) < 1) return;
+    workspaceMotion.current = element.animate(
+      [{ transform: `translateX(${delta}px)` }, { transform: "translateX(0)" }],
+      { duration: 300, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+    );
+  }, [menuOpen, sidebarCollapsed]);
+
+  useEffect(() => () => workspaceMotion.current?.cancel(), []);
   const [draftSymbol, setDraftSymbol] = useState<string | null>(null);
-  const [rules, setRules] = useState<DemoRule[]>(demoRules);
-  const [transactions, setTransactions] =
-    useState<DemoTransaction[]>(initialTransactions);
+  const journalKey = `signalgen:journal-drafts:${user?.id ?? "guest"}`;
+  const [journalState, setJournalState] = useState(() => ({
+    key: journalKey,
+    items: readJournalDrafts(journalKey),
+  }));
+  const transactions =
+    journalState.key === journalKey
+      ? journalState.items
+      : readJournalDrafts(journalKey);
+  const setTransactions: Dispatch<SetStateAction<DemoTransaction[]>> = (
+    update,
+  ) => {
+    setJournalState((current) => {
+      const previous =
+        current.key === journalKey
+          ? current.items
+          : readJournalDrafts(journalKey);
+      return {
+        key: journalKey,
+        items: typeof update === "function" ? update(previous) : update,
+      };
+    });
+  };
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        journalState.key,
+        JSON.stringify(journalState.items),
+      );
+    } catch {
+      // The journal remains usable in memory when browser storage is unavailable.
+    }
+  }, [journalState]);
   const [cacheState, setCacheState] = useState("14.8 MB · encrypted (sample)");
   const meta = viewMeta[view];
+  const PageIcon = meta.icon;
   function go(next: DemoView) {
+    rememberWorkspacePosition();
     location.hash = `app/${next}`;
     setMenuOpen(false);
+    setSidebarCollapsed(true);
   }
   function draft(symbol: string) {
     setDraftSymbol(symbol);
     go("journal");
   }
   return (
-    <main className="workbench demo-workbench">
-      <aside className={`sidebar ${menuOpen ? "is-open" : ""}`}>
+    <main
+      className={`workbench demo-workbench ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${menuOpen ? "is-menu-open" : ""}`}
+    >
+      <aside
+        className={`sidebar ${menuOpen ? "is-open" : ""} ${sidebarCollapsed ? "is-collapsed" : ""}`}
+      >
         <div className="sidebar__brand">
-          <a href="#home">
+          <a className="sidebar__brand-link" href="#home">
             <Brand compact />
           </a>
-          <button onClick={() => setMenuOpen(false)} aria-label="Close menu">
+          <button
+            onClick={() => {
+              rememberWorkspacePosition();
+              setMenuOpen(false);
+              setSidebarCollapsed(true);
+            }}
+            aria-label="Close menu"
+          >
             <X />
           </button>
         </div>
-        <div className="surface-label">
-          <span>Demo workspace</span>
-          <i className="status-dot is-online" />
-        </div>
-        <nav aria-label="Demo navigation">
-          {" "}
-          <div className="nav-group">
-            <span>MVP SURFACES</span>
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.view}
-                  className={view === item.view ? "active" : ""}
-                  onClick={() => go(item.view)}
-                >
-                  {view === item.view && <i />}
-                  <Icon /> {item.label}
-                </button>
-              );
-            })}
-          </div>
-          <div className="nav-group">
-            <span>ACCOUNT</span>
-            <a href="#account">
-              <KeyRound /> Live account
-            </a>
-          </div>
+        <nav aria-label="Workspace navigation">
+          {navGroups.map((group, index) => {
+            const visibleItems = group.items.filter(
+              (item) =>
+                !item.operatorOnly ||
+                user?.role === "operator" ||
+                user?.role === "admin",
+            );
+            if (!visibleItems.length) return null;
+            return (
+              <div
+                className="nav-group"
+                key={group.label ?? `primary-${index}`}
+              >
+                {group.label && <span>{group.label}</span>}
+                {visibleItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.view}
+                      className={view === item.view ? "active" : ""}
+                      onClick={() => go(item.view)}
+                    >
+                      <Icon aria-hidden="true" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
         </nav>
         <div className="sidebar__footer">
           {authenticated && user ? (
-            <AccountMenu
-              user={user}
-              onLogout={onLogout}
-              variant="sidebar"
-            />
+            <AccountMenu user={user} onLogout={onLogout} variant="sidebar" />
           ) : (
             <a className="back-home" href="#login">
               <KeyRound /> Sign in
@@ -1976,47 +2463,48 @@ export function DemoWorkspace({
           aria-label="Close menu"
         />
       )}
-      <section className="workspace">
+      <section className="workspace" ref={workspaceRef}>
         <header className="topbar">
-          <div className="topbar__title">
-            <button
-              className="menu-button"
-              onClick={() => setMenuOpen(true)}
-              aria-label="Open demo menu"
-            >
-              <Menu />
-            </button>
-            <div>
-              <span className="breadcrumb">Signalgen / Demo / {view}</span>
-              <h1>{meta.title}</h1>
+          <div className="topbar__inner">
+            <div className="topbar__title">
+              <button
+                className="menu-button"
+                onClick={() => {
+                  rememberWorkspacePosition();
+                  setMenuOpen(true);
+                }}
+                aria-label="Open workspace menu"
+              >
+                <Menu />
+              </button>
+              <h1>Trading workspace</h1>
             </div>
-          </div>
-          <div className="topbar__actions">
-            <span className="preview-chip">
-              {authenticated ? "Go API connected" : "Static preview"}
-            </span>
-            <a className="topbar-link" href="#home">
-              <ArrowLeft /> Back to landing page
-            </a>
+            <div className="topbar__actions">
+              <ThemeToggle compact />
+            </div>
           </div>
         </header>
         <div className="workspace__content demo-content">
-          <DemoNotice authenticated={authenticated} view={view} />
+          <DemoNotice view={view} />
           <div className="page-heading">
+            <span className="page-heading__icon" aria-hidden="true">
+              <PageIcon />
+            </span>
             <div>
               <h2>{meta.title}</h2>
               <p>{meta.description}</p>
             </div>
-            <span>
-              {view === "realtime"
-                ? "TradingView widget · exchange delay may apply"
-                : "Last reset · reload page"}
-            </span>
           </div>
           <div className="route-stage" key={view}>
-            {view === "overview" && <OverviewPanel go={go} />}
+            {view === "overview" && (
+              <WorkspaceOverviewPanel
+                authenticated={authenticated}
+                backendOnline={backendOnline}
+                go={go}
+              />
+            )}
             {view === "analysis" && (
-              <AnalysisPanel
+              <WorkspaceScreenerPanel
                 onDraft={draft}
                 authenticated={authenticated}
                 backendOnline={backendOnline}
@@ -2024,7 +2512,11 @@ export function DemoWorkspace({
             )}
             {view === "realtime" && <RealtimePanel />}
             {view === "rules" && (
-              <RulesPanel rules={rules} setRules={setRules} />
+              <ServerRulesPanel
+                authenticated={authenticated}
+                backendOnline={backendOnline}
+                onRun={() => go("analysis")}
+              />
             )}
             {view === "journal" && (
               <JournalPanel
@@ -2040,6 +2532,24 @@ export function DemoWorkspace({
                 authenticated={authenticated}
                 cacheState={cacheState}
                 setCacheState={setCacheState}
+              />
+            )}
+            {view === "universes" && (
+              <StockUniversesPanel
+                authenticated={authenticated}
+                backendOnline={backendOnline}
+              />
+            )}
+            {view === "subscription" && (
+              <SubscriptionPanel
+                authenticated={authenticated}
+                backendOnline={backendOnline}
+              />
+            )}
+            {view === "operator" && (
+              <OperatorPanel
+                authenticated={authenticated}
+                backendOnline={backendOnline}
               />
             )}
           </div>

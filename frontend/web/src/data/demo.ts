@@ -1,5 +1,6 @@
 export type DemoRule = {
   id: string;
+  backendRuleId?: string;
   name: string;
   logic: string;
   version: string;
@@ -20,6 +21,7 @@ export type DemoTransaction = {
 export const demoRules: DemoRule[] = [
   {
     id: "r-momentum",
+    backendRuleId: "default-scalping-v1",
     name: "Momentum confirmation",
     logic: "Close > EMA20 · RSI(14) 52–68 · Volume > SMA20",
     version: "v1.4",
