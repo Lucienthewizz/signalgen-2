@@ -18,9 +18,23 @@ import (
 const dynamicOutputSize = 100
 
 type dynamicEntry struct {
-	owner    string
-	manifest Manifest
-	content  []byte
+	owner     string
+	manifest  Manifest
+	content   []byte
+	expiresAt time.Time
+}
+
+// SnapshotLimits bound private datasets without evicting active handles. Full
+// storage returns a retryable service error; expired handles can be prepared again.
+type SnapshotLimits struct {
+	TTL         time.Duration
+	MaxEntries  int
+	MaxPerOwner int
+	MaxBytes    int
+}
+
+func DefaultSnapshotLimits() SnapshotLimits {
+	return SnapshotLimits{TTL: 15 * time.Minute, MaxEntries: 128, MaxPerOwner: 16, MaxBytes: 32 << 20}
 }
 
 // DynamicStore builds immutable, owner-scoped market-data snapshots. Dates
@@ -31,19 +45,38 @@ type DynamicStore struct {
 	universes universe.Repository
 	mu        sync.RWMutex
 	entries   map[string]dynamicEntry
+	limits    SnapshotLimits
+	bytes     int
+	now       func() time.Time
 }
 
 func NewDynamicStore(provider marketdata.Provider, universes universe.Repository) (*DynamicStore, error) {
+	return NewDynamicStoreWithLimits(provider, universes, DefaultSnapshotLimits())
+}
+
+func NewDynamicStoreWithLimits(provider marketdata.Provider, universes universe.Repository, limits SnapshotLimits) (*DynamicStore, error) {
 	if provider == nil || universes == nil {
 		return nil, fmt.Errorf("market data provider and universe repository are required")
 	}
-	return &DynamicStore{provider: provider, universes: universes, entries: make(map[string]dynamicEntry)}, nil
+	if limits.TTL <= 0 || limits.MaxEntries < 1 || limits.MaxPerOwner < 1 || limits.MaxBytes < 1 {
+		return nil, fmt.Errorf("invalid dataset snapshot limits")
+	}
+	return &DynamicStore{provider: provider, universes: universes, entries: make(map[string]dynamicEntry), limits: limits, now: time.Now}, nil
 }
 
 func (store *DynamicStore) Prepare(ctx context.Context, owner string, request PrepareRequest) (Manifest, error) {
 	owner = strings.TrimSpace(owner)
 	if owner == "" || request.Purpose != "screen" || strings.TrimSpace(request.RuleID) == "" || strings.TrimSpace(request.UniverseID) == "" {
 		return Manifest{}, ErrInvalidRequest
+	}
+	// Check limits before an expensive provider fetch and again atomically when
+	// storing, because simultaneous prepares may consume the remaining capacity.
+	store.mu.Lock()
+	store.pruneExpiredLocked()
+	available := store.hasCapacityLocked(owner, 0)
+	store.mu.Unlock()
+	if !available {
+		return Manifest{}, ErrCapacity
 	}
 	instruments, err := store.universes.Instruments(ctx, owner, request.UniverseID)
 	if err != nil {
@@ -56,7 +89,7 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	if err != nil {
 		return Manifest{}, err
 	}
-	if len(series) == 0 {
+	if err := marketdata.ValidateSeries(series, instruments, dynamicOutputSize); err != nil {
 		return Manifest{}, ErrIntegrity
 	}
 
@@ -82,8 +115,10 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 		return Manifest{}, err
 	}
 	hash := sha256.Sum256(content)
+	now := store.now().UTC()
+	expiresAt := now.Add(store.limits.TTL)
 	manifest := Manifest{
-		DatasetID: id, Version: time.Now().UTC().Format("20060102T150405Z"),
+		DatasetID: id, Version: now.Format("20060102T150405Z"), ExpiresAt: expiresAt.Format(time.RFC3339),
 		SchemaVersion: "ohlcv-multi-1", Provider: "yahoo_finance", Purpose: "screen",
 		Market: "IDX", Currency: "IDR", Symbols: symbols, Timeframe: "1d", Timezone: "UTC",
 		RequestedRange: Range{From: from, To: to}, AvailableRange: Range{From: from, To: to},
@@ -92,30 +127,69 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 		Quality:  Quality{Status: "complete", Warnings: []string{"Yahoo Finance data; unofficial source for academic MVP use"}},
 	}
 	store.mu.Lock()
-	store.entries[id] = dynamicEntry{owner: owner, manifest: manifest, content: content}
-	store.mu.Unlock()
-	return manifest, nil
+	defer store.mu.Unlock()
+	store.pruneExpiredLocked()
+	if !store.hasCapacityLocked(owner, len(content)) {
+		return Manifest{}, ErrCapacity
+	}
+	store.entries[id] = dynamicEntry{owner: owner, manifest: cloneManifest(manifest), content: content, expiresAt: expiresAt}
+	store.bytes += len(content)
+	return cloneManifest(manifest), nil
 }
 
 func (store *DynamicStore) Manifest(_ context.Context, owner, id string) (Manifest, error) {
-	store.mu.RLock()
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	store.pruneExpiredLocked()
 	entry, ok := store.entries[strings.TrimSpace(id)]
-	store.mu.RUnlock()
 	if !ok || entry.owner != strings.TrimSpace(owner) {
 		return Manifest{}, ErrNotFound
 	}
-	return entry.manifest, nil
+	return cloneManifest(entry.manifest), nil
 }
 
 func (store *DynamicStore) Content(ctx context.Context, owner, id string) ([]byte, Manifest, error) {
-	manifest, err := store.Manifest(ctx, owner, id)
-	if err != nil {
+	if err := ctx.Err(); err != nil {
 		return nil, Manifest{}, err
 	}
-	store.mu.RLock()
-	content := append([]byte(nil), store.entries[id].content...)
-	store.mu.RUnlock()
-	return content, manifest, nil
+	// Read the bytes and metadata under the same lock; expiry cannot remove the
+	// entry between a successful manifest lookup and a content lookup.
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	store.pruneExpiredLocked()
+	entry, ok := store.entries[strings.TrimSpace(id)]
+	if !ok || entry.owner != strings.TrimSpace(owner) {
+		return nil, Manifest{}, ErrNotFound
+	}
+	return append([]byte(nil), entry.content...), cloneManifest(entry.manifest), nil
+}
+
+func (store *DynamicStore) pruneExpiredLocked() {
+	for id, entry := range store.entries {
+		if !store.now().Before(entry.expiresAt) {
+			store.bytes -= len(entry.content)
+			delete(store.entries, id)
+		}
+	}
+}
+
+func (store *DynamicStore) hasCapacityLocked(owner string, bytes int) bool {
+	if len(store.entries) >= store.limits.MaxEntries || store.bytes+bytes > store.limits.MaxBytes {
+		return false
+	}
+	count := 0
+	for _, entry := range store.entries {
+		if entry.owner == owner {
+			count++
+		}
+	}
+	return count < store.limits.MaxPerOwner
+}
+
+func cloneManifest(manifest Manifest) Manifest {
+	manifest.Symbols = append([]string(nil), manifest.Symbols...)
+	manifest.Quality.Warnings = append([]string(nil), manifest.Quality.Warnings...)
+	return manifest
 }
 
 func (store *DynamicStore) Ready(ctx context.Context) error {

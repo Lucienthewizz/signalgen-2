@@ -5,7 +5,8 @@ or P&L backtest baseline.
 
 ## Selected existing behavior
 
-- Existing rule: `Default Scalping` from `backend/app/storage/init_db.py`.
+- Existing rule: `Default Scalping` from `legacy/python/app/storage/init_db.py`
+  (original path before archive separation: `backend/app/storage/init_db.py`).
 - Existing Python formula source: `ta.trend.ema_indicator`,
   `ta.momentum.rsi`, and `app.core.rule_engine.RuleEngine`.
 - Operands: `EMA9`, `EMA20`, `PRICE`, and `RSI14`.
@@ -38,7 +39,7 @@ db2cd30ef88ed5ed1af7fea79bb601c247b9854f3515de1532599161b2e54fcc
 The committed expected values were printed by:
 
 ```bash
-PYTHONPATH=backend python backend/scripts/export_m0_baseline.py
+python legacy/python/scripts/export_m0_baseline.py
 ```
 
 Run that command only to inspect a candidate library change. Golden values must

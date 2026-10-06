@@ -79,3 +79,46 @@ func TestDynamicStoreRejectsCrossOwnerUniverse(t *testing.T) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
 }
+
+func TestDynamicSnapshotsExpireAndPreserveActiveHandles(t *testing.T) {
+	store, _ := NewDynamicStoreWithLimits(fakeMarketProvider{}, fakeUniverseRepository{owner: "user-a"}, SnapshotLimits{TTL: time.Minute, MaxEntries: 2, MaxPerOwner: 1, MaxBytes: 1 << 20})
+	now := time.Now().UTC()
+	store.now = func() time.Time { return now }
+	input := PrepareRequest{Purpose: "screen", RuleID: "rule-a", UniverseID: "univ-a"}
+	manifest, err := store.Prepare(context.Background(), "user-a", input)
+	if err != nil || manifest.ExpiresAt == "" {
+		t.Fatalf("manifest=%+v error=%v", manifest, err)
+	}
+	manifest.Symbols[0] = "CORRUPT.JK"
+	manifest.Quality.Warnings[0] = "corrupt"
+	if _, err := store.Prepare(context.Background(), "user-a", input); !errors.Is(err, ErrCapacity) {
+		t.Fatalf("capacity error=%v", err)
+	}
+	content, original, err := store.Content(context.Background(), "user-a", "  "+manifest.DatasetID+"  ")
+	if err != nil || original.Symbols[0] != "BBCA.JK" || original.Quality.Warnings[0] == "corrupt" {
+		t.Fatalf("content error=%v, original=%+v", err, original)
+	}
+	content[0] = '!'
+	untouched, _, _ := store.Content(context.Background(), "user-a", manifest.DatasetID)
+	if untouched[0] == '!' {
+		t.Fatal("caller mutated stored content")
+	}
+	now = now.Add(time.Minute)
+	if _, err := store.Manifest(context.Background(), "user-a", manifest.DatasetID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expiry error=%v", err)
+	}
+	if store.bytes != 0 {
+		t.Fatal("expired bytes were not reclaimed")
+	}
+	if _, err := store.Prepare(context.Background(), "user-a", input); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDynamicSnapshotsEnforceByteLimit(t *testing.T) {
+	store, _ := NewDynamicStoreWithLimits(fakeMarketProvider{}, fakeUniverseRepository{owner: "user-a"}, SnapshotLimits{TTL: time.Minute, MaxEntries: 2, MaxPerOwner: 2, MaxBytes: 1})
+	_, err := store.Prepare(context.Background(), "user-a", PrepareRequest{Purpose: "screen", RuleID: "rule-a", UniverseID: "univ-a"})
+	if !errors.Is(err, ErrCapacity) || store.bytes != 0 || len(store.entries) != 0 {
+		t.Fatalf("error=%v bytes=%d", err, store.bytes)
+	}
+}

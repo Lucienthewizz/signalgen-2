@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,23 +66,12 @@ func (provider *YahooFinance) dailyOne(ctx context.Context, instrument universe.
 	query.Set("includeAdjustedClose", "true")
 	endpoint.RawQuery = query.Encode()
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	raw, err := provider.fetchChart(ctx, endpoint.String())
 	if err != nil {
-		return Series{}, ErrUnavailable
+		return Series{}, err
 	}
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("User-Agent", "SignalGen/2.0 academic-market-data-client")
-	response, err := provider.client.Do(request)
-	if err != nil {
-		return Series{}, fmt.Errorf("%w: request failed", ErrUnavailable)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return Series{}, fmt.Errorf("%w: status %d", ErrUnavailable, response.StatusCode)
-	}
-
 	var payload yahooChartResponse
-	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+	if err := json.Unmarshal(raw, &payload); err != nil {
 		return Series{}, ErrInvalidData
 	}
 	if payload.Chart.Error != nil || len(payload.Chart.Result) != 1 || len(payload.Chart.Result[0].Indicators.Quote) != 1 {
@@ -89,6 +80,9 @@ func (provider *YahooFinance) dailyOne(ctx context.Context, instrument universe.
 	chart := payload.Chart.Result[0]
 	quote := chart.Indicators.Quote[0]
 	length := minimumLength(len(chart.Timestamp), len(quote.Open), len(quote.High), len(quote.Low), len(quote.Close), len(quote.Volume))
+	if length != len(chart.Timestamp) || length != len(quote.Open) || length != len(quote.High) || length != len(quote.Low) || length != len(quote.Close) || length != len(quote.Volume) {
+		return Series{}, ErrInvalidData
+	}
 	candles := make([]core.Candle, 0, length)
 	for index := 0; index < length; index++ {
 		if quote.Open[index] == nil || quote.High[index] == nil || quote.Low[index] == nil || quote.Close[index] == nil || quote.Volume[index] == nil {
@@ -109,7 +103,68 @@ func (provider *YahooFinance) dailyOne(ctx context.Context, instrument universe.
 	if len(candles) > outputSize {
 		candles = candles[len(candles)-outputSize:]
 	}
-	return Series{Symbol: instrument.Symbol, Candles: candles, Timezone: "UTC"}, nil
+	series := Series{Symbol: instrument.Symbol, Candles: candles, Timezone: "UTC"}
+	if err := ValidateSeries([]Series{series}, []universe.Instrument{instrument}, outputSize); err != nil {
+		return Series{}, err
+	}
+	return series, nil
+}
+
+const maxYahooResponseBytes = 4 << 20
+
+// fetchChart permits one retry for transient failures. Long Retry-After values
+// fail promptly rather than holding an API request or ignoring provider limits.
+func (provider *YahooFinance) fetchChart(ctx context.Context, endpoint string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	for attempt := 0; attempt < 2; attempt++ {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return nil, ErrUnavailable
+		}
+		request.Header.Set("Accept", "application/json")
+		request.Header.Set("User-Agent", "SignalGen/2.0 academic-market-data-client")
+		response, requestErr := provider.client.Do(request)
+		delay, retry := 250*time.Millisecond, requestErr != nil
+		if requestErr == nil {
+			if response.StatusCode == http.StatusOK {
+				raw, readErr := io.ReadAll(io.LimitReader(response.Body, maxYahooResponseBytes+1))
+				_ = response.Body.Close()
+				if readErr != nil || len(raw) > maxYahooResponseBytes {
+					return nil, ErrInvalidData
+				}
+				return raw, nil
+			}
+			retry = response.StatusCode == http.StatusTooManyRequests || response.StatusCode == http.StatusBadGateway || response.StatusCode == http.StatusServiceUnavailable || response.StatusCode == http.StatusGatewayTimeout
+			delay, retry = retryDelay(response.Header.Get("Retry-After"), retry)
+			_ = response.Body.Close()
+		}
+		if !retry || attempt == 1 {
+			return nil, ErrUnavailable
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ErrUnavailable
+		case <-timer.C:
+		}
+	}
+	return nil, ErrUnavailable
+}
+
+func retryDelay(header string, retry bool) (time.Duration, bool) {
+	delay := 250 * time.Millisecond
+	if header != "" {
+		if seconds, err := strconv.ParseInt(header, 10, 32); err == nil && seconds >= 0 {
+			delay = time.Duration(seconds) * time.Second
+		} else if stamp, err := http.ParseTime(header); err == nil {
+			delay = max(time.Until(stamp), 0)
+		} else {
+			return 0, false
+		}
+	}
+	return delay, retry && delay <= time.Second
 }
 
 func yahooRange(outputSize int) string {

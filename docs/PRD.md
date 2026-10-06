@@ -2,6 +2,11 @@
 
 Versi 2.1 · 29 September 2026 · Keputusan produk terbaru: aplikasi web multi-user dengan Supabase Postgres sebagai penyimpanan aplikasi. Status implementasi: migrasi berlangsung.
 
+Keputusan implementasi 5 Oktober 2026: alur screening aktif memakai **Model A**
+(indikator di Go/WASM client, private decision di Go server melalui WebSocket).
+Model B hanya pembanding penelitian. Benchmark dan persetujuan pembimbing tidak
+dianggap selesai hanya karena pilihan implementasi sudah ditetapkan.
+
 ## 1. Otoritas dan revisi
 
 PRD ini menggantikan baseline desktop-first v1. Pengguna menegaskan rekaman Universitas Udayana.m4a sebagai revisi terbaru. Rekaman adalah sumber kebutuhan, bukan bukti implementasi atau hasil benchmark. Revisi dokumen tidak menghapus kode/data legacy.

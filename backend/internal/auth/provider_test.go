@@ -80,7 +80,7 @@ func TestSupabaseLoginReturnsSession(t *testing.T) {
 			t.Fatalf("url = %s", request.URL.String())
 		}
 		writeTestJSON(writer, http.StatusOK, map[string]interface{}{
-			"access_token": "access-token", "token_type": "bearer", "expires_in": 3600,
+			"access_token": "access-token", "refresh_token": "refresh-token", "token_type": "bearer", "expires_in": 3600,
 			"user": map[string]interface{}{
 				"id": "user-123", "email": "user@example.com",
 				"user_metadata": map[string]string{"full_name": "Demo User"},
@@ -94,7 +94,7 @@ func TestSupabaseLoginReturnsSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.AccessToken != "access-token" || result.ExpiresIn != 3600 || result.User.Email != "user@example.com" {
+	if result.AccessToken != "access-token" || result.RefreshToken != "refresh-token" || result.ExpiresIn != 3600 || result.User.Email != "user@example.com" {
 		t.Fatalf("result = %+v", result)
 	}
 }

@@ -27,6 +27,8 @@ import (
 )
 
 func main() {
+	shutdownContext, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 	// Read deployment configuration once at process startup. Secrets remain in
 	// the backend environment and are never bundled into the frontend/WASM.
 	projectURL := requiredEnvironment("SUPABASE_URL")
@@ -39,6 +41,8 @@ func main() {
 	maxActiveSessions := positiveIntegerEnvironment("SIGNALGEN_MAX_ACTIVE_SESSIONS", 1)
 	deviceSwitchCooldownHours := positiveIntegerEnvironment("SIGNALGEN_DEVICE_SWITCH_COOLDOWN_HOURS", 24)
 	mutationRatePerMinute := positiveIntegerEnvironment("SIGNALGEN_MUTATION_RATE_LIMIT_PER_MINUTE", 60)
+	maxSocketConnections := positiveIntegerEnvironment("SIGNALGEN_MAX_SCREENER_CONNECTIONS", 32)
+	maxUserSocketConnections := positiveIntegerEnvironment("SIGNALGEN_MAX_SCREENER_CONNECTIONS_PER_USER", 2)
 
 	// Supabase is the identity provider: register, login, recovery, and bearer
 	// verification. SignalGen authorization is wired separately below.
@@ -64,7 +68,13 @@ func main() {
 	// Stock universes are durable owner-scoped bundles. Provider symbols remain
 	// server-only metadata so clients cannot request an arbitrary instrument.
 	universeStore := universe.NewPostgresRepository(database)
-	provider, err := marketdata.NewYahooFinance(yahooFinanceBaseURL, nil)
+	yahooProvider, err := marketdata.NewYahooFinance(yahooFinanceBaseURL, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Public OHLCV is shared briefly; private dataset handles remain owner-bound.
+	// Identical instrument fetches reuse one bounded upstream request.
+	provider, err := marketdata.NewCachedProvider(yahooProvider, marketdata.DefaultCacheOptions())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -91,8 +101,11 @@ func main() {
 	handler, err := apihttp.NewServer(
 		identity, sessions, accessStore, datasets, computeStore,
 		apihttp.WithAuthService(identity),
+		apihttp.WithSocketContext(shutdownContext),
+		apihttp.WithScreenerConnectionLimits(maxSocketConnections, maxUserSocketConnections),
 		apihttp.WithPasswordResetRedirectURL(passwordResetRedirectURL),
 		apihttp.WithRuleStore(ruleStore),
+		apihttp.WithProfileStore(accessStore),
 		apihttp.WithSubscriptionService(subscriptionStore),
 		apihttp.WithUniverseStore(universeStore),
 		apihttp.WithRateLimiter(mutationLimiter),
@@ -115,19 +128,25 @@ func main() {
 
 	// Graceful shutdown lets in-flight HTTP requests finish during container
 	// restarts or Ctrl+C instead of being terminated abruptly.
-	shutdownContext, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
+	shutdownDone := make(chan struct{})
 	go func() {
+		defer close(shutdownDone)
 		<-shutdownContext.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_ = server.Shutdown(ctx)
+		if err := server.Shutdown(ctx); err != nil {
+			log.Print("HTTP shutdown deadline exceeded; closing remaining connections")
+			_ = server.Close()
+		}
 	}()
 
 	log.Printf("SignalGen Go API listening on %s", address)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
+	// ListenAndServe returns as soon as listeners close, before Shutdown has
+	// necessarily drained handlers. Wait before deferred Postgres pool cleanup.
+	<-shutdownDone
 }
 
 // requiredEnvironment fails fast when a security-critical setting is absent.

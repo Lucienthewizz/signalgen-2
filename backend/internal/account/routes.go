@@ -7,13 +7,17 @@ type RouteRegistrar interface {
 }
 
 type RouteHandlers struct {
-	Me       http.HandlerFunc
-	Sessions http.HandlerFunc
-	Devices  http.HandlerFunc
-	Device   http.HandlerFunc
+	Profile       http.HandlerFunc
+	UpdateProfile http.HandlerFunc
+	Me            http.HandlerFunc
+	Sessions      http.HandlerFunc
+	Devices       http.HandlerFunc
+	Device        http.HandlerFunc
 }
 
 func RegisterRoutes(router RouteRegistrar, handlers RouteHandlers) {
+	router.Handle(http.MethodGet, "/api/v1/account/profile", handlers.Profile)
+	router.Handle(http.MethodPatch, "/api/v1/account/profile", handlers.UpdateProfile)
 	router.Handle(http.MethodGet, "/api/v1/account/me", handlers.Me)
 	router.Handle(http.MethodGet, "/api/v1/account/sessions", handlers.Sessions)
 	router.Handle(http.MethodGet, "/api/v1/account/devices", handlers.Devices)

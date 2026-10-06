@@ -2,6 +2,11 @@
 
 Versi 2.1 · 29 September 2026. Keputusan terbaru pengguna: SignalGen adalah aplikasi web multi-user dengan backend Go/Gin dan Supabase Postgres. **Dokumen target bukan bukti migrasi selesai**.
 
+Keputusan implementasi 5 Oktober 2026: pengguna memilih **Model A** untuk alur
+aktif. Client Go/WASM menghitung indikator, server menjalankan private decision
+melalui WebSocket. Model B tetap bahan eksperimen, bukan jalur produk kedua.
+Pilihan ini bukan bukti efisiensi production atau persetujuan pembimbing.
+
 ## 1. Acuan
 
 [PRD utama](PRD.md), [PRD frontend](frontend/FRONTEND_MVP_PRD.md), [PRD backend](backend/BACKEND_MVP_PRD.md), [kontrak target](backend/MVP_API_CONTRACT.md), [provenance rekaman](VOICE_MEMO_CONTEXT.md). Kode/test/OpenAPI runtime menetapkan kontrak aktual; dokumen target menetapkan pekerjaan yang harus dilakukan.
@@ -19,14 +24,14 @@ Static hosting/CDN → frontend/web
                                        ├─ Supabase Postgres: profile/session/grant/subscription/rule/jurnal/audit
                                        └─ historical provider adapter
 
-Arsip historis: backend/app Python/FastAPI + frontend/desktop Electron.
+Arsip historis: legacy/python Python/FastAPI + legacy/desktop Electron.
 Keduanya tidak menentukan desain fitur web baru.
 ```
 
 Indikator dan komputasi historis yang berat dihitung client. Berdasarkan bimbingan
 terbaru, keputusan screener kritis diusulkan tetap berada pada modul kecil server
-yang menerima feature vector ringkas melalui WebSocket. Model split final harus
-dipilih setelah eksperimen, bukan diasumsikan selesai. Data akun/portofolio/jurnal
+yang menerima feature vector ringkas melalui WebSocket. Model A dipilih pengguna
+untuk implementasi aktif; evaluasi kinerja dan validasi pembimbing tetap terbuka. Data akun/portofolio/jurnal
 tetap authoritative di server. Worker menjaga respons UI, bukan menghilangkan
 CPU/RAM perangkat. Go/WASM bukan pengganti React dan bukan jaminan enkripsi kode.
 
@@ -36,8 +41,8 @@ pembanding, threat model, dan urutan implementasi.
 ## 3. Monorepo dan tanggung jawab
 
 - frontend/web: public/account dan aplikasi analisis utama; tidak ada backend di folder FE.
-- frontend/desktop: arsip historis; bukan deliverable produk aktif.
-- backend/app: arsip Python/FastAPI untuk pembanding hasil.
+- legacy/desktop: arsip historis; bukan deliverable produk aktif.
+- legacy/python: arsip Python/FastAPI beserta tests dan alat pembanding.
 - backend: Go API/Gin, pgxpool, dan shared portable core.
 
 Struktur Go berada di backend/cmd/api, backend/cmd/wasm,

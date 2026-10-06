@@ -10,11 +10,14 @@ endpoint autentikasi Python.
 
 Untuk mempelajari pembagian screener antara Go/WASM dan backend, mulai dari
 [`HYBRID_SCREENER_DESIGN.md`](../docs/backend/HYBRID_SCREENER_DESIGN.md). Vertical slice Model A
-sudah tersedia untuk eksperimen; pemilihan model final belum diputuskan.
+sudah tersedia dan dipilih pengguna untuk jalur aktif; benchmark production dan
+validasi pembimbing tetap terbuka. Python/Electron disimpan di `../legacy/`.
 
 Untuk memahami struktur kode dari route sampai storage, baca
 [`ARCHITECTURE.md`](../docs/backend/ARCHITECTURE.md). Dokumen tersebut juga menjelaskan data
 yang saat ini dimiliki Supabase Auth, Postgres, memory, dan Yahoo Finance.
+Untuk panduan pemula beserta analogi Express, baca
+[`CODE_READING_GUIDE.md`](../docs/backend/CODE_READING_GUIDE.md).
 
 ## Menjalankan backend
 
@@ -87,12 +90,16 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `GET /api` — status yang dipakai frontend;
 - `POST /api/auth/register` — membuat akun Supabase melalui Go;
 - `POST /api/auth/login` — login Supabase melalui Go;
+- `POST /api/auth/refresh` — memperbarui pasangan access/refresh token;
 - `GET /api/auth/me` — membaca identitas publik dari bearer terverifikasi;
 - `POST /api/auth/password/reset-request` — mengirim email pemulihan tanpa
   membocorkan apakah email terdaftar;
 - `POST /api/auth/password/reset` — memperbarui password dari recovery session;
 - `POST /api/v1/sessions` — membuat sesi aplikasi, membutuhkan bearer Supabase;
+- `POST /api/v1/sessions/{id}/refresh` — merotasi secret sesi aplikasi aktif;
 - `GET /api/v1/account/me` — profil/status/feature grant server-side;
+- `GET /api/v1/account/profile` — nama tampilan, bio dan versi milik user;
+- `PATCH /api/v1/account/profile` — perubahan parsial nama/bio dengan versi;
 - `GET /api/v1/account/sessions` — daftar maksimal 100 sesi milik pengguna;
 - `DELETE /api/v1/account/sessions/{id}` — mencabut sesi milik pengguna;
 - `GET /api/v1/capabilities` — membutuhkan bearer dan `X-App-Session`;
@@ -106,7 +113,7 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `GET/PATCH/DELETE /api/v1/stock-universes/{id}` — detail dan mutasi owner-only;
 - `POST /api/v1/datasets/prepare` — mengambil OHLCV berdasarkan `rule_id + universe_id`;
 - `GET /api/v1/datasets/{id}/manifest` — metadata/checksum dataset;
-- `GET /api/v1/datasets/{id}/content` — konten OHLCV sintetis terproteksi;
+- `GET /api/v1/datasets/{id}/content` — snapshot OHLCV terproteksi milik user;
 - `POST /api/v1/compute-grants` — receipt singkat yang mengikat sesi, dataset,
   system rule atau rule pribadi, engine, dan schema sebelum eksekusi WASM;
 - `POST /api/v1/screener/socket-tickets` — menukar compute grant valid menjadi
@@ -123,7 +130,9 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `POST /api/v1/operator/subscriptions` — aktivasi/perubahan paket oleh operator
   tepercaya selama payment provider belum dipilih.
 
-Token sesi hanya dikembalikan saat dibuat. Postgres menyimpan hash token, bukan
+Token sesi dikembalikan saat dibuat atau berhasil dirotasi. Rotasi tidak
+memperpanjang expiry asli dan langsung menolak secret sebelumnya.
+Postgres menyimpan hash token, bukan
 nilai token mentah. Daftar sesi hanya mengembalikan metadata aman, status, dan
 penanda sesi aktif; ID milik pengguna lain tidak dapat dibaca atau dicabut.
 Daftar perangkat menggabungkan riwayat sesi berdasarkan `installation_id`.

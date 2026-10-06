@@ -60,7 +60,14 @@ func (check PostgresReadiness) Ready(ctx context.Context) error {
   to_regclass('signalgen.subscription_plans') is not null and
   to_regclass('signalgen.subscription_plan_features') is not null and
   to_regclass('signalgen.subscriptions') is not null and
-  to_regclass('signalgen.subscription_events') is not null`).Scan(&migrated)
+  to_regclass('signalgen.subscription_events') is not null and
+  to_regclass('signalgen.stock_catalog') is not null and
+  to_regclass('signalgen.stock_universes') is not null and
+  to_regclass('signalgen.stock_universe_members') is not null and
+  (select count(*)=4 from pg_attribute
+   where attrelid=to_regclass('signalgen.account_profiles')
+     and attname in ('display_name','bio','profile_version','profile_updated_at')
+     and not attisdropped)`).Scan(&migrated)
 	if err != nil {
 		return fmt.Errorf("Postgres readiness: %w", err)
 	}

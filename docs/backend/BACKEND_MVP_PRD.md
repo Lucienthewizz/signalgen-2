@@ -11,6 +11,10 @@ di [`HYBRID_SCREENER_DESIGN.md`](HYBRID_SCREENER_DESIGN.md). Server juga mengelo
 principal, data berizin, rule, entitlement, sesi/perangkat, jurnal/portofolio dan
 audit. Satu backend boundary, bukan microservice per fitur.
 
+Update 5 Oktober 2026: pengguna memilih Model A sebagai alur implementasi aktif.
+Eksperimen Model B tetap disimpan untuk evaluasi, tidak ditambahkan ke runtime.
+Pilihan implementasi tidak menggantikan pengukuran efisiensi atau approval asis.
+
 Simbol baseline yang dibaca: get_current_user di app/auth/dependencies.py memvalidasi bearer melalui Supabase; BacktestingEngine di app/engines/backtesting_engine.py fetch data, evaluate indicators/rule dan menyimpan run/signals lewat SQLiteRepository. Class tersebut mengeluarkan metrik jumlah signal, **bukan bukti seluruh jalur P&L/exit backtest telah dipetakan**. Pemilihan jalur baseline exact adalah gate M0.
 
 Graph project signalgen-2.0 berstatus ready; coverage metadata generation 2026-09-13T06:07:50Z matching pada tiga file Python terpilih. Ini best-effort, bukan audit lengkap/freshness seluruh repo. Dokumen non-code yang berubah/untracked dibaca langsung. Jangan mengklaim role, entitlement, journal, Go API atau full authorization sudah ada dari pengecekan ini.
@@ -138,7 +142,7 @@ Draft signal never implies order execution. Server accepts confirmed fields as u
 
 ## 9. Migration and deployment
 
-Keep backend/app and existing auth contracts as legacy. New /api/v1 Go slice gets contract tests before FE switch; compatibility adapter explicit. No dual-write, shared db mutation races or removing Python baseline prematurely. P0 legacy bridge is allowed and labeled; P1/MVP gate requires new Go slice implemented.
+Keep legacy/python (formerly backend/app) and existing auth contracts as legacy. New /api/v1 Go slice gets contract tests before FE switch; compatibility adapter explicit. No dual-write, shared db mutation races or removing Python baseline prematurely. P0 legacy bridge is allowed and labeled; P1/MVP gate requires new Go slice implemented.
 
 Migration tests empty DB and sanitized old fixture, backup/restore/rollback. Legacy rows without owner mapped only from verified provenance or archived; not assigned to first login. Profile upsert default user/active idempotent; cannot auto-promote.
 
