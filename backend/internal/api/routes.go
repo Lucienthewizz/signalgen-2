@@ -66,10 +66,6 @@ func (server *Server) routes(config serverConfig) http.Handler {
 		Plans: subscriptionsHandler.ListSubscriptionPlans, Current: subscriptionsHandler.CurrentSubscription,
 		Cancel: subscriptionsHandler.CancelCurrentSubscription, OperatorUpsert: subscriptionsHandler.ActivateOperatorSubscription,
 	})
-	subscription.RegisterRoutes(router, subscription.RouteHandlers{
-		Plans: server.listSubscriptionPlans, Current: server.currentSubscription,
-		Cancel: server.cancelCurrentSubscription, OperatorUpsert: server.activateOperatorSubscription,
-	})
 	rules.RegisterRoutes(router, rules.RouteHandlers{
 		List: rulesHandler.ListRules, Create: rulesHandler.CreateRule, Get: rulesHandler.GetRule,
 		Update: rulesHandler.UpdateRule, Delete: rulesHandler.DeleteRule,
@@ -78,11 +74,6 @@ func (server *Server) routes(config serverConfig) http.Handler {
 		Catalog: universesHandler.ListStockCatalog, List: universesHandler.ListStockUniverses,
 		Create: universesHandler.CreateStockUniverse, Get: universesHandler.GetStockUniverse,
 		Update: universesHandler.UpdateStockUniverse, Delete: universesHandler.DeleteStockUniverse,
-	})
-	universe.RegisterRoutes(router, universe.RouteHandlers{
-		Catalog: server.listStockCatalog, List: server.listStockUniverses,
-		Create: server.createStockUniverse, Get: server.getStockUniverse,
-		Update: server.updateStockUniverse, Delete: server.deleteStockUniverse,
 	})
 	dataset.RegisterRoutes(router, dataset.RouteHandlers{
 		Prepare: datasetsHandler.PrepareDataset, Manifest: datasetsHandler.DatasetManifest,
