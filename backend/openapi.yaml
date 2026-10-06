@@ -1,12 +1,17 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.9.0
+  version: 0.10.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     The Go API performs email/password and recovery flows through Supabase Auth,
     verifies returned bearer tokens, and issues a separate opaque app-session
     token. Proposed routes that are not implemented are intentionally excluded.
+    Server-generated X-Request-ID correlates responses with private operational
+    logs. Allowlisted browser origins may read X-Request-ID, Retry-After and ETag.
+    A recovered panic before response commitment uses the standard error
+    envelope with HTTP 500 and code INTERNAL_ERROR. A WebSocket HTTP 101 means
+    upgrade only; screening success is reported by the feature protocol.
 servers:
   - url: http://127.0.0.1:8080
     description: Local Docker development
@@ -24,7 +29,7 @@ tags:
   - name: Subscription
     description: Provider-neutral plans and owner-scoped subscription lifecycle.
   - name: Operator
-    description: Server-role protected entitlement administration.
+    description: Server-role protected account, entitlement and audit administration.
 
 paths:
   /api:
@@ -245,6 +250,7 @@ paths:
       tags: [Sessions]
       operationId: createAppSession
       summary: Register an installation and create an app session
+      description: Suspended accounts cannot create a session. Status is rechecked transactionally against concurrent suspension.
       security:
         - supabaseBearer: []
       requestBody:
@@ -267,6 +273,8 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "409":
           description: Active installation limit reached or the 24-hour device-switch cooldown is still active.
           content:
@@ -1385,6 +1393,119 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /api/v1/operator/accounts:
+    get:
+      tags: [Operator]
+      operationId: listOperatorAccounts
+      summary: List bounded administration metadata
+      description: Active database operator role required. No private biography, rules, dataset bodies or credentials. Unknown, empty or repeated query parameters are rejected.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+        - in: query
+          name: after
+          description: Last user_id from the previous page; ascending UUID keyset.
+          schema: {type: string, format: uuid}
+        - in: query
+          name: role
+          schema: {type: string, enum: [user, operator]}
+        - in: query
+          name: status
+          schema: {type: string, enum: [active, suspended]}
+      responses:
+        "200":
+          description: Page of application profiles, not every Supabase Auth identity.
+          headers:
+            Cache-Control: {$ref: "#/components/headers/PrivateNoStore"}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/OperatorAccountPage"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/InvalidRequest"}
+        "503": {$ref: "#/components/responses/ServiceUnavailable"}
+  /api/v1/operator/accounts/{user_id}/status:
+    patch:
+      tags: [Operator]
+      operationId: changeOperatorAccountStatus
+      summary: Suspend or reactivate an application account atomically
+      description: |
+        Actor/request ID come from the server. Requires the last observed status
+        and a reason. Status, app-session revocation and audit commit together.
+        Same-state requests are no-ops after checking expected_status. Reactivation
+        never revives revoked sessions. No Supabase Auth password/token mutation,
+        account deletion, entitlement alteration or private data deletion occurs.
+        The final active operator cannot be suspended, including role/status races.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - $ref: "#/components/parameters/TargetUserIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/OperatorStatusUpdate"}
+      responses:
+        "200":
+          description: Current administration metadata after commit.
+          headers:
+            Cache-Control: {$ref: "#/components/headers/PrivateNoStore"}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/OperatorAccount"}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409":
+          description: STATUS_CONFLICT or LAST_OPERATOR_REQUIRED. Reload before retrying.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorEnvelope"}
+        "413": {$ref: "#/components/responses/PayloadTooLarge"}
+        "422": {$ref: "#/components/responses/InvalidRequest"}
+        "429": {$ref: "#/components/responses/RateLimited"}
+        "503": {$ref: "#/components/responses/ServiceUnavailable"}
+  /api/v1/operator/audit-events:
+    get:
+      tags: [Operator]
+      operationId: listOperatorAccountAudit
+      summary: Read append-only administration history for one target
+      description: Requires explicit target UUID. Raw before/after JSON and private application content are excluded. Cursor uses decimal strings to preserve bigint precision in JavaScript. Unknown, empty or repeated query parameters are rejected.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - in: query
+          name: user_id
+          required: true
+          schema: {type: string, format: uuid}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+        - in: query
+          name: before
+          description: Last id from previous page; descending ID keyset.
+          schema: {type: string, pattern: '^[1-9][0-9]*$', maxLength: 19}
+      responses:
+        "200":
+          description: Target-scoped page of audit metadata. No write/delete audit endpoint.
+          headers:
+            Cache-Control: {$ref: "#/components/headers/PrivateNoStore"}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/OperatorAuditPage"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "422": {$ref: "#/components/responses/InvalidRequest"}
+        "503": {$ref: "#/components/responses/ServiceUnavailable"}
+
 components:
   securitySchemes:
     supabaseBearer:
@@ -1523,6 +1644,56 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
   schemas:
+    OperatorAccount:
+      type: object
+      additionalProperties: false
+      required: [user_id, email, role, status, created_at, updated_at]
+      properties:
+        user_id: {type: string, format: uuid}
+        email: {type: string}
+        role: {type: string, enum: [user, operator]}
+        status: {type: string, enum: [active, suspended]}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    OperatorAccountPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: "#/components/schemas/OperatorAccount"}
+        next_cursor: {type: string, format: uuid}
+    OperatorStatusUpdate:
+      type: object
+      additionalProperties: false
+      required: [status, expected_status, reason]
+      properties:
+        status: {type: string, enum: [active, suspended]}
+        expected_status: {type: string, enum: [active, suspended]}
+        reason: {type: string, minLength: 1, maxLength: 500, description: Trimmed text without control characters. Never put tokens or passwords here.}
+    OperatorAuditEvent:
+      type: object
+      additionalProperties: false
+      required: [id, actor, action, target_user_id, reason, request_id, created_at]
+      properties:
+        id: {type: string, pattern: '^[1-9][0-9]*$'}
+        actor: {type: string}
+        action: {type: string, enum: [feature.grant, feature.revoke, account.bootstrap_operator, account.role_changed, account.status_changed]}
+        target_user_id: {type: string, format: uuid}
+        feature: {type: string, enum: [screener, backtest]}
+        reason: {type: string}
+        request_id: {type: string}
+        created_at: {type: string, format: date-time}
+    OperatorAuditPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: "#/components/schemas/OperatorAuditEvent"}
+        next_cursor: {type: string, pattern: '^[1-9][0-9]*$'}
     APIStatus:
       type: object
       required: [name, version, description, docs, status]

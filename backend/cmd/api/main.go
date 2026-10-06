@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,6 +20,8 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/marketdata"
 	platformdb "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/database"
+	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/platform/observability"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/ratelimit"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
@@ -98,14 +101,20 @@ func main() {
 	}
 	// NewServer is the composition boundary: concrete infrastructure is passed
 	// into the HTTP package through small interfaces for testing and migration.
+	operationalLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	traffic := platformhttp.NewTrafficObserver(operationalLogger)
+	screeningMetrics := observability.NewScreenerObserver(operationalLogger)
 	handler, err := apihttp.NewServer(
 		identity, sessions, accessStore, datasets, computeStore,
 		apihttp.WithAuthService(identity),
+		apihttp.WithTrafficObserver(traffic),
+		apihttp.WithScreeningObserver(screeningMetrics),
 		apihttp.WithSocketContext(shutdownContext),
 		apihttp.WithScreenerConnectionLimits(maxSocketConnections, maxUserSocketConnections),
 		apihttp.WithPasswordResetRedirectURL(passwordResetRedirectURL),
 		apihttp.WithRuleStore(ruleStore),
 		apihttp.WithProfileStore(accessStore),
+		apihttp.WithAccountManagement(accessStore),
 		apihttp.WithSubscriptionService(subscriptionStore),
 		apihttp.WithUniverseStore(universeStore),
 		apihttp.WithRateLimiter(mutationLimiter),
@@ -141,12 +150,22 @@ func main() {
 	}()
 
 	log.Printf("SignalGen Go API listening on %s", address)
+	// Summaries are process-local operational evidence, not thesis benchmarks.
+	telemetryDone := make(chan struct{})
+	go func() {
+		defer close(telemetryDone)
+		traffic.RunSummaries(shutdownContext, time.Minute, screeningMetrics.LogSummary)
+	}()
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
 	// ListenAndServe returns as soon as listeners close, before Shutdown has
 	// necessarily drained handlers. Wait before deferred Postgres pool cleanup.
 	<-shutdownDone
+	<-telemetryDone
+	// One post-drain snapshot includes requests completed during graceful shutdown.
+	traffic.LogSummary()
+	screeningMetrics.LogSummary()
 }
 
 // requiredEnvironment fails fast when a security-critical setting is absent.

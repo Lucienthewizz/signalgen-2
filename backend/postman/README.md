@@ -28,6 +28,11 @@ access token, refresh token, app-session token, atau socket ticket.
 Variabel lain diisi otomatis oleh test script. Variabel untuk folder opsional
 harus diisi manual sebelum request dijalankan.
 
+Untuk admin terbaru, import tambahan `SignalGen-Admin.postman_collection.json`.
+Ini collection **read-only**, tidak menonaktifkan akun ketika dijalankan. Isi
+operator bearer, app-session dan UUID target secara privat. Uji suspend/activate
+dilakukan manual pada akun test sesuai [panduan admin](../../docs/backend/ADMIN_BACKEND.md).
+
 ## 3. Tiga tingkat akses
 
 Setelah login dan membuat app session, gunakan folder **03B Editable profile**:

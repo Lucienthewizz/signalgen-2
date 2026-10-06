@@ -45,6 +45,15 @@ pembanding, threat model, dan urutan implementasi.
 - legacy/python: arsip Python/FastAPI beserta tests dan alat pembanding.
 - backend: Go API/Gin, pgxpool, dan shared portable core.
 
+Framework REST/HTTP aktif adalah **Gin** melalui adapter
+`backend/internal/platform/http/router.go`; route fitur dirangkai di
+`backend/internal/api/routes.go`. Handler boleh tetap berbentuk `http.HandlerFunc`
+agar service/repository tidak terikat framework. Satu pengecualian adalah
+`GET /api/v1/screener/ws`, yang memakai writer `net/http` asli untuk upgrade
+`coder/websocket`; CORS dan request context tetap berlaku pada kedua jalur.
+Route REST baru harus memakai adapter Gin yang sama, bukan router paralel.
+Detail dan alasan desain: [arsitektur backend](backend/ARCHITECTURE.md).
+
 Struktur Go berada di backend/cmd/api, backend/cmd/wasm,
 backend/internal/{api,auth,account,subscription,session,rules,dataset,compute,screener},
 dan backend/core. Core bebas HTTP/storage/provider/Supabase; berbagi source Go.
@@ -72,6 +81,16 @@ menjadi default. Grant manual memakai fitur/expiry/alasan/audit. Fondasi
 subscription menyimpan paket, periode, status, feature mapping, dan event;
 aktivasi MVP dilakukan operator tepercaya. Harga, checkout, dan webhook tetap
 menunggu keputusan provider dan tidak boleh disimulasikan sebagai payment sukses.
+
+Kelanjutan admin backend yang diminta 6 Oktober 2026 menyediakan daftar metadata
+akun aplikasi, suspend/aktifkan kembali dengan pencabutan sesi dan audit atomik,
+serta riwayat audit per target. Semua operator-only, tanpa akses otomatis ke
+rules/dataset/jurnal privat. Reactivation membutuhkan sesi baru. Migration audit
+dan index baru sudah diterapkan ke Supabase cloud pada 6 Oktober 2026, dengan
+riwayat ketujuh migration sinkron serta RLS/privilege audit tetap terjaga.
+Deployment schema bukan bukti pengujian operator nyata atau deployment image API.
+UI admin/payment/full admin suite
+tetap terpisah; lihat `docs/backend/ADMIN_BACKEND.md`.
 
 ## 5. Data dan proteksi
 

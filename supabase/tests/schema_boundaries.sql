@@ -50,6 +50,13 @@ begin
     raise exception 'client roles must not update account role/status through profiles';
   end if;
 
+  if has_table_privilege('authenticated', 'signalgen.audit_events', 'select')
+    or has_table_privilege('authenticated', 'signalgen.audit_events', 'insert')
+    or has_table_privilege('anon', 'signalgen.audit_events', 'select')
+    or has_table_privilege('anon', 'signalgen.audit_events', 'insert') then
+    raise exception 'audit ledger must remain backend-only, even for application operators';
+  end if;
+
   select string_agg(c.relname, ', ' order by c.relname)
   into rls_disabled_tables
   from pg_class c

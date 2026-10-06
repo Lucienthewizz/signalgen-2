@@ -15,12 +15,15 @@ import (
 	screenerapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/screener"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
+	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 )
 
 func TestHybridScreenerTicketAndWebSocketLifecycle(t *testing.T) {
+	probe := newScreeningProbe()
 	sessions := &fakeSessions{verified: session.Session{ID: "ses-1", UserID: "user-a"}}
 	computeStore := &fakeCompute{grant: compute.Grant{
 		ID: "cgr-1", Purpose: "screen", RuleID: core.BaselineRuleID,
@@ -32,6 +35,8 @@ func TestHybridScreenerTicketAndWebSocketLifecycle(t *testing.T) {
 		fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions,
 		&fakeAccess{features: []string{access.FeatureScreener}},
 		&fakeDatasets{manifest: screenerTestManifest()}, computeStore,
+		api.WithTrafficObserver(platformhttp.NewTrafficObserver(nil)),
+		api.WithScreeningObserver(probe),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -95,10 +100,21 @@ func TestHybridScreenerTicketAndWebSocketLifecycle(t *testing.T) {
 		len(result.Results) != 1 || !result.Results[0].Matched {
 		t.Fatalf("result = %+v", result)
 	}
+	event := probe.await(t)
+	if event.Outcome != screener.OutcomeWritten || !event.Upgraded || !event.ReplyWritten || event.Candidates != 1 || event.FailedStage != screener.StageNone || event.RequestID != response.Header.Get("X-Request-ID") {
+		t.Fatalf("written result observation = %+v", event)
+	}
+	if strings.Contains(probe.logs.String(), requestID) || strings.Contains(probe.logs.String(), "BBCA.JK") {
+		t.Fatal("result details entered operational logs")
+	}
 
 	_, replayResponse, replayErr := websocket.Dial(context.Background(), websocketURL, nil)
 	if replayErr == nil || replayResponse == nil || replayResponse.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("replay response = %+v, error = %v", replayResponse, replayErr)
+	}
+	event = probe.await(t)
+	if event.Outcome != screener.OutcomeRejected || event.Upgraded || event.FailedStage != screener.StageAuthorize {
+		t.Fatalf("replay observation = %+v", event)
 	}
 }
 

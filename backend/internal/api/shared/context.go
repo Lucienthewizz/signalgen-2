@@ -10,19 +10,21 @@ import (
 // Context holds backend-owned dependencies shared by HTTP feature adapters.
 // Construct it once at startup; do not mutate dependencies during live requests.
 type Context struct {
-	Profiles       account.ProfileRepository
-	Identity       IdentityVerifier
-	Auth           AuthService
-	Sessions       SessionStore
-	Access         AccessStore
-	Datasets       DatasetStore
-	Compute        ComputeStore
-	Rules          RuleStore
-	Subscriptions  SubscriptionService
-	Universes      UniverseStore
-	Limiter        RateLimiter
-	Tickets        ScreenerTicketStore
-	OriginPatterns []string
-	SocketContext  context.Context
-	SocketLimiter  *screener.ConnectionLimiter
+	Profiles          account.ProfileRepository
+	Management        account.ManagementRepository
+	Identity          IdentityVerifier
+	Auth              AuthService
+	Sessions          SessionStore
+	Access            AccessStore
+	Datasets          DatasetStore
+	Compute           ComputeStore
+	Rules             RuleStore
+	Subscriptions     SubscriptionService
+	Universes         UniverseStore
+	Limiter           RateLimiter
+	Tickets           ScreenerTicketStore
+	OriginPatterns    []string
+	SocketContext     context.Context
+	SocketLimiter     *screener.ConnectionLimiter
+	ScreeningObserver screener.Observer
 }

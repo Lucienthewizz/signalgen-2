@@ -7,23 +7,63 @@ import (
 	"strings"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/account"
+	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 )
 
 type serverConfig struct {
-	profileStore    account.ProfileRepository
-	allowedOrigins  map[string]struct{}
-	readinessChecks []ReadinessChecker
-	ruleStore       RuleStore
-	rateLimiter     RateLimiter
-	ticketStore     ScreenerTicketStore
-	originPatterns  []string
-	authService     AuthService
-	subscriptions   SubscriptionService
-	universeStore   UniverseStore
-	resetRedirect   string
-	socketContext   context.Context
-	socketLimiter   *screener.ConnectionLimiter
+	profileStore      account.ProfileRepository
+	managementStore   account.ManagementRepository
+	allowedOrigins    map[string]struct{}
+	readinessChecks   []ReadinessChecker
+	ruleStore         RuleStore
+	rateLimiter       RateLimiter
+	ticketStore       ScreenerTicketStore
+	originPatterns    []string
+	authService       AuthService
+	subscriptions     SubscriptionService
+	universeStore     UniverseStore
+	resetRedirect     string
+	socketContext     context.Context
+	socketLimiter     *screener.ConnectionLimiter
+	trafficObserver   *platformhttp.TrafficObserver
+	screeningObserver screener.Observer
+}
+
+// WithAccountManagement enables operator-only account metadata/status/audit.
+// It is independent of owner profile editing and never grants operator access.
+func WithAccountManagement(store account.ManagementRepository) ServerOption {
+	return func(config *serverConfig) error {
+		if store == nil {
+			return fmt.Errorf("account management store is required")
+		}
+		config.managementStore = store
+		return nil
+	}
+}
+
+// WithScreeningObserver injects an aggregate-only measurement sink. It cannot
+// grant permission or receive client/private decision payloads.
+func WithScreeningObserver(observer screener.Observer) ServerOption {
+	return func(config *serverConfig) error {
+		if observer == nil {
+			return fmt.Errorf("screening observer is required")
+		}
+		config.screeningObserver = observer
+		return nil
+	}
+}
+
+// WithTrafficObserver enables safe, process-local operational telemetry.
+// No account fields or credentials are passed to the observer.
+func WithTrafficObserver(observer *platformhttp.TrafficObserver) ServerOption {
+	return func(config *serverConfig) error {
+		if observer == nil {
+			return fmt.Errorf("traffic observer is required")
+		}
+		config.trafficObserver = observer
+		return nil
+	}
 }
 
 // WithProfileStore enables editable profile data independently of role storage.

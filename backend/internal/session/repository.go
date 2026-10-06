@@ -63,6 +63,16 @@ func (store *PostgresRepository) Create(ctx context.Context, userID, installatio
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, userID); err != nil {
 		return Created{}, err
 	}
+	// Status changes use this same user lock. Recheck inside the transaction:
+	// a suspended account cannot recreate a session after the operator revokes
+	// its old sessions, even if the HTTP status check raced with suspension.
+	var accountStatus string
+	if err := tx.QueryRow(ctx, `select status from signalgen.account_profiles where user_id=$1::uuid for update`, userID).Scan(&accountStatus); err != nil {
+		return Created{}, err
+	}
+	if accountStatus != "active" {
+		return Created{}, ErrAccountInactive
+	}
 	_, err = tx.Exec(ctx, `insert into signalgen.account_device_state
 (user_id,current_installation_id,updated_at) values ($1::uuid,$2,$3)
 on conflict (user_id) do nothing`, userID, installationID, now)

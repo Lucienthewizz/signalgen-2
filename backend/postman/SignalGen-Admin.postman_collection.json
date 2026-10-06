@@ -1,0 +1,51 @@
+{
+  "info": {
+    "name": "SignalGen Admin — safe read checks",
+    "description": "Read-only admin checks. Fill local variables privately; do not export real tokens. No account status, role, entitlement or subscription mutation is executed by this collection. See docs/backend/ADMIN_BACKEND.md for explicit manual status tests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://127.0.0.1:8080"},
+    {"key": "operator_access_token", "value": ""},
+    {"key": "operator_app_session", "value": ""},
+    {"key": "target_user_id", "value": ""},
+    {"key": "accounts_after", "value": ""},
+    {"key": "audit_before", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "Admin list without login is rejected",
+      "request": {"method": "GET", "url": "{{base_url}}/api/v1/operator/accounts"},
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('401 without login', () => pm.response.to.have.status(401));",
+        "pm.test('AUTH_REQUIRED', () => pm.expect(pm.response.json().error.code).to.eql('AUTH_REQUIRED'));"
+      ]}}]
+    },
+    {
+      "name": "Operator account list",
+      "request": {
+        "method": "GET",
+        "header": [{"key": "Authorization", "value": "Bearer {{operator_access_token}}"}, {"key": "X-App-Session", "value": "{{operator_app_session}}"}],
+        "url": "{{base_url}}/api/v1/operator/accounts?limit=25"
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('operator list 200', () => pm.response.to.have.status(200));",
+        "pm.test('private no-store', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));",
+        "if(pm.response.code === 200) { const b=pm.response.json(); pm.test('bounded metadata', () => { pm.expect(b.items).to.be.an('array'); pm.expect(b.items.length).to.be.at.most(25); for(const item of b.items) { pm.expect(item).not.to.have.property('bio'); pm.expect(item).not.to.have.property('token_hash'); pm.expect(item).not.to.have.property('definition_json'); } }); pm.collectionVariables.set('accounts_after', b.next_cursor || ''); }"
+      ]}}]
+    },
+    {
+      "name": "Target account audit history",
+      "request": {
+        "method": "GET",
+        "header": [{"key": "Authorization", "value": "Bearer {{operator_access_token}}"}, {"key": "X-App-Session", "value": "{{operator_app_session}}"}],
+        "url": "{{base_url}}/api/v1/operator/audit-events?user_id={{target_user_id}}&limit=25"
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('target history 200', () => pm.response.to.have.status(200));",
+        "pm.test('private no-store', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));",
+        "if(pm.response.code === 200) { const b=pm.response.json(); pm.test('only target metadata and string IDs', () => { pm.expect(b.items).to.be.an('array'); for(const item of b.items) { pm.expect(item.target_user_id).to.eql(pm.variables.get('target_user_id')); pm.expect(item.id).to.be.a('string'); pm.expect(item).not.to.have.property('before'); pm.expect(item).not.to.have.property('after'); } }); pm.collectionVariables.set('audit_before', b.next_cursor || ''); }"
+      ]}}]
+    }
+  ]
+}

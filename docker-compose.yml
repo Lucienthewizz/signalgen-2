@@ -53,6 +53,12 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
+    # Bound request logs; cloud retention/access is a separate deployment choice.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   signalgen-backend-data:

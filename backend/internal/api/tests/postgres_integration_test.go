@@ -26,6 +26,8 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/marketdata"
 	platformdb "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/database"
+	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/platform/observability"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
@@ -127,6 +129,8 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 			sessions, accounts, datasets, compute.NewPostgresRepository(db),
 			api.WithRuleStore(rules.NewPostgresRepository(db)),
 			api.WithProfileStore(accounts),
+			api.WithTrafficObserver(platformhttp.NewTrafficObserver(nil)),
+			api.WithScreeningObserver(observability.NewScreenerObserver(nil)),
 			api.WithSubscriptionService(subscriptions),
 			api.WithUniverseStore(universes))
 		if err != nil {

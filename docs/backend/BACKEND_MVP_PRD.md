@@ -44,7 +44,15 @@ backend/
 supabase/migrations versioned application schema at repository root
 ```
 
-Gin dipakai untuk route HTTP; handler mempertahankan kontrak JSON yang sudah digunakan frontend. Portable core tidak mengimpor HTTP, database, provider atau Supabase. Core menerima snapshot rule/data/config dan mengembalikan deterministic output. State indikator per-run/per-symbol, tidak global lintas pengguna/job.
+Gin adalah framework untuk seluruh route REST/HTTP aktif, melalui adapter
+`internal/platform/http/router.go`. Handler tetap berbentuk `http.HandlerFunc`
+dan mempertahankan kontrak JSON frontend; service/repository tidak perlu
+mengimpor Gin. Route REST baru wajib melewati adapter yang sama. Pengecualian
+transport: `GET /api/v1/screener/ws` menggunakan writer `net/http` asli untuk
+upgrade `coder/websocket`, dengan CORS dan request context bersama. Lihat
+[arsitektur backend](ARCHITECTURE.md) untuk penjelasan pemisahan ini.
+
+Portable core tidak mengimpor HTTP, database, provider atau Supabase. Core menerima snapshot rule/data/config dan mengembalikan deterministic output. State indikator per-run/per-symbol, tidak global lintas pengguna/job.
 
 ## 3. Requirements
 
@@ -88,6 +96,14 @@ Supabase retains identity/password. Go verifies token with a supported verificat
 Authenticated setup returns opaque app-session token bound to verified user and registered browser installation. Business routes require bearer + app-session. Server stores token hash, expiry and revoked_at, not raw reusable session tokens in logs. Setup/refresh/list identity exemptions are explicitly listed in contract to avoid bootstrap deadlock.
 
 P0 can seed users/grants through restricted local tooling; P1 grant tooling requires reason/expiry and atomic append-only audit. Operator does not automatically read other users' rules/journal. Production operator bootstrap out-of-band; no public make-admin or mark-paid.
+
+Approved implementation extension, 6 October 2026 (user request "lanjut admin"):
+operator-only application-account metadata listing, status suspend/reactivation
+and target-scoped audit reading. Status/session revocation/audit are atomic,
+role/status races retain an active operator, and reactivation requires a fresh
+app session. This adds a backend slice of P2 administration; it does not promote
+the full admin suite or change P0/P1 research priorities. UI, payment and private
+data access remain outside this extension. See [admin contract](ADMIN_BACKEND.md).
 
 Compute grant coordinates purpose/dataset/rule/engine/version access; **not cryptographic DRM over offline math**. Data fetch and grant check are bounded and do not trigger server backtest. Same data obtained through screener can be reused by a malicious client; this is a documented limit of the requirement.
 

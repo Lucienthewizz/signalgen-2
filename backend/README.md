@@ -8,6 +8,26 @@ masih melalui operator tepercaya dan belum merupakan payment checkout. Kode Pyth
 perbandingan melalui profile Docker `legacy`; frontend tidak lagi bergantung pada
 endpoint autentikasi Python.
 
+## Framework HTTP: Gin
+
+Semua route REST/HTTP pada backend Go aktif memakai **Gin**, termasuk auth,
+account/profile, sessions, rules, universes, datasets, compute grants,
+subscription, operator, health, dan readiness. Registrasinya dirangkai di
+`internal/api/routes.go` melalui adapter `internal/platform/http/router.go`.
+
+Handler fitur tetap memakai `http.ResponseWriter` dan `*http.Request`, bukan
+`*gin.Context`. Adapter meneruskan request dari Gin ke handler tersebut agar
+logika fitur mudah diuji dan tidak bergantung langsung pada framework. Jadi,
+melihat `net/http` atau decoder JSON di handler bukan berarti router tidak
+menggunakan Gin. Parsing/validasi JSON tetap memakai helper bersama dengan
+aturan input yang ketat; Gin tidak otomatis menggantikannya.
+
+Pengecualian yang disengaja: `GET /api/v1/screener/ws` memakai handler
+`net/http` langsung agar `coder/websocket` menerima writer asli untuk upgrade
+koneksi. Request ID dan CORS tetap membungkus kedua jalur. Framework untuk
+route REST baru tetap Gin melalui adapter yang sama; jangan membuat router
+REST paralel. Python/FastAPI di `legacy/` hanya untuk pembanding historis.
+
 Untuk mempelajari pembagian screener antara Go/WASM dan backend, mulai dari
 [`HYBRID_SCREENER_DESIGN.md`](../docs/backend/HYBRID_SCREENER_DESIGN.md). Vertical slice Model A
 sudah tersedia dan dipilih pengguna untuk jalur aktif; benchmark production dan
@@ -30,6 +50,15 @@ docker compose up --build go-api
 
 API tersedia di `http://127.0.0.1:8080`; kontrak lengkap berada di
 `backend/openapi.yaml`.
+
+## Pemantauan backend
+
+Runtime Go mencatat request dalam JSON dengan request ID, pola route, status,
+durasi, dan ukuran respons HTTP. Token/header/body/query atau data pribadi tidak
+dicatat oleh observer. Ringkasan counter dan memori Go muncul setiap menit.
+Log Docker dibatasi; tidak ada endpoint `/metrics` publik. Lihat
+[`OBSERVABILITY.md`](../docs/backend/OBSERVABILITY.md) untuk cara membaca log,
+perlindungan panic, dan batas pengukuran WebSocket/CPU/RAM.
 
 ## Menjalankan test
 
@@ -215,11 +244,19 @@ melalui API berikut:
 - `POST /api/v1/operator/grants`
 - `DELETE /api/v1/operator/grants/{user_id}/{feature}`
 - `PATCH /api/v1/operator/accounts/{user_id}/role`
+- `GET /api/v1/operator/accounts?limit=25` — metadata akun aplikasi, bukan private rules/bio
+- `PATCH /api/v1/operator/accounts/{user_id}/status` — suspend/aktifkan kembali dengan reason dan expected status
+- `GET /api/v1/operator/audit-events?user_id=UUID` — audit metadata per target, bukan raw before/after JSON
 
 Semua route tersebut mengambil actor audit dari identitas operator yang sudah
 diverifikasi. Body dari frontend tidak dapat memilih atau memalsukan actor.
 Perubahan role mewajibkan alasan dan akan ditolak dengan
 `409 LAST_OPERATOR_REQUIRED` jika menurunkan role operator aktif terakhir.
+Status mutation juga melindungi operator terakhir dan mencabut sesi target
+secara atomik bersama audit. Akun suspended tidak bisa membuat sesi baru;
+reactivation tidak menghidupkan sesi lama. Migration audit/index baru perlu
+diterapkan melalui review deployment; belum diterapkan ke cloud pada tahap ini.
+Panduan lengkap dan Postman read-only: [admin backend](../docs/backend/ADMIN_BACKEND.md).
 
 Grant demo lokal tetap dijalankan dengan:
 
