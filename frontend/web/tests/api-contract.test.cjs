@@ -216,14 +216,18 @@ test("hybrid screener calls use the implemented Go API contract", async () => {
     engine_version: "core-0.3.0",
     schema_version: "signal-baseline-1",
   };
-  await c.api.prepareDataset();
+  await c.api.prepareDataset("default-scalping-v1", "universe-bank");
   await c.api.createComputeGrant(manifest, rule);
   await c.api.createScreenerSocketTicket("cgr_1");
   assert.equal(
     c.calls[0].url,
     "https://api.example.test/api/v1/datasets/prepare",
   );
-  assert.deepEqual(JSON.parse(c.calls[0].init.body).symbols, ["BBCA.JK"]);
+  assert.deepEqual(JSON.parse(c.calls[0].init.body), {
+    purpose: "screen",
+    rule_id: "default-scalping-v1",
+    universe_id: "universe-bank",
+  });
   assert.equal(
     JSON.parse(c.calls[1].init.body).dataset_checksum,
     "sha256:data",
@@ -267,10 +271,42 @@ test("Go error envelopes produce a readable entitlement message", async () => {
     ),
   );
   await assert.rejects(
-    c.api.prepareDataset(),
+    c.api.prepareDataset("default-scalping-v1", "universe-bank"),
     (error) =>
       error.status === 403 && error.message.includes("akses fitur screener"),
   );
+});
+
+test("an expired app session is renewed once before retrying a private call", async () => {
+  let accountAttempts = 0;
+  const c = client((url) => {
+    if (url.endsWith("/api/v1/sessions"))
+      return response(
+        { session: { id: "ses_2" }, session_token: "sgs_fresh" },
+        201,
+      );
+    if (url.endsWith("/api/v1/account/me") && accountAttempts++ === 0)
+      return response(
+        {
+          error: {
+            code: "SESSION_EXPIRED",
+            message: "expired",
+            request_id: "req_expired",
+          },
+        },
+        403,
+      );
+    return response({ features: ["screener"] });
+  });
+  c.session.setToken("access-token");
+  c.session.setAppSession("sgs_stale");
+
+  const account = await c.api.account();
+
+  assert.deepEqual(account.features, ["screener"]);
+  assert.equal(c.calls.length, 3);
+  assert.equal(c.calls[0].init.headers.get("X-App-Session"), "sgs_stale");
+  assert.equal(c.calls[2].init.headers.get("X-App-Session"), "sgs_fresh");
 });
 
 test("logout revokes the current app session before local cleanup", async () => {

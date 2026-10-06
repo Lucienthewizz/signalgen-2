@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CircleAlert, ExternalLink } from "lucide-react";
 
 type WidgetState = "loading" | "ready" | "error";
+type Theme = "dark" | "light";
 
 export function TradingViewChart({
   symbol,
@@ -12,7 +13,20 @@ export function TradingViewChart({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [widgetState, setWidgetState] = useState<WidgetState>("loading");
+  const [theme, setTheme] = useState<Theme>(() =>
+    document.documentElement.dataset.theme === "light" ? "light" : "dark",
+  );
   const tradingViewUrl = `https://www.tradingview.com/symbols/${symbol.replace(":", "-")}/`;
+
+  useEffect(() => {
+    const updateTheme = (event: Event) => {
+      const nextTheme = (event as CustomEvent<{ theme: Theme }>).detail?.theme;
+      if (nextTheme) setTheme(nextTheme);
+    };
+    window.addEventListener("signalgen:themechange", updateTheme);
+    return () =>
+      window.removeEventListener("signalgen:themechange", updateTheme);
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -23,6 +37,10 @@ export function TradingViewChart({
     let readinessTimer: number | null = null;
     setWidgetState("loading");
     container.replaceChildren();
+    // Cover a blocked embedding script as well as an iframe that never loads.
+    readinessTimer = window.setTimeout(() => {
+      if (mounted) setWidgetState("error");
+    }, 12000);
 
     const widget = document.createElement("div");
     widget.className = "tradingview-widget-container__widget";
@@ -50,9 +68,6 @@ export function TradingViewChart({
 
       activeFrame = iframe;
       iframe.addEventListener("load", markReady, { once: true });
-      readinessTimer = window.setTimeout(() => {
-        if (mounted) setWidgetState("error");
-      }, 8000);
       observer.disconnect();
     });
     observer.observe(container, { childList: true, subtree: true });
@@ -69,11 +84,13 @@ export function TradingViewChart({
     script.textContent = JSON.stringify({
       autosize: true,
       symbol,
-      interval: "15",
+      interval: "D",
       timezone: "Asia/Jakarta",
-      theme: "dark",
-      backgroundColor: "rgba(4, 8, 6, 1)",
-      gridColor: "rgba(54, 73, 62, 0.24)",
+      theme,
+      backgroundColor:
+        theme === "dark" ? "rgba(4, 8, 6, 1)" : "rgba(248, 251, 249, 1)",
+      gridColor:
+        theme === "dark" ? "rgba(54, 73, 62, 0.24)" : "rgba(57, 98, 73, 0.14)",
       style: "1",
       locale: "id",
       allow_symbol_change: true,
@@ -102,7 +119,7 @@ export function TradingViewChart({
       observer.disconnect();
       container.replaceChildren();
     };
-  }, [label, symbol]);
+  }, [label, symbol, theme]);
 
   return (
     <div className="tradingview-chart">
@@ -133,7 +150,7 @@ export function TradingViewChart({
             <>
               <i aria-hidden="true" />
               <strong>Memuat feed TradingView</strong>
-              <span>Menyiapkan {label} · interval 15 menit</span>
+              <span>Menyiapkan {label} · interval harian</span>
             </>
           )}
         </div>

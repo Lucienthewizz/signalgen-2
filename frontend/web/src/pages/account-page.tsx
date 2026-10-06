@@ -12,6 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -93,12 +94,17 @@ export function AccountPage({
   return (
     <main className="account-page">
       <header className="account-topbar">
-        <a href="#home" aria-label="Signalgen home">
-          <Brand compact />
-        </a>
-        <a href="#app/overview">
-          <ArrowLeft aria-hidden="true" /> Back to workspace
-        </a>
+        <div className="account-topbar__inner">
+          <a href="#home" aria-label="Signalgen home">
+            <Brand compact />
+          </a>
+          <div className="account-topbar__actions">
+            <ThemeToggle compact />
+            <a href="#app/overview">
+              <ArrowLeft aria-hidden="true" /> Back to workspace
+            </a>
+          </div>
+        </div>
       </header>
 
       <section className="account-layout" aria-label="Account settings">

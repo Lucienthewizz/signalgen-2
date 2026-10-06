@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LogOut, Settings2 } from "lucide-react";
+import { BadgeCheck, LogOut, Settings2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -37,6 +37,12 @@ export function AccountMenu({
   );
   const triggerLabel = name;
   const isSidebarMenu = variant === "sidebar";
+  const planCode = user.entitlement?.plan_code?.trim() || "free";
+  const planLabel = planCode
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
 
   useEffect(() => {
     const syncAvatar = () => setAvatarKey(getSavedProfileAvatar(user.id));
@@ -89,6 +95,19 @@ export function AccountMenu({
           >
             <Settings2 aria-hidden="true" />
             Account
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="account-menu__item account-menu__plan"
+            onClick={() => {
+              location.hash = "app/subscription";
+            }}
+          >
+            <BadgeCheck aria-hidden="true" />
+            <span className="account-menu__plan-copy">
+              <span>Subscription</span>
+              <small>{planLabel} tier</small>
+            </span>
+            <span className="account-menu__plan-badge">{planLabel}</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator className="account-menu__separator" />

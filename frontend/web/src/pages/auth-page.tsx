@@ -23,6 +23,7 @@ import {
   PasswordStrengthIndicator,
 } from "@/components/ui/password-strength";
 import { Brand } from "@/components/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { api, ApiError, session } from "@/api/client";
 import type { User } from "@/types";
 
@@ -147,7 +148,7 @@ export function AuthPage({
   const copy = {
     login: [
       "Continue to Signalgen",
-      "Use the same account across web and desktop.",
+      "Access your private analysis workspace securely.",
     ],
     register: [
       "Create your account",
@@ -208,6 +209,9 @@ export function AuthPage({
         </section>
       )}
       <section className="auth-panel">
+        <div className="auth-theme-toggle">
+          <ThemeToggle compact />
+        </div>
         <div className="auth-card">
           <div className="auth-card__top">
             {view === "forgot-password" ? (

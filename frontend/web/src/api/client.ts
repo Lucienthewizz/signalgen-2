@@ -10,8 +10,17 @@ import type {
   ComputeGrant,
   DatasetContent,
   DatasetManifest,
+  RuleListResponse,
   RuleResource,
+  UserRuleDefinition,
   ScreenerSocketTicket,
+  StockInstrument,
+  StockUniverse,
+  SubscriptionPlan,
+  Subscription,
+  FeatureGrant,
+  AccountRole,
+  SessionListResponse,
 } from "../types";
 
 const TOKEN_KEY = "signalgen.access-token";
@@ -24,6 +33,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    public readonly code?: string,
+    public readonly requestId?: string,
   ) {
     super(message);
   }
@@ -54,7 +65,26 @@ export const session = {
   },
 };
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+type ErrorEnvelope = {
+  code?: string;
+  message?: string;
+  request_id?: string;
+};
+
+function errorEnvelope(payload: unknown): ErrorEnvelope | undefined {
+  if (!payload || typeof payload !== "object" || !("error" in payload))
+    return undefined;
+  const error = (payload as { error?: unknown }).error;
+  return error && typeof error === "object"
+    ? (error as ErrorEnvelope)
+    : undefined;
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  retryExpiredSession = true,
+): Promise<T> {
   const token = session.getToken();
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
@@ -83,11 +113,30 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    const envelope = errorEnvelope(payload);
+    const expiredAppSession =
+      response.status === 403 &&
+      (envelope?.code === "SESSION_EXPIRED" ||
+        envelope?.code === "SESSION_REVOKED");
+    if (
+      retryExpiredSession &&
+      expiredAppSession &&
+      path !== "/api/v1/sessions"
+    ) {
+      session.clearAppSession();
+      await api.ensureAppSession();
+      return request<T>(path, init, false);
+    }
     if (response.status === 401 && path !== "/api/auth/login") {
       session.clear();
       window.dispatchEvent(new Event("signalgen:unauthorized"));
     }
-    throw new ApiError(errorDetail(payload, response.status), response.status);
+    throw new ApiError(
+      errorDetail(payload, response.status),
+      response.status,
+      envelope?.code,
+      envelope?.request_id,
+    );
   }
   return payload as T;
 }
@@ -97,16 +146,23 @@ function errorDetail(payload: unknown, status: number): string {
     payload && typeof payload === "object" && "detail" in payload
       ? (payload as { detail: unknown }).detail
       : undefined;
-  const apiError =
-    payload && typeof payload === "object" && "error" in payload
-      ? (payload as { error?: { code?: string; message?: string } }).error
-      : undefined;
+  const apiError = errorEnvelope(payload);
   if (apiError?.code === "DEVICE_SWITCH_COOLDOWN")
     return "Perangkat hanya dapat dipindahkan satu kali per hari.";
   if (apiError?.code === "DEVICE_MISMATCH")
     return "Jaringan perangkat berubah. Masuk kembali dari jaringan yang terdaftar.";
   if (apiError?.code === "ENTITLEMENT_REQUIRED")
     return "Akun ini belum memiliki akses fitur screener.";
+  if (apiError?.code === "SESSION_EXPIRED")
+    return "Your workspace session expired. Run the screen again to reconnect.";
+  if (apiError?.code === "SESSION_REVOKED")
+    return "This workspace session was revoked. Run the screen again to reconnect.";
+  if (apiError?.code === "ROLE_REQUIRED")
+    return "Your account role does not allow this screening action.";
+  if (apiError?.code === "RATE_LIMITED")
+    return "Too many requests were sent. Wait a moment, then try again.";
+  if (apiError?.code === "SERVICE_UNAVAILABLE")
+    return "The screening service is temporarily unavailable. Try again shortly.";
   if (apiError?.message) return apiError.message;
   if (Array.isArray(detail)) {
     return "Check your email, name, and password length, then try again.";
@@ -177,6 +233,11 @@ export const api = {
   revokeCurrentAppSession: () =>
     request<void>("/api/v1/sessions/current", { method: "DELETE" }),
   account: () => request<AccountState>("/api/v1/account/me"),
+  listSessions: () => request<SessionListResponse>("/api/v1/account/sessions"),
+  revokeSession: (id: string) =>
+    request<void>(`/api/v1/account/sessions/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
   listDevices: () => request<DeviceListResponse>("/api/v1/account/devices"),
   renameDevice: (installationId: string, label: string) =>
     request<void>(
@@ -190,17 +251,55 @@ export const api = {
     ),
   getRule: (id: string) =>
     request<RuleResource>(`/api/v1/rules/${encodeURIComponent(id)}`),
-  prepareDataset: () =>
+  listRules: () => request<RuleListResponse>("/api/v1/rules"),
+  createRule: (definition: UserRuleDefinition) =>
+    request<RuleResource>("/api/v1/rules", {
+      method: "POST",
+      body: JSON.stringify({ definition }),
+    }),
+  updateRule: (id: string, version: number, definition: UserRuleDefinition) =>
+    request<RuleResource>(`/api/v1/rules/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ version, definition }),
+    }),
+  deleteRule: (id: string, version: number) =>
+    request<void>(`/api/v1/rules/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ version }),
+    }),
+  listStocks: () => request<{ items: StockInstrument[] }>("/api/v1/stocks"),
+  listStockUniverses: () =>
+    request<{ items: StockUniverse[] }>("/api/v1/stock-universes"),
+  createStockUniverse: (name: string, symbols: StockInstrument["symbol"][]) =>
+    request<StockUniverse>("/api/v1/stock-universes", {
+      method: "POST",
+      body: JSON.stringify({ name, symbols }),
+    }),
+  updateStockUniverse: (
+    id: string,
+    version: number,
+    name: string,
+    symbols: StockInstrument["symbol"][],
+  ) =>
+    request<StockUniverse>(
+      `/api/v1/stock-universes/${encodeURIComponent(id)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ version, name, symbols }),
+      },
+    ),
+  deleteStockUniverse: (id: string, version: number) =>
+    request<void>(`/api/v1/stock-universes/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ version }),
+    }),
+  prepareDataset: (ruleId: string, universeId: string) =>
     request<DatasetManifest>("/api/v1/datasets/prepare", {
       method: "POST",
       body: JSON.stringify({
         purpose: "screen",
-        market: "IDX",
-        symbols: ["BBCA.JK"],
-        timeframe: "1d",
-        date_from: "2026-01-01",
-        date_to: "2026-02-09",
-        rule_id: "default-scalping-v1",
+        rule_id: ruleId,
+        universe_id: universeId,
       }),
     }),
   getDatasetContent: (datasetId: string) =>
@@ -227,6 +326,70 @@ export const api = {
       body: JSON.stringify({
         compute_grant_id: computeGrantId,
         protocol: "screener-private-1",
+      }),
+    }),
+  listSubscriptionPlans: () =>
+    request<{ items: SubscriptionPlan[] }>("/api/v1/subscription/plans"),
+  currentSubscription: () =>
+    request<{ subscription: Subscription | null }>("/api/v1/subscription"),
+  cancelSubscription: (atPeriodEnd: boolean, reason: string) =>
+    request<{ subscription: Subscription }>("/api/v1/subscription/cancel", {
+      method: "POST",
+      body: JSON.stringify({ at_period_end: atPeriodEnd, reason }),
+    }),
+  listFeatureGrants: (userId: string) =>
+    request<{ items: FeatureGrant[] }>(
+      `/api/v1/operator/grants?user_id=${encodeURIComponent(userId)}`,
+    ),
+  grantFeature: (
+    userId: string,
+    feature: FeatureGrant["feature"],
+    validUntil: string,
+    reason: string,
+  ) =>
+    request<FeatureGrant>("/api/v1/operator/grants", {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: userId,
+        feature,
+        valid_until: validUntil,
+        reason,
+      }),
+    }),
+  revokeFeature: (
+    userId: string,
+    feature: FeatureGrant["feature"],
+    reason: string,
+  ) =>
+    request<void>(
+      `/api/v1/operator/grants/${encodeURIComponent(userId)}/${encodeURIComponent(feature)}`,
+      { method: "DELETE", body: JSON.stringify({ reason }) },
+    ),
+  changeAccountRole: (
+    userId: string,
+    role: AccountRole["role"],
+    reason: string,
+  ) =>
+    request<AccountRole>(
+      `/api/v1/operator/accounts/${encodeURIComponent(userId)}/role`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ role, reason }),
+      },
+    ),
+  activateSubscription: (
+    userId: string,
+    planCode: SubscriptionPlan["code"],
+    currentPeriodEnd: string,
+    reason: string,
+  ) =>
+    request<{ subscription: Subscription }>("/api/v1/operator/subscriptions", {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: userId,
+        plan_code: planCode,
+        current_period_end: currentPeriodEnd,
+        reason,
       }),
     }),
 };
