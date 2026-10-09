@@ -207,14 +207,24 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           </form>
         </header>
         <Table>
+          <colgroup>
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "20%" }} />
+            <col style={{ width: "16%" }} />
+            <col style={{ width: "6%" }} />
+          </colgroup>
           <TableHeader>
             <TableRow>
               <TableHead>Saham</TableHead>
               <TableHead className="monitor-price-heading--open">
-                Harga buka (IDR)
+                Buka <span className="monitor-unit">IDR</span>
               </TableHead>
               <TableHead className="monitor-price-heading--close">
-                Harga tutup (IDR)
+                Tutup <span className="monitor-unit">IDR</span>
               </TableHead>
               <TableHead>RSI 14</TableHead>
               <TableHead>EMA 20</TableHead>
@@ -247,19 +257,23 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                   key={ticker}
                   data-state={selected === ticker ? "selected" : undefined}
                 >
-                  <TableCell>
+                  <TableCell data-label="Saham">
                     <Button
                       variant="ghost"
+                      size="sm"
                       aria-pressed={selected === ticker}
                       onClick={() => setSelected(ticker)}
                     >
                       {ticker}
                     </Button>
-                    <span className="monitor-company">
+                    <span
+                      className="monitor-company"
+                      title={names[ticker] ?? "Saham IDX"}
+                    >
                       {names[ticker] ?? "Saham IDX"}
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Buka · IDR">
                     <span
                       className="monitor-price"
                       data-price={hasOpen ? "open" : "missing"}
@@ -267,7 +281,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                       {hasOpen ? number(snapshot.latestOpen!) : "—"}
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Tutup · IDR">
                     <span
                       className="monitor-price"
                       data-price={hasClose ? movement : "missing"}
@@ -289,34 +303,47 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                       )}
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="RSI 14">
                     {snapshot ? number(snapshot.features.rsi14) : "—"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="EMA 20">
                     {snapshot ? number(snapshot.features.ema20) : "—"}
                   </TableCell>
-                  <TableCell>
-                    {snapshot ? (
-                      <>
-                        <Badge
-                          variant={
-                            snapshot.decision.matched ? "secondary" : "outline"
-                          }
-                        >
-                          {snapshot.decision.matched
-                            ? "Sesuai rule"
-                            : "Tidak sesuai"}
-                        </Badge>
-                        <span className="monitor-company">
-                          {snapshot.record.rule}
-                        </span>
-                      </>
-                    ) : (
-                      <Badge variant="outline">Belum dievaluasi</Badge>
-                    )}
+                  <TableCell data-label="Hasil rule">
+                    <div className="monitor-result">
+                      {snapshot ? (
+                        <>
+                          <Badge
+                            variant={
+                              snapshot.decision.matched
+                                ? "secondary"
+                                : "outline"
+                            }
+                          >
+                            {snapshot.decision.matched
+                              ? "Sesuai rule"
+                              : "Tidak sesuai"}
+                          </Badge>
+                          <span
+                            className="monitor-company"
+                            title={snapshot.record.rule}
+                          >
+                            {snapshot.record.rule}
+                          </span>
+                        </>
+                      ) : (
+                        <Badge variant="outline">Belum dievaluasi</Badge>
+                      )}
+                    </div>
                   </TableCell>
-                  <TableCell>
-                    {snapshot ? date(snapshot.decision.timestamp) : "—"}
+                  <TableCell data-label="Waktu data">
+                    {snapshot ? (
+                      <time dateTime={snapshot.decision.timestamp}>
+                        {date(snapshot.decision.timestamp)}
+                      </time>
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                   <TableCell>
                     <Button

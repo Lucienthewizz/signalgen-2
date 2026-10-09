@@ -109,7 +109,7 @@ export function WorkspaceOverviewPanel({
   }
   if (!authenticated || !backendOnline)
     return (
-      <Alert>
+      <Alert className="overview-notice">
         <ShieldCheck />
         <AlertTitle>
           {backendOnline
@@ -161,7 +161,7 @@ export function WorkspaceOverviewPanel({
   return (
     <div className="overview-board" aria-busy={loading}>
       {error && (
-        <Alert>
+        <Alert className="overview-notice">
           <RefreshCw />
           <AlertTitle>Sebagian data belum dapat dimuat</AlertTitle>
           <AlertDescription>
