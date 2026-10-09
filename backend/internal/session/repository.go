@@ -37,6 +37,16 @@ func (store *PostgresRepository) DeviceSwitchCooldown() time.Duration {
 	return store.cooldown
 }
 
+// CooldownUntil is owner-scoped metadata, never a permission bypass.
+func (store *PostgresRepository) CooldownUntil(ctx context.Context, userID string) (time.Time, error) {
+	var switched pgtype.Timestamptz
+	err := store.db.QueryRow(ctx, `select last_switched_at from signalgen.account_device_state where user_id=$1::uuid`, userID).Scan(&switched)
+	if err != nil || !switched.Valid {
+		return time.Time{}, err
+	}
+	return switched.Time.Add(store.cooldown), nil
+}
+
 const sessionColumns = `id,user_id::text,installation_id,label,created_at,expires_at,last_seen_at,revoked_at`
 
 func (store *PostgresRepository) Create(ctx context.Context, userID, installationID, label string) (Created, error) {

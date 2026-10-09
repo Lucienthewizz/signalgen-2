@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/workspace"
 	"log"
 	"net/http"
 	"os"
@@ -108,6 +109,7 @@ func main() {
 		apihttp.WithProfileStore(accessStore),
 		apihttp.WithSubscriptionService(subscriptionStore),
 		apihttp.WithUniverseStore(universeStore),
+		apihttp.WithWorkspaceStore(&workspace.PostgresStore{DB: database}),
 		apihttp.WithRateLimiter(mutationLimiter),
 		apihttp.WithCORSOrigins(allowedOrigins),
 		apihttp.WithReadinessChecks(platformdb.PostgresReadiness{Pool: database}, datasets),

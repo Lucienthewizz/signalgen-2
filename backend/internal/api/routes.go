@@ -8,6 +8,7 @@ import (
 	authapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/auth"
 	computeapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/compute"
 	datasetsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/datasets"
+	newsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/news"
 	operatorapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/operator"
 	rulesapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/rules"
 	screenerapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/screener"
@@ -15,6 +16,7 @@ import (
 	subscriptionsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/subscriptions"
 	systemapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/system"
 	universesapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/universes"
+	workspaceapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/workspace"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
@@ -42,9 +44,13 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	systemHandler := &systemapi.Handler{Context: server.Context}
 	universesHandler := &universesapi.Handler{Context: server.Context}
 	router := platformhttp.NewRouter()
+	workspaceHandler := &workspaceapi.Handler{Context: server.Context, Store: config.workspaceStore}
+	router.Handle(http.MethodGet, "/api/v1/workspace", workspaceHandler.List)
+	router.Handle(http.MethodPut, "/api/v1/workspace/:kind", workspaceHandler.Put)
 
 	router.Handle(http.MethodGet, "/api", systemHandler.APIStatus)
 	router.Handle(http.MethodGet, "/health", systemHandler.Health)
+	router.Handle(http.MethodGet, "/api/news", newsapi.NewHandler().ServeHTTP)
 	router.Handle(http.MethodGet, "/ready", systemHandler.Ready(config.readinessChecks))
 	router.Handle(http.MethodGet, "/api/v1/capabilities", systemHandler.Capabilities)
 

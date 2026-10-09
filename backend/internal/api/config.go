@@ -8,9 +8,11 @@ import (
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/account"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/workspace"
 )
 
 type serverConfig struct {
+	workspaceStore  workspace.Store
 	profileStore    account.ProfileRepository
 	allowedOrigins  map[string]struct{}
 	readinessChecks []ReadinessChecker
@@ -24,6 +26,16 @@ type serverConfig struct {
 	resetRedirect   string
 	socketContext   context.Context
 	socketLimiter   *screener.ConnectionLimiter
+}
+
+func WithWorkspaceStore(store workspace.Store) ServerOption {
+	return func(config *serverConfig) error {
+		if store == nil {
+			return fmt.Errorf("workspace store is required")
+		}
+		config.workspaceStore = store
+		return nil
+	}
 }
 
 // WithProfileStore enables editable profile data independently of role storage.

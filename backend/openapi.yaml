@@ -25,8 +25,91 @@ tags:
     description: Provider-neutral plans and owner-scoped subscription lifecycle.
   - name: Operator
     description: Server-role protected entitlement administration.
+  - name: Workspace
+    description: Owner-scoped presentation state; never permissions or authoritative trading records.
 
 paths:
+  /api/v1/workspace:
+    get:
+      tags: [Workspace]
+      operationId: listWorkspaceState
+      summary: Restore the current account's UI state
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Current account state only.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkspaceItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/workspace/{kind}:
+    put:
+      tags: [Workspace]
+      operationId: saveWorkspaceState
+      summary: Save presentation state with optimistic version checking
+      description: Maximum 120000 data bytes. Version zero creates; subsequent writes require the last known version. Null data is a deliberate reset. Credentials and authorization fields are rejected.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [rule-draft, screener-preferences, monitor-history, watchlist]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, data]
+              properties:
+                version: {type: integer, format: int64, minimum: 0}
+                data:
+                  description: A bounded object, a watchlist/history array, or null reset; shape depends on kind.
+                  nullable: true
+      responses:
+        "200":
+          description: Saved state with incremented version.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: VERSION_CONFLICT; do not overwrite until the user chooses a copy.
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api:
     get:
       tags: [Operations]
@@ -1523,6 +1606,18 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
   schemas:
+    WorkspaceItem:
+      type: object
+      required: [kind, data, version, updated_at]
+      properties:
+        kind:
+          type: string
+          enum: [rule-draft, screener-preferences, monitor-history, watchlist]
+        data:
+          description: Unverified presentation state, never used for authorization.
+          nullable: true
+        version: {type: integer, format: int64, minimum: 1}
+        updated_at: {type: string, format: date-time}
     APIStatus:
       type: object
       required: [name, version, description, docs, status]

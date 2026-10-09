@@ -1,8 +1,11 @@
 package sessionsapi
 
 import (
+	"context"
 	"errors"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/api/shared"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
@@ -44,6 +47,13 @@ func (server *Handler) CreateSession(writer http.ResponseWriter, request *http.R
 		return
 	}
 	if errors.Is(err, session.ErrDeviceCooldown) {
+		if metadata, supported := server.Sessions.(interface {
+			CooldownUntil(context.Context, string) (time.Time, error)
+		}); supported {
+			if until, metadataErr := metadata.CooldownUntil(request.Context(), principal.ID); metadataErr == nil && until.After(time.Now()) {
+				writer.Header().Set("Retry-After", strconv.FormatInt(int64(time.Until(until).Seconds())+1, 10))
+			}
+		}
 		shared.WriteError(writer, request, http.StatusConflict, "DEVICE_SWITCH_COOLDOWN", "Perangkat hanya dapat dipindahkan sekali dalam 24 jam.")
 		return
 	}
