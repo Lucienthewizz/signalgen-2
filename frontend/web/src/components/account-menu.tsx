@@ -16,6 +16,7 @@ import {
   type ProfileAvatarKey,
 } from "@/lib/profile-avatar";
 import type { User } from "@/types";
+import { api } from "@/api/client";
 
 export function AccountMenu({
   user,
@@ -37,12 +38,55 @@ export function AccountMenu({
   );
   const triggerLabel = name;
   const isSidebarMenu = variant === "sidebar";
-  const planCode = user.entitlement?.plan_code?.trim() || "free";
-  const planLabel = planCode
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
+  const [subscriptionInfo, setSubscriptionInfo] = useState<{
+    userId: string;
+    label: string;
+    status: string;
+  } | null>(null);
+  const planLabel =
+    subscriptionInfo?.userId === user.id
+      ? subscriptionInfo.label
+      : "Subscription";
+  const planStatus =
+    subscriptionInfo?.userId === user.id ? subscriptionInfo.status : "Loading…";
+  useEffect(() => {
+    let active = true;
+    const loadSubscription = () => {
+      void api
+        .currentSubscription()
+        .then(({ subscription }) => {
+          if (!active) return;
+          const statuses: Record<string, string> = {
+            active: "Active",
+            trialing: "Trial",
+            past_due: "Past due",
+            canceled: "Canceled",
+            expired: "Expired",
+          };
+          setSubscriptionInfo({
+            userId: user.id,
+            label: subscription?.plan_name || subscription?.plan_code || "Free",
+            status: subscription
+              ? statuses[subscription.status] || subscription.status
+              : "No paid subscription",
+          });
+        })
+        .catch(() => {
+          if (active)
+            setSubscriptionInfo({
+              userId: user.id,
+              label: "Subscription",
+              status: "Unavailable",
+            });
+        });
+    };
+    loadSubscription();
+    addEventListener("signalgen:subscription", loadSubscription);
+    return () => {
+      active = false;
+      removeEventListener("signalgen:subscription", loadSubscription);
+    };
+  }, [user.id]);
 
   useEffect(() => {
     const syncAvatar = () => setAvatarKey(getSavedProfileAvatar(user.id));
@@ -78,7 +122,12 @@ export function AccountMenu({
             <AvatarIcon aria-hidden="true" />
           </AvatarFallback>
         </Avatar>
-        <span>{triggerLabel}</span>
+        <span className="account-menu__identity">
+          <span>{triggerLabel}</span>
+          <small>
+            {planLabel} · {planStatus}
+          </small>
+        </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         className={`account-menu__content${isSidebarMenu ? " account-menu__content--sidebar" : ""}`}
@@ -105,7 +154,7 @@ export function AccountMenu({
             <BadgeCheck aria-hidden="true" />
             <span className="account-menu__plan-copy">
               <span>Subscription</span>
-              <small>{planLabel} tier</small>
+              <small>{planStatus}</small>
             </span>
             <span className="account-menu__plan-badge">{planLabel}</span>
           </DropdownMenuItem>

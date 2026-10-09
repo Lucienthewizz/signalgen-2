@@ -24,6 +24,8 @@ import type {
 } from "../types";
 
 const TOKEN_KEY = "signalgen.access-token";
+const REFRESH_KEY = "signalgen.refresh-token";
+const EXPIRY_KEY = "signalgen.token-expires-at";
 const APP_SESSION_KEY = "signalgen.app-session";
 const APP_SESSION_ORIGIN_KEY = "signalgen.app-session-origin";
 const INSTALLATION_KEY = "signalgen.installation-id";
@@ -40,9 +42,40 @@ export class ApiError extends Error {
   }
 }
 
+let authGeneration = 0;
 export const session = {
   getToken: () => sessionStorage.getItem(TOKEN_KEY),
-  setToken: (token: string) => sessionStorage.setItem(TOKEN_KEY, token),
+  setToken: (token: string) => {
+    ++authGeneration;
+    sessionStorage.setItem(TOKEN_KEY, token);
+  },
+  setAuth: (
+    value: {
+      access_token: string;
+      refresh_token?: string | null;
+      expires_in?: number;
+    },
+    refreshed = false,
+  ) => {
+    if (!refreshed) ++authGeneration;
+    sessionStorage.setItem(TOKEN_KEY, value.access_token);
+    if (value.refresh_token)
+      sessionStorage.setItem(REFRESH_KEY, value.refresh_token);
+    else sessionStorage.removeItem(REFRESH_KEY);
+    if (value.expires_in && value.expires_in > 0)
+      sessionStorage.setItem(
+        EXPIRY_KEY,
+        String(Date.now() + value.expires_in * 1000),
+      );
+    else sessionStorage.removeItem(EXPIRY_KEY);
+  },
+  getRefreshToken: () => sessionStorage.getItem(REFRESH_KEY),
+  needsRefresh: () => {
+    const expiry = Number(sessionStorage.getItem(EXPIRY_KEY));
+    return Boolean(
+      session.getRefreshToken() && expiry && expiry <= Date.now() + 60_000,
+    );
+  },
   getAppSession: () => sessionStorage.getItem(APP_SESSION_KEY),
   setAppSession: (token: string) => {
     sessionStorage.setItem(APP_SESSION_KEY, token);
@@ -60,7 +93,10 @@ export const session = {
     return created;
   },
   clear: () => {
+    ++authGeneration;
     sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(REFRESH_KEY);
+    sessionStorage.removeItem(EXPIRY_KEY);
     session.clearAppSession();
   },
 };
@@ -80,11 +116,104 @@ function errorEnvelope(payload: unknown): ErrorEnvelope | undefined {
     : undefined;
 }
 
-async function request<T>(
+// Share simultaneous reads only. Never cache authorization or mutation responses.
+const pendingReads = new Map<string, Promise<unknown>>();
+let sessionCreation: Promise<string> | null = null;
+let tokenRefresh: Promise<void> | null = null;
+
+function unauthorized() {
+  session.clear();
+  window.dispatchEvent(new Event("signalgen:unauthorized"));
+}
+
+// One rotating exchange per tab. Never retry a refresh token automatically.
+async function refreshAuth(): Promise<void> {
+  if (tokenRefresh) return tokenRefresh;
+  const refreshToken = session.getRefreshToken();
+  if (!refreshToken)
+    throw new ApiError("Sesi berakhir. Silakan masuk kembali.", 401);
+  const identity = session.getToken();
+  tokenRefresh = (async () => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(`${API_ORIGIN}/api/auth/refresh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        signal: controller.signal,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (
+        identity !== session.getToken() ||
+        refreshToken !== session.getRefreshToken()
+      )
+        throw new ApiError("Akun berubah. Silakan masuk kembali.", 401);
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 400) unauthorized();
+        throw new ApiError(
+          errorDetail(result, response.status),
+          response.status,
+        );
+      }
+      if (
+        !result.access_token ||
+        !result.refresh_token ||
+        !(result.expires_in > 0)
+      )
+        throw new ApiError("Sesi belum dapat diperbarui. Coba lagi.", 503);
+      session.setAuth(result, true);
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(
+        "Koneksi terputus. Sesi belum dapat diperbarui; coba lagi.",
+        0,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  })().finally(() => {
+    tokenRefresh = null;
+  });
+  return tokenRefresh;
+}
+
+function request<T>(
   path: string,
   init: RequestInit = {},
   retryExpiredSession = true,
 ): Promise<T> {
+  if (init.method && init.method !== "GET")
+    return performRequest<T>(path, init, retryExpiredSession);
+  const key = JSON.stringify([
+    path,
+    session.getToken(),
+    session.getAppSession(),
+    retryExpiredSession,
+  ]);
+  const existing = pendingReads.get(key);
+  if (existing) return existing as Promise<T>;
+  const pending = performRequest<T>(path, init, retryExpiredSession).finally(
+    () => pendingReads.delete(key),
+  );
+  pendingReads.set(key, pending);
+  return pending;
+}
+
+async function performRequest<T>(
+  path: string,
+  init: RequestInit = {},
+  retryExpiredSession = true,
+): Promise<T> {
+  if (
+    session.needsRefresh() &&
+    !/^\/api\/auth\/(login|register|refresh|password)/.test(path)
+  )
+    await refreshAuth();
+  const identity = authGeneration;
   const token = session.getToken();
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
@@ -112,12 +241,12 @@ async function request<T>(
   }
 
   const payload = await response.json().catch(() => ({}));
+  if (identity !== authGeneration)
+    throw new ApiError("Akun berubah. Permintaan sebelumnya dibatalkan.", 401);
   if (!response.ok) {
     const envelope = errorEnvelope(payload);
     const expiredAppSession =
-      response.status === 403 &&
-      (envelope?.code === "SESSION_EXPIRED" ||
-        envelope?.code === "SESSION_REVOKED");
+      response.status === 403 && envelope?.code === "SESSION_EXPIRED";
     if (
       retryExpiredSession &&
       expiredAppSession &&
@@ -127,12 +256,29 @@ async function request<T>(
       await api.ensureAppSession();
       return request<T>(path, init, false);
     }
-    if (response.status === 401 && path !== "/api/auth/login") {
-      session.clear();
-      window.dispatchEvent(new Event("signalgen:unauthorized"));
+    if (
+      response.status === 401 &&
+      !path.startsWith("/api/auth/login") &&
+      !path.startsWith("/api/auth/register") &&
+      !path.startsWith("/api/auth/password")
+    ) {
+      if (
+        retryExpiredSession &&
+        session.getRefreshToken() &&
+        !path.startsWith("/api/auth/password")
+      ) {
+        if (token === session.getToken()) await refreshAuth();
+        return performRequest<T>(path, init, false);
+      }
+      unauthorized();
     }
+    if (envelope?.code === "SESSION_REVOKED") unauthorized();
+    let message = errorDetail(payload, response.status);
+    const retryAfter = Number(response.headers.get("Retry-After"));
+    if (envelope?.code === "DEVICE_SWITCH_COOLDOWN" && retryAfter > 0)
+      message = `Perangkat dapat diganti setelah ${new Date(Date.now() + retryAfter * 1000).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}. Gunakan browser sebelumnya atau tunggu hingga waktu tersebut.`;
     throw new ApiError(
-      errorDetail(payload, response.status),
+      message,
       response.status,
       envelope?.code,
       envelope?.request_id,
@@ -178,7 +324,11 @@ function errorDetail(payload: unknown, status: number): string {
 }
 
 export const api = {
+  refreshIfNeeded: async () => {
+    if (session.needsRefresh()) await refreshAuth();
+  },
   status: () => request<ApiStatus>("/api"),
+  readiness: () => request<{ status: "ready" }>("/ready"),
   login: (email: string, password: string) =>
     request<LoginResponse>("/api/auth/login", {
       method: "POST",
@@ -208,6 +358,25 @@ export const api = {
       }),
     }),
   me: () => request<User>("/api/auth/me"),
+  workspace: () =>
+    request<{
+      items: {
+        kind: string;
+        data: unknown;
+        version: number;
+        updated_at: string;
+      }[];
+    }>("/api/v1/workspace"),
+  saveWorkspace: (kind: string, version: number, data: unknown) =>
+    request<{
+      kind: string;
+      data: unknown;
+      version: number;
+      updated_at: string;
+    }>(`/api/v1/workspace/${encodeURIComponent(kind)}`, {
+      method: "PUT",
+      body: JSON.stringify({ version, data }),
+    }),
   createAppSession: () =>
     request<AppSessionResponse>("/api/v1/sessions", {
       method: "POST",
@@ -221,14 +390,26 @@ export const api = {
       }),
     }),
   ensureAppSession: async () => {
+    if (session.needsRefresh()) await refreshAuth();
     const existing = session.getAppSession();
     const storedOrigin = sessionStorage.getItem(APP_SESSION_ORIGIN_KEY);
     if (existing && storedOrigin === (API_ORIGIN || "same-origin"))
       return existing;
     session.clearAppSession();
-    const created = await api.createAppSession();
-    session.setAppSession(created.session_token);
-    return created.session_token;
+    if (sessionCreation) return sessionCreation;
+    const identity = authGeneration;
+    sessionCreation = api
+      .createAppSession()
+      .then((created) => {
+        if (identity !== authGeneration)
+          throw new ApiError("Account changed. Sign in again.", 401);
+        session.setAppSession(created.session_token);
+        return created.session_token;
+      })
+      .finally(() => {
+        sessionCreation = null;
+      });
+    return sessionCreation;
   },
   revokeCurrentAppSession: () =>
     request<void>("/api/v1/sessions/current", { method: "DELETE" }),

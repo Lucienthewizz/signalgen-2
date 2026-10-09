@@ -3,12 +3,19 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Boxes,
-  KeyRound,
+  Clock3,
   ListChecks,
+  RefreshCw,
   SearchCheck,
   ShieldCheck,
 } from "lucide-react";
 import { api } from "@/api/client";
+import { monitorRuns, type MonitorRun } from "@/lib/market-monitor";
+import {
+  readScreenerPreferences,
+  saveScreenerPreferences,
+} from "@/lib/screener-preferences";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,6 +29,7 @@ import type {
 type Props = {
   authenticated: boolean;
   backendOnline: boolean;
+  userId?: string;
   go: (
     view: "analysis" | "rules" | "universes" | "access" | "subscription",
   ) => void;
@@ -30,6 +38,7 @@ type Props = {
 export function WorkspaceOverviewPanel({
   authenticated,
   backendOnline,
+  userId,
   go,
 }: Props) {
   const [account, setAccount] = useState<AccountState | null>(null);
@@ -37,221 +46,253 @@ export function WorkspaceOverviewPanel({
   const [universes, setUniverses] = useState<StockUniverse[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  const [error, setError] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [history, setHistory] = useState<MonitorRun[]>([]);
+  useEffect(() => {
+    const update = () => setHistory(monitorRuns(userId));
+    update();
+    window.addEventListener("signalgen:monitor-run", update);
+    return () => window.removeEventListener("signalgen:monitor-run", update);
+  }, [userId]);
+  useEffect(() => {
+    setAccount(null);
+    setRules([]);
+    setUniverses([]);
+    setSubscription(null);
+  }, [userId]);
   useEffect(() => {
     if (!authenticated || !backendOnline) return;
     let active = true;
     setLoading(true);
-    setError(null);
-    Promise.all([
+    setError(false);
+    // One failed request must not hide the resources that are available.
+    Promise.allSettled([
       api.account(),
       api.listRules(),
       api.listStockUniverses(),
       api.currentSubscription(),
-    ])
-      .then(
-        ([
-          accountResponse,
-          ruleResponse,
-          universeResponse,
-          subscriptionResponse,
-        ]) => {
-          if (!active) return;
-          setAccount(accountResponse);
-          setRules(ruleResponse.items);
-          setUniverses(universeResponse.items);
-          setSubscription(subscriptionResponse.subscription);
-        },
-      )
-      .catch((caught) => {
-        if (active)
-          setError(
-            caught instanceof Error
-              ? caught.message
-              : "Workspace summary belum dapat dimuat.",
-          );
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    ]).then(([a, r, u, s]) => {
+      if (!active) return;
+      if (a.status === "fulfilled") setAccount(a.value);
+      if (r.status === "fulfilled") setRules(r.value.items);
+      if (u.status === "fulfilled") setUniverses(u.value.items);
+      if (s.status === "fulfilled") setSubscription(s.value.subscription);
+      setError([a, r, u, s].some((result) => result.status === "rejected"));
+      setLoading(false);
+    });
     return () => {
       active = false;
     };
-  }, [authenticated, backendOnline]);
-
-  const readyToScreen =
+  }, [authenticated, backendOnline, userId, reload]);
+  const preferences = userId ? readScreenerPreferences(userId) : null;
+  const activeRule =
+    rules.find((rule) => rule.id === preferences?.ruleId) ?? rules[0];
+  const ready =
     Boolean(account?.features.includes("screener")) &&
     rules.length > 0 &&
     universes.length > 0;
-
-  if (!authenticated || !backendOnline) {
+  const latest = history[0];
+  const nextStep = !account?.features.includes("screener")
+    ? "subscription"
+    : !rules.length
+      ? "rules"
+      : "universes";
+  function continueScreen(item?: MonitorRun) {
+    if (userId && item?.context)
+      saveScreenerPreferences(userId, {
+        ...readScreenerPreferences(userId),
+        ruleId: item.context.ruleId,
+        universeId: item.context.universeId,
+      });
+    go("analysis");
+  }
+  if (!authenticated || !backendOnline)
     return (
-      <section className="overview-connect">
-        <span>
-          <KeyRound />
-        </span>
-        <div>
-          <p>Workspace connection</p>
-          <h3>
-            {backendOnline
-              ? "Sign in to load your workspace"
-              : "Go API is offline"}
-          </h3>
-          <p>
-            {backendOnline
-              ? "Your rules, stock universes, sessions, and plan are account-scoped."
-              : "Start the backend before opening protected workspace resources."}
-          </p>
-        </div>
+      <Alert>
+        <ShieldCheck />
+        <AlertTitle>
+          {backendOnline
+            ? "Masuk untuk membuka workspace"
+            : "Backend belum terhubung"}
+        </AlertTitle>
+        <AlertDescription>
+          {backendOnline
+            ? "Rule, universe, dan riwayat terpisah untuk setiap akun."
+            : "Hubungkan backend untuk memuat akun dan menjalankan screening."}
+        </AlertDescription>
         {backendOnline && (
           <Button nativeButton={false} render={<a href="#login" />}>
             Sign in
           </Button>
         )}
-      </section>
+      </Alert>
     );
-  }
-
-  if (loading) {
+  if (loading && !account)
     return (
       <div
-        className="connected-overview dashboard-skeleton"
+        className="overview-board"
         role="status"
-        aria-label="Loading dashboard"
+        aria-label="Memuat dashboard"
         aria-busy="true"
       >
-        <section className="connected-overview__lead" aria-hidden="true">
-          <div className="dashboard-skeleton__intro">
-            <Skeleton className="dashboard-skeleton__title" />
-            <Skeleton className="dashboard-skeleton__line" />
-            <Skeleton className="dashboard-skeleton__line dashboard-skeleton__line--short" />
-          </div>
-          <div className="connected-overview__readiness">
-            <Skeleton className="dashboard-skeleton__line" />
-            <Skeleton className="dashboard-skeleton__value" />
-            <Skeleton className="dashboard-skeleton__action" />
-          </div>
-        </section>
         <section
-          className="connected-overview__metrics dashboard-skeleton__metrics"
+          className="overview-next overview-placeholder"
           aria-hidden="true"
         >
-          {[0, 1, 2, 3].map((item) => (
-            <div key={item}>
-              <Skeleton className="dashboard-skeleton__line" />
-              <Skeleton className="dashboard-skeleton__value" />
-              <Skeleton className="dashboard-skeleton__line dashboard-skeleton__line--short" />
-            </div>
+          <Skeleton className="dashboard-skeleton__value" />
+          <Skeleton className="dashboard-skeleton__line" />
+          <Skeleton className="dashboard-skeleton__action" />
+        </section>
+        <div
+          className="overview-counts overview-placeholder"
+          aria-hidden="true"
+        >
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="dashboard-skeleton__value" />
           ))}
+        </div>
+        <section className="overview-placeholder" aria-hidden="true">
+          <Skeleton className="dashboard-skeleton__line" />
+          <Skeleton className="overview-placeholder__rows" />
         </section>
       </div>
     );
-  }
-
   return (
-    <div className="connected-overview">
-      <section className="connected-overview__lead">
-        <div>
-          <Badge variant="outline">Connected workspace</Badge>
-          <h2>Everything needed for the next screen.</h2>
-          <p>
-            Rules define the logic. Stock universes define the scope. Signalgen
-            keeps the evidence attached to every result.
-          </p>
-        </div>
-        <div className="connected-overview__readiness">
-          <span>Screening readiness</span>
-          <strong>{readyToScreen ? "Ready" : "Setup required"}</strong>
-          <small>
-            {readyToScreen
-              ? `${rules.length} rules · ${universes.length} universes · server access active`
-              : "Create a rule and universe, then verify screener access."}
-          </small>
-          <Button onClick={() => go(readyToScreen ? "analysis" : "rules")}>
-            {readyToScreen ? "Open screener" : "Continue setup"}
-            <ArrowUpRight data-icon="inline-end" />
+    <div className="overview-board" aria-busy={loading}>
+      {error && (
+        <Alert>
+          <RefreshCw />
+          <AlertTitle>Sebagian data belum dapat dimuat</AlertTitle>
+          <AlertDescription>
+            Data yang sudah tersedia tetap ditampilkan. Coba muat ulang untuk
+            memperbarui dashboard.
+          </AlertDescription>
+          <Button
+            variant="outline"
+            onClick={() => setReload((v) => v + 1)}
+            disabled={loading}
+          >
+            Muat ulang
           </Button>
-        </div>
-      </section>
-
-      {loading ? (
-        <div className="connected-overview__loading">
-          <Skeleton />
-          <Skeleton />
-          <Skeleton />
-          <Skeleton />
-        </div>
-      ) : (
-        <section className="connected-overview__metrics">
-          <button onClick={() => go("rules")}>
-            <span>
-              <ListChecks /> Screening rules
-            </span>
-            <strong>{rules.length}</strong>
-            <small>
-              {rules.filter((rule) => rule.owner_type === "user").length}{" "}
-              private rules
-            </small>
-          </button>
-          <button onClick={() => go("universes")}>
-            <span>
-              <Boxes /> Stock universes
-            </span>
-            <strong>{universes.length}</strong>
-            <small>
-              {universes.reduce(
-                (count, universe) => count + universe.symbols.length,
-                0,
-              )}{" "}
-              scoped instruments
-            </small>
-          </button>
-          <button onClick={() => go("subscription")}>
-            <span>
-              <BadgeCheck /> Plan & access
-            </span>
-            <strong>{subscription?.plan_name ?? "No plan"}</strong>
-            <small>{account?.features.length ?? 0} server capabilities</small>
-          </button>
-          <button onClick={() => go("access")}>
-            <span>
-              <ShieldCheck /> Account status
-            </span>
-            <strong>{account?.user.status ?? "—"}</strong>
-            <small>{account?.user.role ?? "user"} role</small>
-          </button>
-        </section>
+        </Alert>
       )}
-
-      <section className="connected-overview__flow">
-        <header>
-          <div>
-            <span>Workspace flow</span>
-            <h3>From scope to evidence</h3>
-          </div>
-          <SearchCheck />
-        </header>
+      <section className="overview-next">
         <div>
-          <button onClick={() => go("rules")}>
-            <em>01</em>
-            <strong>Define the rule</strong>
-            <span>Use readable indicator conditions.</span>
-          </button>
-          <button onClick={() => go("universes")}>
-            <em>02</em>
-            <strong>Choose the universe</strong>
-            <span>Group one to three IDX instruments.</span>
-          </button>
-          <button onClick={() => go("analysis")}>
-            <em>03</em>
-            <strong>Run and review</strong>
-            <span>Inspect decisions, indicators, and dataset provenance.</span>
-          </button>
+          <h3>
+            {ready
+              ? latest
+                ? "Lanjutkan analisis Anda"
+                : "Siap untuk screening pertama"
+              : "Lengkapi workspace Anda"}
+          </h3>
+          <p>
+            {ready
+              ? latest
+                ? `Terakhir menggunakan ${latest.rule}. Pilihan rule dan universe Anda tersimpan.`
+                : "Pilih rule dan stock universe, lalu periksa hasil beserta alasannya."
+              : "Akses screener, rule, dan stock universe diperlukan sebelum menjalankan analisis."}
+          </p>
+          {activeRule && (
+            <p className="overview-next__rule">
+              <ListChecks aria-hidden="true" />
+              Rule pilihan: <strong>{activeRule.name}</strong>
+            </p>
+          )}
         </div>
+        <Button
+          size="lg"
+          onClick={() => (ready ? continueScreen() : go(nextStep))}
+        >
+          <SearchCheck data-icon="inline-start" />
+          {ready
+            ? "Buka screener"
+            : nextStep === "subscription"
+              ? "Periksa akses"
+              : nextStep === "rules"
+                ? "Buat rule"
+                : "Buat universe"}
+        </Button>
       </section>
-
-      {error && <p className="connected-overview__error">{error}</p>}
+      <section className="overview-counts" aria-label="Ringkasan workspace">
+        <button onClick={() => go("rules")}>
+          <ListChecks aria-hidden="true" />
+          <span>Rules</span>
+          <strong>{rules.length}</strong>
+        </button>
+        <button onClick={() => go("universes")}>
+          <Boxes aria-hidden="true" />
+          <span>Stock universes</span>
+          <strong>{universes.length}</strong>
+        </button>
+        <button onClick={() => go("subscription")}>
+          <BadgeCheck aria-hidden="true" />
+          <span>Paket</span>
+          <strong>{subscription?.plan_name ?? "—"}</strong>
+        </button>
+        <button onClick={() => go("access")}>
+          <ShieldCheck aria-hidden="true" />
+          <span>Akun</span>
+          <strong>
+            {account?.user.status === "active"
+              ? "Aktif"
+              : (account?.user.status ?? "—")}
+          </strong>
+        </button>
+      </section>
+      <section
+        className="overview-activity"
+        aria-labelledby="overview-activity-title"
+      >
+        <header>
+          <h3 id="overview-activity-title">
+            <Clock3 aria-hidden="true" />
+            Screening terbaru
+          </h3>
+          <Badge variant="outline">Riwayat workspace</Badge>
+        </header>
+        {history.length ? (
+          <ul>
+            {history.slice(0, 3).map((item) => (
+              <li key={item.recordedAt}>
+                <div>
+                  <strong>{item.rule}</strong>
+                  <p>
+                    {item.context?.universeName ??
+                      item.run.rows
+                        .map((row) => row.decision.symbol.replace(".JK", ""))
+                        .join(", ")}
+                  </p>
+                  <time dateTime={item.recordedAt}>
+                    {new Date(item.recordedAt).toLocaleString("id-ID", {
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                </div>
+                <Badge variant="secondary">
+                  {item.run.rows.filter((row) => row.decision.matched).length} /{" "}
+                  {item.run.rows.length} cocok
+                </Badge>
+                <Button variant="outline" onClick={() => continueScreen(item)}>
+                  Tinjau
+                  <ArrowUpRight data-icon="inline-end" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="overview-activity__empty">
+            <p>Belum ada screening yang selesai.</p>
+            <span>
+              Hasil pertama Anda akan tersimpan di sini setelah screening
+              berhasil.
+            </span>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

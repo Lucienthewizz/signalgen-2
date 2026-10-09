@@ -1,12 +1,27 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { api, session } from "@/api/client";
 import { Brand } from "@/components/brand";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AccountPage } from "@/pages/account-page";
-import { AuthPage, type AuthView } from "@/pages/auth-page";
-import { DemoWorkspace, type DemoView } from "@/pages/demo-workspace";
-import { CreatorsPage } from "@/pages/creators-page";
-import { PublicWorkspace } from "@/pages/public-workspace";
+import type { AuthView } from "@/pages/auth-page";
+import type { DemoView } from "@/pages/demo-workspace";
+import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
+const AccountPage = lazy(() =>
+  import("@/pages/account-page").then((m) => ({ default: m.AccountPage })),
+);
+const AuthPage = lazy(() =>
+  import("@/pages/auth-page").then((m) => ({ default: m.AuthPage })),
+);
+const DemoWorkspace = lazy(() =>
+  import("@/pages/demo-workspace").then((m) => ({ default: m.DemoWorkspace })),
+);
+const CreatorsPage = lazy(() =>
+  import("@/pages/creators-page").then((m) => ({ default: m.CreatorsPage })),
+);
+const PublicWorkspace = lazy(() =>
+  import("@/pages/public-workspace").then((m) => ({
+    default: m.PublicWorkspace,
+  })),
+);
 import type { User } from "@/types";
 
 type Route = "home" | "account" | "creators" | AuthView | `app/${DemoView}`;
@@ -22,11 +37,13 @@ function currentRoute(): Route {
     return "reset-password";
   }
   const route = location.hash.slice(1).split("&")[0];
+  if (route === "app/admin") return "app/operator";
   if (
     [
       "app/overview",
       "app/analysis",
       "app/realtime",
+      "app/news",
       "app/rules",
       "app/journal",
       "app/access",
@@ -49,7 +66,7 @@ function currentRoute(): Route {
     : "home";
 }
 
-export default function App() {
+function RoutedApp() {
   const [route, setRoute] = useState<Route>(currentRoute);
   const [backendOnline, setBackendOnline] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -97,6 +114,14 @@ export default function App() {
     setUser(nextUser);
     location.hash = "app/overview";
   }
+
+  useEffect(() => {
+    if (!user) return;
+    const refresh = () => { void api.refreshIfNeeded().catch(() => { /* Retry on next request; don't log tokens or sign out on network failure. */ }); };
+    const timer = window.setInterval(refresh, 30_000);
+    window.addEventListener("focus", refresh);
+    return () => { clearInterval(timer); window.removeEventListener("focus", refresh); };
+  }, [user]);
 
   async function logout() {
     try {
@@ -170,5 +195,15 @@ export default function App() {
       user={user}
       onLogout={logout}
     />
+  );
+}
+
+export default function App() {
+  return (
+    <RouteBoundary>
+      <Suspense fallback={<RouteLoading />}>
+        <RoutedApp />
+      </Suspense>
+    </RouteBoundary>
   );
 }

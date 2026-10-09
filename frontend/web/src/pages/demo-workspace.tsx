@@ -7,6 +7,8 @@ import {
   useMemo,
   useRef,
   useState,
+  lazy,
+  Suspense,
 } from "react";
 import {
   Activity,
@@ -30,6 +32,7 @@ import {
   ListChecks,
   Menu,
   NotebookTabs,
+  Newspaper,
   Pencil,
   Plus,
   RefreshCw,
@@ -46,7 +49,6 @@ import {
 } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { AccountMenu } from "@/components/account-menu";
-import { TradingViewChart } from "@/components/tradingview-chart";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,21 +78,54 @@ import {
   type ScreenerStage,
 } from "@/analysis/screener";
 import { api } from "@/api/client";
+import { useWorkspaceSync } from "@/lib/use-workspace-sync";
 import type { AccountDevice, AccountSession, AccountState } from "@/types";
-import {
-  OperatorPanel,
-  StockUniversesPanel,
-  SubscriptionPanel,
-} from "@/pages/workspace-resource-panels";
-import { ServerRulesPanel } from "@/pages/workspace-rules-panel";
-import { WorkspaceScreenerPanel } from "@/pages/workspace-screener-panel";
-import { WorkspaceOverviewPanel } from "@/pages/workspace-overview-panel";
+import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
+const StockUniversesPanel = lazy(() =>
+  import("@/pages/workspace-resource-panels").then((m) => ({
+    default: m.StockUniversesPanel,
+  })),
+);
+const SubscriptionPanel = lazy(() =>
+  import("@/pages/workspace-resource-panels").then((m) => ({
+    default: m.SubscriptionPanel,
+  })),
+);
+const ServerRulesPanel = lazy(() =>
+  import("@/pages/workspace-rules-panel").then((m) => ({
+    default: m.ServerRulesPanel,
+  })),
+);
+const WorkspaceScreenerPanel = lazy(() =>
+  import("@/pages/workspace-screener-panel").then((m) => ({
+    default: m.WorkspaceScreenerPanel,
+  })),
+);
+const WorkspaceOverviewPanel = lazy(() =>
+  import("@/pages/workspace-overview-panel").then((m) => ({
+    default: m.WorkspaceOverviewPanel,
+  })),
+);
+const AdminPage = lazy(() =>
+  import("@/pages/admin-page").then((m) => ({ default: m.AdminPage })),
+);
+const MarketMonitorPanel = lazy(() =>
+  import("@/pages/market-monitor-panel").then((m) => ({
+    default: m.MarketMonitorPanel,
+  })),
+);
 import { journalPerformance, localJournalDate } from "@/lib/journal";
+const WorkspaceNewsPanel = lazy(() =>
+  import("@/pages/workspace-news-panel").then((m) => ({
+    default: m.WorkspaceNewsPanel,
+  })),
+);
 
 export type DemoView =
   | "overview"
   | "analysis"
   | "realtime"
+  | "news"
   | "rules"
   | "journal"
   | "universes"
@@ -106,51 +141,57 @@ const viewMeta: Record<
   { title: string; description: string; icon: typeof Gauge }
 > = {
   overview: {
-    title: "Workspace overview",
-    description: "A map of MVP features and their current integration status.",
+    title: "Ringkasan workspace",
+    description: "Lanjutkan analisis dan tinjau aktivitas screening Anda.",
     icon: Gauge,
   },
   analysis: {
-    title: "Market screener",
+    title: "Screener saham",
     description:
-      "Start from a goal, then inspect the evidence behind each result.",
+      "Pilih rule dan stock universe, lalu tinjau hasil dan alasannya.",
     icon: SearchCheck,
   },
   realtime: {
-    title: "Realtime market",
+    title: "Market Monitor",
     description:
-      "Move through an IDX watchlist and inspect the selected market on TradingView.",
+      "Pantau saham pilihan, chart harian, dan hasil rule dalam satu tampilan.",
     icon: Activity,
   },
   rules: {
-    title: "Rule management",
-    description: "Manage system and private rules within the MVP scope.",
+    title: "Kelola rule",
+    description: "Buat kondisi screening sendiri atau tinjau rule yang tersimpan.",
     icon: ListChecks,
   },
+  news: {
+    title: "Berita",
+    description: "Video dan berita seputar pasar saham.",
+    icon: Newspaper,
+  },
   journal: {
-    title: "Trade journal",
-    description: "Record trades and review positions in one workflow.",
+    title: "Jurnal transaksi",
+    description: "Catat rencana transaksi dan tinjau posisi Anda.",
     icon: NotebookTabs,
   },
   access: {
-    title: "Access & devices",
-    description: "Review entitlements, sessions, devices, and user cache.",
+    title: "Akun & perangkat",
+    description: "Tinjau akses akun, sesi aktif, dan perangkat Anda.",
     icon: SlidersHorizontal,
   },
   universes: {
     title: "Stock universes",
-    description: "Group IDX instruments into reusable screening scopes.",
+    description: "Kelompokkan saham IDX untuk screening berikutnya.",
     icon: Boxes,
   },
   subscription: {
-    title: "Plan & access",
-    description: "Review your current subscription and server capabilities.",
+    title: "Paket & akses",
+    description: "Tinjau paket aktif dan fitur yang dapat Anda gunakan.",
     icon: BadgeCheck,
   },
   operator: {
-    title: "Operator console",
-    description: "Administer feature grants, subscriptions, and account roles.",
-    icon: UsersRound,
+    title: "Administrasi",
+    description:
+      "Kelola akses akun, paket, dan izin operator.",
+    icon: ShieldCheck,
   },
 };
 
@@ -167,32 +208,35 @@ const navGroups: Array<{
     items: [{ view: "overview", label: "Dashboard", icon: Gauge }],
   },
   {
-    label: "Analysis",
+    label: "Analisis",
     items: [
       { view: "analysis", label: "Screener", icon: SearchCheck },
-      { view: "journal", label: "Trade journal", icon: NotebookTabs },
+      { view: "journal", label: "Jurnal transaksi", icon: NotebookTabs },
     ],
   },
   {
-    label: "Configuration",
+    label: "Konfigurasi",
     items: [
       { view: "rules", label: "Rules", icon: ListChecks },
       { view: "universes", label: "Stock universes", icon: Boxes },
-      { view: "access", label: "Access & devices", icon: SlidersHorizontal },
-      { view: "subscription", label: "Plan & access", icon: BadgeCheck },
+      { view: "access", label: "Akun & perangkat", icon: SlidersHorizontal },
+      { view: "subscription", label: "Paket & akses", icon: BadgeCheck },
     ],
   },
   {
-    label: "Live",
-    items: [{ view: "realtime", label: "Realtime signal", icon: Activity }],
+    label: "Pasar",
+    items: [
+      { view: "realtime", label: "Market Monitor", icon: Activity },
+      { view: "news", label: "Berita", icon: Newspaper },
+    ],
   },
   {
-    label: "Administration",
+    label: "Administrasi",
     items: [
       {
         view: "operator",
-        label: "Operator console",
-        icon: UsersRound,
+        label: "Admin",
+        icon: ShieldCheck,
         operatorOnly: true,
       },
     ],
@@ -312,143 +356,6 @@ function DemoNotice({ view }: { view: DemoView }) {
       </div>
       <Badge variant="outline">External feed</Badge>
     </div>
-  );
-}
-
-type RealtimeAsset = {
-  symbol: string;
-  ticker: string;
-  name: string;
-  referencePrice: string;
-  referenceChange: string;
-  direction: "up" | "down";
-};
-
-const realtimeWatchlist: RealtimeAsset[] = [
-  {
-    symbol: "IDX:BBCA",
-    ticker: "BBCA",
-    name: "Bank Central Asia",
-    referencePrice: "6,325",
-    referenceChange: "−1.95%",
-    direction: "down",
-  },
-  {
-    symbol: "IDX:TLKM",
-    ticker: "TLKM",
-    name: "Telkom Indonesia",
-    referencePrice: "2,610",
-    referenceChange: "−1.13%",
-    direction: "down",
-  },
-  {
-    symbol: "IDX:BMRI",
-    ticker: "BMRI",
-    name: "Bank Mandiri",
-    referencePrice: "5,050",
-    referenceChange: "−0.98%",
-    direction: "down",
-  },
-  {
-    symbol: "IDX:BBRI",
-    ticker: "BBRI",
-    name: "Bank Rakyat Indonesia",
-    referencePrice: "3,780",
-    referenceChange: "+0.53%",
-    direction: "up",
-  },
-  {
-    symbol: "IDX:ASII",
-    ticker: "ASII",
-    name: "Astra International",
-    referencePrice: "4,810",
-    referenceChange: "+0.84%",
-    direction: "up",
-  },
-];
-
-function RealtimePanel() {
-  const [selectedSymbol, setSelectedSymbol] = useState(
-    realtimeWatchlist[0].symbol,
-  );
-  const selected =
-    realtimeWatchlist.find((asset) => asset.symbol === selectedSymbol) ??
-    realtimeWatchlist[0];
-
-  return (
-    <section className="realtime-workspace">
-      <aside className="market-watchlist" aria-label="IDX market watchlist">
-        <header className="market-watchlist__header">
-          <div>
-            <h3>Market watchlist</h3>
-            <span>Select an IDX stock to update the daily chart.</span>
-          </div>
-          <span className="market-watchlist__pulse">
-            <i /> Chart feed
-          </span>
-        </header>
-        <div className="market-watchlist__items">
-          {realtimeWatchlist.map((asset) => {
-            const active = asset.symbol === selected.symbol;
-            return (
-              <button
-                type="button"
-                key={asset.symbol}
-                className={active ? "is-active" : ""}
-                aria-pressed={active}
-                onClick={() => setSelectedSymbol(asset.symbol)}
-              >
-                <span className="market-watchlist__identity">
-                  <strong>{asset.ticker}</strong>
-                  <small>{asset.name}</small>
-                </span>
-                <span className="market-watchlist__quote">
-                  <strong>Rp {asset.referencePrice}</strong>
-                  <small className={asset.direction}>
-                    {asset.direction === "up" ? (
-                      <ArrowUpRight />
-                    ) : (
-                      <ArrowDownRight />
-                    )}
-                    {asset.referenceChange}
-                  </small>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </aside>
-
-      <div className="realtime-chart-panel">
-        <header className="realtime-chart-panel__header">
-          <div className="realtime-chart-panel__symbol">
-            <span>{selected.ticker}</span>
-            <div>
-              <strong>{selected.name}</strong>
-              <small>Indonesia Stock Exchange</small>
-            </div>
-          </div>
-          <div className="realtime-chart-panel__actions">
-            <span>1D</span>
-            <a
-              href={`https://www.tradingview.com/symbols/${selected.symbol.replace(":", "-")}/`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open TradingView <ExternalLink />
-            </a>
-          </div>
-        </header>
-        <div className="realtime-chart-panel__meta">
-          <span>
-            <i /> TradingView widget
-          </span>
-          <span>IDX · IDR</span>
-          <span>Delay may apply</span>
-        </div>
-        <TradingViewChart symbol={selected.symbol} label={selected.ticker} />
-      </div>
-    </section>
   );
 }
 
@@ -2315,6 +2222,7 @@ export function DemoWorkspace({
   onLogout: () => void | Promise<void>;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const sync = useWorkspaceSync(authenticated ? user?.id : undefined);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const workspaceRef = useRef<HTMLElement>(null);
   const workspaceMotion = useRef<Animation | null>(null);
@@ -2340,7 +2248,7 @@ export function DemoWorkspace({
     if (Math.abs(delta) < 1) return;
     workspaceMotion.current = element.animate(
       [{ transform: `translateX(${delta}px)` }, { transform: "translateX(0)" }],
-      { duration: 300, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+      { duration: 520, easing: "cubic-bezier(0.22, 0.61, 0.36, 1)" },
     );
   }, [menuOpen, sidebarCollapsed]);
 
@@ -2383,10 +2291,7 @@ export function DemoWorkspace({
   const meta = viewMeta[view];
   const PageIcon = meta.icon;
   function go(next: DemoView) {
-    rememberWorkspacePosition();
     location.hash = `app/${next}`;
-    setMenuOpen(false);
-    setSidebarCollapsed(true);
   }
   function draft(symbol: string) {
     setDraftSymbol(symbol);
@@ -2456,13 +2361,7 @@ export function DemoWorkspace({
           )}
         </div>
       </aside>
-      {menuOpen && (
-        <button
-          className="backdrop"
-          onClick={() => setMenuOpen(false)}
-          aria-label="Close menu"
-        />
-      )}
+      {menuOpen && <div className="backdrop" aria-hidden="true" />}
       <section className="workspace" ref={workspaceRef}>
         <header className="topbar">
           <div className="topbar__inner">
@@ -2477,7 +2376,9 @@ export function DemoWorkspace({
               >
                 <Menu />
               </button>
-              <h1>Trading workspace</h1>
+              <h1>
+                {view === "operator" ? "Administration" : "Trading workspace"}
+              </h1>
             </div>
             <div className="topbar__actions">
               <ThemeToggle compact />
@@ -2495,63 +2396,82 @@ export function DemoWorkspace({
               <p>{meta.description}</p>
             </div>
           </div>
-          <div className="route-stage" key={view}>
-            {view === "overview" && (
-              <WorkspaceOverviewPanel
-                authenticated={authenticated}
-                backendOnline={backendOnline}
-                go={go}
-              />
-            )}
-            {view === "analysis" && (
-              <WorkspaceScreenerPanel
-                onDraft={draft}
-                authenticated={authenticated}
-                backendOnline={backendOnline}
-              />
-            )}
-            {view === "realtime" && <RealtimePanel />}
-            {view === "rules" && (
-              <ServerRulesPanel
-                authenticated={authenticated}
-                backendOnline={backendOnline}
-                onRun={() => go("analysis")}
-              />
-            )}
-            {view === "journal" && (
-              <JournalPanel
-                draftSymbol={draftSymbol}
-                clearDraft={() => setDraftSymbol(null)}
-                transactions={transactions}
-                setTransactions={setTransactions}
-              />
-            )}
-            {view === "access" && (
-              <AccessPanel
-                backendOnline={backendOnline}
-                authenticated={authenticated}
-                cacheState={cacheState}
-                setCacheState={setCacheState}
-              />
-            )}
-            {view === "universes" && (
-              <StockUniversesPanel
-                authenticated={authenticated}
-                backendOnline={backendOnline}
-              />
-            )}
-            {view === "subscription" && (
-              <SubscriptionPanel
-                authenticated={authenticated}
-                backendOnline={backendOnline}
-              />
-            )}
-            {view === "operator" && (
-              <OperatorPanel
-                authenticated={authenticated}
-                backendOnline={backendOnline}
-              />
-            )}
+          {authenticated && (
+            <div className="workspace-sync" role="status" aria-live="polite">
+              <span>{sync.state === "saved" ? "Tersimpan di akun" : sync.state === "loading" ? "Memuat data akun…" : sync.state === "saving" ? "Menyimpan perubahan…" : sync.state === "conflict" ? "Ada perubahan di perangkat lain. Pilih salinan yang ingin digunakan." : "Salinan lokal tersedia. Sinkronisasi belum selesai."}</span>
+              {sync.state === "local" && <Button variant="ghost" size="sm" onClick={sync.retry}>Coba sinkronkan</Button>}
+              {sync.state === "conflict" && <><Button variant="outline" size="sm" onClick={() => void sync.useAccount()}>Gunakan versi akun</Button><Button variant="outline" size="sm" onClick={() => void sync.useDevice()}>Simpan versi perangkat ini</Button></>}
+            </div>
+          )}
+          <div className="route-stage" key={`${view}:${sync.epoch}`}>
+            <RouteBoundary>
+              <Suspense fallback={<RouteLoading />}>
+                {!sync.ready ? <RouteLoading /> : <>
+                {view === "overview" && (
+                  <WorkspaceOverviewPanel
+                    authenticated={authenticated}
+                    userId={user?.id}
+                    backendOnline={backendOnline}
+                    go={go}
+                  />
+                )}
+                {view === "analysis" && (
+                  <WorkspaceScreenerPanel
+                    onDraft={draft}
+                    userId={user?.id}
+                    authenticated={authenticated}
+                    backendOnline={backendOnline}
+                  />
+                )}
+                {view === "realtime" && (
+                  <MarketMonitorPanel userId={user?.id} />
+                )}
+                {view === "news" && <WorkspaceNewsPanel />}
+                {view === "rules" && (
+                  <ServerRulesPanel
+                    authenticated={authenticated}
+                    userId={user?.id}
+                    backendOnline={backendOnline}
+                    onRun={() => go("analysis")}
+                  />
+                )}
+                {view === "journal" && (
+                  <JournalPanel
+                    draftSymbol={draftSymbol}
+                    clearDraft={() => setDraftSymbol(null)}
+                    transactions={transactions}
+                    setTransactions={setTransactions}
+                  />
+                )}
+                {view === "access" && (
+                  <AccessPanel
+                    backendOnline={backendOnline}
+                    authenticated={authenticated}
+                    cacheState={cacheState}
+                    setCacheState={setCacheState}
+                  />
+                )}
+                {view === "universes" && (
+                  <StockUniversesPanel
+                    authenticated={authenticated}
+                    backendOnline={backendOnline}
+                  />
+                )}
+                {view === "subscription" && (
+                  <SubscriptionPanel
+                    authenticated={authenticated}
+                    backendOnline={backendOnline}
+                  />
+                )}
+                {view === "operator" && (
+                  <AdminPage
+                    authenticated={authenticated}
+                    backendOnline={backendOnline}
+                  />
+                )}
+                </>}
+              </Suspense>
+            </RouteBoundary>
           </div>
         </div>
       </section>

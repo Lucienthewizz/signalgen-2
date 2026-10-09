@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpenCheck,
   CircleAlert,
@@ -28,16 +28,23 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { RuleCondition, RuleResource, UserRuleDefinition } from "@/types";
+import {
+  readRuleDraft,
+  saveRuleDraft,
+  type RuleDraft,
+} from "@/lib/workspace-storage";
 
 type Props = {
   authenticated: boolean;
   backendOnline: boolean;
+  userId?: string;
   onRun: () => void;
 };
 
@@ -80,6 +87,7 @@ function summary(definition?: UserRuleDefinition) {
 export function ServerRulesPanel({
   authenticated,
   backendOnline,
+  userId,
   onRun,
 }: Props) {
   const [rules, setRules] = useState<RuleResource[]>([]);
@@ -90,24 +98,78 @@ export function ServerRulesPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [draftOwner, setDraftOwner] = useState<string | undefined>();
+  const [pendingDraft, setPendingDraft] = useState<RuleDraft | null>(null);
+  const [draftStorageFailed, setDraftStorageFailed] = useState(false);
+  const activeUser = useRef(userId);
+  activeUser.current = authenticated ? userId : undefined;
+
+  useEffect(() => {
+    const owner = authenticated ? userId : undefined;
+    setDraftOwner(owner);
+    setPendingDraft(owner ? readRuleDraft(owner) : null);
+    setDefinition(blankDefinition());
+    setEditing(null);
+    setRules([]);
+    setSaving(false);
+    setLoading(false);
+    setError(null);
+    setNotice(null);
+    setDraftStorageFailed(false);
+  }, [authenticated, userId]);
+
+  useEffect(() => {
+    if (!authenticated || !userId || draftOwner !== userId || pendingDraft)
+      return;
+    setDraftStorageFailed(
+      !saveRuleDraft(userId, {
+        definition,
+        editingId: editing?.id ?? null,
+        editingVersion: editing?.version ?? null,
+      }),
+    );
+  }, [authenticated, userId, draftOwner, pendingDraft, definition, editing]);
+
+  function restoreDraft() {
+    if (!pendingDraft) return;
+    if (pendingDraft.editingId) {
+      const rule = rules.find(
+        (item) =>
+          item.id === pendingDraft.editingId && item.owner_type === "user",
+      );
+      if (!rule || rule.version !== pendingDraft.editingVersion) {
+        setError(
+          "Rule asal berubah atau tidak tersedia. Muat ulang daftar, atau mulai rule kosong untuk membuang draft.",
+        );
+        return;
+      }
+      setEditing(rule);
+    } else setEditing(null);
+    setDefinition(pendingDraft.definition);
+    setPendingDraft(null);
+    setNotice("Draft dipulihkan. Periksa kondisi sebelum menyimpan.");
+  }
 
   async function load() {
     if (!authenticated || !backendOnline) return;
+    const owner = userId;
     setLoading(true);
     setError(null);
     try {
       const response = await api.listRules();
+      if (activeUser.current !== owner) return;
       setRules(response.items);
     } catch (caught) {
+      if (activeUser.current !== owner) return;
       setError(readableError(caught));
     } finally {
-      setLoading(false);
+      if (activeUser.current === owner) setLoading(false);
     }
   }
 
   useEffect(() => {
     void load();
-  }, [authenticated, backendOnline]);
+  }, [authenticated, backendOnline, userId]);
 
   const privateRules = useMemo(
     () => rules.filter((rule) => rule.owner_type === "user"),
@@ -119,6 +181,8 @@ export function ServerRulesPanel({
   );
 
   function startNew() {
+    if (userId) saveRuleDraft(userId, null);
+    setPendingDraft(null);
     setEditing(null);
     setDefinition(blankDefinition());
     setError(null);
@@ -128,6 +192,7 @@ export function ServerRulesPanel({
   function edit(rule: RuleResource) {
     if (!rule.definition) return;
     setEditing(rule);
+    setPendingDraft(null);
     setDefinition({
       ...rule.definition,
       conditions: rule.definition.conditions.map((condition) => ({
@@ -162,33 +227,42 @@ export function ServerRulesPanel({
     setError(null);
     setNotice(null);
     const payload = { ...definition, name: definition.name.trim() };
+    const owner = userId;
     try {
       if (editing) {
         await api.updateRule(editing.id, editing.version, payload);
+        if (activeUser.current !== owner) return;
         setNotice("Rule berhasil diperbarui.");
       } else {
         await api.createRule(payload);
+        if (activeUser.current !== owner) return;
         setNotice("Rule baru tersimpan dan siap dipakai di screener.");
       }
       setEditing(null);
       setDefinition(blankDefinition());
+      if (userId) saveRuleDraft(userId, null);
+      setPendingDraft(null);
       await load();
     } catch (caught) {
+      if (activeUser.current !== owner) return;
       setError(readableError(caught));
     } finally {
-      setSaving(false);
+      if (activeUser.current === owner) setSaving(false);
     }
   }
 
   async function remove(rule: RuleResource) {
     if (!window.confirm(`Hapus rule “${rule.name}”?`)) return;
     setError(null);
+    const owner = userId;
     try {
       await api.deleteRule(rule.id, rule.version);
+      if (activeUser.current !== owner) return;
       if (editing?.id === rule.id) startNew();
       await load();
       setNotice("Rule dihapus.");
     } catch (caught) {
+      if (activeUser.current !== owner) return;
       setError(readableError(caught));
     }
   }
@@ -226,202 +300,255 @@ export function ServerRulesPanel({
               <p>Bangun checklist sederhana; semua kondisi harus terpenuhi.</p>
             </div>
           </div>
-          <Button variant="outline" onClick={startNew}>
+          <Button variant="outline" onClick={startNew} disabled={saving}>
             <CopyPlus data-icon="inline-start" /> New blank rule
           </Button>
         </header>
 
-        <form className="rule-composer__form" onSubmit={save}>
-          <div className="rule-basics">
-            <Field>
-              <FieldLabel htmlFor="rule-name">Rule name</FieldLabel>
-              <Input
-                id="rule-name"
-                value={definition.name}
-                onChange={(event) =>
-                  setDefinition((current) => ({
-                    ...current,
-                    name: event.target.value,
-                  }))
-                }
-                placeholder="Contoh: Momentum bank harian"
-                maxLength={100}
-              />
-              <FieldDescription>
-                Nama ini muncul di pilihan screener.
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="rule-cooldown">
-                Cooldown (seconds)
-              </FieldLabel>
-              <Input
-                id="rule-cooldown"
-                type="number"
-                min={0}
-                value={definition.cooldown_sec}
-                onChange={(event) =>
-                  setDefinition((current) => ({
-                    ...current,
-                    cooldown_sec: Math.max(0, Number(event.target.value) || 0),
-                  }))
-                }
-              />
-              <FieldDescription>
-                Mencegah sinyal berulang terlalu dekat.
-              </FieldDescription>
-            </Field>
-          </div>
+        {pendingDraft && (
+          <Alert>
+            <Save />
+            <AlertTitle>Draft rule tersedia</AlertTitle>
+            <AlertDescription>
+              <p>
+                Draft Anda tersedia. Pulihkan untuk melanjutkan, atau mulai rule
+                kosong.
+              </p>
+              <Button
+                variant="outline"
+                onClick={restoreDraft}
+                disabled={loading}
+              >
+                Restore draft
+              </Button>
+              <Button variant="ghost" onClick={startNew}>
+                Discard draft
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+        {draftStorageFailed && (
+          <Alert>
+            <CircleAlert />
+            <AlertTitle>Draft hanya tersedia selama halaman terbuka</AlertTitle>
+            <AlertDescription>
+              Browser tidak dapat menyimpan draft. Simpan rule sebelum memuat
+              ulang atau meninggalkan halaman.
+            </AlertDescription>
+          </Alert>
+        )}
 
-          <div className="rule-condition-section">
-            <div className="rule-condition-section__heading">
-              <div>
-                <h4>Screening conditions</h4>
-                <p>
-                  Pilih indikator, pembanding, lalu nilai atau indikator acuan.
-                </p>
-              </div>
-              <Badge variant="outline">AND logic</Badge>
+        <form className="rule-composer__form" onSubmit={save}>
+          <fieldset
+            disabled={saving || !!pendingDraft}
+            style={{
+              border: 0,
+              padding: 0,
+              margin: 0,
+              minWidth: 0,
+              display: "grid",
+              gap: "inherit",
+            }}
+          >
+            <div className="rule-basics">
+              <Field>
+                <FieldLabel htmlFor="rule-name">Rule name</FieldLabel>
+                <Input
+                  id="rule-name"
+                  value={definition.name}
+                  onChange={(event) =>
+                    setDefinition((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  placeholder="Contoh: Momentum bank harian"
+                  maxLength={100}
+                />
+                <FieldDescription>
+                  Nama ini muncul di pilihan screener.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="rule-cooldown">
+                  Cooldown (seconds)
+                </FieldLabel>
+                <Input
+                  id="rule-cooldown"
+                  type="number"
+                  min={0}
+                  value={definition.cooldown_sec}
+                  onChange={(event) =>
+                    setDefinition((current) => ({
+                      ...current,
+                      cooldown_sec: Math.max(
+                        0,
+                        Number(event.target.value) || 0,
+                      ),
+                    }))
+                  }
+                />
+                <FieldDescription>
+                  Mencegah sinyal berulang terlalu dekat.
+                </FieldDescription>
+              </Field>
             </div>
-            {definition.conditions.length === 0 ? (
-              <button
+
+            <div className="rule-condition-section">
+              <div className="rule-condition-section__heading">
+                <div>
+                  <h4>Screening conditions</h4>
+                  <p>
+                    Pilih indikator, pembanding, lalu nilai atau indikator
+                    acuan.
+                  </p>
+                </div>
+                <Badge variant="outline">AND logic</Badge>
+              </div>
+              {definition.conditions.length === 0 ? (
+                <button
+                  type="button"
+                  className="rule-empty-condition"
+                  onClick={() =>
+                    setDefinition((current) => ({
+                      ...current,
+                      conditions: [blankCondition()],
+                    }))
+                  }
+                >
+                  <Plus />
+                  <span>
+                    <strong>Add the first condition</strong>
+                    <small>Rule baru dimulai tanpa template lama.</small>
+                  </span>
+                </button>
+              ) : (
+                <div className="rule-condition-list">
+                  {definition.conditions.map((condition, index) => (
+                    <div
+                      className="rule-condition-row"
+                      key={`${index}-${condition.left}`}
+                    >
+                      <span className="rule-condition-row__index">
+                        {index + 1}
+                      </span>
+                      <Select
+                        value={condition.left}
+                        onValueChange={(value) =>
+                          setCondition(index, {
+                            left: value as RuleCondition["left"],
+                          })
+                        }
+                      >
+                        <SelectTrigger
+                          aria-label={`Indikator kondisi ${index + 1}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {(["PRICE", "EMA9", "EMA20", "RSI14"] as const).map(
+                              (value) => (
+                                <SelectItem key={value} value={value}>
+                                  {value}
+                                </SelectItem>
+                              ),
+                            )}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={condition.op}
+                        onValueChange={(value) =>
+                          setCondition(index, {
+                            op: value as RuleCondition["op"],
+                          })
+                        }
+                      >
+                        <SelectTrigger
+                          aria-label={`Operator kondisi ${index + 1}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {([">", ">=", "<", "<="] as const).map((value) => (
+                              <SelectItem key={value} value={value}>
+                                {value}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        aria-label={`Nilai kondisi ${index + 1}`}
+                        value={String(condition.right)}
+                        onChange={(event) =>
+                          setCondition(index, {
+                            right: rightValue(event.target.value),
+                          })
+                        }
+                        placeholder="EMA20 atau 55"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Hapus kondisi ${index + 1}`}
+                        onClick={() =>
+                          setDefinition((current) => ({
+                            ...current,
+                            conditions: current.conditions.filter(
+                              (_, conditionIndex) => conditionIndex !== index,
+                            ),
+                          }))
+                        }
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Button
                 type="button"
-                className="rule-empty-condition"
+                variant="outline"
+                disabled={definition.conditions.length >= 20}
                 onClick={() =>
                   setDefinition((current) => ({
                     ...current,
-                    conditions: [blankCondition()],
+                    conditions: [...current.conditions, blankCondition()],
                   }))
                 }
               >
-                <Plus />
-                <span>
-                  <strong>Add the first condition</strong>
-                  <small>Rule baru dimulai tanpa template lama.</small>
-                </span>
-              </button>
-            ) : (
-              <div className="rule-condition-list">
-                {definition.conditions.map((condition, index) => (
-                  <div
-                    className="rule-condition-row"
-                    key={`${index}-${condition.left}`}
-                  >
-                    <span className="rule-condition-row__index">
-                      {index + 1}
-                    </span>
-                    <Select
-                      value={condition.left}
-                      onValueChange={(value) =>
-                        setCondition(index, {
-                          left: value as RuleCondition["left"],
-                        })
-                      }
-                    >
-                      <SelectTrigger
-                        aria-label={`Indikator kondisi ${index + 1}`}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(["PRICE", "EMA9", "EMA20", "RSI14"] as const).map(
-                          (value) => (
-                            <SelectItem key={value} value={value}>
-                              {value}
-                            </SelectItem>
-                          ),
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={condition.op}
-                      onValueChange={(value) =>
-                        setCondition(index, {
-                          op: value as RuleCondition["op"],
-                        })
-                      }
-                    >
-                      <SelectTrigger
-                        aria-label={`Operator kondisi ${index + 1}`}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {([">", ">=", "<", "<="] as const).map((value) => (
-                          <SelectItem key={value} value={value}>
-                            {value}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      aria-label={`Nilai kondisi ${index + 1}`}
-                      value={String(condition.right)}
-                      onChange={(event) =>
-                        setCondition(index, {
-                          right: rightValue(event.target.value),
-                        })
-                      }
-                      placeholder="EMA20 atau 55"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Hapus kondisi ${index + 1}`}
-                      onClick={() =>
-                        setDefinition((current) => ({
-                          ...current,
-                          conditions: current.conditions.filter(
-                            (_, conditionIndex) => conditionIndex !== index,
-                          ),
-                        }))
-                      }
-                    >
-                      <Trash2 />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              disabled={definition.conditions.length >= 20}
-              onClick={() =>
-                setDefinition((current) => ({
-                  ...current,
-                  conditions: [...current.conditions, blankCondition()],
-                }))
-              }
-            >
-              <Plus data-icon="inline-start" /> Add condition
-            </Button>
-          </div>
+                <Plus data-icon="inline-start" /> Add condition
+              </Button>
+            </div>
 
-          {error && (
-            <Alert variant="destructive">
-              <CircleAlert />
-              <AlertTitle>Rule belum tersimpan</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          <footer className="rule-composer__footer">
-            <span>{definition.conditions.length} kondisi · Daily IDX</span>
-            <Button type="submit" size="lg" disabled={saving}>
-              {saving ? (
-                <LoaderCircle
-                  data-icon="inline-start"
-                  className="is-spinning"
-                />
-              ) : editing ? (
-                <Pencil data-icon="inline-start" />
-              ) : (
-                <Save data-icon="inline-start" />
-              )}
-              {editing ? "Update rule" : "Save rule"}
-            </Button>
-          </footer>
+            {error && (
+              <Alert variant="destructive">
+                <CircleAlert />
+                <AlertTitle>Rule belum tersimpan</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <footer className="rule-composer__footer">
+              <span>{definition.conditions.length} kondisi · Daily IDX</span>
+              <Button type="submit" size="lg" disabled={saving}>
+                {saving ? (
+                  <LoaderCircle
+                    data-icon="inline-start"
+                    className="is-spinning"
+                  />
+                ) : editing ? (
+                  <Pencil data-icon="inline-start" />
+                ) : (
+                  <Save data-icon="inline-start" />
+                )}
+                {editing ? "Update rule" : "Save rule"}
+              </Button>
+            </footer>
+          </fieldset>
         </form>
       </section>
 
@@ -485,6 +612,8 @@ export function ServerRulesPanel({
                           variant="ghost"
                           size="icon"
                           onClick={() => edit(rule)}
+                          disabled={saving}
+                          aria-label={`Edit ${rule.name}`}
                         >
                           <Pencil />
                         </Button>
@@ -492,6 +621,8 @@ export function ServerRulesPanel({
                           variant="destructive"
                           size="icon"
                           onClick={() => void remove(rule)}
+                          disabled={saving}
+                          aria-label={`Hapus ${rule.name}`}
                         >
                           <Trash2 />
                         </Button>

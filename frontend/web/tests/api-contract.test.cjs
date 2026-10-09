@@ -51,6 +51,132 @@ function client(reply) {
 const response = (payload, status = 200) =>
   new Response(JSON.stringify(payload), { status });
 
+test("proactive token refresh is coalesced and does not change installation sessions", async () => {
+  const c = client((url) =>
+    response(
+      url.endsWith("/refresh")
+        ? { access_token: "new", refresh_token: "rotated", expires_in: 3600 }
+        : { id: "user" },
+    ),
+  );
+  c.session.setAuth({
+    access_token: "old",
+    refresh_token: "refresh",
+    expires_in: 1,
+  });
+  c.session.setAppSession("workspace");
+  await Promise.all([c.api.me(), c.api.listRules(), c.api.ensureAppSession()]);
+  assert.equal(
+    c.calls.filter((call) => call.url.endsWith("/refresh")).length,
+    1,
+  );
+  assert.equal(c.session.getToken(), "new");
+  assert.equal(c.session.getAppSession(), "workspace");
+});
+test("401 refreshes once and retries the request with the rotated bearer", async () => {
+  const c = client((url, init) =>
+    response(
+      url.endsWith("/refresh")
+        ? { access_token: "new", refresh_token: "rotated", expires_in: 3600 }
+        : init.headers.get("Authorization") === "Bearer new"
+          ? { id: "u" }
+          : { detail: "expired" },
+      url.endsWith("/refresh") ||
+        init.headers.get("Authorization") === "Bearer new"
+        ? 200
+        : 401,
+    ),
+  );
+  c.session.setAuth({
+    access_token: "old",
+    refresh_token: "refresh",
+    expires_in: 3600,
+  });
+  await c.api.me();
+  assert.equal(c.calls.length, 3);
+  assert.equal(c.events.length, 0);
+});
+test("invalid refresh signs out while a network failure preserves credentials", async () => {
+  const c = client(() => response({ detail: "invalid" }, 401));
+  c.session.setAuth({
+    access_token: "old",
+    refresh_token: "refresh",
+    expires_in: 1,
+  });
+  await assert.rejects(c.api.me());
+  assert.equal(c.session.getToken(), null);
+  const offline = client(() => {
+    throw Error("offline");
+  });
+  offline.session.setAuth({
+    access_token: "old",
+    refresh_token: "refresh",
+    expires_in: 1,
+  });
+  await assert.rejects(offline.api.me());
+  assert.equal(offline.session.getToken(), "old");
+});
+test("a revoked device session cannot silently recreate itself", async () => {
+  const c = client(() => response({ error: { code: "SESSION_REVOKED" } }, 403));
+  c.session.setAuth({
+    access_token: "old",
+    refresh_token: "refresh",
+    expires_in: 3600,
+  });
+  await assert.rejects(c.api.listRules());
+  assert.equal(c.calls.length, 1);
+  assert.equal(c.session.getToken(), null);
+});
+test("logging out during refresh cannot resurrect a session", async () => {
+  let done;
+  const c = client(
+    () =>
+      new Promise((resolve) => {
+        done = resolve;
+      }),
+  );
+  c.session.setAuth({
+    access_token: "old",
+    refresh_token: "refresh",
+    expires_in: 1,
+  });
+  const pending = c.api.me();
+  c.session.clear();
+  done(
+    response({
+      access_token: "new",
+      refresh_token: "rotated",
+      expires_in: 3600,
+    }),
+  );
+  await assert.rejects(pending);
+  assert.equal(c.session.getToken(), null);
+});
+
+test("simultaneous GETs share a request without caching later reads", async () => {
+  const c = client(() => response({ items: [] }));
+  await Promise.all([c.api.listRules(), c.api.listRules(), c.api.listRules()]);
+  assert.equal(c.calls.length, 1);
+  await c.api.listRules();
+  assert.equal(c.calls.length, 2);
+});
+
+test("read coalescing is scoped to authorization identity", async () => {
+  const c = client(() => response({ items: [] }));
+  c.session.setToken("account-a");
+  const a = c.api.listRules();
+  c.session.setToken("account-b");
+  await Promise.all([assert.rejects(a, /Akun berubah/), c.api.listRules()]);
+  assert.equal(c.calls.length, 2);
+});
+
+test("simultaneous app-session setup creates only one session", async () => {
+  const c = client(() => response({ session_token: "workspace-token" }));
+  c.session.setToken("identity");
+  await Promise.all([c.api.ensureAppSession(), c.api.ensureAppSession()]);
+  assert.equal(c.calls.length, 1);
+});
+
 test("login sends the authorization-branch contract", async () => {
   const c = client(() =>
     response({
@@ -357,4 +483,50 @@ test("device rename and revoke send exactly one supported action", async () => {
     label: "Safari on Mac",
   });
   assert.deepEqual(JSON.parse(c.calls[1].init.body), { status: "revoked" });
+});
+
+test("admin mutations carry the target, reason and authenticated session", async () => {
+  const c = client(() => response({}));
+  c.session.setToken("access-token");
+  c.session.setAppSession("sgs_operator");
+  const until = "2026-11-06T00:00:00Z";
+  await c.api.grantFeature("target-user", "screener", until, "Approved trial");
+  await c.api.revokeFeature("target-user", "screener", "Trial ended");
+  await c.api.activateSubscription(
+    "target-user",
+    "analyst",
+    until,
+    "Approved plan",
+  );
+  await c.api.changeAccountRole("target-user", "operator", "Approved operator");
+  assert.deepEqual(JSON.parse(c.calls[0].init.body), {
+    user_id: "target-user",
+    feature: "screener",
+    valid_until: until,
+    reason: "Approved trial",
+  });
+  assert.equal(c.calls[1].init.method, "DELETE");
+  assert.deepEqual(JSON.parse(c.calls[1].init.body), { reason: "Trial ended" });
+  assert.deepEqual(JSON.parse(c.calls[2].init.body), {
+    user_id: "target-user",
+    plan_code: "analyst",
+    current_period_end: until,
+    reason: "Approved plan",
+  });
+  assert.equal(c.calls[3].init.method, "PATCH");
+  assert.deepEqual(JSON.parse(c.calls[3].init.body), {
+    role: "operator",
+    reason: "Approved operator",
+  });
+  for (const call of c.calls) {
+    assert.equal(call.init.headers.get("Authorization"), "Bearer access-token");
+    assert.equal(call.init.headers.get("X-App-Session"), "sgs_operator");
+    assert.ok(call.url.includes("/api/v1/operator/"));
+  }
+});
+
+test("admin readiness uses the public readiness endpoint", async () => {
+  const c = client(() => response({ status: "ready" }));
+  assert.equal((await c.api.readiness()).status, "ready");
+  assert.equal(c.calls[0].url, "https://api.example.test/ready");
 });

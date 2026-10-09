@@ -13,6 +13,7 @@ export type User = {
 
 export type LoginResponse = {
   access_token: string;
+  refresh_token?: string;
   token_type: string;
   expires_in: number;
   user: User;
@@ -22,6 +23,8 @@ export type RegisterResponse = {
   message: string;
   requires_email_confirmation: boolean;
   access_token?: string | null;
+  refresh_token?: string | null;
+  expires_in?: number;
   user: User;
 };
 

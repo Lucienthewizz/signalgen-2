@@ -17,10 +17,12 @@ export type LiveScreenerRun = {
   features: ScreenerFeatureVector;
   manifest: DatasetManifest;
   latestClose: number;
+  latestOpen: number | null;
   rows: Array<{
     decision: ScreenerDecision;
     features: ScreenerFeatureVector;
     latestClose: number;
+    latestOpen: number | null;
   }>;
   execution: "client_wasm+server_private_scoring";
 };
@@ -33,6 +35,7 @@ export async function runLiveScreener(
 ): Promise<LiveScreenerRun> {
   onStage("validating_access");
   await api.ensureAppSession();
+  signal.throwIfAborted();
 
   onStage("preparing_data");
   const [manifest, rule] = await Promise.all([
@@ -40,6 +43,7 @@ export async function runLiveScreener(
     api.getRule(ruleId),
   ]);
   const dataset = await api.getDatasetContent(manifest.dataset_id);
+  signal.throwIfAborted();
   if (!dataset.series.length)
     throw new ApiError(
       "Dataset tidak memiliki seri saham yang dapat dianalisis.",
@@ -59,47 +63,60 @@ export async function runLiveScreener(
   );
 
   onStage("private_scoring");
-  const scored = await Promise.all(
-    featureRuns.map(async ({ series, result: featureResult }) => {
-      const latestCandidate = featureResult.candidates.at(-1);
-      if (!latestCandidate)
-        throw new ApiError(
-          `WASM tidak menghasilkan kandidat untuk ${series.symbol}.`,
-          0,
-        );
-      const grant = await api.createComputeGrant(manifest, rule);
-      const ticket = await api.createScreenerSocketTicket(grant.id);
-      if (
-        featureResult.feature_schema_version !==
-          ticket.feature_schema_version ||
-        featureResult.candidates.length > ticket.max_candidates
-      )
-        throw new ApiError(
-          "Hasil WASM tidak cocok dengan batas private scoring.",
-          0,
-        );
-      const result = await evaluateOverSocket(
-        ticket.websocket_path,
-        ticket.ticket,
-        ticket.protocol,
-        ticket.feature_schema_version,
-        featureResult,
-        signal,
+  const scoreSeries = async ({
+    series,
+    result: featureResult,
+  }: (typeof featureRuns)[number]) => {
+    signal.throwIfAborted();
+    const latestCandidate = featureResult.candidates.at(-1);
+    if (!latestCandidate)
+      throw new ApiError(
+        `WASM tidak menghasilkan kandidat untuk ${series.symbol}.`,
+        0,
       );
-      const decision = result.results.at(-1);
-      if (!decision)
-        throw new ApiError(
-          `Server tidak mengembalikan hasil untuk ${series.symbol}.`,
-          0,
-        );
-      return {
-        result,
-        decision,
-        features: latestCandidate.features,
-        latestClose: series.candles.at(-1)?.close ?? 0,
-      };
-    }),
-  );
+    const grant = await api.createComputeGrant(manifest, rule);
+    const ticket = await api.createScreenerSocketTicket(grant.id);
+    signal.throwIfAborted();
+    if (
+      featureResult.feature_schema_version !== ticket.feature_schema_version ||
+      featureResult.candidates.length > ticket.max_candidates
+    )
+      throw new ApiError(
+        "Hasil WASM tidak cocok dengan batas private scoring.",
+        0,
+      );
+    const result = await evaluateOverSocket(
+      ticket.websocket_path,
+      ticket.ticket,
+      ticket.protocol,
+      ticket.feature_schema_version,
+      featureResult,
+      signal,
+    );
+    const decision = result.results.at(-1);
+    if (!decision)
+      throw new ApiError(
+        `Server tidak mengembalikan hasil untuk ${series.symbol}.`,
+        0,
+      );
+    return {
+      result,
+      decision,
+      features: latestCandidate.features,
+      latestClose: series.candles.at(-1)?.close ?? 0,
+      latestOpen: series.candles.at(-1)?.open ?? null,
+    };
+  };
+  // The API allows at most two concurrent scoring sockets per account.
+  const scored: Awaited<ReturnType<typeof scoreSeries>>[] = [];
+  for (let offset = 0; offset < featureRuns.length; offset += 2) {
+    signal.throwIfAborted();
+    scored.push(
+      ...(await Promise.all(
+        featureRuns.slice(offset, offset + 2).map(scoreSeries),
+      )),
+    );
+  }
   const primary = scored[0];
   const result: ScreenerResult = {
     ...primary.result,
@@ -112,10 +129,12 @@ export async function runLiveScreener(
     features: primary.features,
     manifest,
     latestClose: primary.latestClose,
-    rows: scored.map(({ decision, features, latestClose }) => ({
+    latestOpen: primary.latestOpen,
+    rows: scored.map(({ decision, features, latestClose, latestOpen }) => ({
       decision,
       features,
       latestClose,
+      latestOpen,
     })),
     execution: "client_wasm+server_private_scoring",
   };

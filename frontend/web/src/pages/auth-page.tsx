@@ -115,7 +115,7 @@ export function AuthPage({
           password,
         );
         if (result.access_token) {
-          session.setToken(result.access_token);
+          session.setAuth({...result, access_token: result.access_token});
           await api.ensureAppSession();
           onAuthenticated(result.user);
         } else {
@@ -127,7 +127,7 @@ export function AuthPage({
         }
       } else {
         const result = await api.login(email, password);
-        session.setToken(result.access_token);
+        session.setAuth(result);
         await api.ensureAppSession();
         onAuthenticated(result.user);
       }
