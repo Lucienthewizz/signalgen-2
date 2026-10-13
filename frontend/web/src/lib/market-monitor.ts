@@ -368,3 +368,25 @@ export function priceMovement(open?: number | null, close?: number | null) {
     return "unknown";
   return close > open ? "up" : close < open ? "down" : "flat";
 }
+
+export function openCloseChange(
+  open?: number | null,
+  close?: number | null,
+): number | null {
+  if (
+    open == null ||
+    close == null ||
+    !Number.isFinite(open) ||
+    !Number.isFinite(close) ||
+    open <= 0 ||
+    close < 0
+  )
+    return null;
+  return ((close - open) / open) * 100;
+}
+export function snapshotAge(timestamp?: string, now = Date.now()) {
+  const stamp = timestamp ? Date.parse(timestamp) : NaN;
+  if (!Number.isFinite(stamp) || !Number.isFinite(now)) return "unknown";
+  if (stamp > now + 300_000) return "future";
+  return now - stamp > 7 * 86400000 ? "old" : "recent";
+}

@@ -320,6 +320,13 @@ html[data-theme="light"] .monitor-ledger { --quote-open: #1d58a6; }
 .monitor-price[data-price="up"] { color: var(--green); }
 .monitor-price[data-price="down"] { color: var(--danger); }
 .monitor-price[data-price="missing"] { color: var(--muted); font-weight: 400; }
+.monitor-toolbar { display: grid; grid-template-columns: minmax(220px, 360px) minmax(0, 1fr); align-items: end; gap: 24px; padding: 20px 24px; border-bottom: 1px solid var(--line-soft); }
+.monitor-toolbar [data-slot="select-trigger"] { width: 100%; }
+.monitor-toolbar p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; max-width: 65ch; }
+.monitor-change { display: block; margin-top: 6px; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); }
+.monitor-change[data-direction="up"] { color: var(--green); }
+.monitor-change[data-direction="down"] { color: var(--danger); }
+@container (max-width: 600px) { .monitor-toolbar { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 20px; } }
 .monitor-add {
   display: flex;
   align-items: center;

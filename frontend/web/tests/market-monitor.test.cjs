@@ -261,3 +261,16 @@ test("run comparison only evaluates overlapping symbols, not missing stocks", ()
   assert.equal(diff.lost.length, 0);
   assert.equal(diff.sameRule, false);
 });
+test("open-close percentages never use missing, zero or invalid opening prices", () => {
+  assert.equal(output.openCloseChange(100, 110), 10);
+  assert.equal(output.openCloseChange(100, 90), -10);
+  assert.equal(output.openCloseChange(100, 100), 0);
+  for (const [open, close] of [[0,100],[-1,100],[null,100],[100,NaN],[100,Infinity],[100,-5]]) assert.equal(output.openCloseChange(open, close), null);
+});
+test("snapshot age uses a conservative seven-calendar-day threshold and rejects future clocks", () => {
+  const now = Date.parse("2026-10-14T12:00:00Z");
+  assert.equal(output.snapshotAge("2026-10-09T12:00:00Z", now), "recent");
+  assert.equal(output.snapshotAge("2026-10-01T12:00:00Z", now), "old");
+  assert.equal(output.snapshotAge("2026-11-01T12:00:00Z", now), "future");
+  assert.equal(output.snapshotAge("invalid", now), "unknown");
+});
