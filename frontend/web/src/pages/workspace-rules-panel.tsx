@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { api, ApiError } from "@/api/client";
+import { ResourceQuota } from "@/components/resource-quota";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -555,7 +556,8 @@ export function ServerRulesPanel({
       <section className="rule-library" aria-labelledby="rule-library-title">
         <header className="resource-library__header">
           <div>
-            <h3 id="rule-library-title">Saved rules</h3>
+            <h3 id="rule-library-title">Rule tersimpan</h3>
+            <ResourceQuota kind="custom_rules" revision={rules.length} />
             <p>Pilih rule pribadi untuk diedit, atau jalankan dari screener.</p>
           </div>
           <div>

@@ -1180,6 +1180,25 @@ paths:
               schema: {$ref: "#/components/schemas/ErrorEnvelope"}
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/subscription/usage:
+    get:
+      summary: Owner-scoped custom-rule and stock-universe capacity
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Effective capacity and current resource counts. System rules are excluded. Manual grants retain Analyst capacity; capacity does not grant feature access.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [limits, used]
+                properties:
+                  limits: {$ref: "#/components/schemas/ResourceLimits"}
+                  used: {$ref: "#/components/schemas/ResourceLimits"}
+        "401": {description: Authentication or app session required}
+        "503": {description: Capacity could not be verified}
   /api/v1/subscription/plans:
     get:
       tags: [Subscription]
@@ -1840,10 +1859,17 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FeatureGrant"
+    ResourceLimits:
+      type: object
+      required: [custom_rules, stock_universes]
+      properties:
+        custom_rules: {type: integer, minimum: 0}
+        stock_universes: {type: integer, minimum: 0}
     SubscriptionPlan:
       type: object
       required: [code, name, description, features]
       properties:
+        limits: {$ref: "#/components/schemas/ResourceLimits"}
         code: {type: string, enum: [free, analyst, pro]}
         name: {type: string}
         description: {type: string}

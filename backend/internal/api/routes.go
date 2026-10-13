@@ -51,6 +51,7 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	router.Handle(http.MethodGet, "/api", systemHandler.APIStatus)
 	router.Handle(http.MethodGet, "/health", systemHandler.Health)
 	router.Handle(http.MethodGet, "/api/news", newsapi.NewHandler().ServeHTTP)
+	router.Handle(http.MethodGet, "/api/v1/subscription/usage", subscriptionsHandler.ResourceUsage)
 	router.Handle(http.MethodGet, "/ready", systemHandler.Ready(config.readinessChecks))
 	router.Handle(http.MethodGet, "/api/v1/capabilities", systemHandler.Capabilities)
 

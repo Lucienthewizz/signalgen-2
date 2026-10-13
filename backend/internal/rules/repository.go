@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/core"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -46,7 +47,7 @@ func (store *PostgresRepository) Create(ctx context.Context, owner string, defin
 	id := "rule_" + hex.EncodeToString(idRaw)
 	now := time.Now().UTC().Truncate(time.Second)
 	// Serialize rule creation per owner across API replicas so concurrent
-	// requests cannot both pass the 100-rule limit check.
+	// requests cannot both pass the plan's custom-rule limit check.
 	tx, err := store.db.Begin(ctx)
 	if err != nil {
 		return Rule{}, err
@@ -55,12 +56,16 @@ func (store *PostgresRepository) Create(ctx context.Context, owner string, defin
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, owner); err != nil {
 		return Rule{}, err
 	}
+	limits, err := subscription.LockedLimits(ctx, tx, owner)
+	if err != nil {
+		return Rule{}, err
+	}
 	command, err := tx.Exec(ctx, `insert into signalgen.user_rules
 (id,owner_user_id,name,definition_json,definition_hash,schema_version,engine_version,version,created_at,updated_at)
 select $1,$2::uuid,$3,$4::jsonb,$5,$6,$7,1,$8,$8
 where (select count(*) from signalgen.user_rules where owner_user_id=$2::uuid)<$9`,
 		id, owner, definition.Name, string(raw), fmt.Sprintf("sha256:%x", hash),
-		core.SchemaVersion, core.EngineVersion, now, MaxRulesPerUser)
+		core.SchemaVersion, core.EngineVersion, now, limits.CustomRules)
 	if err != nil {
 		return Rule{}, fmt.Errorf("create Postgres rule: %w", err)
 	}

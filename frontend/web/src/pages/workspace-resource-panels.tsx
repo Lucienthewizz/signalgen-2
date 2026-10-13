@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ResourceQuota } from "@/components/resource-quota";
 import {
   BadgeCheck,
   Boxes,
@@ -242,11 +243,15 @@ export function StockUniversesPanel({
             </span>
             <div>
               <h3 id="universe-editor-title">
-                {editing ? "Edit stock universe" : "Create a stock universe"}
+                {editing ? "Edit stock universe" : "Buat stock universe"}
               </h3>
               <p>
                 Pilih satu sampai tiga saham IDX untuk satu proses screening.
               </p>
+              <ResourceQuota
+                kind="stock_universes"
+                revision={universes.length}
+              />
             </div>
           </div>
           {editing && (
@@ -605,6 +610,13 @@ export function SubscriptionPanel({
                 );
               })}
             </div>
+            <ResourceQuota
+              revision={
+                subscription.updated_at
+                  ? Date.parse(subscription.updated_at)
+                  : 0
+              }
+            />
             <details className="subscription-manage">
               <summary>Kelola paket</summary>
               <p>
@@ -701,7 +713,9 @@ export function SubscriptionPanel({
                   <CardDescription>
                     {plan.code === "free"
                       ? "Coba demo Signalgen."
-                      : "Akses screener dan backtesting."}
+                      : plan.code === "pro"
+                        ? "Lebih banyak ruang untuk strategi dan kelompok saham."
+                        : "Untuk analisis pribadi yang terstruktur."}
                   </CardDescription>
                   <CardAction>
                     {access?.usable &&
@@ -711,6 +725,12 @@ export function SubscriptionPanel({
                   </CardAction>
                 </CardHeader>
                 <CardContent>
+                  {plan.limits && (
+                    <p className="plan-capacity">
+                      <strong>{plan.limits.custom_rules} rule pribadi</strong> ·{" "}
+                      {plan.limits.stock_universes} stock universe
+                    </p>
+                  )}
                   <ul>
                     <li
                       className={
@@ -759,7 +779,10 @@ export function SubscriptionPanel({
             ))}
         </div>
         <p className="subscription-plan-note">
-          Analyst dan Pro saat ini memiliki akses fitur yang sama.
+          Pro menyediakan kapasitas lebih besar. Kualitas keputusan screening
+          tetap sama pada semua paket. Data yang sudah tersimpan tidak dihapus
+          saat paket berubah; jika melewati kuota, hapus sebagian data sebelum
+          membuat yang baru.
         </p>
         {error && (
           <Alert variant="destructive">

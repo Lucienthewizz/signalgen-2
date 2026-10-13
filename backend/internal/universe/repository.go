@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -99,6 +100,20 @@ func (store *PostgresRepository) Create(ctx context.Context, owner, name string,
 		return Universe{}, err
 	}
 	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, owner); err != nil {
+		return Universe{}, err
+	}
+	limits, err := subscription.LockedLimits(ctx, tx, owner)
+	if err != nil {
+		return Universe{}, err
+	}
+	var used int
+	if err := tx.QueryRow(ctx, `select count(*) from signalgen.stock_universes where owner_user_id=$1::uuid`, owner).Scan(&used); err != nil {
+		return Universe{}, err
+	}
+	if used >= limits.StockUniverses {
+		return Universe{}, ErrLimit
+	}
 	var id string
 	if err := tx.QueryRow(ctx, `insert into signalgen.stock_universes(owner_user_id,name) values($1::uuid,$2) returning id`, owner, name).Scan(&id); err != nil {
 		return Universe{}, err

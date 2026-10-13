@@ -19,6 +19,9 @@ func (server *Handler) ListSubscriptionPlans(writer http.ResponseWriter, request
 		shared.WriteError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Daftar paket belum dapat dibaca.")
 		return
 	}
+	for index := range plans {
+		plans[index].Limits = subscription.LimitsForPlan(plans[index].Code)
+	}
 	shared.WriteJSON(writer, http.StatusOK, map[string]interface{}{"items": plans})
 }
 

@@ -513,6 +513,8 @@ export const api = {
     request<{ items: SubscriptionPlan[] }>("/api/v1/subscription/plans"),
   currentSubscription: () =>
     request<{ subscription: Subscription | null }>("/api/v1/subscription"),
+  resourceUsage: () =>
+    request<import("@/types").ResourceUsage>("/api/v1/subscription/usage"),
   cancelSubscription: (atPeriodEnd: boolean, reason: string) =>
     request<{ subscription: Subscription }>("/api/v1/subscription/cancel", {
       method: "POST",

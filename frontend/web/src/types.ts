@@ -151,6 +151,12 @@ export type SubscriptionPlan = {
   name: string;
   description: string;
   features: Array<"screener" | "backtest">;
+  limits?: { custom_rules: number; stock_universes: number };
+};
+
+export type ResourceUsage = {
+  limits: { custom_rules: number; stock_universes: number };
+  used: { custom_rules: number; stock_universes: number };
 };
 
 export type Subscription = {
