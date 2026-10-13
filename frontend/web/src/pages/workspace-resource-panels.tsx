@@ -1,10 +1,13 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ResourceQuota } from "@/components/resource-quota";
 import {
   BadgeCheck,
   Boxes,
   CalendarClock,
+  ChartNoAxesCombined,
   Check,
   CircleAlert,
+  Compass,
   Database,
   KeyRound,
   Layers3,
@@ -12,12 +15,15 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  SearchCheck,
+  History,
   ShieldCheck,
   Trash2,
   UsersRound,
   X,
 } from "lucide-react";
 import { api, ApiError } from "@/api/client";
+import { subscriptionState } from "@/lib/workspace-feedback";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -237,11 +243,15 @@ export function StockUniversesPanel({
             </span>
             <div>
               <h3 id="universe-editor-title">
-                {editing ? "Edit stock universe" : "Create a stock universe"}
+                {editing ? "Edit stock universe" : "Buat stock universe"}
               </h3>
               <p>
                 Pilih satu sampai tiga saham IDX untuk satu proses screening.
               </p>
+              <ResourceQuota
+                kind="stock_universes"
+                revision={universes.length}
+              />
             </div>
           </div>
           {editing && (
@@ -423,26 +433,67 @@ export function SubscriptionPanel({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const access = subscription ? subscriptionState(subscription) : null;
+  const active = useRef(false);
+  const loadVersion = useRef(0);
 
   async function load() {
+    const version = ++loadVersion.current;
+    const current = () => active.current && version === loadVersion.current;
     setLoading(true);
     setError(null);
+    setAccountError(null);
     try {
-      const plansResponse = await api.listSubscriptionPlans();
-      setPlans(plansResponse.items);
+      const plansRequest = api
+        .listSubscriptionPlans()
+        .then((response) => {
+          if (current()) setPlans(response.items);
+        })
+        .catch((caught) => {
+          if (current())
+            setError(
+              readableError(caught, "Pilihan paket belum dapat dimuat."),
+            );
+        });
       if (authenticated && backendOnline) {
-        const current = await api.currentSubscription();
-        setSubscription(current.subscription);
+        await api
+          .currentSubscription()
+          .then((response) => {
+            if (current()) setSubscription(response.subscription);
+          })
+          .catch((caught) => {
+            if (current())
+              setAccountError(
+                readableError(
+                  caught,
+                  "Status paket belum dapat dimuat. Coba lagi untuk memeriksa akses Anda.",
+                ),
+              );
+          });
+      } else {
+        setSubscription(null);
+        if (authenticated)
+          setAccountError(
+            "Server belum terhubung. Status paket Anda belum dapat diperiksa.",
+          );
       }
+      await plansRequest;
     } catch (caught) {
-      setError(readableError(caught, "Paket belum dapat dimuat."));
+      if (current())
+        setError(readableError(caught, "Paket belum dapat dimuat."));
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }
 
   useEffect(() => {
+    active.current = true;
     void load();
+    return () => {
+      active.current = false;
+      ++loadVersion.current;
+    };
   }, [authenticated, backendOnline]);
 
   async function cancel(atPeriodEnd: boolean) {
@@ -461,6 +512,7 @@ export function SubscriptionPanel({
           : "user canceled immediately",
       );
       setSubscription(response.subscription);
+      dispatchEvent(new Event("signalgen:subscription"));
     } catch (caught) {
       setError(readableError(caught, "Subscription belum dapat dibatalkan."));
     } finally {
@@ -469,103 +521,167 @@ export function SubscriptionPanel({
   }
 
   return (
-    <div className="subscription-workspace">
+    <div className="subscription-workspace subscription-workspace--simple">
       <section className="subscription-current">
         <header className="resource-editor__header">
-          <div className="resource-title-lockup">
-            <span aria-hidden="true">
-              <BadgeCheck />
-            </span>
-            <div>
-              <h3>Current access</h3>
-              <p>Paket mengatur fitur server yang dapat dipakai akun Anda.</p>
-            </div>
-          </div>
-          {subscription && (
-            <Badge variant="outline">{subscription.status}</Badge>
-          )}
+          <h3>Paket Anda</h3>
         </header>
         {loading ? (
           <div className="resource-loading">
             <Skeleton />
             <Skeleton />
           </div>
+        ) : accountError ? (
+          <Alert variant="destructive">
+            <CircleAlert />
+            <AlertTitle>Status paket belum tersedia</AlertTitle>
+            <AlertDescription>{accountError}</AlertDescription>
+            <Button variant="outline" onClick={() => void load()}>
+              <RefreshCw data-icon="inline-start" />
+              Coba lagi
+            </Button>
+          </Alert>
         ) : subscription ? (
           <div className="subscription-ledger">
             <div className="subscription-ledger__lead">
-              <span>Paket aktif</span>
-              <strong>{subscription.plan_name}</strong>
-              <p>
-                Berlaku sampai {formatDate(subscription.current_period_end)}
-                {subscription.cancel_at_period_end
-                  ? " · akan berhenti di akhir periode"
-                  : ""}
-                .
+              <div className="subscription-plan-name">
+                <Layers3 aria-hidden="true" />
+                <h4>{subscription.plan_name}</h4>
+                <Badge variant={access?.usable ? "secondary" : "outline"}>
+                  {access?.usable
+                    ? "Aktif"
+                    : access?.label === "Expired"
+                      ? "Berakhir"
+                      : access?.label === "Canceled"
+                        ? "Dibatalkan"
+                        : access?.label}
+                </Badge>
+              </div>
+              <p className="subscription-expiry">
+                {access?.usable ? "Aktif sampai" : "Akhir periode"}
+                <strong>{formatDate(subscription.current_period_end)}</strong>
+                {subscription.cancel_at_period_end && (
+                  <small>Berhenti di akhir periode</small>
+                )}
               </p>
             </div>
-            <dl>
-              <div>
-                <dt>Sumber</dt>
-                <dd>
-                  {subscription.source === "manual"
-                    ? "Operator Signalgen"
-                    : "Payment provider"}
-                </dd>
-              </div>
-              <div>
-                <dt>Screening</dt>
-                <dd>
-                  {subscription.features.includes("screener")
-                    ? "Aktif"
-                    : "Tidak termasuk"}
-                </dd>
-              </div>
-              <div>
-                <dt>Backtest</dt>
-                <dd>
-                  {subscription.features.includes("backtest")
-                    ? "Aktif"
-                    : "Tidak termasuk"}
-                </dd>
-              </div>
-            </dl>
-            {!subscription.cancel_at_period_end &&
-              subscription.status === "active" && (
-                <div className="subscription-actions">
-                  <Button
-                    variant="outline"
-                    disabled={saving}
-                    onClick={() => void cancel(true)}
+            <div
+              className="subscription-feature-grid"
+              aria-label="Akses dari paket Anda"
+            >
+              {[
+                {
+                  code: "screener",
+                  name: "Market screener",
+                  description: "Cari saham yang sesuai dengan rule Anda.",
+                  icon: SearchCheck,
+                },
+                {
+                  code: "backtest",
+                  name: "Akses backtest",
+                  description: "Uji strategi menggunakan data historis.",
+                  icon: History,
+                },
+              ].map(({ code, name, description, icon: Icon }) => {
+                const included = Boolean(
+                  access?.usable &&
+                  subscription.features.includes(
+                    code as "screener" | "backtest",
+                  ),
+                );
+                return (
+                  <Card
+                    key={code}
+                    data-access={included ? "included" : "excluded"}
                   >
-                    <CalendarClock data-icon="inline-start" /> Batalkan di akhir
-                    periode
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    disabled={saving}
-                    onClick={() => void cancel(false)}
-                  >
-                    <X data-icon="inline-start" /> Batalkan sekarang
-                  </Button>
-                </div>
-              )}
+                    <CardHeader>
+                      <CardTitle>
+                        <Icon aria-hidden="true" />
+                        {name}
+                      </CardTitle>
+                      <CardAction>
+                        <Badge variant={included ? "secondary" : "outline"}>
+                          {included ? "Bisa digunakan" : "Tidak aktif"}
+                        </Badge>
+                      </CardAction>
+                    </CardHeader>
+                    <CardContent>
+                      <p>{description}</p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+            <ResourceQuota
+              revision={
+                subscription.updated_at
+                  ? Date.parse(subscription.updated_at)
+                  : 0
+              }
+            />
+            <details className="subscription-manage">
+              <summary>Kelola paket</summary>
+              <p>
+                Mulai {formatDate(subscription.current_period_start)} ·{" "}
+                {subscription.source === "manual"
+                  ? "Diaktifkan oleh operator. Tidak ada pembayaran otomatis."
+                  : "Pembayaran dikelola oleh penyedia layanan."}
+              </p>
+              <p>
+                Akses di atas berasal dari paket Anda. Izin tambahan dari
+                operator tetap berlaku sesuai pengaturannya.
+              </p>
+              {!subscription.cancel_at_period_end &&
+                access?.usable &&
+                subscription.status === "active" && (
+                  <div className="subscription-actions">
+                    <Button
+                      variant="outline"
+                      disabled={saving}
+                      onClick={() => void cancel(true)}
+                    >
+                      <CalendarClock data-icon="inline-start" /> Batalkan di
+                      akhir periode
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      disabled={saving}
+                      onClick={() => void cancel(false)}
+                    >
+                      <X data-icon="inline-start" /> Batalkan sekarang
+                    </Button>
+                  </div>
+                )}
+            </details>
           </div>
         ) : (
-          <Empty>
+          <Empty className="subscription-empty">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <KeyRound />
               </EmptyMedia>
               <EmptyTitle>
                 {authenticated
-                  ? "Belum ada subscription aktif"
+                  ? "Belum ada paket aktif"
                   : "Masuk untuk melihat paket akun"}
               </EmptyTitle>
               <EmptyDescription>
-                Paket Free tetap dapat melihat demo. Fitur server memerlukan
-                grant atau subscription aktif.
+                {authenticated
+                  ? "Bandingkan kapasitas di bawah. Aktivasi paket dilakukan melalui operator."
+                  : "Bandingkan paket di bawah, atau masuk untuk memeriksa akses Anda."}
               </EmptyDescription>
             </EmptyHeader>
+            {!authenticated && (
+              <EmptyContent>
+                <Button
+                  onClick={() => {
+                    window.location.hash = "login";
+                  }}
+                >
+                  <KeyRound data-icon="inline-start" /> Masuk
+                </Button>
+              </EmptyContent>
+            )}
           </Empty>
         )}
       </section>
@@ -573,59 +689,139 @@ export function SubscriptionPanel({
       <section className="plan-ledger" aria-labelledby="plan-heading">
         <header>
           <div>
-            <h3 id="plan-heading">Available plans</h3>
-            <p>Harga dan checkout belum tersedia pada backend saat ini.</p>
+            <h3 id="plan-heading">Pilihan paket</h3>
+            <p>Pilih kapasitas yang sesuai dengan kebutuhan analisis Anda.</p>
           </div>
         </header>
         <div className="plan-columns">
-          {plans.map((plan) => (
-            <Card
-              key={plan.code}
-              className={
-                subscription?.plan_code === plan.code ? "is-current" : ""
-              }
-            >
-              <CardHeader>
-                <CardTitle>{plan.name}</CardTitle>
-                <CardDescription>{plan.description}</CardDescription>
-                <CardAction>
-                  {subscription?.plan_code === plan.code && (
-                    <Badge>Current</Badge>
+          {[...plans]
+            .sort(
+              (a, b) =>
+                ["free", "analyst", "pro"].indexOf(a.code) -
+                ["free", "analyst", "pro"].indexOf(b.code),
+            )
+            .map((plan) => (
+              <Card
+                key={plan.code}
+                className={
+                  access?.usable && subscription?.plan_code === plan.code
+                    ? "is-current"
+                    : ""
+                }
+              >
+                <CardHeader>
+                  <CardTitle>
+                    <span className="plan-title-lockup">
+                      <span className="plan-icon" aria-hidden="true">
+                        {plan.code === "free" ? (
+                          <Compass />
+                        ) : plan.code === "analyst" ? (
+                          <ChartNoAxesCombined />
+                        ) : (
+                          <Layers3 />
+                        )}
+                      </span>
+                      {plan.name}
+                    </span>
+                  </CardTitle>
+                  <CardDescription>
+                    {plan.code === "free"
+                      ? "Coba demo Signalgen."
+                      : plan.code === "pro"
+                        ? "Lebih banyak ruang untuk strategi dan kelompok saham."
+                        : "Untuk analisis pribadi yang terstruktur."}
+                  </CardDescription>
+                  <CardAction>
+                    {access?.usable &&
+                      subscription?.plan_code === plan.code && (
+                        <Badge>Paket Anda</Badge>
+                      )}
+                  </CardAction>
+                </CardHeader>
+                <CardContent>
+                  {plan.limits && (
+                    <dl className="plan-capacity">
+                      <div>
+                        <dt>Rule pribadi</dt>
+                        <dd>
+                          <strong>
+                            {plan.limits.custom_rules}
+                            <span className="sr-only"> rule pribadi</span>
+                          </strong>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Stock universe</dt>
+                        <dd>
+                          {plan.limits.stock_universes}
+                          <span className="sr-only"> stock universe</span>
+                        </dd>
+                      </div>
+                    </dl>
                   )}
-                </CardAction>
-              </CardHeader>
-              <CardContent>
-                <ul>
-                  <li
-                    className={
-                      plan.features.includes("screener") ? "is-included" : ""
-                    }
-                  >
-                    <Check /> Market screener
-                  </li>
-                  <li
-                    className={
-                      plan.features.includes("backtest") ? "is-included" : ""
-                    }
-                  >
-                    <Check /> Backtesting access
-                  </li>
-                </ul>
-              </CardContent>
-              <CardFooter>
-                <span>
-                  {plan.code === "free"
-                    ? "Demo access"
-                    : "Activation by operator"}
-                </span>
-              </CardFooter>
-            </Card>
-          ))}
+                  <ul>
+                    <li
+                      className={
+                        plan.features.includes("screener") ? "is-included" : ""
+                      }
+                    >
+                      {plan.features.includes("screener") ? (
+                        <Check aria-hidden="true" />
+                      ) : (
+                        <X aria-hidden="true" />
+                      )}{" "}
+                      Market screener
+                      {!plan.features.includes("screener") && (
+                        <span className="plan-feature-status">
+                          Tidak termasuk
+                        </span>
+                      )}
+                    </li>
+                    <li
+                      className={
+                        plan.features.includes("backtest") ? "is-included" : ""
+                      }
+                    >
+                      {plan.features.includes("backtest") ? (
+                        <Check aria-hidden="true" />
+                      ) : (
+                        <X aria-hidden="true" />
+                      )}{" "}
+                      Akses backtest
+                      {!plan.features.includes("backtest") && (
+                        <span className="plan-feature-status">
+                          Tidak termasuk
+                        </span>
+                      )}
+                    </li>
+                  </ul>
+                </CardContent>
+                <CardFooter>
+                  <span>
+                    {plan.code === "free"
+                      ? "Akses demo"
+                      : "Aktivasi melalui operator"}
+                  </span>
+                </CardFooter>
+              </Card>
+            ))}
         </div>
+        <p className="subscription-plan-note">
+          Analyst dan Pro memakai fitur screening yang sama; Pro memberi kuota
+          lebih besar. Paket diaktifkan melalui operator, tanpa checkout online.
+        </p>
+        <details className="subscription-manage">
+          <summary>Apa yang terjadi jika paket berubah?</summary>
+          <p>
+            Data yang tersimpan tidak dihapus. Jika penggunaan melebihi kuota
+            paket baru, kurangi jumlah rule atau universe sebelum membuat yang
+            baru.
+          </p>
+        </details>
         {error && (
           <Alert variant="destructive">
             <CircleAlert />
-            <AlertTitle>Plan data belum siap</AlertTitle>
+            <AlertTitle>Pilihan paket belum tersedia</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
             <Button
               variant="outline"
@@ -633,7 +829,7 @@ export function SubscriptionPanel({
               disabled={loading}
               onClick={() => void load()}
             >
-              <RefreshCw data-icon="inline-start" /> Try again
+              <RefreshCw data-icon="inline-start" /> Coba lagi
             </Button>
           </Alert>
         )}

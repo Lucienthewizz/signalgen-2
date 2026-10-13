@@ -9,6 +9,7 @@ import (
 const MaxSymbols = 3
 
 var (
+	ErrLimit           = errors.New("stock universe plan limit reached")
 	ErrNotFound        = errors.New("stock universe not found")
 	ErrInvalid         = errors.New("invalid stock universe")
 	ErrVersionConflict = errors.New("stock universe version conflict")

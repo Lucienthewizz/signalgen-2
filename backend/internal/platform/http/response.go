@@ -87,7 +87,7 @@ func CORSAllowlist(next stdhttp.Handler, allowedOrigins map[string]struct{}) std
 			next.ServeHTTP(writer, request)
 			return
 		}
-		writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+		writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-App-Session")
 		writer.Header().Set("Access-Control-Max-Age", "600")
 		writer.WriteHeader(stdhttp.StatusNoContent)

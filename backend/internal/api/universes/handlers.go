@@ -109,6 +109,8 @@ func writeUniverseError(writer http.ResponseWriter, request *http.Request, err e
 		return false
 	}
 	switch {
+	case errors.Is(err, universe.ErrLimit):
+		shared.WriteError(writer, request, http.StatusConflict, "UNIVERSE_LIMIT_REACHED", "Kuota stock universe paket Anda sudah tercapai. Hapus universe yang tidak digunakan atau periksa paket Anda.")
 	case errors.Is(err, universe.ErrNotFound):
 		shared.WriteError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Stock universe tidak ditemukan.")
 	case errors.Is(err, universe.ErrInvalid):

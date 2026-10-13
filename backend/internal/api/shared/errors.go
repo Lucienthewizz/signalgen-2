@@ -17,7 +17,7 @@ func WriteRuleError(writer http.ResponseWriter, request *http.Request, err error
 	case errors.Is(err, rules.ErrVersionConflict):
 		WriteError(writer, request, http.StatusConflict, "VERSION_CONFLICT", "Rule sudah berubah; muat ulang versi terbaru.")
 	case errors.Is(err, rules.ErrLimit):
-		WriteError(writer, request, http.StatusConflict, "RULE_LIMIT_REACHED", "Batas 100 rule per akun sudah tercapai.")
+		WriteError(writer, request, http.StatusConflict, "RULE_LIMIT_REACHED", "Kuota rule paket Anda sudah tercapai. Hapus rule yang tidak digunakan atau periksa paket Anda.")
 	default:
 		WriteError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Rule belum dapat diproses.")
 	}

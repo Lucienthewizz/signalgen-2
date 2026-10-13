@@ -3,6 +3,7 @@ package apitests
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/api"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
@@ -20,6 +22,43 @@ type fakeSubscriptions struct {
 	err       error
 	activated subscription.ActivateRequest
 	canceled  subscription.CancelRequest
+}
+
+type quotaRules struct {
+	rules.Repository
+	owner string
+}
+
+func (store *quotaRules) List(_ context.Context, owner string) ([]rules.Rule, error) {
+	store.owner = owner
+	return []rules.Rule{{ID: "owned-rule", OwnerType: "user"}}, nil
+}
+
+func TestResourceUsageUsesPrincipalAndEffectivePlan(t *testing.T) {
+	store := &quotaRules{}
+	service := &fakeSubscriptions{current: subscription.Subscription{PlanCode: "pro", Status: subscription.StatusActive, CurrentPeriodStart: time.Now().Add(-time.Hour), CurrentPeriodEnd: time.Now().Add(time.Hour)}}
+	server, err := api.NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, &fakeSessions{}, &fakeAccess{account: access.Account{UserID: "user-a", Status: access.StatusActive}}, &fakeDatasets{}, &fakeCompute{}, api.WithSubscriptionService(service), api.WithRuleStore(store), api.WithUniverseStore(&fakeUniverseStore{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, subscriptionRequest(http.MethodGet, "/api/v1/subscription/usage?user_id=user-b", ""))
+	var usage struct {
+		Limits subscription.ResourceLimits `json:"limits"`
+		Used   subscription.ResourceLimits `json:"used"`
+	}
+	if response.Code != http.StatusOK {
+		t.Fatalf("usage failed: %d %s", response.Code, response.Body.String())
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &usage); err != nil {
+		t.Fatal(err)
+	}
+	if store.owner != "user-a" || usage.Used.CustomRules != 1 || usage.Used.StockUniverses != 1 || usage.Limits.CustomRules != 50 || usage.Limits.StockUniverses != 20 {
+		t.Fatalf("owner=%s usage=%+v", store.owner, usage)
+	}
+	if response.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatal("usage must remain private")
+	}
 }
 
 func (fake *fakeSubscriptions) Plans(context.Context) ([]subscription.Plan, error) {
@@ -75,6 +114,24 @@ func TestSubscriptionPlansArePublicAndExcludePricing(t *testing.T) {
 	}
 	if bytes.Contains(response.Body.Bytes(), []byte("price")) {
 		t.Fatal("unapproved pricing leaked from subscription catalog")
+	}
+	var catalog struct {
+		Items []subscription.Plan `json:"items"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &catalog); err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog.Items) != 1 || catalog.Items[0].Limits.CustomRules != 10 || catalog.Items[0].Limits.StockUniverses != 5 {
+		t.Fatalf("missing Analyst limits: %+v", catalog.Items)
+	}
+}
+
+func TestUsageRejectsAnonymousCallers(t *testing.T) {
+	server := subscriptionTestServer(t, access.RoleUser, &fakeSubscriptions{})
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/subscription/usage?user_id=other", nil))
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("usage without identity returned %d", response.Code)
 	}
 }
 

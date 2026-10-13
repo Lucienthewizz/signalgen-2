@@ -9,9 +9,11 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/account"
 	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/workspace"
 )
 
 type serverConfig struct {
+	workspaceStore    workspace.Store
 	profileStore      account.ProfileRepository
 	managementStore   account.ManagementRepository
 	allowedOrigins    map[string]struct{}
@@ -62,6 +64,16 @@ func WithTrafficObserver(observer *platformhttp.TrafficObserver) ServerOption {
 			return fmt.Errorf("traffic observer is required")
 		}
 		config.trafficObserver = observer
+		return nil
+	}
+}
+
+func WithWorkspaceStore(store workspace.Store) ServerOption {
+	return func(config *serverConfig) error {
+		if store == nil {
+			return fmt.Errorf("workspace store is required")
+		}
+		config.workspaceStore = store
 		return nil
 	}
 }

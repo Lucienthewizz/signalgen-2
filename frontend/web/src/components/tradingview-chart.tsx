@@ -93,7 +93,7 @@ export function TradingViewChart({
         theme === "dark" ? "rgba(54, 73, 62, 0.24)" : "rgba(57, 98, 73, 0.14)",
       style: "1",
       locale: "id",
-      allow_symbol_change: true,
+      allow_symbol_change: false,
       calendar: false,
       details: false,
       hide_legend: false,

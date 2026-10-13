@@ -30,8 +30,91 @@ tags:
     description: Provider-neutral plans and owner-scoped subscription lifecycle.
   - name: Operator
     description: Server-role protected account, entitlement and audit administration.
+  - name: Workspace
+    description: Owner-scoped presentation state; never permissions or authoritative trading records.
 
 paths:
+  /api/v1/workspace:
+    get:
+      tags: [Workspace]
+      operationId: listWorkspaceState
+      summary: Restore the current account's UI state
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Current account state only.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkspaceItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/workspace/{kind}:
+    put:
+      tags: [Workspace]
+      operationId: saveWorkspaceState
+      summary: Save presentation state with optimistic version checking
+      description: Maximum 120000 data bytes. Version zero creates; subsequent writes require the last known version. Null data is a deliberate reset. Credentials and authorization fields are rejected.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [rule-draft, screener-preferences, monitor-history, watchlist]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, data]
+              properties:
+                version: {type: integer, format: int64, minimum: 0}
+                data:
+                  description: A bounded object, a watchlist/history array, or null reset; shape depends on kind.
+                  nullable: true
+      responses:
+        "200":
+          description: Saved state with incremented version.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: VERSION_CONFLICT; do not overwrite until the user chooses a copy.
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api:
     get:
       tags: [Operations]
@@ -1105,6 +1188,25 @@ paths:
               schema: {$ref: "#/components/schemas/ErrorEnvelope"}
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/subscription/usage:
+    get:
+      summary: Owner-scoped custom-rule and stock-universe capacity
+      security:
+        - supabaseBearer: []
+          appSession: []
+      responses:
+        "200":
+          description: Effective capacity and current resource counts. System rules are excluded. Manual grants retain Analyst capacity; capacity does not grant feature access.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [limits, used]
+                properties:
+                  limits: {$ref: "#/components/schemas/ResourceLimits"}
+                  used: {$ref: "#/components/schemas/ResourceLimits"}
+        "401": {description: Authentication or app session required}
+        "503": {description: Capacity could not be verified}
   /api/v1/subscription/plans:
     get:
       tags: [Subscription]
@@ -1694,12 +1796,24 @@ components:
           maxItems: 100
           items: {$ref: "#/components/schemas/OperatorAuditEvent"}
         next_cursor: {type: string, pattern: '^[1-9][0-9]*$'}
+    WorkspaceItem:
+      type: object
+      required: [kind, data, version, updated_at]
+      properties:
+        kind:
+          type: string
+          enum: [rule-draft, screener-preferences, monitor-history, watchlist]
+        data:
+          description: Unverified presentation state, never used for authorization.
+          nullable: true
+        version: {type: integer, format: int64, minimum: 1}
+        updated_at: {type: string, format: date-time}
     APIStatus:
       type: object
       required: [name, version, description, docs, status]
       properties:
         name: {type: string}
-        version: {type: string, enum: [0.9.0]}
+        version: {type: string, enum: [0.10.0]}
         description: {type: string}
         docs: {type: string}
         status: {type: string, enum: [ok]}
@@ -1916,10 +2030,17 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FeatureGrant"
+    ResourceLimits:
+      type: object
+      required: [custom_rules, stock_universes]
+      properties:
+        custom_rules: {type: integer, minimum: 0}
+        stock_universes: {type: integer, minimum: 0}
     SubscriptionPlan:
       type: object
       required: [code, name, description, features]
       properties:
+        limits: {$ref: "#/components/schemas/ResourceLimits"}
         code: {type: string, enum: [free, analyst, pro]}
         name: {type: string}
         description: {type: string}

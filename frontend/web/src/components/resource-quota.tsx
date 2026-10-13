@@ -1,0 +1,59 @@
+import { useEffect, useState } from "react";
+import { api } from "@/api/client";
+import type { ResourceUsage } from "@/types";
+
+// Server-owned capacity: a local plan badge is never an authorization source.
+export function ResourceQuota({
+  kind,
+  revision = 0,
+}: {
+  kind?: keyof ResourceUsage["limits"];
+  revision?: number;
+}) {
+  const [usage, setUsage] = useState<ResourceUsage | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setError(false);
+    api
+      .resourceUsage()
+      .then((value) => {
+        if (active) setUsage(value);
+      })
+      .catch(() => {
+        if (active) {
+          setUsage(null);
+          setError(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [revision]);
+  const keys: Array<keyof ResourceUsage["limits"]> = kind
+    ? [kind]
+    : ["custom_rules", "stock_universes"];
+  return (
+    <div className="resource-quota" role="status" aria-live="polite">
+      {error ? (
+        <span>
+          Kuota belum dapat diperiksa. Server tetap memvalidasi saat menyimpan.
+        </span>
+      ) : !usage ? (
+        <span>Memeriksa kuota…</span>
+      ) : (
+        keys.map((key) => (
+          <span key={key}>
+            <strong>
+              {usage.used[key]} / {usage.limits[key]}
+            </strong>{" "}
+            {key === "custom_rules" ? "rule pribadi" : "stock universe"}
+            <small>
+              {Math.max(0, usage.limits[key] - usage.used[key])} slot tersisa
+            </small>
+          </span>
+        ))
+      )}
+    </div>
+  );
+}

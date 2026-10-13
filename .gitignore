@@ -175,6 +175,7 @@ credentials.json
 .venv/
 
 # Keep local environment variants out of version control.
+.playwright-cli/
 .env.*
 !.env.example
 

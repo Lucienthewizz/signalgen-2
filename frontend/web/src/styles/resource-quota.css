@@ -1,0 +1,27 @@
+.resource-quota {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-block: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.resource-quota > span {
+  min-width: 0;
+}
+.resource-quota strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.resource-quota small {
+  display: block;
+}
+.plan-capacity {
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.plan-capacity strong {
+  color: var(--text);
+}
