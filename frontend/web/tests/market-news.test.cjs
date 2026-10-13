@@ -17,6 +17,28 @@ function news(fetch, clock = Date) {
   );
   return exports;
 }
+test("headline filters combine search words and exact ticker/company matches", () => {
+  const n = news();
+  const articles = [
+    { title: "BBCA naik setelah laporan laba", url: "https://example.org/1" },
+    {
+      title: "Bank Central Asia membagikan dividen",
+      url: "https://example.org/2",
+    },
+    { title: "XBBCA bukan kode saham BBCA2", url: "https://example.org/3" },
+    { title: "BRI meningkatkan laba", url: "https://example.org/4" },
+  ];
+  assert.equal(n.filterMarketArticles(articles, "", "BBCA").length, 2);
+  assert.equal(
+    n.filterMarketArticles(articles, " LABA naik ", "BBCA.JK").length,
+    1,
+  );
+  assert.equal(n.filterMarketArticles(articles, "laba", "all").length, 2);
+  assert.equal(n.filterMarketArticles(articles, "", "BBRI").length, 1);
+  assert.equal(n.filterMarketArticles(articles, "", "[.*]").length, 0);
+  assert.equal(n.filterMarketArticles(articles, "tidak ditemukan").length, 0);
+  assert.equal(n.filterMarketArticles(articles, "").length, articles.length);
+});
 test("news normalizes metadata, rejects unsafe links and removes duplicates", () => {
   const n = news();
   const items = n.parseMarketNews({

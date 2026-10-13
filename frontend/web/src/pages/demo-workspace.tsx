@@ -2426,7 +2426,7 @@ export function DemoWorkspace({
                 {view === "realtime" && (
                   <MarketMonitorPanel userId={user?.id} />
                 )}
-                {view === "news" && <WorkspaceNewsPanel />}
+                {view === "news" && <WorkspaceNewsPanel key={user?.id ?? "guest"} userId={user?.id} />}
                 {view === "rules" && (
                   <ServerRulesPanel
                     authenticated={authenticated}

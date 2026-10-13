@@ -4,6 +4,39 @@ export type MarketArticle = {
   source: string;
   indexedAt: string | null;
 };
+
+const issuerNames: Record<string, string[]> = {
+  BBCA: ["bank central asia", "bca"],
+  BBRI: ["bank rakyat indonesia", "bri"],
+  BMRI: ["bank mandiri"],
+  TLKM: ["telkom indonesia", "telkom"],
+  ASII: ["astra international"],
+  TINS: ["pt timah"],
+  RATU: ["raharja energi cepu"],
+};
+
+/** Headline-only matching; never implies full-article or sentiment analysis. */
+export function filterMarketArticles(
+  articles: MarketArticle[],
+  query: string,
+  ticker = "all",
+): MarketArticle[] {
+  const words = query
+    .trim()
+    .toLocaleLowerCase("id-ID")
+    .split(/\s+/)
+    .filter(Boolean);
+  const symbol = ticker.toUpperCase().replace(/\.JK$/, "");
+  return articles.filter((article) => {
+    const title = article.title.toLocaleLowerCase("id-ID");
+    if (!words.every((word) => title.includes(word))) return false;
+    if (ticker === "all") return true;
+    if (!/^[A-Z]{4}$/.test(symbol)) return false;
+    const terms = [symbol.toLowerCase(), ...(issuerNames[symbol] ?? [])];
+    const tokens = ` ${title.replace(/[^\p{L}\p{N}]+/gu, " ")} `;
+    return terms.some((term) => tokens.includes(` ${term} `));
+  });
+}
 export const IDX_CHANNEL =
   "https://www.youtube.com/channel/UCXyfYHdOPLUgxMndSwf9tHg";
 // Verified against the official channel feed on 7 October 2026; curated, not a live video feed.
