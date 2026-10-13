@@ -6,12 +6,14 @@ import type {
   ScreenerFeatureResult,
   ScreenerFeatureVector,
   ScreenerResult,
+  RuleResource,
 } from "@/types";
 
 export type ScreenerStage =
   "validating_access" | "preparing_data" | "loading_engine" | "private_scoring";
 
 export type LiveScreenerRun = {
+  ruleSnapshot?: RuleResource;
   result: ScreenerResult;
   latestDecision: ScreenerDecision;
   features: ScreenerFeatureVector;
@@ -124,6 +126,7 @@ export async function runLiveScreener(
   };
 
   return {
+    ruleSnapshot: rule,
     result,
     latestDecision: primary.decision,
     features: primary.features,

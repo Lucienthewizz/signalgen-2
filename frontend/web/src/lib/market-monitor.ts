@@ -1,17 +1,105 @@
 import type { LiveScreenerRun } from "@/analysis/screener";
+import type { RuleResource, UserRuleDefinition } from "@/types";
 import {
   readWorkspaceData,
   hasWorkspaceData,
   writeWorkspaceData,
   WORKSPACE_MAX_AGE,
+  validatedRuleDraft,
 } from "@/lib/workspace-storage";
 
 export type MonitorRun = {
   rule: string;
   recordedAt: string;
   run: LiveScreenerRun;
-  context?: { ruleId: string; universeId: string; universeName: string };
+  context?: {
+    ruleId: string;
+    universeId: string;
+    universeName: string;
+    ruleSnapshot?: RuleSnapshot;
+  };
 };
+export type RuleSnapshot = {
+  version: number;
+  definition_hash: string;
+  definition?: UserRuleDefinition;
+};
+export function frozenRule(rule: RuleResource): RuleSnapshot {
+  return {
+    version: rule.version,
+    definition_hash: rule.definition_hash,
+    ...(rule.owner_type === "user" && rule.definition
+      ? { definition: rule.definition }
+      : {}),
+  };
+}
+function safeRuleSnapshot(value: unknown): RuleSnapshot | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as RuleSnapshot;
+  if (
+    !Number.isInteger(v.version) ||
+    v.version < 1 ||
+    typeof v.definition_hash !== "string" ||
+    v.definition_hash.length > 200
+  )
+    return undefined;
+  const draft = validatedRuleDraft({
+    definition: v.definition,
+    editingId: null,
+    editingVersion: null,
+  });
+  return {
+    version: v.version,
+    definition_hash: v.definition_hash,
+    ...(draft ? { definition: draft.definition } : {}),
+  };
+}
+
+export function compareMonitorRuns(before: MonitorRun, after: MonitorRun) {
+  const old = new Map(
+    before.run.rows.map((row) => [
+      idxTicker(row.decision.symbol),
+      row.decision.matched,
+    ]),
+  );
+  const next = new Map(
+    after.run.rows.map((row) => [
+      idxTicker(row.decision.symbol),
+      row.decision.matched,
+    ]),
+  );
+  const gained: string[] = [],
+    lost: string[] = [],
+    retained: string[] = [],
+    unpaired: string[] = [];
+  for (const [symbol, matched] of next) {
+    if (!symbol) continue;
+    if (!old.has(symbol)) {
+      unpaired.push(symbol);
+      continue;
+    }
+    if (matched && !old.get(symbol)) gained.push(symbol);
+    else if (!matched && old.get(symbol)) lost.push(symbol);
+    else if (matched) retained.push(symbol);
+  }
+  for (const symbol of old.keys())
+    if (symbol && !next.has(symbol)) unpaired.push(symbol);
+  const sameRule = Boolean(
+    before.context?.ruleSnapshot &&
+    after.context?.ruleSnapshot &&
+    before.context.ruleId === after.context.ruleId &&
+    before.context.ruleSnapshot.definition_hash ===
+      after.context.ruleSnapshot.definition_hash,
+  );
+  return {
+    gained,
+    lost,
+    retained,
+    unpaired,
+    common: [...next.keys()].filter((key) => old.has(key)).length,
+    sameRule,
+  };
+}
 const history = new Map<string, MonitorRun[]>();
 
 const fields = new Set([
@@ -193,6 +281,9 @@ function storedRuns(value: unknown): MonitorRun[] {
             ruleId: c.ruleId,
             universeId: c.universeId,
             universeName: c.universeName,
+            ...(safeRuleSnapshot(c.ruleSnapshot)
+              ? { ruleSnapshot: safeRuleSnapshot(c.ruleSnapshot) }
+              : {}),
           }
         : undefined;
     return [
