@@ -4031,6 +4031,50 @@ html[data-theme="light"] .tradingview-chart__status span {
   padding: 0;
   gap: 16px;
 }
+.subscription-workspace--simple .subscription-empty {
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  text-align: left;
+}
+.subscription-empty [data-slot="empty-header"] {
+  align-items: flex-start;
+  max-width: 65ch;
+}
+.subscription-empty [data-slot="empty-icon"] {
+  display: none;
+}
+.subscription-empty [data-slot="empty-content"] {
+  width: auto;
+  flex-shrink: 0;
+}
+.subscription-workspace--simple .plan-capacity {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0 0 24px;
+  padding-block: 20px;
+  border-block: 1px solid var(--line-soft);
+  font-variant-numeric: tabular-nums;
+}
+.plan-capacity dt {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.plan-capacity dd,
+.plan-capacity dd strong {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
 .subscription-workspace--simple .subscription-ledger__lead {
   display: flex;
   align-items: center;
@@ -4149,8 +4193,16 @@ html[data-theme="light"] .tradingview-chart__status span {
   margin: 16px 0 0;
   color: var(--muted);
   font-size: 14px;
+  max-width: 75ch;
+  line-height: 1.65;
 }
 @media (max-width: 760px) {
+  .subscription-workspace--simple .subscription-empty {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+  }
   .subscription-feature-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -4192,21 +4244,11 @@ html[data-theme="light"] .tradingview-chart__status span {
   animation-delay: 120ms;
 }
 .plan-columns [data-slot="card"]::after {
-  content: "";
-  position: absolute;
-  inset: 0 auto auto 0;
-  width: 34%;
-  height: 1px;
-  opacity: 0;
-  background: linear-gradient(90deg, transparent, var(--green), transparent);
-  pointer-events: none;
+  content: none;
 }
 @media (hover: hover) {
   .plan-columns [data-slot="card"]:hover {
     background: var(--accent-surface);
-  }
-  .plan-columns [data-slot="card"]:hover::after {
-    animation: pricing-edge-sweep 850ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   .plan-columns [data-slot="card"]:hover .plan-icon {
     transform: translateY(-2px);

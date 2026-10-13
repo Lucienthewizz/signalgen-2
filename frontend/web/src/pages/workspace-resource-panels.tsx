@@ -452,7 +452,9 @@ export function SubscriptionPanel({
         })
         .catch((caught) => {
           if (current())
-            setError(readableError(caught, "Plans could not be loaded."));
+            setError(
+              readableError(caught, "Pilihan paket belum dapat dimuat."),
+            );
         });
       if (authenticated && backendOnline) {
         await api
@@ -465,7 +467,7 @@ export function SubscriptionPanel({
               setAccountError(
                 readableError(
                   caught,
-                  "Your subscription could not be loaded. Retry to verify your access.",
+                  "Status paket belum dapat dimuat. Coba lagi untuk memeriksa akses Anda.",
                 ),
               );
           });
@@ -473,7 +475,7 @@ export function SubscriptionPanel({
         setSubscription(null);
         if (authenticated)
           setAccountError(
-            "The backend is offline. Your subscription status cannot be verified.",
+            "Server belum terhubung. Status paket Anda belum dapat diperiksa.",
           );
       }
       await plansRequest;
@@ -532,11 +534,11 @@ export function SubscriptionPanel({
         ) : accountError ? (
           <Alert variant="destructive">
             <CircleAlert />
-            <AlertTitle>Subscription status unavailable</AlertTitle>
+            <AlertTitle>Status paket belum tersedia</AlertTitle>
             <AlertDescription>{accountError}</AlertDescription>
             <Button variant="outline" onClick={() => void load()}>
               <RefreshCw data-icon="inline-start" />
-              Retry
+              Coba lagi
             </Button>
           </Alert>
         ) : subscription ? (
@@ -576,7 +578,7 @@ export function SubscriptionPanel({
                 },
                 {
                   code: "backtest",
-                  name: "Backtesting",
+                  name: "Akses backtest",
                   description: "Uji strategi menggunakan data historis.",
                   icon: History,
                 },
@@ -653,21 +655,33 @@ export function SubscriptionPanel({
             </details>
           </div>
         ) : (
-          <Empty>
+          <Empty className="subscription-empty">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <KeyRound />
               </EmptyMedia>
               <EmptyTitle>
                 {authenticated
-                  ? "Belum ada subscription aktif"
+                  ? "Belum ada paket aktif"
                   : "Masuk untuk melihat paket akun"}
               </EmptyTitle>
               <EmptyDescription>
-                Paket Free tetap dapat melihat demo. Fitur server memerlukan
-                grant atau subscription aktif.
+                {authenticated
+                  ? "Bandingkan kapasitas di bawah. Aktivasi paket dilakukan melalui operator."
+                  : "Bandingkan paket di bawah, atau masuk untuk memeriksa akses Anda."}
               </EmptyDescription>
             </EmptyHeader>
+            {!authenticated && (
+              <EmptyContent>
+                <Button
+                  onClick={() => {
+                    window.location.hash = "login";
+                  }}
+                >
+                  <KeyRound data-icon="inline-start" /> Masuk
+                </Button>
+              </EmptyContent>
+            )}
           </Empty>
         )}
       </section>
@@ -676,7 +690,7 @@ export function SubscriptionPanel({
         <header>
           <div>
             <h3 id="plan-heading">Pilihan paket</h3>
-            <p>Aktivasi melalui operator · belum ada checkout online.</p>
+            <p>Pilih kapasitas yang sesuai dengan kebutuhan analisis Anda.</p>
           </div>
         </header>
         <div className="plan-columns">
@@ -726,10 +740,24 @@ export function SubscriptionPanel({
                 </CardHeader>
                 <CardContent>
                   {plan.limits && (
-                    <p className="plan-capacity">
-                      <strong>{plan.limits.custom_rules} rule pribadi</strong> ·{" "}
-                      {plan.limits.stock_universes} stock universe
-                    </p>
+                    <dl className="plan-capacity">
+                      <div>
+                        <dt>Rule pribadi</dt>
+                        <dd>
+                          <strong>
+                            {plan.limits.custom_rules}
+                            <span className="sr-only"> rule pribadi</span>
+                          </strong>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Stock universe</dt>
+                        <dd>
+                          {plan.limits.stock_universes}
+                          <span className="sr-only"> stock universe</span>
+                        </dd>
+                      </div>
+                    </dl>
                   )}
                   <ul>
                     <li
@@ -759,7 +787,7 @@ export function SubscriptionPanel({
                       ) : (
                         <X aria-hidden="true" />
                       )}{" "}
-                      Backtesting access
+                      Akses backtest
                       {!plan.features.includes("backtest") && (
                         <span className="plan-feature-status">
                           Tidak termasuk
@@ -779,15 +807,21 @@ export function SubscriptionPanel({
             ))}
         </div>
         <p className="subscription-plan-note">
-          Pro menyediakan kapasitas lebih besar. Kualitas keputusan screening
-          tetap sama pada semua paket. Data yang sudah tersimpan tidak dihapus
-          saat paket berubah; jika melewati kuota, hapus sebagian data sebelum
-          membuat yang baru.
+          Analyst dan Pro memakai fitur screening yang sama; Pro memberi kuota
+          lebih besar. Paket diaktifkan melalui operator, tanpa checkout online.
         </p>
+        <details className="subscription-manage">
+          <summary>Apa yang terjadi jika paket berubah?</summary>
+          <p>
+            Data yang tersimpan tidak dihapus. Jika penggunaan melebihi kuota
+            paket baru, kurangi jumlah rule atau universe sebelum membuat yang
+            baru.
+          </p>
+        </details>
         {error && (
           <Alert variant="destructive">
             <CircleAlert />
-            <AlertTitle>Plan data belum siap</AlertTitle>
+            <AlertTitle>Pilihan paket belum tersedia</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
             <Button
               variant="outline"
@@ -795,7 +829,7 @@ export function SubscriptionPanel({
               disabled={loading}
               onClick={() => void load()}
             >
-              <RefreshCw data-icon="inline-start" /> Try again
+              <RefreshCw data-icon="inline-start" /> Coba lagi
             </Button>
           </Alert>
         )}
