@@ -378,7 +378,7 @@ test("worker and socket orchestration use the current private-screener contract"
     "utf8",
   );
   const orchestration = fs.readFileSync(
-    path.join(__dirname, "../src/analysis/screener.ts"),
+    path.join(__dirname, "../src/analysis/screener-socket.ts"),
     "utf8",
   );
   assert.match(worker, /worker-2/);

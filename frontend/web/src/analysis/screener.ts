@@ -1,9 +1,10 @@
-import { api, ApiError, websocketURL } from "@/api/client";
+import { api, ApiError } from "@/api/client";
+import { extractDatasetFeatures } from "./screener-engine";
+import { packCandidateBatches } from "./screener-batches";
+import { evaluateOverSocket } from "./screener-socket";
 import type {
-  DatasetContent,
   DatasetManifest,
   ScreenerDecision,
-  ScreenerFeatureResult,
   ScreenerFeatureVector,
   ScreenerResult,
   RuleResource,
@@ -11,7 +12,6 @@ import type {
 
 export type ScreenerStage =
   "validating_access" | "preparing_data" | "loading_engine" | "private_scoring";
-
 export type LiveScreenerRun = {
   ruleSnapshot?: RuleResource;
   result: ScreenerResult;
@@ -27,6 +27,14 @@ export type LiveScreenerRun = {
     latestOpen: number | null;
   }>;
   execution: "client_wasm+server_private_scoring";
+  metrics?: {
+    feature_ms: number;
+    scoring_ms: number;
+    total_ms: number;
+    stocks: number;
+    candidates: number;
+    sockets: number;
+  };
 };
 
 export async function runLiveScreener(
@@ -35,10 +43,10 @@ export async function runLiveScreener(
   signal: AbortSignal,
   onStage: (stage: ScreenerStage) => void,
 ): Promise<LiveScreenerRun> {
+  const start = performance.now();
   onStage("validating_access");
   await api.ensureAppSession();
   signal.throwIfAborted();
-
   onStage("preparing_data");
   const [manifest, rule] = await Promise.all([
     api.prepareDataset(ruleId, universeId),
@@ -53,231 +61,93 @@ export async function runLiveScreener(
     );
 
   onStage("loading_engine");
-  const featureRuns = await Promise.all(
-    dataset.series.map(async (series) => ({
-      series,
-      result: await extractFeaturesWithWasm(
-        series.symbol,
-        series.candles,
-        signal,
-      ),
-    })),
-  );
-
+  const featureStart = performance.now();
+  const featureRuns = await extractDatasetFeatures(dataset.series, signal);
+  signal.throwIfAborted();
+  const featureMs = performance.now() - featureStart;
   onStage("private_scoring");
-  const scoreSeries = async ({
-    series,
-    result: featureResult,
-  }: (typeof featureRuns)[number]) => {
+  const scoringStart = performance.now();
+  const grant = await api.createComputeGrant(manifest, rule);
+  signal.throwIfAborted();
+  let ticket = await api.createScreenerSocketTicket(grant.id);
+  signal.throwIfAborted();
+  let batches;
+  try {
+    batches = packCandidateBatches(featureRuns, ticket.max_candidates);
+  } catch (error) {
+    throw new ApiError(
+      error instanceof Error ? error.message : "Batch screening tidak valid.",
+      0,
+    );
+  }
+  if (!batches.length) throw new ApiError("Tidak ada kandidat screening.", 0);
+  const results: ScreenerResult[] = [];
+  for (const [index, featureResult] of batches.entries()) {
     signal.throwIfAborted();
-    const latestCandidate = featureResult.candidates.at(-1);
-    if (!latestCandidate)
-      throw new ApiError(
-        `WASM tidak menghasilkan kandidat untuk ${series.symbol}.`,
-        0,
-      );
-    const grant = await api.createComputeGrant(manifest, rule);
-    const ticket = await api.createScreenerSocketTicket(grant.id);
+    if (index > 0) ticket = await api.createScreenerSocketTicket(grant.id);
     signal.throwIfAborted();
     if (
-      featureResult.feature_schema_version !== ticket.feature_schema_version ||
+      ticket.feature_schema_version !== featureResult.feature_schema_version ||
       featureResult.candidates.length > ticket.max_candidates
     )
       throw new ApiError(
         "Hasil WASM tidak cocok dengan batas private scoring.",
         0,
       );
-    const result = await evaluateOverSocket(
-      ticket.websocket_path,
-      ticket.ticket,
-      ticket.protocol,
-      ticket.feature_schema_version,
-      featureResult,
-      signal,
+    results.push(
+      await evaluateOverSocket(
+        ticket.websocket_path,
+        ticket.ticket,
+        ticket.protocol,
+        ticket.feature_schema_version,
+        featureResult,
+        signal,
+      ),
     );
-    const decision = result.results.at(-1);
-    if (!decision)
+  }
+  const result = {
+    ...results[0],
+    results: results.flatMap((batch) => batch.results),
+  };
+  const decisions = new Map(
+    result.results.map((decision) => [
+      `${decision.symbol}\u0000${decision.timestamp}`,
+      decision,
+    ]),
+  );
+  const rows = dataset.series.map((series, index) => {
+    const latest = featureRuns[index]?.candidates.at(-1);
+    const decision =
+      latest && decisions.get(`${latest.symbol}\u0000${latest.timestamp}`);
+    if (!latest || !decision || latest.symbol !== series.symbol)
       throw new ApiError(
-        `Server tidak mengembalikan hasil untuk ${series.symbol}.`,
+        `Hasil screening untuk ${series.symbol} tidak lengkap.`,
         0,
       );
     return {
-      result,
       decision,
-      features: latestCandidate.features,
+      features: latest.features,
       latestClose: series.candles.at(-1)?.close ?? 0,
       latestOpen: series.candles.at(-1)?.open ?? null,
     };
-  };
-  // The API allows at most two concurrent scoring sockets per account.
-  const scored: Awaited<ReturnType<typeof scoreSeries>>[] = [];
-  for (let offset = 0; offset < featureRuns.length; offset += 2) {
-    signal.throwIfAborted();
-    scored.push(
-      ...(await Promise.all(
-        featureRuns.slice(offset, offset + 2).map(scoreSeries),
-      )),
-    );
-  }
-  const primary = scored[0];
-  const result: ScreenerResult = {
-    ...primary.result,
-    results: scored.flatMap((entry) => entry.result.results),
-  };
-
+  });
   return {
     ruleSnapshot: rule,
     result,
-    latestDecision: primary.decision,
-    features: primary.features,
+    latestDecision: rows[0].decision,
+    features: rows[0].features,
     manifest,
-    latestClose: primary.latestClose,
-    latestOpen: primary.latestOpen,
-    rows: scored.map(({ decision, features, latestClose, latestOpen }) => ({
-      decision,
-      features,
-      latestClose,
-      latestOpen,
-    })),
+    latestClose: rows[0].latestClose,
+    latestOpen: rows[0].latestOpen,
+    rows,
     execution: "client_wasm+server_private_scoring",
+    metrics: {
+      feature_ms: featureMs,
+      scoring_ms: performance.now() - scoringStart,
+      total_ms: performance.now() - start,
+      stocks: rows.length,
+      candidates: result.results.length,
+      sockets: batches.length,
+    },
   };
-}
-
-function extractFeaturesWithWasm(
-  symbol: string,
-  candles: DatasetContent["series"][number]["candles"],
-  signal: AbortSignal,
-): Promise<ScreenerFeatureResult> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(
-      new URL("../workers/screener.worker.ts", import.meta.url),
-      { type: "module", name: "signalgen-screener" },
-    );
-    const jobId = crypto.randomUUID();
-    const timeout = window.setTimeout(
-      () => finishError("WASM tidak siap dalam 15 detik."),
-      15000,
-    );
-
-    function cleanup() {
-      clearTimeout(timeout);
-      signal.removeEventListener("abort", cancelled);
-      worker.terminate();
-    }
-    function finishError(message: string) {
-      cleanup();
-      reject(new ApiError(message, 0));
-    }
-    function cancelled() {
-      finishError("Analisis dibatalkan.");
-    }
-    signal.addEventListener("abort", cancelled, { once: true });
-    worker.onerror = () => finishError("Worker Go/WASM gagal dimuat.");
-    worker.onmessage = (event: MessageEvent) => {
-      const message = event.data as {
-        type: "result" | "error";
-        jobId: string;
-        features?: ScreenerFeatureResult;
-        message?: string;
-      };
-      if (message.jobId !== jobId) return;
-      if (message.type === "error" || !message.features) {
-        finishError(message.message ?? "WASM gagal menghitung indikator.");
-        return;
-      }
-      cleanup();
-      resolve(message.features);
-    };
-    worker.postMessage({
-      type: "extract",
-      jobId,
-      symbol,
-      candles,
-    });
-  });
-}
-
-function evaluateOverSocket(
-  path: string,
-  ticket: string,
-  protocol: "screener-private-1",
-  featureSchemaVersion: "screener-features-1",
-  featureResult: ScreenerFeatureResult,
-  signal: AbortSignal,
-): Promise<ScreenerResult> {
-  return new Promise((resolve, reject) => {
-    const socket = new WebSocket(websocketURL(path, ticket));
-    const requestId = crypto.randomUUID();
-    let settled = false;
-    const timeout = window.setTimeout(
-      () => finishError("Private scoring melewati batas waktu."),
-      10000,
-    );
-
-    function cleanup() {
-      clearTimeout(timeout);
-      signal.removeEventListener("abort", cancelled);
-      socket.onopen = null;
-      socket.onmessage = null;
-      socket.onerror = null;
-      socket.onclose = null;
-      if (
-        socket.readyState === WebSocket.CONNECTING ||
-        socket.readyState === WebSocket.OPEN
-      )
-        socket.close(1000, "completed");
-    }
-    function finishError(message: string) {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(new ApiError(message, 0));
-    }
-    function cancelled() {
-      finishError("Analisis dibatalkan.");
-    }
-    signal.addEventListener("abort", cancelled, { once: true });
-    socket.onerror = () => finishError("Koneksi private scoring gagal.");
-    socket.onclose = (event) => {
-      if (!event.wasClean) finishError("Koneksi private scoring terputus.");
-    };
-    socket.onopen = () => {
-      socket.send(
-        JSON.stringify({
-          type: "screener.evaluate",
-          protocol,
-          request_id: requestId,
-          engine_version: featureResult.engine_version,
-          feature_schema_version: featureSchemaVersion,
-          candidates: featureResult.candidates,
-        }),
-      );
-    };
-    socket.onmessage = (event) => {
-      let payload:
-        ScreenerResult | { type: "screener.error"; message?: string };
-      try {
-        payload = JSON.parse(String(event.data));
-      } catch {
-        finishError("Respons private scoring tidak valid.");
-        return;
-      }
-      if (payload.type === "screener.error") {
-        finishError(payload.message ?? "Private scoring ditolak.");
-        return;
-      }
-      if (payload.type !== "screener.result") return;
-      if (
-        payload.request_id !== requestId ||
-        payload.protocol !== protocol ||
-        !Array.isArray(payload.results)
-      ) {
-        finishError("Respons private scoring tidak cocok dengan request.");
-        return;
-      }
-      settled = true;
-      cleanup();
-      resolve(payload as ScreenerResult);
-    };
-  });
 }

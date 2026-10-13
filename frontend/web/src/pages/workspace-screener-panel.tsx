@@ -1152,6 +1152,20 @@ export function WorkspaceScreenerPanel({
                   <span>Checksum</span>
                   <code>{run.manifest.checksum.slice(0, 12)}…</code>
                 </div>
+                {run.metrics && (
+                  <>
+                    <div>
+                      <span>Komputasi client</span>
+                      <strong>{run.metrics.feature_ms.toFixed(1)} ms</strong>
+                    </div>
+                    <div>
+                      <span>Kandidat / koneksi</span>
+                      <strong>
+                        {run.metrics.candidates} / {run.metrics.sockets}
+                      </strong>
+                    </div>
+                  </>
+                )}
               </footer>
             </details>
           </>

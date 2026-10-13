@@ -29,34 +29,44 @@ let ready: Promise<void> | null = null;
 
 self.onmessage = async (event: MessageEvent) => {
   const message = event.data as {
-    type: "extract";
+    type: "extract" | "extract-batch";
     jobId: string;
     symbol: string;
     candles: Candle[];
+    series?: Array<{ symbol: string; candles: Candle[] }>;
   };
-  if (message.type !== "extract") return;
+  if (!["extract", "extract-batch"].includes(message.type)) return;
   try {
     ready ??= loadEngine();
     await ready;
-    const encoded = scope.signalgenComputeFeatures?.(
-      JSON.stringify({
-        purpose: "screen",
-        symbol: message.symbol,
-        candles: message.candles,
-      }),
-    );
-    if (!encoded) throw new Error("WASM feature function is unavailable");
-    const response = JSON.parse(encoded) as {
-      ok: boolean;
-      result?: ScreenerFeatureResult;
-      error?: { message?: string };
-    };
-    if (!response.ok || !response.result)
-      throw new Error(response.error?.message ?? "Feature extraction failed");
+    const series =
+      message.type === "extract"
+        ? [{ symbol: message.symbol, candles: message.candles }]
+        : message.series;
+    if (!Array.isArray(series) || !series.length)
+      throw new Error("Dataset batch kosong");
+    const results = series.map((item) => {
+      const encoded = scope.signalgenComputeFeatures?.(
+        JSON.stringify({
+          purpose: "screen",
+          symbol: item.symbol,
+          candles: item.candles,
+        }),
+      );
+      if (!encoded) throw new Error("WASM feature function is unavailable");
+      const response = JSON.parse(encoded) as {
+        ok: boolean;
+        result?: ScreenerFeatureResult;
+        error?: { message?: string };
+      };
+      if (!response.ok || !response.result)
+        throw new Error(response.error?.message ?? "Feature extraction failed");
+      return response.result;
+    });
     self.postMessage({
       type: "result",
       jobId: message.jobId,
-      features: response.result,
+      ...(message.type === "extract" ? { features: results[0] } : { results }),
     });
   } catch (error) {
     self.postMessage({
