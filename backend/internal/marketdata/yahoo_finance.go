@@ -140,6 +140,9 @@ func (provider *YahooFinance) fetchChart(ctx context.Context, endpoint string) (
 			_ = response.Body.Close()
 		}
 		if !retry || attempt == 1 {
+			if requestErr == nil {
+				return nil, &HTTPError{Status: response.StatusCode, RetryAfter: delay}
+			}
 			return nil, ErrUnavailable
 		}
 		timer := time.NewTimer(delay)
