@@ -17,6 +17,7 @@ async (page) => {
   let unauthorized = false;
   let systemRule = false;
   let failUniverseDelete = false;
+  let universeWrite = null;
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -30,6 +31,10 @@ async (page) => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort();
     const p = url.pathname;
+    if (p.startsWith("/api/v1/stock-universes") && ["POST", "PATCH"].includes(route.request().method())) {
+      universeWrite = { method: route.request().method(), body: route.request().postDataJSON() };
+      return route.fulfill({ json: { ...universe, ...universeWrite.body } });
+    }
     if (failUniverseDelete && p.startsWith("/api/v1/stock-universes/") && route.request().method() === "DELETE") return route.fulfill({ status: 500, json: { error: { code: "TEST_FAILURE", message: "Penghapusan fixture gagal." } } });
     if (p !== "/api" && !p.startsWith("/api/") && p !== "/ready") return route.continue();
     if (unauthorized && p === "/api/v1/account/me") return route.fulfill({ status: 401, json: { error: { code: "UNAUTHORIZED", message: "Fixture session expired" } } });
@@ -141,6 +146,29 @@ async (page) => {
           });
           if (offset > 1) throw Error(`Rule header/form gutters differ: ${offset}px`);
         }
+        if (view === "universes") {
+          await page.getByRole("heading", { name: "Your stock universes", exact: true }).waitFor({ timeout: 5000 });
+          await page.getByRole("table", { name: "Stock catalog", exact: true }).waitFor({ timeout: 5000 });
+          const categories = page.getByRole("group", { name: "Stock categories", exact: true });
+          for (const name of ["All stocks", "Blue chip", "Banks", "Energy", "Consumer", "Property", "Technology"]) {
+            await categories.getByRole("button", { name, exact: true }).waitFor({ timeout: 5000 });
+          }
+          const layout = await page.locator(".universe-workspace").evaluate(el => {
+            const editor = el.querySelector(".universe-editor"), library = el.querySelector(".universe-library");
+            const a = editor.getBoundingClientRect(), b = library.getBoundingClientRect();
+            const content = [editor, library].map(card => {
+              const outer = card.getBoundingClientRect(), inner = card.querySelector('[data-slot="card-content"]').getBoundingClientRect();
+              const styles = getComputedStyle(card.querySelector('[data-slot="card-content"]'));
+              return { left: inner.left - outer.left + parseFloat(styles.paddingLeft), right: outer.right - inner.right + parseFloat(styles.paddingRight) };
+            });
+            const chips = library.querySelector(".universe-library__symbols");
+            return { gap: b.top - a.bottom, left: Math.abs(a.left - b.left), right: Math.abs(a.right - b.right), content, wrap: chips && getComputedStyle(chips).flexWrap };
+          });
+          if (layout.gap < 16 || layout.left > 1 || layout.right > 1) throw Error(`Universe cards are not stacked/aligned: ${JSON.stringify(layout)}`);
+          if (layout.content.some(inset => inset.left < 16 || inset.right < 16 || Math.abs(inset.left - inset.right) > 1) || Math.abs(layout.content[0].left - layout.content[1].left) > 1) throw Error(`Universe content insets differ: ${JSON.stringify(layout)}`);
+          if (layout.wrap !== "wrap") throw Error("Saved universe stocks cannot wrap");
+          if (await page.locator(".universe-library").getByText(/^v\d+$/).count()) throw Error("Universe version badge still visible");
+        }
         if (view === "journal") {
           if (await page.getByText("Static preview", { exact: true }).count()) throw Error("Journal preview label remains");
           const controlAlignment = await page.locator(".journal-toolbar").evaluate(el => {
@@ -183,6 +211,20 @@ async (page) => {
   await page.locator("main").waitFor({ timeout: 10000 });
   await page.screenshot({ path: "/private/tmp/signalgen-account.png", animations: "disabled", timeout: 10000 });
   await page.goto("http://127.0.0.1:5174/#app/universes");
+  await page.getByRole("button", { name: "Edit Bank pilihan", exact: true }).click({ timeout: 5000 });
+  if (await page.getByLabel("Universe name", {exact:true}).inputValue() !== "Bank pilihan") throw Error("Universe edit did not preserve its name");
+  await page.getByLabel("Universe name", {exact:true}).fill("Bank pilihan edited");
+  await page.getByRole("button", { name: "Save changes", exact:true }).click({ timeout: 5000 });
+  await page.getByRole("button", { name: "Create universe", exact:true }).waitFor({ timeout: 5000 });
+  if (!universeWrite || universeWrite.method !== "PATCH" || universeWrite.body.version !== 1 || universeWrite.body.name !== "Bank pilihan edited" || universeWrite.body.symbols.join(",") !== "BBCA.JK,BBRI.JK") throw Error("Universe update payload changed");
+  await page.getByRole("button", { name: /Add BBCA/ }).click({ timeout: 5000 });
+  await page.getByLabel("Universe name", {exact:true}).fill("New fixture group");
+  await page.getByRole("button", { name: "Create universe", exact:true }).click({ timeout: 5000 });
+  await page.getByRole("button", { name: /Add BBCA/ }).waitFor({ timeout: 5000 });
+  if (!universeWrite || universeWrite.method !== "POST" || universeWrite.body.name !== "New fixture group" || universeWrite.body.symbols.join(",") !== "BBCA.JK") throw Error("Universe create payload changed");
+  // Start toast placement checks without lingering create/update notifications.
+  await page.reload();
+  await page.getByRole("button", { name: "Delete Bank pilihan", exact: true }).waitFor({ timeout: 5000 });
   await page.evaluate(() => { window.confirm = () => true; });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -190,9 +232,12 @@ async (page) => {
       for (const failure of [false, true]) {
         await page.mouse.move(1, 900);
         failUniverseDelete = failure;
-        await page.getByRole("button", { name: "Hapus Bank pilihan", exact: true }).click({ timeout: 5000 });
-        const toast = page.locator(`.notification-toast[data-type=${failure ? "error" : "success"}]`).last();
-        await toast.waitFor({ state: "visible", timeout: 5000 });
+        await page.getByRole("button", { name: "Delete Bank pilihan", exact: true }).click({ timeout: 5000 });
+        const latestToast = page.locator(`.notification-toast[data-type=${failure ? "error" : "success"}]`).last();
+        await latestToast.waitFor({ state: "visible", timeout: 5000 });
+        // Pin this toast: after dismissal .last() can resolve an older save toast.
+        const toastLabel = await latestToast.getAttribute("aria-labelledby");
+        const toast = page.locator(`.notification-toast[aria-labelledby="${toastLabel}"]`);
         await toast.hover({ timeout: 5000 });
         const bounds = await page.locator(".notification-viewport").boundingBox();
         if (!bounds || bounds.y > 24 || Math.abs(width - bounds.x - bounds.width - 16) > 2) throw Error("Notification not top-right");

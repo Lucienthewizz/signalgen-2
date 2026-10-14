@@ -120,3 +120,29 @@ are left untouched, and sample performance/review content is labelled as illustr
 `npm run test:browser` checks the workspace routes in both themes, responsive overflow,
 dashboard content alignment, primary Refresh styling, and journal form/non-persistence
 using synthetic API/account fixtures only.
+
+## Stock universe catalog and English interface
+
+The stock universe editor uses a bounded, scrollable table with category shortcuts,
+search, persistent in-form selections (up to 10 stocks), and a naming/save footer.
+Saved universes are listed below the editor. Category/query changes reset pagination,
+not the selected stocks. Company names and user-created resource names are preserved.
+Website controls, descriptions, notifications, and client errors use English; external
+news headlines retain their source text.
+
+Blue chip, Banks, Energy, Consumer, Property, and Technology are explicitly **curated
+browsing shortcuts**, not complete sector membership, live index constituents, or
+investment recommendations. Only symbols present in the backend catalog are shown.
+The category vocabulary follows [IDX product information](https://www.idx.co.id/en/products/stocks/).
+Refresh category lists deliberately when issuer classifications change; unknown groups
+display a dash instead of an inferred classification.
+
+The local stylesheet owns universe spacing and liquid-glass controls without changing
+other resource layouts. Reduced-motion and reduced-transparency preferences have static,
+opaque alternatives. The layout reference is [DesignMD Command Center](https://designmd.ai/frknaykc/command-center)
+for restrained operational hierarchy, not its palette or identity.
+
+`npm run test:catalog` exercises categories, search, keyboard selection, the 10-stock
+limit, pagination, loading/empty states, and both themes at 1440/900/390px using a
+synthetic catalog. Set `SIGNALGEN_TEST_BROWSER_EXECUTABLE` to an existing Chromium
+executable when the Playwright CLI's expected browser is not installed.

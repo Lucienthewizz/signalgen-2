@@ -133,8 +133,10 @@ export function StockUniversesPanel({
       ]);
       setCatalog(stocks.items);
       setUniverses(groups.items);
-    } catch (caught) {
-      setError(readableError(caught, "Stock universe belum dapat dimuat."));
+    } catch {
+      setError(
+        "Stock universes could not be loaded. Check your connection and try Refresh.",
+      );
     } finally {
       setLoading(false);
     }
@@ -158,6 +160,7 @@ export function StockUniversesPanel({
     setSymbols([...universe.symbols]);
     setError(null);
     setNotice(null);
+    document.getElementById("universe-name")?.focus();
   }
 
   function toggleSymbol(symbol: StockInstrument["symbol"]) {
@@ -173,7 +176,7 @@ export function StockUniversesPanel({
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!name.trim() || symbols.length === 0) {
-      setError("Isi nama dan pilih setidaknya satu saham.");
+      setError("Enter a name and select at least one stock.");
       return;
     }
     setSaving(true);
@@ -187,33 +190,37 @@ export function StockUniversesPanel({
           name.trim(),
           symbols,
         );
-        setNotice("Perubahan universe tersimpan.");
+        setNotice("Stock universe updated.");
       } else {
         await api.createStockUniverse(name.trim(), symbols);
-        setNotice("Stock universe dibuat dan siap dipakai di screener.");
+        setNotice("Stock universe created and ready for screening.");
       }
       setEditing(null);
       setName("");
       setSymbols([]);
       await load();
     } catch (caught) {
-      setError(readableError(caught, "Stock universe belum tersimpan."));
+      setError(
+        caught instanceof ApiError && caught.code === "VERSION_CONFLICT"
+          ? "This universe changed in another session. Refresh and try again."
+          : "Stock universe could not be saved. Please try again.",
+      );
     } finally {
       setSaving(false);
     }
   }
 
   async function remove(universe: StockUniverse) {
-    if (!window.confirm(`Hapus “${universe.name}”?`)) return;
+    if (!window.confirm(`Delete “${universe.name}”?`)) return;
     setError(null);
     setNotice(null);
     try {
       await api.deleteStockUniverse(universe.id, universe.version);
       if (editing?.id === universe.id) resetEditor();
       await load();
-      setNotice("Stock universe dihapus.");
-    } catch (caught) {
-      setError(readableError(caught, "Stock universe belum dapat dihapus."));
+      setNotice("Stock universe deleted.");
+    } catch {
+      setError("Stock universe could not be deleted. Refresh and try again.");
     }
   }
 
@@ -224,17 +231,17 @@ export function StockUniversesPanel({
           <EmptyMedia variant="icon">
             <KeyRound />
           </EmptyMedia>
-          <EmptyTitle>Hubungkan akun untuk mengatur universe</EmptyTitle>
+          <EmptyTitle>Connect your account to manage universes</EmptyTitle>
           <EmptyDescription>
             {!backendOnline
-              ? "Go API belum terhubung. Jalankan backend lalu muat ulang halaman."
-              : "Masuk agar universe tersimpan sebagai resource milik akun Anda."}
+              ? "The service is unavailable. Check your connection and reload."
+              : "Sign in to create and manage your stock universes."}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
           {backendOnline && (
             <Button nativeButton={false} render={<a href="#login" />}>
-              Masuk
+              Sign in
             </Button>
           )}
         </EmptyContent>
@@ -243,176 +250,199 @@ export function StockUniversesPanel({
   }
 
   return (
-    <div className="resource-layout">
-      <section
-        className="resource-editor"
-        aria-labelledby="universe-editor-title"
-      >
-        <header className="resource-editor__header">
-          <div className="resource-title-lockup">
-            <span aria-hidden="true">
-              <Boxes />
-            </span>
-            <div>
-              <h3 id="universe-editor-title">
-                {editing ? "Edit stock universe" : "Buat stock universe"}
-              </h3>
-              <p>
-                Pilih 1–10 saham IDX untuk satu proses screening. Pilihan 3 saham tetap bisa digunakan.
-              </p>
-              <ResourceQuota
-                kind="stock_universes"
-                revision={universes.length}
-              />
-            </div>
-          </div>
-          {editing && (
-            <Button variant="ghost" onClick={resetEditor}>
-              <X data-icon="inline-start" /> Batal edit
-            </Button>
-          )}
-        </header>
-        <form onSubmit={save} className="resource-form">
-          <FieldGroup>
-            <Field data-invalid={Boolean(error && !name.trim())}>
-              <FieldLabel htmlFor="universe-name">Nama universe</FieldLabel>
-              <Input
-                id="universe-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Contoh: Bank pilihan"
-                maxLength={100}
-                aria-invalid={Boolean(error && !name.trim())}
-              />
-              <FieldDescription>
-                Gunakan nama yang mudah dikenali saat memilih universe di
-                screener.
-              </FieldDescription>
-            </Field>
-            <FieldSet>
-              <FieldLegend>Anggota universe</FieldLegend>
-              <FieldDescription>
-                Cari saham dari katalog IDX. Maksimal {universeSelectionLimit} saham per universe;
-                ketersediaan OHLCV diperiksa ketika screening dijalankan.
-              </FieldDescription>
-              <StockCatalogPicker
-                catalog={catalog}
-                selected={symbols}
-                loading={loading}
-                disabled={saving}
-                onToggle={toggleSymbol}
-              />
-            </FieldSet>
-            {error && <FieldError>{error}</FieldError>}
-          </FieldGroup>
-          <div className="resource-form__actions">
-            <span>{symbols.length}/{universeSelectionLimit} saham dipilih</span>
-            <Button type="submit" size="lg" disabled={saving}>
-              {saving ? (
-                <LoaderCircle
-                  data-icon="inline-start"
-                  className="is-spinning"
+    <div className="universe-workspace">
+      <Card className="universe-editor" aria-labelledby="universe-editor-title">
+        <CardHeader>
+          <CardTitle>
+            <h3 id="universe-editor-title">
+              {editing ? "Edit stock universe" : "Build a stock universe"}
+            </h3>
+          </CardTitle>
+          <CardDescription>
+            Select up to {universeSelectionLimit} IDX stocks for your next
+            screening.
+          </CardDescription>
+          <CardAction>
+            <ResourceQuota kind="stock_universes" revision={universes.length} />
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={save} className="universe-form">
+            <FieldGroup>
+              <FieldSet>
+                <FieldLegend className="sr-only">Universe stocks</FieldLegend>
+                <StockCatalogPicker
+                  key={editing?.id ?? "new"}
+                  catalog={catalog}
+                  selected={symbols}
+                  loading={loading}
+                  disabled={saving}
+                  onToggle={toggleSymbol}
                 />
-              ) : editing ? (
-                <Pencil data-icon="inline-start" />
-              ) : (
-                <Plus data-icon="inline-start" />
-              )}
-              {editing ? "Simpan perubahan" : "Create universe"}
-            </Button>
-          </div>
-        </form>
-      </section>
+              </FieldSet>
+            </FieldGroup>
+            <div className="universe-form__save">
+              <Field
+                data-invalid={Boolean(error && !name.trim())}
+                data-disabled={saving}
+              >
+                <FieldLabel htmlFor="universe-name">Universe name</FieldLabel>
+                <Input
+                  id="universe-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="e.g. Banking watchlist"
+                  maxLength={100}
+                  disabled={saving}
+                  aria-invalid={Boolean(error && !name.trim())}
+                />
+              </Field>
+              <div className="universe-form__actions">
+                {editing && (
+                  <Button
+                    variant="outline"
+                    disabled={saving}
+                    onClick={resetEditor}
+                  >
+                    Cancel
+                  </Button>
+                )}
+                <Button
+                  type="submit"
+                  disabled={
+                    loading || saving || !name.trim() || symbols.length === 0
+                  }
+                >
+                  {saving ? (
+                    <LoaderCircle
+                      data-icon="inline-start"
+                      className="is-spinning"
+                    />
+                  ) : editing ? (
+                    <Pencil data-icon="inline-start" />
+                  ) : (
+                    <Plus data-icon="inline-start" />
+                  )}
+                  {saving
+                    ? "Saving…"
+                    : editing
+                      ? "Save changes"
+                      : "Create universe"}
+                </Button>
+              </div>
+            </div>
+            {error && <FieldError>{error}</FieldError>}
+          </form>
+        </CardContent>
+        <CardFooter>
+          <p>Daily price data is checked when you run a screening.</p>
+        </CardFooter>
+      </Card>
 
-      <section
-        className="resource-library"
+      <Card
+        className="universe-library"
         aria-labelledby="universe-library-title"
       >
-        <header className="resource-library__header">
-          <div>
+        <CardHeader>
+          <CardTitle>
             <h3 id="universe-library-title">Your stock universes</h3>
-            <p>Universe ini tersedia sebagai input pada market screener.</p>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void load()}
-            disabled={loading}
-          >
-            <RefreshCw
-              data-icon="inline-start"
-              className={loading ? "is-spinning" : ""}
-            />
-            Muat ulang
-          </Button>
-        </header>
-        {loading && universes.length === 0 ? (
-          <div className="resource-loading" aria-label="Memuat stock universe">
-            <Skeleton />
-            <Skeleton />
-            <Skeleton />
-          </div>
-        ) : universes.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Layers3 />
-              </EmptyMedia>
-              <EmptyTitle>Belum ada stock universe</EmptyTitle>
-              <EmptyDescription>
-                Pilih saham di sebelah kiri untuk membuat universe pertama.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <div className="resource-rows">
-            {universes.map((universe) => (
-              <article
-                key={universe.id}
-                className={editing?.id === universe.id ? "is-active" : ""}
-              >
-                <div className="resource-row__identity">
-                  <span aria-hidden="true">
-                    <Database />
-                  </span>
-                  <div>
-                    <strong>{universe.name}</strong>
-                    <small>
-                      Diperbarui {formatDate(universe.updated_at)} · v
-                      {universe.version}
-                    </small>
+          </CardTitle>
+          <CardDescription>
+            Saved groups, ready to use in the screener.
+          </CardDescription>
+          <CardAction>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void load()}
+              disabled={loading || saving}
+            >
+              <RefreshCw
+                data-icon="inline-start"
+                className={loading ? "is-spinning" : ""}
+              />
+              Refresh
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          {loading && universes.length === 0 ? (
+            <div
+              className="resource-loading"
+              aria-label="Loading stock universes"
+            >
+              <Skeleton />
+              <Skeleton />
+              <Skeleton />
+            </div>
+          ) : universes.length === 0 ? (
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Layers3 />
+                </EmptyMedia>
+                <EmptyTitle>No stock universes yet</EmptyTitle>
+                <EmptyDescription>
+                  Select stocks above and give your first universe a name.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <div className="universe-library__rows">
+              {universes.map((universe) => (
+                <article
+                  key={universe.id}
+                  data-editing={editing?.id === universe.id || undefined}
+                >
+                  <div className="universe-library__identity">
+                    <div>
+                      <strong>{universe.name}</strong>
+                      <small>
+                        {universe.symbols.length} stocks · Updated{" "}
+                        {formatDate(universe.updated_at)}
+                      </small>
+                    </div>
                   </div>
-                </div>
-                <div className="resource-row__symbols">
-                  {universe.symbols.map((symbol) => (
-                    <Badge key={symbol} variant="outline">
-                      {symbol.replace(".JK", "")}
-                    </Badge>
-                  ))}
-                </div>
-                <div className="resource-row__actions">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => edit(universe)}
-                    aria-label={`Edit ${universe.name}`}
-                  >
-                    <Pencil />
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    onClick={() => void remove(universe)}
-                    aria-label={`Hapus ${universe.name}`}
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+                  <div className="universe-library__symbols">
+                    {universe.symbols.map((symbol) => (
+                      <Badge key={symbol} variant="outline">
+                        {symbol.replace(".JK", "")}
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="universe-library__actions">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => edit(universe)}
+                      disabled={saving || loading}
+                      aria-label={`Edit ${universe.name}`}
+                    >
+                      <Pencil data-icon="inline-start" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => void remove(universe)}
+                      disabled={saving || loading}
+                      aria-label={`Delete ${universe.name}`}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </CardContent>
+        <CardFooter>
+          <span>
+            {universes.length} saved{" "}
+            {universes.length === 1 ? "universe" : "universes"}
+          </span>
+        </CardFooter>
+      </Card>
     </div>
   );
 }

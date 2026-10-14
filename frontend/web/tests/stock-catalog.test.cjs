@@ -17,7 +17,14 @@ vm.runInNewContext(
   ).outputText,
   { exports: exportsForTest },
 );
-const { catalogPage, catalogPageSize, universeSelectionLimit } = exportsForTest;
+const {
+  catalogPage,
+  catalogPageSize,
+  universeSelectionLimit,
+  stockCategories,
+  stockInCategory,
+  stockGroupLabel,
+} = exportsForTest;
 const stocks = [
   {
     symbol: "ASII.JK",
@@ -67,6 +74,24 @@ test("a 962-item catalog renders only a bounded page and preserves input", () =>
   assert.equal(JSON.stringify(catalog), before);
 });
 
+test("category shortcuts intersect the available catalog and search", () => {
+  assert.equal(stockCategories.length, 7);
+  assert.equal(catalogPage(stocks, "", 0, "banks").totalMatches, 2);
+  assert.equal(
+    catalogPage(stocks, "asia", 50, "banks").items[0].symbol,
+    "BBCA.JK",
+  );
+  assert.equal(catalogPage(stocks, "", 0, "blue-chip").totalMatches, 3);
+  assert.equal(catalogPage(stocks, "", 0, "energy").totalMatches, 0);
+  assert.equal(stockInCategory(stocks[0], "banks"), false);
+  assert.equal(stockGroupLabel(stocks[1]), "Banks");
+  assert.equal(stockGroupLabel(stocks[0]), "—");
+  assert.equal(
+    stockInCategory({ ...stocks[0], symbol: "MADEUP.JK" }, "blue-chip"),
+    false,
+  );
+});
+
 test("picker integrates search, persistent selection, loading and pagination", () => {
   assert.equal(universeSelectionLimit, 10);
   const panel = fs.readFileSync(
@@ -84,4 +109,7 @@ test("picker integrates search, persistent selection, loading and pagination", (
   assert.ok(picker.includes("selected.map"));
   assert.ok(picker.includes("aria-busy={loading}"));
   assert.ok(picker.includes("full && !active"));
+  assert.ok(picker.includes('aria-label="Stock catalog"'));
+  assert.ok(picker.includes('aria-label="Stock categories"'));
+  assert.ok(panel.includes('className="universe-workspace"'));
 });

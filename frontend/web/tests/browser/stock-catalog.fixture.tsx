@@ -58,10 +58,9 @@ function Fixture() {
           gap: "16px",
         }}
       >
-        <h1>Katalog · UI fixture</h1>
+        <h1>Stock catalog · UI fixture</h1>
         <p>
-          962 baris sintetis untuk pengujian UI. Bukan akun atau data saham
-          nyata.
+          962 synthetic rows for UI testing. No real account or market data.
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
           <button
@@ -70,7 +69,7 @@ function Fixture() {
               setLight(!light);
             }}
           >
-            Ganti tema
+            Toggle theme
           </button>
           <button onClick={() => setLoading(!loading)}>Toggle loading</button>
           <button onClick={() => setEmpty(!empty)}>Toggle empty</button>
@@ -90,8 +89,8 @@ function Fixture() {
             )
           }
         />
-        <output aria-label="Pilihan fixture">
-          {selected.join(", ") || "Belum dipilih"}
+        <output aria-label="Fixture selection">
+          {selected.join(", ") || "No selection"}
         </output>
       </div>
     </main>
