@@ -542,22 +542,26 @@ export function WorkspaceScreenerPanel({
 
             <div className="screener-run-summary">
               <div>
-                <strong>{selectedRule?.name}</strong>
+                <div className="screener-run-summary__title">
+                  <strong>{selectedRule?.name}</strong>
+                  <small>
+                    {selectedUniverse?.symbols.length ?? 0} saham · Harian
+                  </small>
+                </div>
                 {!conditions.length && (
                   <p>Kondisi rule sistem diperiksa oleh server.</p>
                 )}
-                <div>
-                  {conditions.map((condition) => (
-                    <Badge key={condition} variant="outline">
-                      {condition}
-                    </Badge>
-                  ))}
-                </div>
+                {conditions.length > 0 && (
+                  <div>
+                    {conditions.map((condition) => (
+                      <Badge key={condition} variant="outline">
+                        {condition}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="screener-run-summary__action">
-                <small>
-                  {selectedUniverse?.symbols.length ?? 0} saham · Harian
-                </small>
                 <Button
                   size="lg"
                   onClick={() => void execute()}
