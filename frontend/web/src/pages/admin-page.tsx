@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { api } from "@/api/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useActionNotifications } from "@/components/ui/toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -104,6 +105,7 @@ export function AdminPage({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  useActionNotifications(message, error);
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [system, setSystem] = useState<{
     api: boolean;
@@ -919,17 +921,6 @@ export function AdminPage({
             </AlertDescription>
           </Alert>
         )}
-        <div aria-live="polite">
-          {(error || message) && (
-            <Alert variant={error ? "destructive" : "default"}>
-              {error ? <CircleAlert /> : <BadgeCheck />}
-              <AlertTitle>
-                {error ? "Change not completed" : "Change saved"}
-              </AlertTitle>
-              <AlertDescription>{error ?? message}</AlertDescription>
-            </Alert>
-          )}
-        </div>
       </section>
       <section
         className="admin-activity"

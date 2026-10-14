@@ -28,6 +28,7 @@ import { subscriptionState } from "@/lib/workspace-feedback";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast, useActionNotifications } from "@/components/ui/toast";
 import {
   Accordion,
   AccordionItem,
@@ -117,6 +118,7 @@ export function StockUniversesPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  useActionNotifications(notice, error);
 
   async function load() {
     if (!authenticated || !backendOnline) return;
@@ -202,6 +204,7 @@ export function StockUniversesPanel({
   async function remove(universe: StockUniverse) {
     if (!window.confirm(`Hapus “${universe.name}”?`)) return;
     setError(null);
+    setNotice(null);
     try {
       await api.deleteStockUniverse(universe.id, universe.version);
       if (editing?.id === universe.id) resetEditor();
@@ -419,13 +422,6 @@ export function StockUniversesPanel({
             ))}
           </div>
         )}
-        {notice && (
-          <Alert>
-            <BadgeCheck />
-            <AlertTitle>Perubahan tersimpan</AlertTitle>
-            <AlertDescription>{notice}</AlertDescription>
-          </Alert>
-        )}
       </section>
     </div>
   );
@@ -519,9 +515,28 @@ export function SubscriptionPanel({
           : "user canceled immediately",
       );
       setSubscription(response.subscription);
+      toast.add({
+        type: "success",
+        title: "Paket diperbarui",
+        description: atPeriodEnd
+          ? "Pembatalan dijadwalkan pada akhir periode."
+          : "Subscription dibatalkan.",
+        timeout: 5000,
+      });
       dispatchEvent(new Event("signalgen:subscription"));
     } catch (caught) {
-      setError(readableError(caught, "Subscription belum dapat dibatalkan."));
+      const message = readableError(
+        caught,
+        "Subscription belum dapat dibatalkan.",
+      );
+      setError(message);
+      toast.add({
+        type: "error",
+        title: "Pembatalan belum berhasil",
+        description: message,
+        priority: "high",
+        timeout: 8000,
+      });
     } finally {
       setSaving(false);
     }

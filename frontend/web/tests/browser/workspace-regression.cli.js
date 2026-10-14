@@ -16,6 +16,7 @@ async (page) => {
   const subscription = { plan_code: "pro", plan_name: "Pro", status: "active", features: ["screener", "backtest"], source: "manual", current_period_start: now, current_period_end: new Date(Date.now()+30*86400000).toISOString(), cancel_at_period_end: false };
   let unauthorized = false;
   let systemRule = false;
+  let failUniverseDelete = false;
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -29,6 +30,7 @@ async (page) => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort();
     const p = url.pathname;
+    if (failUniverseDelete && p.startsWith("/api/v1/stock-universes/") && route.request().method() === "DELETE") return route.fulfill({ status: 500, json: { error: { code: "TEST_FAILURE", message: "Penghapusan fixture gagal." } } });
     if (p !== "/api" && !p.startsWith("/api/") && p !== "/ready") return route.continue();
     if (unauthorized && p === "/api/v1/account/me") return route.fulfill({ status: 401, json: { error: { code: "UNAUTHORIZED", message: "Fixture session expired" } } });
     let payload;
@@ -166,6 +168,31 @@ async (page) => {
   await page.goto("http://127.0.0.1:5174/#account");
   await page.locator("main").waitFor({ timeout: 10000 });
   await page.screenshot({ path: "/private/tmp/signalgen-account.png", animations: "disabled", timeout: 10000 });
+  await page.goto("http://127.0.0.1:5174/#app/universes");
+  await page.evaluate(() => { window.confirm = () => true; });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (let theme = 0; theme < 2; theme++) {
+      for (const failure of [false, true]) {
+        await page.mouse.move(1, 900);
+        failUniverseDelete = failure;
+        await page.getByRole("button", { name: "Hapus Bank pilihan", exact: true }).click({ timeout: 5000 });
+        const toast = page.locator(`.notification-toast[data-type=${failure ? "error" : "success"}]`).last();
+        await toast.waitFor({ state: "visible", timeout: 5000 });
+        await toast.hover({ timeout: 5000 });
+        const bounds = await page.locator(".notification-viewport").boundingBox();
+        if (!bounds || bounds.y > 24 || Math.abs(width - bounds.x - bounds.width - 16) > 2) throw Error("Notification not top-right");
+        await toast.screenshot({ path: `/private/tmp/signalgen-toast-${width}-${theme}-${failure}.png`, animations: "disabled", timeout: 10000 });
+        // Base UI announces the toast through its live region and hides the
+        // visual copy from AT until the viewport is keyboard-focused.
+        const closeToast = toast.getByRole("button", { name: "Tutup notifikasi", exact: true, includeHidden: true });
+        await closeToast.click({ timeout: 5000 });
+        await toast.waitFor({ state: "detached", timeout: 5000 });
+      }
+      await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
+    }
+  }
+  failUniverseDelete = false;
   systemRule = true;
   await page.goto("http://127.0.0.1:5174/#app/analysis");
   await page.getByText("Kondisi rule sistem diperiksa oleh server.", { exact: true }).waitFor({ timeout: 10000 });
@@ -220,4 +247,5 @@ async (page) => {
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Public page overflow: ${route}`);
   }
   if (errors.length) throw Error(errors.join("; "));
+  await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));
 }
