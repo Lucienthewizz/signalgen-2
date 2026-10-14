@@ -102,6 +102,13 @@ async (page) => {
             return Math.abs(range.getBoundingClientRect().x - label.getBoundingClientRect().x);
           });
           if (offset > 2) throw Error(`Misaligned screener explanation: ${offset}px`);
+          if (await page.locator(".screener-results .screener-technical").count()) throw Error("Technical card still nested in results");
+          const technical = page.locator(".screener-workspace > .screener-technical");
+          await technical.getByRole("heading", { name: "Informasi teknis data", exact: true }).waitFor({ timeout: 5000 });
+          if (await technical.locator("summary").count()) throw Error("Technical card still collapsible");
+          const layout = await technical.evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), text: parseFloat(getComputedStyle(el.querySelector(".dataset-provenance strong")).fontSize), left: el.getBoundingClientRect().left - document.querySelector(".screener-results").getBoundingClientRect().left }));
+          if (layout.radius < 12 || layout.text > 14 || Math.abs(layout.left) > 1) throw Error(`Technical card layout incorrect: ${JSON.stringify(layout)}`);
+          await technical.screenshot({ path: `/private/tmp/signalgen-technical-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           await page.getByRole("button", { name: "BBCA", exact: true }).click({ timeout: 5000 });
           const detail = page.locator(".stock-detail");
           await detail.getByRole("heading", { name: /Bukti kondisi/ }).waitFor({ timeout: 5000 });

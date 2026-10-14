@@ -1131,51 +1131,56 @@ export function WorkspaceScreenerPanel({
                 </TableBody>
               </Table>
             </div>
-            <details className="screener-evidence">
-              <summary>Informasi teknis data</summary>
-              <footer className="dataset-provenance">
-                <div>
-                  <span>Provider</span>
-                  <strong>Yahoo Finance</strong>
-                </div>
-                <div>
-                  <span>Dataset</span>
-                  <strong>{run.manifest.schema_version}</strong>
-                </div>
-                <div>
-                  <span>Range</span>
-                  <strong>
-                    {run.manifest.available_range.from} —{" "}
-                    {run.manifest.available_range.to}
-                  </strong>
-                </div>
-                <div>
-                  <span>Quality</span>
-                  <strong>{run.manifest.quality.status}</strong>
-                </div>
-                <div>
-                  <span>Checksum</span>
-                  <code>{run.manifest.checksum.slice(0, 12)}…</code>
-                </div>
-                {run.metrics && (
-                  <>
-                    <div>
-                      <span>Komputasi client</span>
-                      <strong>{run.metrics.feature_ms.toFixed(1)} ms</strong>
-                    </div>
-                    <div>
-                      <span>Kandidat / koneksi</span>
-                      <strong>
-                        {run.metrics.candidates} / {run.metrics.sockets}
-                      </strong>
-                    </div>
-                  </>
-                )}
-              </footer>
-            </details>
           </>
         )}
       </section>
+      {run && (
+        <section
+          className="screener-technical"
+          aria-labelledby="screener-technical-title"
+        >
+          <h4 id="screener-technical-title">Informasi teknis data</h4>
+          <footer className="dataset-provenance">
+            <div>
+              <span>Provider</span>
+              <strong>Yahoo Finance</strong>
+            </div>
+            <div>
+              <span>Dataset</span>
+              <strong>{run.manifest.schema_version}</strong>
+            </div>
+            <div>
+              <span>Range</span>
+              <strong>
+                {run.manifest.available_range.from} —{" "}
+                {run.manifest.available_range.to}
+              </strong>
+            </div>
+            <div>
+              <span>Quality</span>
+              <strong>{run.manifest.quality.status}</strong>
+            </div>
+            <div>
+              <span>Checksum</span>
+              <code>{run.manifest.checksum.slice(0, 12)}…</code>
+            </div>
+            {run.metrics && (
+              <>
+                <div>
+                  <span>Komputasi client</span>
+                  <strong>{run.metrics.feature_ms.toFixed(1)} ms</strong>
+                </div>
+                <div>
+                  <span>Kandidat / koneksi</span>
+                  <strong>
+                    {run.metrics.candidates} / {run.metrics.sockets}
+                  </strong>
+                </div>
+              </>
+            )}
+          </footer>
+        </section>
+      )}
     </div>
   );
 }

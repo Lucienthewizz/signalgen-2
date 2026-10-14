@@ -1016,8 +1016,12 @@
   color: var(--muted);
 }
 .screener-result-ledger :is(th, td):first-child { padding-inline-start: var(--workspace-panel-gutter); }
-.screener-results > .screener-evidence { max-width: none; margin: 0; }
-.screener-results > .screener-evidence > summary { width: 100%; padding: 16px var(--workspace-panel-gutter); }
+.screener-workspace > .screener-technical { padding: 20px var(--workspace-panel-gutter); border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.screener-technical h4 { margin: 0 0 16px; color: var(--text); font-size: 14px; font-weight: 650; }
+.screener-technical .dataset-provenance { border: 0; background: transparent; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px 24px; }
+.screener-technical .dataset-provenance > div { padding: 0; border: 0; }
+.screener-technical .dataset-provenance span { color: var(--muted); font-size: 12px; letter-spacing: 0; text-transform: none; }
+.screener-technical .dataset-provenance :is(strong, code) { font-size: 12px; font-weight: 500; white-space: normal; overflow-wrap: anywhere; }
 
 .screener-result-ledger td strong {
   color: var(--text);
