@@ -1350,9 +1350,11 @@
   border-radius: 0 0 13px 13px;
 }
 .subscription-faq { margin: 20px var(--workspace-panel-gutter) var(--workspace-panel-gutter); width: auto; }
-.subscription-faq [data-slot="accordion-item"] { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); overflow: hidden; }
-.subscription-faq [data-slot="accordion-trigger"] { align-items: center; gap: 16px; min-height: 64px; padding: 18px var(--workspace-panel-gutter); color: var(--text); font-size: 14px; line-height: 1.5; font-weight: 650; text-decoration: none; cursor: pointer; }
-.subscription-faq [data-slot="accordion-trigger"]:hover { background: var(--accent-surface); }
+.subscription-faq [data-slot="accordion-item"] { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
+.subscription-faq [data-slot="accordion-item"] > h3 { margin: 0; font: inherit; letter-spacing: normal; }
+.subscription-faq [data-slot="accordion-trigger"] { align-items: center; gap: 16px; min-height: 56px; padding: 16px var(--workspace-panel-gutter); border: 0; border-radius: 0; color: var(--text); font-size: 14px; line-height: 1.6; font-weight: 550; letter-spacing: 0; text-decoration: none; cursor: pointer; }
+.subscription-faq [data-slot="accordion-trigger"]:hover { background: var(--surface-2); }
+.subscription-faq [data-slot="accordion-trigger"]:focus-visible { box-shadow: none; outline: 2px solid var(--muted); outline-offset: -3px; }
 .subscription-faq [data-slot="accordion-content"] { color: var(--muted); }
 .subscription-faq [data-slot="accordion-content"] > div { padding: 0 var(--workspace-panel-gutter) 20px; }
 .subscription-faq p { margin: 0; max-width: 75ch; font-size: 14px; line-height: 1.7; }

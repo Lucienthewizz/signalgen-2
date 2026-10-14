@@ -234,6 +234,10 @@ async (page) => {
     for (let theme = 0; theme < 2; theme++) {
       const question = page.getByRole("button", { name: "Apa yang terjadi jika paket berubah?", exact: true });
       if (await question.getAttribute("aria-expanded") !== "false") throw Error("Package FAQ should start collapsed");
+      await question.focus();
+      const type = await question.evaluate(el => ({ tracking: parseFloat(getComputedStyle(el).letterSpacing) || 0, weight: Number(getComputedStyle(el).fontWeight), shadow: getComputedStyle(el).boxShadow, headerMargin: getComputedStyle(el.parentElement).marginBottom }));
+      if (type.tracking !== 0 || type.weight > 600 || type.shadow !== "none" || type.headerMargin !== "0px") throw Error(`Package FAQ inherited display styling: ${JSON.stringify(type)}`);
+      await page.locator(".subscription-faq").screenshot({ path: `/private/tmp/signalgen-package-faq-closed-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
       await question.click({ timeout: 5000 });
       await page.locator(".subscription-faq [data-slot=accordion-content]").waitFor({ state: "visible", timeout: 5000 });
       await page.locator(".subscription-faq").screenshot({ path: `/private/tmp/signalgen-package-faq-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
