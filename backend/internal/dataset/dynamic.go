@@ -117,14 +117,15 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	hash := sha256.Sum256(content)
 	now := store.now().UTC()
 	expiresAt := now.Add(store.limits.TTL)
+	source := marketdata.DescribeSource(store.provider)
 	manifest := Manifest{
 		DatasetID: id, Version: now.Format("20060102T150405Z"), ExpiresAt: expiresAt.Format(time.RFC3339),
-		SchemaVersion: "ohlcv-multi-1", Provider: "yahoo_finance", Purpose: "screen",
+		SchemaVersion: "ohlcv-multi-1", Provider: source.Provider, Purpose: "screen",
 		Market: "IDX", Currency: "IDR", Symbols: symbols, Timeframe: "1d", Timezone: "UTC",
 		RequestedRange: Range{From: from, To: to}, AvailableRange: Range{From: from, To: to},
 		WarmupCandles: 20, Adjustment: "none", CandleCount: candleCount, DecodedBytes: len(content),
 		Checksum: "sha256:" + hex.EncodeToString(hash[:]),
-		Quality:  Quality{Status: "complete", Warnings: []string{"Yahoo Finance data; unofficial source for academic MVP use"}},
+		Quality:  Quality{Status: "complete", Warnings: source.Warnings},
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()

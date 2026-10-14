@@ -103,8 +103,9 @@ Checksum bukan enkripsi dan bukan bukti bahwa harga provider benar.
 
 **Output ini plaintext backend research data, bukan cache browser terenkripsi.**
 Jangan expose directory melalui static hosting atau memasukkannya ke Git. Runtime
-default tetap memakai provider/snapshot lamanya; membaca koleksi ini melalui API
-memerlukan integrasi berikutnya dengan access control dan bounds yang tetap aktif.
+default tetap memakai request Yahoo. Integrasi arsip read-only kini opsional;
+lihat [IDX_ARCHIVE_API.md](IDX_ARCHIVE_API.md). Ownership dan bounds tetap aktif,
+bukan endpoint publik untuk seluruh koleksi.
 
 Di laptop pengujian, proses Go tidak dapat menulis ke Documents, sehingga output
 live memakai `/private/tmp/signalgen-idx-history-20261014`. Data tersimpan di disk

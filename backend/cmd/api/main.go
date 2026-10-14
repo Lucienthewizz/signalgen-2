@@ -72,13 +72,16 @@ func main() {
 	// Stock universes are durable owner-scoped bundles. Provider symbols remain
 	// server-only metadata so clients cannot request an arbitrary instrument.
 	universeStore := universe.NewPostgresRepository(database)
-	yahooProvider, err := marketdata.NewYahooFinance(yahooFinanceBaseURL, nil)
+	upstreamProvider, err := configuredMarketProvider(
+		environment("SIGNALGEN_MARKET_DATA_MODE", "yahoo"),
+		os.Getenv("SIGNALGEN_IDX_HISTORY_DIR"), yahooFinanceBaseURL,
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
 	// Public OHLCV is shared briefly; private dataset handles remain owner-bound.
 	// Identical instrument fetches reuse one bounded upstream request.
-	provider, err := marketdata.NewCachedProvider(yahooProvider, marketdata.DefaultCacheOptions())
+	provider, err := marketdata.NewCachedProvider(upstreamProvider, marketdata.DefaultCacheOptions())
 	if err != nil {
 		log.Fatal(err)
 	}

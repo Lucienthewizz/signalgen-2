@@ -226,32 +226,57 @@ func Run(ctx context.Context, catalog Catalog, provider HistoryProvider, options
 }
 
 func verifySnapshot(directory string, item Instrument, from, to time.Time) error {
+	_, err := readSnapshot(directory, item, from, to)
+	return err
+}
+
+// readSnapshot is shared by resume validation and the read-only API adapter.
+// A valid JSON file is not enough: symbol, window, hash and candles must agree.
+func readSnapshot(directory string, item Instrument, from, to time.Time) (Snapshot, error) {
 	var snapshot Snapshot
 	if err := readJSON(filepath.Join(directory, item.Code+".json"), &snapshot); err != nil {
-		return err
+		return Snapshot{}, err
 	}
 	if snapshot.Code != item.Code || snapshot.RequestedFrom != from.Format(time.RFC3339) || snapshot.RequestedToExclusive != to.Format(time.RFC3339) {
-		return fmt.Errorf("snapshot binding mismatch")
+		return Snapshot{}, fmt.Errorf("snapshot binding mismatch")
 	}
-	data, _ := json.Marshal(snapshot.History)
+	if _, err := time.Parse(time.RFC3339, snapshot.FetchedAt); err != nil {
+		return Snapshot{}, fmt.Errorf("invalid snapshot fetch timestamp")
+	}
+	data, err := json.Marshal(snapshot.History)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("invalid snapshot encoding")
+	}
 	hash := sha256.Sum256(data)
 	if hex.EncodeToString(hash[:]) != snapshot.DataSHA256 {
-		return fmt.Errorf("snapshot checksum mismatch")
+		return Snapshot{}, fmt.Errorf("snapshot checksum mismatch")
 	}
-	return marketdata.ValidateHistory(snapshot.History.Series, item.ProviderSymbol, from, to)
+	if err := marketdata.ValidateHistory(snapshot.History.Series, item.ProviderSymbol, from, to); err != nil {
+		return Snapshot{}, err
+	}
+	return snapshot, nil
 }
 
 func readJSON(path string, target any) error {
+	// Reject links, pipes and devices before opening. Paths are operator-owned,
+	// but a bad archive must not turn a bounded JSON read into a blocking pipe.
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("collection input must be a regular file")
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	info, err := file.Stat()
+	info, err = file.Stat()
 	if err != nil {
 		return err
 	}
-	if info.Size() > 16<<20 {
+	if !info.Mode().IsRegular() || info.Size() > 16<<20 {
 		return fmt.Errorf("collection file exceeds 16 MiB")
 	}
 	decoder := json.NewDecoder(io.LimitReader(file, 16<<20))
