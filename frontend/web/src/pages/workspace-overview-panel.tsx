@@ -8,6 +8,8 @@ import {
   RefreshCw,
   SearchCheck,
   ShieldCheck,
+  Activity,
+  Newspaper,
 } from "lucide-react";
 import { api } from "@/api/client";
 import { monitorRuns, type MonitorRun } from "@/lib/market-monitor";
@@ -19,6 +21,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import type {
   AccountState,
   RuleResource,
@@ -31,7 +39,14 @@ type Props = {
   backendOnline: boolean;
   userId?: string;
   go: (
-    view: "analysis" | "rules" | "universes" | "access" | "subscription",
+    view:
+      | "analysis"
+      | "rules"
+      | "universes"
+      | "access"
+      | "subscription"
+      | "realtime"
+      | "news",
   ) => void;
 };
 
@@ -88,6 +103,9 @@ export function WorkspaceOverviewPanel({
   const preferences = userId ? readScreenerPreferences(userId) : null;
   const activeRule =
     rules.find((rule) => rule.id === preferences?.ruleId) ?? rules[0];
+  const activeUniverse =
+    universes.find((universe) => universe.id === preferences?.universeId) ??
+    universes[0];
   const ready =
     Boolean(account?.features.includes("screener")) &&
     rules.length > 0 &&
@@ -177,43 +195,80 @@ export function WorkspaceOverviewPanel({
           </Button>
         </Alert>
       )}
-      <section className="overview-next">
-        <div>
-          <h3>
-            {ready
-              ? latest
-                ? "Lanjutkan analisis Anda"
-                : "Siap untuk screening pertama"
-              : "Lengkapi workspace Anda"}
-          </h3>
-          <p>
-            {ready
-              ? latest
-                ? `Terakhir menggunakan ${latest.rule}. Pilihan rule dan universe Anda tersimpan.`
-                : "Pilih rule dan stock universe, lalu periksa hasil beserta alasannya."
-              : "Akses screener, rule, dan stock universe diperlukan sebelum menjalankan analisis."}
-          </p>
-          {activeRule && (
-            <p className="overview-next__rule">
-              <ListChecks aria-hidden="true" />
-              Rule pilihan: <strong>{activeRule.name}</strong>
-            </p>
-          )}
-        </div>
-        <Button
-          size="lg"
-          onClick={() => (ready ? continueScreen() : go(nextStep))}
+      <div className="overview-launch">
+        <section
+          className="overview-next"
+          aria-labelledby="overview-next-title"
         >
-          <SearchCheck data-icon="inline-start" />
-          {ready
-            ? "Buka screener"
-            : nextStep === "subscription"
-              ? "Periksa akses"
-              : nextStep === "rules"
-                ? "Buat rule"
-                : "Buat universe"}
-        </Button>
-      </section>
+          <div>
+            <h3 id="overview-next-title">
+              {ready
+                ? latest
+                  ? "Lanjutkan analisis Anda"
+                  : "Siap untuk screening pertama"
+                : "Lengkapi workspace Anda"}
+            </h3>
+            <p>
+              {ready
+                ? latest
+                  ? "Lanjutkan dengan pilihan terakhir, atau ubah sebelum screening."
+                  : "Pilih rule dan stock universe, lalu periksa hasil beserta alasannya."
+                : "Akses screener, rule, dan stock universe diperlukan sebelum menjalankan analisis."}
+            </p>
+            <dl className="overview-selection">
+              <div>
+                <dt>
+                  <ListChecks aria-hidden="true" />
+                  Rule
+                </dt>
+                <dd>{activeRule?.name ?? "Belum dipilih"}</dd>
+              </div>
+              <div>
+                <dt>
+                  <Boxes aria-hidden="true" />
+                  Stock universe
+                </dt>
+                <dd>{activeUniverse?.name ?? "Belum dibuat"}</dd>
+                {activeUniverse && (
+                  <span>{activeUniverse.symbols.length} saham</span>
+                )}
+              </div>
+            </dl>
+          </div>
+          <Button
+            size="lg"
+            onClick={() => (ready ? continueScreen() : go(nextStep))}
+          >
+            <SearchCheck data-icon="inline-start" />
+            {ready
+              ? "Buka screener"
+              : nextStep === "subscription"
+                ? "Periksa akses"
+                : nextStep === "rules"
+                  ? "Buat rule"
+                  : "Buat universe"}
+          </Button>
+        </section>
+        <nav className="overview-shortcuts" aria-label="Akses cepat">
+          <h3>Pantau pasar</h3>
+          <button onClick={() => go("realtime")}>
+            <Activity aria-hidden="true" />
+            <span>
+              <strong>Market monitor</strong>
+              <small>Chart dan harga saham pantauan</small>
+            </span>
+            <ArrowUpRight aria-hidden="true" />
+          </button>
+          <button onClick={() => go("news")}>
+            <Newspaper aria-hidden="true" />
+            <span>
+              <strong>Berita & video</strong>
+              <small>Ikuti kabar emiten dan pasar</small>
+            </span>
+            <ArrowUpRight aria-hidden="true" />
+          </button>
+        </nav>
+      </div>
       <section className="overview-counts" aria-label="Ringkasan workspace">
         <button onClick={() => go("rules")}>
           <ListChecks aria-hidden="true" />
@@ -249,11 +304,15 @@ export function WorkspaceOverviewPanel({
             <Clock3 aria-hidden="true" />
             Screening terbaru
           </h3>
-          <Badge variant="outline">Riwayat workspace</Badge>
+          <span className="overview-activity__caption">
+            {history.length
+              ? `${Math.min(history.length, 5)} aktivitas terakhir`
+              : "Riwayat workspace"}
+          </span>
         </header>
         {history.length ? (
           <ul>
-            {history.slice(0, 3).map((item) => (
+            {history.slice(0, 5).map((item) => (
               <li key={item.recordedAt}>
                 <div>
                   <strong>{item.rule}</strong>
@@ -263,34 +322,36 @@ export function WorkspaceOverviewPanel({
                         .map((row) => row.decision.symbol.replace(".JK", ""))
                         .join(", ")}
                   </p>
-                  <time dateTime={item.recordedAt}>
-                    {new Date(item.recordedAt).toLocaleString("id-ID", {
-                      day: "numeric",
-                      month: "short",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </time>
                 </div>
+                <time dateTime={item.recordedAt}>
+                  {new Date(item.recordedAt).toLocaleString("id-ID", {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </time>
                 <Badge variant="secondary">
                   {item.run.rows.filter((row) => row.decision.matched).length} /{" "}
                   {item.run.rows.length} cocok
                 </Badge>
                 <Button variant="outline" onClick={() => continueScreen(item)}>
-                  Tinjau
+                  Gunakan pilihan
                   <ArrowUpRight data-icon="inline-end" />
                 </Button>
               </li>
             ))}
           </ul>
         ) : (
-          <div className="overview-activity__empty">
-            <p>Belum ada screening yang selesai.</p>
-            <span>
-              Hasil pertama Anda akan tersimpan di sini setelah screening
-              berhasil.
-            </span>
-          </div>
+          <Empty className="overview-activity__empty">
+            <EmptyHeader>
+              <EmptyTitle>Belum ada screening yang selesai.</EmptyTitle>
+              <EmptyDescription>
+                Hasil pertama Anda akan tersimpan di sini setelah screening
+                berhasil.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
       </section>
     </div>

@@ -61,6 +61,16 @@ async (page) => {
   const download = page.waitForEvent("download", { timeout: 5000 });
   await page.getByRole("button", { name: "Ekspor CSV" }).click({ timeout: 5000 });
   if ((await download).suggestedFilename() !== "signalgen-screening.csv") throw Error("CSV download failed");
+  const journalKey = `signalgen:journal-drafts:${user.id}`;
+  await page.evaluate(key => localStorage.setItem(key, "preserve-existing-drafts"), journalKey);
+  await page.getByRole("button", { name: "Catat jurnal", exact: true }).first().click({ timeout: 5000 });
+  await page.getByRole("heading", { name: "Catat transaksi", exact: true }).waitFor({ timeout: 5000 });
+  if (await page.locator(".journal-capture input").first().inputValue() !== "BBCA") throw Error("Screener did not prefill journal symbol");
+  if (!await page.getByRole("button", { name: "Penyimpanan belum tersedia", exact: true }).isDisabled()) throw Error("Unavailable journal storage must not submit");
+  if (await page.locator(".journal-drafts").count()) throw Error("Local draft workflow still visible");
+  await page.reload();
+  if (await page.evaluate(key => localStorage.getItem(key), journalKey) !== "preserve-existing-drafts") throw Error("Old drafts were overwritten");
+  if (await page.locator(".journal-capture").count()) throw Error("Journal form was persisted");
   await page.goto("http://127.0.0.1:5174/#app/realtime");
   await page.getByLabel("Urutkan tabel", { exact: true }).click({ timeout: 5000 });
   await page.getByRole("option", { name: "Perubahan buka–tutup tertinggi", exact: true }).click({ timeout: 5000 });
@@ -90,6 +100,38 @@ async (page) => {
             return Math.abs(range.getBoundingClientRect().x - label.getBoundingClientRect().x);
           });
           if (offset > 2) throw Error(`Misaligned screener explanation: ${offset}px`);
+        }
+        if (view === "overview") {
+          await page.getByRole("heading", { name: "Pantau pasar", exact: true }).waitFor({ timeout: 5000 });
+          const alignment = await page.evaluate(() => {
+            const title = document.querySelector(".overview-next h3").getBoundingClientRect();
+            const selection = document.querySelector(".overview-selection").getBoundingClientRect();
+            const history = document.querySelector(".overview-activity header h3").getBoundingClientRect();
+            const row = document.querySelector(".overview-activity li > div").getBoundingClientRect();
+            return Math.max(Math.abs(title.x - selection.x), Math.abs(title.x - history.x), Math.abs(history.x - row.x));
+          });
+          if (alignment > 2) throw Error(`Dashboard gutters inconsistent: ${alignment}px`);
+        }
+        if (view === "rules") {
+          const refresh = page.locator(".rule-library").getByRole("button", { name: "Refresh", exact: true });
+          if (!(await refresh.getAttribute("class")).split(" ").includes("bg-primary")) throw Error("Rules refresh not primary");
+          if (await page.locator(".rule-library__rows").getByText("v2", { exact: true }).count()) throw Error("Rule version badge still visible");
+          const offset = await page.evaluate(() => {
+            const header = document.querySelector(".rule-composer__header"), form = document.querySelector(".rule-composer__form");
+            return Math.abs(parseFloat(getComputedStyle(header).paddingLeft) - parseFloat(getComputedStyle(form).paddingLeft));
+          });
+          if (offset > 1) throw Error(`Rule header/form gutters differ: ${offset}px`);
+        }
+        if (view === "journal") {
+          const review = page.locator(".journal-detail");
+          await review.screenshot({ path: `/private/tmp/signalgen-journal-review-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+          if (await review.locator("dt").allTextContents().then(labels => labels.join(",")) !== "Rule,Waktu masuk,Waktu keluar") throw Error("Journal review metadata not separated");
+          const offset = await review.evaluate(el => {
+            const parts = [el.querySelector("header"), el.querySelector(".journal-detail__note"), el.querySelector("dl"), el.querySelector(".journal-tags")];
+            const positions = parts.map(part => part.getBoundingClientRect().x);
+            return Math.max(...positions) - Math.min(...positions);
+          });
+          if (offset > 1) throw Error(`Journal review alignment differs: ${offset}px`);
         }
         if (view === "realtime") {
           const offset = await page.evaluate(() => {

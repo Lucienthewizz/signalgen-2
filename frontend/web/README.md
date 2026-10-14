@@ -104,3 +104,19 @@ execution. It requires `core-0.3.0`, `worker-2`, and
 `screener-features-1`; the system rule definition remains server-side. A real
 run requires a Supabase user with the `screener` entitlement;
 the guest state directs the user to sign in instead of showing fabricated data.
+
+## Workspace layout and journal status (14 October 2026)
+
+The overview combines the selected rule/universe, monitor/news shortcuts, account
+resources, and up to five recent screening runs. “Gunakan pilihan” restores a run's
+selection; it does not claim to reopen its historical evidence. Panel content uses
+`--workspace-panel-gutter` for desktop/mobile alignment, including the shared header.
+
+“Catat jurnal” opens the Trade Journal form with the stock symbol prefilled.
+Server journal storage is deliberately not enabled. The form does not persist local
+drafts or submit a transaction; saving is visibly unavailable. Existing browser drafts
+are left untouched, and sample performance/review content is labelled as illustrative.
+
+`npm run test:browser` checks the workspace routes in both themes, responsive overflow,
+dashboard content alignment, primary Refresh styling, and journal form/non-persistence
+using synthetic API/account fixtures only.
