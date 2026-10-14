@@ -2280,9 +2280,9 @@ export function DemoWorkspace({
               <p>{meta.description}</p>
             </div>
           </div>
-          {authenticated && view !== "journal" && (
+          {authenticated && view !== "journal" && sync.state !== "saved" && (
             <div className="workspace-sync" role="status" aria-live="polite">
-              <span>{sync.state === "saved" ? "Tersimpan di akun" : sync.state === "loading" ? "Memuat data akun…" : sync.state === "saving" ? "Menyimpan perubahan…" : sync.state === "conflict" ? "Ada perubahan di perangkat lain. Pilih salinan yang ingin digunakan." : "Salinan lokal tersedia. Sinkronisasi belum selesai."}</span>
+              <span>{sync.state === "loading" ? "Memuat data akun…" : sync.state === "saving" ? "Menyimpan perubahan…" : sync.state === "conflict" ? "Ada perubahan di perangkat lain. Pilih salinan yang ingin digunakan." : "Salinan lokal tersedia. Sinkronisasi belum selesai."}</span>
               {sync.state === "local" && <Button variant="ghost" size="sm" onClick={sync.retry}>Coba sinkronkan</Button>}
               {sync.state === "conflict" && <><Button variant="outline" size="sm" onClick={() => void sync.useAccount()}>Gunakan versi akun</Button><Button variant="outline" size="sm" onClick={() => void sync.useDevice()}>Simpan versi perangkat ini</Button></>}
             </div>

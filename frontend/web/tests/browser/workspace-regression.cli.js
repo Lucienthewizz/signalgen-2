@@ -100,6 +100,16 @@ async (page) => {
             return Math.abs(range.getBoundingClientRect().x - label.getBoundingClientRect().x);
           });
           if (offset > 2) throw Error(`Misaligned screener explanation: ${offset}px`);
+          await page.getByRole("button", { name: "BBCA", exact: true }).click({ timeout: 5000 });
+          const detail = page.locator(".stock-detail");
+          await detail.getByRole("heading", { name: /Bukti kondisi/ }).waitFor({ timeout: 5000 });
+          if (await detail.locator(".stock-detail__values > div").count() !== 5) throw Error("Indicator cards missing");
+          if ((await detail.innerText()).includes("Perbandingan angka dihitung di browser")) throw Error("Server calculation explanation remains");
+          const card = await detail.locator(".stock-detail__evidence li").first().evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), padding: parseFloat(getComputedStyle(el).paddingLeft) }));
+          if (card.radius < 12 || card.padding < 16) throw Error("Condition card styling missing");
+          await detail.screenshot({ path: `/private/tmp/signalgen-stock-detail-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+          if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error("Stock detail overflows page");
+          await page.getByRole("button", { name: "Tutup detail", exact: true }).click({ timeout: 5000 });
         }
         if (view === "overview") {
           await page.getByRole("heading", { name: "Pantau pasar", exact: true }).waitFor({ timeout: 5000 });
@@ -143,6 +153,7 @@ async (page) => {
           if (offset > 2) throw Error(`Misaligned monitor explanation: ${offset}px`);
         }
         if (await page.getByText("This page could not be loaded", { exact: false }).count()) throw Error(`Route boundary: ${view}`);
+        if (await page.getByText("Tersimpan di akun", { exact: true }).count()) throw Error("Saved-account status still visible");
       }
       await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
     }

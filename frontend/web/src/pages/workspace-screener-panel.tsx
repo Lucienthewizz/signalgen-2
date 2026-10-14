@@ -918,11 +918,16 @@ export function WorkspaceScreenerPanel({
                                       ? "Terpenuhi"
                                       : "Belum terpenuhi"}
                                   </Badge>
-                                  <span>
-                                    {evidence.label}
+                                  <span className="stock-detail__condition">
+                                    <strong>{evidence.label}</strong>
                                     <small>
-                                      {evidence.left.toFixed(2)} dibanding{" "}
-                                      {evidence.right.toFixed(2)}
+                                      {new Intl.NumberFormat("id-ID", {
+                                        maximumFractionDigits: 2,
+                                      }).format(evidence.left)}{" "}
+                                      dibanding{" "}
+                                      {new Intl.NumberFormat("id-ID", {
+                                        maximumFractionDigits: 2,
+                                      }).format(evidence.right)}
                                     </small>
                                   </span>
                                 </>
@@ -938,13 +943,9 @@ export function WorkspaceScreenerPanel({
                     <p>
                       {historicalRun
                         ? "Definisi rule pada saat screening tidak tersedia. Hasil lama tidak dihitung ulang dengan rule terbaru."
-                        : "Definisi rule sistem bersifat privat. Keputusan dan alasan berasal dari server."}
+                        : "Detail kondisi rule sistem tidak ditampilkan."}
                     </p>
                   )}
-                  <p>
-                    Perbandingan angka dihitung di browser; keputusan akhir
-                    tetap dari server dan dapat memperhitungkan cooldown.
-                  </p>
                 </div>
                 <div className="stock-detail__chart">
                   <TradingViewChart
