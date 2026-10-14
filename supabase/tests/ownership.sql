@@ -6,6 +6,11 @@ insert into signalgen.account_profiles (user_id, email)
 select id, coalesce(email, '') from auth.users order by created_at limit 2
 on conflict (user_id) do nothing;
 
+-- Transaction-only metadata for testing ten distinct members, never real prices.
+insert into signalgen.stock_catalog (symbol, provider, provider_symbol, name, exchange, currency)
+select 'RLSTEST' || i || '.JK', 'yahoo_finance', 'RLSTEST' || i || '.JK', 'RLS fixture', 'XIDX', 'IDR'
+from generate_series(1, 10) i;
+
 do $$
 declare
   owner_id uuid;
@@ -31,7 +36,14 @@ begin
   insert into signalgen.stock_universes (owner_user_id, name)
   values (owner_id, 'RLS universe test') returning id into test_universe_id;
   insert into signalgen.stock_universe_members (universe_id, symbol, position)
-  values (test_universe_id, 'BBCA.JK', 0);
+  select test_universe_id, 'RLSTEST' || i || '.JK', i - 1
+  from generate_series(1, 10) i;
+  begin
+    insert into signalgen.stock_universe_members (universe_id, symbol, position)
+    values (test_universe_id, 'BBCA.JK', 10);
+    raise exception 'eleventh member was accepted';
+  exception when check_violation then null;
+  end;
 
   perform set_config('request.jwt.claim.sub', other_id::text, true);
   select count(*) into visible_count from signalgen.account_profiles where user_id = owner_id;
@@ -60,6 +72,11 @@ begin
   if visible_count <> 0 then
     raise exception 'another user can read owner stock universe members';
   end if;
+  delete from signalgen.stock_universe_members where universe_id = test_universe_id;
+  get diagnostics changed_count = row_count;
+  if changed_count <> 0 then
+    raise exception 'another user can delete owner stock universe members';
+  end if;
 
   perform set_config('request.jwt.claim.sub', owner_id::text, true);
   select count(*) into visible_count from signalgen.account_profiles where user_id = owner_id;
@@ -73,6 +90,10 @@ begin
   select count(*) into visible_count from signalgen.stock_universes where id = test_universe_id;
   if visible_count <> 1 then
     raise exception 'owner cannot read own stock universe';
+  end if;
+  select count(*) into visible_count from signalgen.stock_universe_members where universe_id = test_universe_id;
+  if visible_count <> 10 then
+    raise exception 'owner cannot read all ten own members';
   end if;
 end;
 $$;

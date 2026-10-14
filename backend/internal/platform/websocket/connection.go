@@ -4,6 +4,7 @@ package websocket
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	ws "github.com/coder/websocket"
@@ -11,6 +12,11 @@ import (
 )
 
 type Connection struct{ raw *ws.Conn }
+
+var (
+	ErrNonTextMessage  = errors.New("WebSocket message must be text")
+	ErrMessageTooLarge = errors.New("WebSocket message exceeds read limit")
+)
 
 func Accept(writer http.ResponseWriter, request *http.Request, originPatterns []string) (*Connection, error) {
 	connection, err := ws.Accept(writer, request, &ws.AcceptOptions{
@@ -25,8 +31,24 @@ func Accept(writer http.ResponseWriter, request *http.Request, originPatterns []
 func (connection *Connection) SetReadLimit(limit int64) { connection.raw.SetReadLimit(limit) }
 
 func (connection *Connection) ReadText(ctx context.Context) ([]byte, bool) {
+	raw, err := connection.ReadTextMessage(ctx)
+	return raw, err == nil
+}
+
+// ReadTextMessage preserves errors for timeout/cancellation measurements, but
+// callers must never serialize/log the raw error or received feature payload.
+func (connection *Connection) ReadTextMessage(ctx context.Context) ([]byte, error) {
 	messageType, raw, err := connection.raw.Read(ctx)
-	return raw, err == nil && messageType == ws.MessageText
+	if err != nil {
+		if errors.Is(err, ws.ErrMessageTooBig) || ws.CloseStatus(err) == ws.StatusMessageTooBig {
+			return nil, ErrMessageTooLarge
+		}
+		return nil, err
+	}
+	if messageType != ws.MessageText {
+		return nil, ErrNonTextMessage
+	}
+	return raw, nil
 }
 
 func (connection *Connection) WriteJSON(ctx context.Context, value any) error {

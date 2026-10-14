@@ -6,6 +6,20 @@ Mulai dari `server.go` (pemasangan dependency), lalu `routes.go` (penghubung
 endpoint). Pengaturan startup berada di `config.go`; kontrak dependency di
 `contracts.go`; fallback yang aman di `defaults.go`.
 
+## Gin dan bentuk handler
+
+Semua route REST/HTTP aktif didaftarkan ke Gin melalui
+`internal/platform/http/router.go`. `routes.go` memasang adapter ini dan
+menghubungkan daftar URL tiap domain dengan handler di folder fitur.
+Handler sengaja berbentuk `http.HandlerFunc`: adapter Gin meneruskan writer,
+request, dan parameter URL ke handler. Ini bukan router tanpa framework;
+Gin mengurus routing/recovery, sementara helper bersama mengurus kontrak JSON.
+
+Satu pengecualian adalah `GET /api/v1/screener/ws`: upgrade koneksi memakai
+writer `net/http` asli untuk kompatibilitas dengan `coder/websocket`.
+Request ID dan CORS membungkus REST maupun WebSocket. Route REST baru wajib
+melewati adapter Gin yang sama; service/repository tidak perlu mengimpor Gin.
+
 | Folder | Tanggung jawab |
 |---|---|
 | `auth/` | Login, register, refresh identitas, profil publik, recovery password |
@@ -29,6 +43,14 @@ Pada `compute/`, handler memanggil service domain `internal/compute/issuance.go`
 `errors.go` hanya menerjemahkan error domain menjadi kontrak HTTP yang stabil.
 Pada `datasets/`, `service.go` memasang service akses dari `internal/dataset/`.
 Prepare/read policy ada di domain; retry header, ETag, dan respons ada di API.
+Pada `screener/`, `handlers.go` menangani ticket dan `websocket_handler.go`
+menangani satu batch WebSocket. `observation.go` mengukur tahap/outcome tanpa
+menyimpan payload; observer domain dipasang melalui dependency injection.
+Logger/counter berada di `internal/platform/observability`, bukan di rumus core.
+Pada `operator/`, `accounts.go` memetakan listing/status/audit ke kontrak
+`account.ManagementRepository`. SQL dan transaksi ada di
+`internal/account/management_repository.go`. Route baru tidak masuk `app.py`
+atau menjadi handler besar pada server composition root.
 
 `api/rules` dan `internal/rules` bukan duplikasi: yang pertama menangani HTTP,
 yang kedua model dan persistence. Jangan mengimpor parent `api` dari subfolder

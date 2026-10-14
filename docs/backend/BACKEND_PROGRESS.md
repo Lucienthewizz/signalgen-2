@@ -5,6 +5,24 @@ checkpoint, not a claim that the whole PRD or thesis evaluation is complete.
 
 ## Implemented in this working branch
 
+- Operator/admin backend extension: paginated account metadata, audited
+  suspend/reactivation and target-scoped audit metadata. Status/revoked app
+  sessions/audit commit together; session creation and role/status races retain
+  account safety and an active operator. Audit-action/index migration was
+  applied to cloud on 6 October 2026. No admin UI/private rule access added. See
+  [admin backend](ADMIN_BACKEND.md).
+- Screening-specific observability: bounded outcomes, contract candidate/text
+  byte counts and wall-clock stage durations with server-generated correlation
+  IDs. Result computation/HTTP upgrade is not treated as successful delivery.
+  Socket adapter separated from ticket handlers; frozen Model A calculations and
+  protocol envelopes retained. No schema/cloud migration needed. See
+  [screening observations](SCREENING_OBSERVABILITY.md).
+- Safe operational telemetry: bounded process-local request/status/byte/duration
+  counters, JSON events with server-generated IDs and route templates, periodic
+  Go-runtime summaries, redacted Gin panic recovery and Docker log rotation.
+  No public metrics endpoint, credential/request dumps or scoring-success claim
+  from HTTP 101. Allowlisted frontend origins can inspect request/retry/cache
+  headers. See [observability](OBSERVABILITY.md) for limitations and tests.
 - Editable owner profile: `GET/PATCH /api/v1/account/profile`, name/bio validation,
   strict payload, bearer + app-session protection and atomic version checking.
   Profile edits cannot modify email/password/role/status/entitlement.
@@ -67,6 +85,25 @@ prices and indicator values under the documented 1e-9 parity tolerance.
 
 ## Still required before claiming a complete MVP
 
+Admin verification on 6 October: the complete Go race suite with actual
+Postgres/WASM/WebSocket integration and Go vet passed. The isolated schema
+runner passed 7 migrations and 2 policy checks, including backend-only audit
+privileges. Admin tests cover bearer/session/active-role denial, strict filters
+and forged actor input, no-store metadata, cursor pages, stale status, atomic
+revocation/audit rollback, reactivation without session resurrection, twelve
+concurrent session creations and a mixed role/status last-operator race.
+The earlier race scenario was also repeated three times successfully.
+
+OpenAPI validated; the read-only admin Postman collection and scripts parsed
+with no filled credentials. Image `signalgen-admin:verified` built, its test
+container was healthy, health/readiness returned 200, and all three admin paths
+without login returned 401. Runtime logs retained only the route template (not
+target/reason canaries); SIGTERM exited 0 with final HTTP in-flight count 0.
+At this local verification checkpoint, no real operator/user, cloud Auth or cloud
+database was modified. The later cloud schema deployment is recorded below.
+Admin UI and Git commit/push remain outstanding; existing
+containers/volumes were preserved.
+
 1. Frontend prepare payload, multi-series computation and current WASM artifacts;
    login-to-screening and automatic identity refresh against real services.
 2. Model A staging measurements and the required research comparison, separated
@@ -78,7 +115,41 @@ prices and indicator values under the documented 1e-9 parity tolerance.
 5. Provider data rights and realistic availability/rate measurements.
 6. Production least-privilege database role, TLS/proxy configuration, safe
    observability, backup/restore drill, and multi-replica resource/state design.
-7. Publish/review this feature branch and run CI remotely when authorized.
+7. Review the published feature branch and confirm remote CI. Commit 74415ec
+   was pushed and local/remote SHA equality verified on 6 October; the later
+   Gin documentation and observability changes are not yet committed/pushed.
+
+Observability regression on 6 October: the full Go race suite with isolated
+Postgres and actual WASM passed, including the Model A contracts with telemetry
+enabled. Go vet passed; all 6 migrations and 2 ownership/schema policy checks
+passed. A fresh Docker runtime image also built successfully. This test did not
+modify cloud Supabase or contact real Auth users/provider services. Telemetry
+is an operational foundation; staging metrics/production hardening remain open.
+
+Docker smoke checks returned health/readiness 200, profile without bearer 401,
+invalid socket ticket 401, unknown path 404, and allowed CORS preflight 204.
+The runtime JSON-log privacy check found no canary ticket/query/resource IDs.
+The tested process exited 0 on SIGTERM with final in-flight count 0, and the
+Docker log driver confirmed three 10 MB files. Temporary test containers were
+removed; existing user containers/volumes were not replaced.
+
+Screening observability verification on 6 October: the full Go race suite,
+Go vet, 6 migrations and 2 policy checks passed against isolated PostgreSQL 16.
+A focused integration rerun with both observers enabled confirmed actual WASM
+feature parity for 3 series and 63 private WebSocket decisions. Malformed,
+binary and oversized frames, replay, revoked permissions, dependency failures,
+shutdown cancellation and failed result writes passed their outcome assertions.
+The oversized-frame test exposed a read-error classification issue; matching
+the transport's `ErrMessageTooBig` sentinel corrected it without relaxing the
+read limit or changing the client contract.
+
+Image `signalgen-screening-observability:verified` built and its temporary
+runtime was healthy. `/health` and `/ready` returned 200; profile/ticket denial
+returned 401; an unknown path returned 404. Runtime logs contained one rejected
+screening attempt, zero written results and no private query/ticket canaries.
+SIGTERM exited 0 with final summaries and HTTP in-flight count 0. No cloud
+Supabase migration, real Auth login or live provider request was performed.
+These latest changes remain local, uncommitted and unpushed.
 
 Cloud deployment on 6 October is recorded below. Real account creation,
 recovery email, payment and frontend feature edits are not part of this
@@ -86,7 +157,19 @@ checkpoint. Existing legacy references are preserved.
 
 ## Supabase deployment — 6 October 2026
 
-All six local migration versions now match cloud migration history. Editable
+At the profile deployment checkpoint, the six then-existing local migrations
+matched cloud migration history. The seventh migration for admin status
+audits/indexes, `20261006053327_operator_account_status`, was subsequently applied
+through Supabase CLI after a dry-run showed this as the sole pending migration.
+All seven local migration versions now match the cloud history. The audit action
+constraint is validated, the target/descending-ID index is valid and ready,
+audit RLS remains enabled, and anon/authenticated cannot SELECT audit rows;
+authenticated cannot INSERT them. Counts remained 3 account profiles, 17 app
+sessions, 0 user rules and 6 audit events. No live account mutation or Auth login
+was performed. Security advisors have the same categories/counts as before this
+admin migration, including the existing public-function/password warnings.
+This does not deploy the latest API image or establish end-to-end admin behavior.
+Editable
 profile columns/constraints are installed, existing account count is unchanged,
 owner RLS is retained and client UPDATE privilege is absent. The latest Go image
 returned `/health=200` and `/ready=200` against the configured cloud database.

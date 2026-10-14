@@ -89,6 +89,8 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	compute.RegisterRoutes(router, computeHandler.CreateComputeGrant)
 	screener.RegisterRoutes(router, screenerHandler.CreateScreenerSocketTicket)
 	operator.RegisterRoutes(router, operator.RouteHandlers{
+		ListAccounts: operatorHandler.ListAccounts, ChangeStatus: operatorHandler.ChangeAccountStatus,
+		ListAudit:  operatorHandler.ListAccountAudit,
 		ListGrants: operatorHandler.ListOperatorGrants, CreateGrant: operatorHandler.CreateOperatorGrant,
 		RevokeGrant: operatorHandler.RevokeOperatorGrant, ChangeRole: operatorHandler.ChangeOperatorAccountRole,
 	})
@@ -98,10 +100,15 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	// boundary while the ordinary HTTP routes use Gin.
 	boundary := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method == http.MethodGet && request.URL.Path == "/api/v1/screener/ws" {
+			platformhttp.LabelRoute(request, "/api/v1/screener/ws")
 			screenerHandler.ScreenerWebSocket(writer, request)
 			return
 		}
 		router.Handler().ServeHTTP(writer, request)
 	})
-	return platformhttp.RequestContext(platformhttp.CORSAllowlist(boundary, config.allowedOrigins))
+	var handler http.Handler = platformhttp.CORSAllowlist(boundary, config.allowedOrigins)
+	if config.trafficObserver != nil {
+		handler = config.trafficObserver.Observe(handler)
+	}
+	return platformhttp.RequestContext(handler)
 }

@@ -3,6 +3,7 @@ package apitests
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,10 +23,19 @@ import (
 )
 
 func TestScreeningBatchOverWebSocketUsesAuthorizedDataset(t *testing.T) {
-	for _, mode := range []string{"three-symbols", "unauthorized-symbol", "outside-dates", "expired-snapshot", "version-mismatch", "socket-capacity"} {
+	for _, mode := range []string{"three-symbols", "ten-symbols", "eleven-symbols", "unauthorized-symbol", "outside-dates", "expired-snapshot", "version-mismatch", "socket-capacity"} {
 		t.Run(mode, func(t *testing.T) {
 			manifest := screenerTestManifest()
 			manifest.Symbols = []string{"BBCA.JK", "BBRI.JK", "TLKM.JK"}
+			if mode == "ten-symbols" || mode == "eleven-symbols" {
+				count := 10
+				if mode == "eleven-symbols" {
+					count = 11
+				}
+				for i := len(manifest.Symbols); i < count; i++ {
+					manifest.Symbols = append(manifest.Symbols, fmt.Sprintf("TEST%d.JK", i))
+				}
+			}
 			datasets := &fakeDatasets{manifest: manifest}
 			grants := &fakeCompute{grant: compute.Grant{ID: "cgr-1", Purpose: "screen", RuleID: core.BaselineRuleID,
 				DefinitionHash: core.BaselineRuleHash, EngineVersion: core.EngineVersion, SchemaVersion: core.SchemaVersion,
@@ -111,13 +121,13 @@ func TestScreeningBatchOverWebSocketUsesAuthorizedDataset(t *testing.T) {
 			if err := wsjson.Read(ctx, connection, &result); err != nil {
 				t.Fatal(err)
 			}
-			if mode != "three-symbols" {
+			if mode != "three-symbols" && mode != "ten-symbols" {
 				if result.Type != "screener.error" || result.Code != "INVALID_MESSAGE" {
 					t.Fatalf("unexpected result=%+v", result)
 				}
 				return
 			}
-			if result.Type != "screener.result" || len(result.Results) != 3 {
+			if result.Type != "screener.result" || len(result.Results) != len(manifest.Symbols) {
 				t.Fatalf("result=%+v", result)
 			}
 			for index, decision := range result.Results {

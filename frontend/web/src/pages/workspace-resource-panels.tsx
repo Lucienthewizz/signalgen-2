@@ -1,5 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ResourceQuota } from "@/components/resource-quota";
+import { StockCatalogPicker } from "@/components/stock-catalog-picker";
+import { universeSelectionLimit } from "@/lib/stock-catalog";
 import {
   BadgeCheck,
   Boxes,
@@ -162,7 +164,7 @@ export function StockUniversesPanel({
     setSymbols((current) =>
       current.includes(symbol)
         ? current.filter((item) => item !== symbol)
-        : current.length < 3
+        : current.length < universeSelectionLimit
           ? [...current, symbol]
           : current,
     );
@@ -256,7 +258,7 @@ export function StockUniversesPanel({
                 {editing ? "Edit stock universe" : "Buat stock universe"}
               </h3>
               <p>
-                Pilih satu sampai tiga saham IDX untuk satu proses screening.
+                Pilih 1–10 saham IDX untuk satu proses screening. Pilihan 3 saham tetap bisa digunakan.
               </p>
               <ResourceQuota
                 kind="stock_universes"
@@ -290,33 +292,21 @@ export function StockUniversesPanel({
             <FieldSet>
               <FieldLegend>Anggota universe</FieldLegend>
               <FieldDescription>
-                Katalog saat ini dibatasi backend pada tiga instrumen IDX.
+                Cari saham dari katalog IDX. Maksimal {universeSelectionLimit} saham per universe;
+                ketersediaan OHLCV diperiksa ketika screening dijalankan.
               </FieldDescription>
-              <div className="instrument-choices">
-                {catalog.map((stock) => {
-                  const selected = symbols.includes(stock.symbol);
-                  return (
-                    <button
-                      key={stock.symbol}
-                      type="button"
-                      className={selected ? "is-selected" : ""}
-                      aria-pressed={selected}
-                      onClick={() => toggleSymbol(stock.symbol)}
-                    >
-                      <span>{stock.symbol.replace(".JK", "")}</span>
-                      <small>{stock.name}</small>
-                      <i aria-hidden="true">
-                        {selected ? <Check /> : <Plus />}
-                      </i>
-                    </button>
-                  );
-                })}
-              </div>
+              <StockCatalogPicker
+                catalog={catalog}
+                selected={symbols}
+                loading={loading}
+                disabled={saving}
+                onToggle={toggleSymbol}
+              />
             </FieldSet>
             {error && <FieldError>{error}</FieldError>}
           </FieldGroup>
           <div className="resource-form__actions">
-            <span>{symbols.length}/3 saham dipilih</span>
+            <span>{symbols.length}/{universeSelectionLimit} saham dipilih</span>
             <Button type="submit" size="lg" disabled={saving}>
               {saving ? (
                 <LoaderCircle

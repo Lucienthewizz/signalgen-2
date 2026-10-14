@@ -6,13 +6,14 @@ import (
 )
 
 var (
-	ErrInvalid        = errors.New("app session is invalid")
-	ErrExpired        = errors.New("app session is expired")
-	ErrRevoked        = errors.New("app session is revoked")
-	ErrInvalidRequest = errors.New("invalid session request")
-	ErrNotFound       = errors.New("app session was not found")
-	ErrSessionLimit   = errors.New("active session limit reached")
-	ErrDeviceCooldown = errors.New("device switch cooldown is active")
+	ErrInvalid         = errors.New("app session is invalid")
+	ErrExpired         = errors.New("app session is expired")
+	ErrRevoked         = errors.New("app session is revoked")
+	ErrInvalidRequest  = errors.New("invalid session request")
+	ErrNotFound        = errors.New("app session was not found")
+	ErrSessionLimit    = errors.New("active session limit reached")
+	ErrDeviceCooldown  = errors.New("device switch cooldown is active")
+	ErrAccountInactive = errors.New("cannot create session for inactive account")
 )
 
 type Session struct {

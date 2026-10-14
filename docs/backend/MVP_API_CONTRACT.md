@@ -106,7 +106,13 @@ Stable HTTP/code minimum:
 | 404 | `RESOURCE_NOT_FOUND` (consistent for non-owner/private missing) |
 | 409 | `VERSION_CONFLICT`, `DEVICE_LIMIT_REACHED`, `DEVICE_SWITCH_COOLDOWN`, `IDEMPOTENCY_CONFLICT`, `POSITION_INSUFFICIENT` |
 | 413/429 | `PAYLOAD_TOO_LARGE`, `DATASET_LIMIT_EXCEEDED`, `RATE_LIMITED` |
+| 500 | `INTERNAL_ERROR` (sanitized panic recovery before response commitment) |
 | 502/503 | `PROVIDER_UNAVAILABLE`, `SERVICE_UNAVAILABLE` |
+
+Allowed browser origins may inspect `X-Request-ID`, `Retry-After`, and `ETag`.
+Request IDs are server-generated; support/debugging may correlate them with
+private operational logs. See [observability](OBSERVABILITY.md) for log redaction
+and why a WebSocket HTTP 101 is not a successful screening result.
 
 ## 2. Auth/account/session routes
 
@@ -264,9 +270,30 @@ are stored atomically in an append-only audit table. Protected
 the list requires an explicit target user and does not expose unrelated users.
 Operator cannot read private rule/journal bodies solely by role. General role
 management is limited to role changes and protects the final active operator;
-account status management remains unavailable.
+operator account metadata/status/audit is now implemented as the explicit admin
+extension below. Private rule/journal access is unchanged.
 
-Payment status is not part of manual grant. Full admin user management, billing webhooks, release management and metrics dashboard are P2 per revised priorities.
+| Method | Path | Behavior |
+|---|---|---|
+| GET | `/operator/accounts` | Application-profile metadata only; limit 1–100 (default 25), ascending UUID `after`, optional `role`/`status` |
+| PATCH | `/operator/accounts/{user_id}/status` | `status`, `expected_status`, `reason`; atomic status/session-revoke/audit; final active operator protected |
+| GET | `/operator/audit-events` | Required `user_id`, limit 1–100, descending decimal-string ID `before`; no raw before/after JSON |
+
+All three require verified bearer, app session, active account and database
+operator role. Response pages are `{items, next_cursor?}` and private/no-store.
+Unknown/empty/repeated list parameters and invalid UUID/cursors are rejected.
+Status payload cannot supply actor/request ID/user ID; reason is trimmed,
+1–500 characters and contains no control characters. `STATUS_CONFLICT` and
+`LAST_OPERATOR_REQUIRED` return 409. Same-state changes are no-ops after checking
+expected status. Suspended accounts cannot create app sessions; reactivation
+does not revive old sessions or modify Supabase Auth identity tokens/passwords.
+The existing RLS/Data API exposure is unchanged. The local audit-action/index
+migration must be deployed before cloud use; it has not been cloud-applied in
+this checkpoint. See [admin backend](ADMIN_BACKEND.md) for Postman and limitations.
+
+Payment status is not part of manual grant. The full admin UI/suite, billing
+webhooks, release management and metrics dashboard remain P2 per revised
+priorities; this backend extension does not complete them.
 
 ## 6. Worker dan private-scoring protocol (P0)
 

@@ -115,7 +115,7 @@ export function AuthPage({
           password,
         );
         if (result.access_token) {
-          session.setAuth({...result, access_token: result.access_token});
+          session.setAuth({ ...result, access_token: result.access_token });
           await api.ensureAppSession();
           onAuthenticated(result.user);
         } else {

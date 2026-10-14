@@ -37,7 +37,15 @@ func (server *Handler) CreateSession(writer http.ResponseWriter, request *http.R
 		shared.WriteError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Profil akun belum dapat disiapkan.")
 		return
 	}
+	if _, err := server.Access.RequireActive(request.Context(), principal.ID); err != nil {
+		shared.WriteAccessError(writer, request, err)
+		return
+	}
 	created, err := server.Sessions.Create(request.Context(), principal.ID, input.InstallationID, input.Label)
+	if errors.Is(err, session.ErrAccountInactive) {
+		shared.WriteError(writer, request, http.StatusForbidden, "ACCOUNT_SUSPENDED", "Akun tidak aktif.")
+		return
+	}
 	if errors.Is(err, session.ErrInvalidRequest) {
 		shared.WriteError(writer, request, http.StatusUnprocessableEntity, "INVALID_REQUEST", "Installation ID dan label wajib diisi.")
 		return

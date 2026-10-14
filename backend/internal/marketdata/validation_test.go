@@ -1,8 +1,11 @@
 package marketdata
 
 import (
+	"fmt"
 	"math"
 	"testing"
+
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
 )
 
 func TestValidateSeriesRejectsCorruptCandles(t *testing.T) {
@@ -29,5 +32,20 @@ func TestValidateSeriesRejectsCorruptCandles(t *testing.T) {
 				t.Fatalf("error = %v", err)
 			}
 		})
+	}
+}
+
+func TestValidateSeriesThreeTenAndElevenSymbols(t *testing.T) {
+	for _, count := range []int{3, 10, 11} {
+		series := make([]Series, count)
+		instruments := make([]universe.Instrument, count)
+		for i := range series {
+			symbol := fmt.Sprintf("TEST%d.JK", i)
+			series[i] = validSeries(symbol)
+			instruments[i] = universe.Instrument{Symbol: symbol, ProviderSymbol: symbol}
+		}
+		if err := ValidateSeries(series, instruments, 20); (err == nil) != (count <= 10) {
+			t.Fatalf("count=%d error=%v", count, err)
+		}
 	}
 }

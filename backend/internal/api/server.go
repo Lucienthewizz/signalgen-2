@@ -57,12 +57,14 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 		config.socketLimiter, _ = screener.NewConnectionLimiter(32, 2)
 	}
 	server := &Server{Context: &shared.Context{
-		Profiles: config.profileStore,
-		Identity: identity, Auth: config.authService, Sessions: sessions, Access: accessStore,
+		Profiles:   config.profileStore,
+		Management: config.managementStore,
+		Identity:   identity, Auth: config.authService, Sessions: sessions, Access: accessStore,
 		Datasets: datasets, Compute: computeStore, Rules: config.ruleStore, Subscriptions: config.subscriptions, Universes: config.universeStore, Limiter: config.rateLimiter,
 		Tickets: config.ticketStore, OriginPatterns: append([]string(nil), config.originPatterns...),
-		SocketContext: config.socketContext,
-		SocketLimiter: config.socketLimiter,
+		SocketContext:     config.socketContext,
+		SocketLimiter:     config.socketLimiter,
+		ScreeningObserver: config.screeningObserver,
 	}}
 	// Route registration is isolated in routes.go so this constructor only wires dependencies.
 	server.handler = server.routes(config)

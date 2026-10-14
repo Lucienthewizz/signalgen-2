@@ -6,7 +6,8 @@ import (
 	"time"
 )
 
-const MaxSymbols = 3
+// MaxSymbols bounds one owned universe and its dataset/scoring scope, not the catalog.
+const MaxSymbols = 10
 
 var (
 	ErrLimit           = errors.New("stock universe plan limit reached")

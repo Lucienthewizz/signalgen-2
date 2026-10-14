@@ -25,7 +25,7 @@ type PostgresRepository struct {
 }
 
 func NewPostgresRepository(db *pgxpool.Pool, max int, cooldown time.Duration) (*PostgresRepository, error) {
-	if db == nil || max != 1 || cooldown <= 0 {
+	if db == nil || max < 1 || max > 5 || cooldown <= 0 {
 		return nil, fmt.Errorf("invalid Postgres session configuration")
 	}
 	return &PostgresRepository{db: db, max: max, cooldown: cooldown, ttl: 24 * time.Hour}, nil
@@ -34,11 +34,17 @@ func NewPostgresRepository(db *pgxpool.Pool, max int, cooldown time.Duration) (*
 func (store *PostgresRepository) Ready(ctx context.Context) error { return store.db.Ping(ctx) }
 func (store *PostgresRepository) ActiveLimit() int                { return store.max }
 func (store *PostgresRepository) DeviceSwitchCooldown() time.Duration {
+	if store.max > 1 {
+		return 0 // Switching one exclusive device is not a multi-session operation.
+	}
 	return store.cooldown
 }
 
 // CooldownUntil is owner-scoped metadata, never a permission bypass.
 func (store *PostgresRepository) CooldownUntil(ctx context.Context, userID string) (time.Time, error) {
+	if store.max > 1 {
+		return time.Time{}, nil
+	}
 	var switched pgtype.Timestamptz
 	err := store.db.QueryRow(ctx, `select last_switched_at from signalgen.account_device_state where user_id=$1::uuid`, userID).Scan(&switched)
 	if err != nil || !switched.Valid {
@@ -73,32 +79,18 @@ func (store *PostgresRepository) Create(ctx context.Context, userID, installatio
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, userID); err != nil {
 		return Created{}, err
 	}
-	_, err = tx.Exec(ctx, `insert into signalgen.account_device_state
-(user_id,current_installation_id,updated_at) values ($1::uuid,$2,$3)
-on conflict (user_id) do nothing`, userID, installationID, now)
-	if err != nil {
+	// Status changes use this same user lock. Recheck inside the transaction:
+	// a suspended account cannot recreate a session after the operator revokes
+	// its old sessions, even if the HTTP status check raced with suspension.
+	var accountStatus string
+	if err := tx.QueryRow(ctx, `select status from signalgen.account_profiles where user_id=$1::uuid for update`, userID).Scan(&accountStatus); err != nil {
 		return Created{}, err
 	}
-	var current string
-	var lastSwitch pgtype.Timestamptz
-	err = tx.QueryRow(ctx, `select current_installation_id,last_switched_at
-from signalgen.account_device_state where user_id=$1::uuid for update`, userID).Scan(&current, &lastSwitch)
-	if err != nil {
+	if accountStatus != "active" {
+		return Created{}, ErrAccountInactive
+	}
+	if err := store.reserveSessionSlot(ctx, tx, userID, installationID, now); err != nil {
 		return Created{}, err
-	}
-	if current != installationID && lastSwitch.Valid && now.Before(lastSwitch.Time.Add(store.cooldown)) {
-		return Created{}, ErrDeviceCooldown
-	}
-	if _, err := tx.Exec(ctx, `update signalgen.app_sessions set revoked_at=$2
-where user_id=$1::uuid and revoked_at is null and expires_at>$2`, userID, now); err != nil {
-		return Created{}, err
-	}
-	if current != installationID {
-		_, err = tx.Exec(ctx, `update signalgen.account_device_state
-set current_installation_id=$2,last_switched_at=$3,updated_at=$3 where user_id=$1::uuid`, userID, installationID, now)
-		if err != nil {
-			return Created{}, err
-		}
 	}
 	hash := sha256.Sum256([]byte(token))
 	item := Session{

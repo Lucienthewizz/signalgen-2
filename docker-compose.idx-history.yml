@@ -1,0 +1,17 @@
+# Optional research/demo mode. Apply after docker-compose.yml.
+# Never mount this directory under a public/static server.
+services:
+  go-api:
+    # Match the archive owner's IDs for its 0700/0600 files; never use UID 0.
+    # Production defaults to the existing unprivileged image user (10001).
+    user: "${SIGNALGEN_ARCHIVE_UID:-10001}:${SIGNALGEN_ARCHIVE_GID:-10001}"
+    environment:
+      SIGNALGEN_MARKET_DATA_MODE: idx_archive
+      SIGNALGEN_IDX_HISTORY_DIR: /var/lib/signalgen/idx-history
+    volumes:
+      - type: bind
+        source: ${SIGNALGEN_IDX_HISTORY_HOST_DIR:?Set the absolute path to an existing IDX archive}
+        target: /var/lib/signalgen/idx-history
+        read_only: true
+        bind:
+          create_host_path: false

@@ -131,7 +131,7 @@ export type RuleListResponse = {
 };
 
 export type StockInstrument = {
-  symbol: "BBCA.JK" | "BBRI.JK" | "TLKM.JK";
+  symbol: string;
   name: string;
   exchange: "XIDX";
   currency: "IDR";

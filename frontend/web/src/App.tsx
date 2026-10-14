@@ -117,10 +117,17 @@ function RoutedApp() {
 
   useEffect(() => {
     if (!user) return;
-    const refresh = () => { void api.refreshIfNeeded().catch(() => { /* Retry on next request; don't log tokens or sign out on network failure. */ }); };
+    const refresh = () => {
+      void api.refreshIfNeeded().catch(() => {
+        /* Retry on next request; don't log tokens or sign out on network failure. */
+      });
+    };
     const timer = window.setInterval(refresh, 30_000);
     window.addEventListener("focus", refresh);
-    return () => { clearInterval(timer); window.removeEventListener("focus", refresh); };
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
   }, [user]);
 
   async function logout() {

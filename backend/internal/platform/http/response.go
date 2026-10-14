@@ -80,7 +80,9 @@ func CORSAllowlist(next stdhttp.Handler, allowedOrigins map[string]struct{}) std
 			return
 		}
 		writer.Header().Set("Access-Control-Allow-Origin", origin)
-		writer.Header().Set("Access-Control-Expose-Headers", "Retry-After, X-Request-ID")
+		// Only allowlisted browser origins may inspect these response headers.
+		// They contain request correlation/cache/retry metadata, never credentials.
+		writer.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, Retry-After, ETag")
 		if request.Method != stdhttp.MethodOptions {
 			next.ServeHTTP(writer, request)
 			return

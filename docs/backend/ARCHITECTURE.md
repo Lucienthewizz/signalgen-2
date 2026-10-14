@@ -14,6 +14,26 @@ owns each kind of data.
    Supabase Postgres through pgxpool and legacy stores remain for tests.
 5. Keep endpoint paths and JSON responses stable for the web frontend.
 
+## HTTP framework: Gin, with one WebSocket exception
+
+All active Go REST/HTTP routes use **Gin**, including authentication, profile,
+sessions, rules, universes, datasets, grants, subscriptions, operator actions,
+and health/readiness. `internal/platform/http/router.go` owns `gin.Engine`;
+`internal/api/routes.go` composes the feature registrations through that adapter.
+
+Feature handlers intentionally retain the standard `http.HandlerFunc` signature.
+The Gin adapter forwards its writer, request, and URL parameters to them. This
+keeps services/repositories framework-independent and handlers easy to test;
+using `net/http` types or shared JSON decoding does not mean routing bypasses Gin.
+Strict input validation and response contracts remain explicit in shared helpers.
+
+Only `GET /api/v1/screener/ws` bypasses the Gin writer and uses the original
+`net/http` writer for the `coder/websocket` connection upgrade. The outer request
+context and CORS wrappers cover both paths. This is an intentional transport
+boundary, not a second REST framework. Register new REST routes through the same
+Gin adapter; do not add a parallel REST router. Archived Python/FastAPI routes
+under `legacy/` are not part of the active Go runtime.
+
 ## Reading order for beginners
 
 Follow one request from the outside to the inside:
@@ -55,6 +75,7 @@ backend/
 │   ├── platform/
 │   │   ├── database/    # pgxpool connection and Postgres readiness
 │   │   ├── http/        # Gin adapter, JSON, request ID, CORS
+│   │   ├── observability/ # Aggregate-only private screening measurements
 │   │   └── websocket/   # Low-level WebSocket connection adapter
 │   ├── api/             # Server composition, feature HTTP adapters, tests
 │   ├── auth/            # Supabase identity provider, service, feature routes
@@ -112,6 +133,17 @@ holds injected backend dependencies, not request data. It is created once at
 startup and must not be mutated during live requests. Feature handlers use its
 common guards; domain services and repositories remain outside `api`.
 Generic JSON, CORS and request IDs are still implemented in `platform/http`.
+
+`platform/http.TrafficObserver` adds bounded process-local counters and safe JSON
+events outside CORS/Gin/the raw WebSocket boundary. Gin recovery uses a local
+middleware without request/panic dumps. The observer preserves response
+controller, flushing and hijacking; it does not inspect bodies or credentials.
+See [observability](OBSERVABILITY.md) for counter meanings and deployment limits.
+Screening additionally emits bounded outcome/stage measurements through a
+domain-owned `screener.Observer`. The per-request trace stays in the socket
+adapter; the logger/counters live in `platform/observability`. No payload or
+authorization decision crosses that measurement interface. See
+[screening observations](SCREENING_OBSERVABILITY.md).
 
 A handler should only:
 

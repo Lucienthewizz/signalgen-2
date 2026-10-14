@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/workspace"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +21,8 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/marketdata"
 	platformdb "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/database"
+	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/platform/observability"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/ratelimit"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
@@ -69,13 +72,16 @@ func main() {
 	// Stock universes are durable owner-scoped bundles. Provider symbols remain
 	// server-only metadata so clients cannot request an arbitrary instrument.
 	universeStore := universe.NewPostgresRepository(database)
-	yahooProvider, err := marketdata.NewYahooFinance(yahooFinanceBaseURL, nil)
+	upstreamProvider, err := configuredMarketProvider(
+		environment("SIGNALGEN_MARKET_DATA_MODE", "yahoo"),
+		os.Getenv("SIGNALGEN_IDX_HISTORY_DIR"), yahooFinanceBaseURL,
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
 	// Public OHLCV is shared briefly; private dataset handles remain owner-bound.
 	// Identical instrument fetches reuse one bounded upstream request.
-	provider, err := marketdata.NewCachedProvider(yahooProvider, marketdata.DefaultCacheOptions())
+	provider, err := marketdata.NewCachedProvider(upstreamProvider, marketdata.DefaultCacheOptions())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -99,14 +105,20 @@ func main() {
 	}
 	// NewServer is the composition boundary: concrete infrastructure is passed
 	// into the HTTP package through small interfaces for testing and migration.
+	operationalLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	traffic := platformhttp.NewTrafficObserver(operationalLogger)
+	screeningMetrics := observability.NewScreenerObserver(operationalLogger)
 	handler, err := apihttp.NewServer(
 		identity, sessions, accessStore, datasets, computeStore,
 		apihttp.WithAuthService(identity),
+		apihttp.WithTrafficObserver(traffic),
+		apihttp.WithScreeningObserver(screeningMetrics),
 		apihttp.WithSocketContext(shutdownContext),
 		apihttp.WithScreenerConnectionLimits(maxSocketConnections, maxUserSocketConnections),
 		apihttp.WithPasswordResetRedirectURL(passwordResetRedirectURL),
 		apihttp.WithRuleStore(ruleStore),
 		apihttp.WithProfileStore(accessStore),
+		apihttp.WithAccountManagement(accessStore),
 		apihttp.WithSubscriptionService(subscriptionStore),
 		apihttp.WithUniverseStore(universeStore),
 		apihttp.WithWorkspaceStore(&workspace.PostgresStore{DB: database}),
@@ -143,12 +155,22 @@ func main() {
 	}()
 
 	log.Printf("SignalGen Go API listening on %s", address)
+	// Summaries are process-local operational evidence, not thesis benchmarks.
+	telemetryDone := make(chan struct{})
+	go func() {
+		defer close(telemetryDone)
+		traffic.RunSummaries(shutdownContext, time.Minute, screeningMetrics.LogSummary)
+	}()
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
 	// ListenAndServe returns as soon as listeners close, before Shutdown has
 	// necessarily drained handlers. Wait before deferred Postgres pool cleanup.
 	<-shutdownDone
+	<-telemetryDone
+	// One post-drain snapshot includes requests completed during graceful shutdown.
+	traffic.LogSummary()
+	screeningMetrics.LogSummary()
 }
 
 // requiredEnvironment fails fast when a security-critical setting is absent.

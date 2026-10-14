@@ -17,6 +17,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -106,6 +107,7 @@ func TestScreenerRechecksAccessAfterUpgrade(t *testing.T) {
 		{"shutdown", "", false},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
+			probe := newScreeningProbe()
 			phase := &atomic.Bool{}
 			manifest := screenerTestManifest()
 			sessions := &phaseSessions{fakeSessions: &fakeSessions{verified: session.Session{ID: "ses-1", UserID: "user-a"}}, phase: phase}
@@ -138,7 +140,7 @@ func TestScreenerRechecksAccessAfterUpgrade(t *testing.T) {
 			}
 			lifetime, shutdown := context.WithCancel(context.Background())
 			defer shutdown()
-			server, err := api.NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accounts, datasets, grants, api.WithSocketContext(lifetime))
+			server, err := api.NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accounts, datasets, grants, api.WithSocketContext(lifetime), api.WithScreeningObserver(probe))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -172,6 +174,10 @@ func TestScreenerRechecksAccessAfterUpgrade(t *testing.T) {
 				if wsjson.Read(ctx, conn, &value) == nil {
 					t.Fatal("shutdown returned a scoring result")
 				}
+				event := probe.await(t)
+				if event.Outcome != screener.OutcomeCanceled || !event.Upgraded || event.ReplyWritten {
+					t.Fatalf("shutdown observation = %+v", event)
+				}
 				return
 			}
 			message := screenerapi.EvaluateMessage{Type: "screener.evaluate", Protocol: core.PrivateProtocol, RequestID: "recheck-test",
@@ -188,6 +194,18 @@ func TestScreenerRechecksAccessAfterUpgrade(t *testing.T) {
 			if result.Type != "screener.error" || result.Code != tc.code || result.Retryable != tc.retryable ||
 				result.RequestID != "recheck-test" || strings.Contains(result.Message, "private database") {
 				t.Fatalf("unexpected error=%+v", result)
+			}
+			_ = conn.Close(websocket.StatusNormalClosure, "test complete")
+			event := probe.await(t)
+			want := screener.OutcomeRejected
+			if tc.retryable {
+				want = screener.OutcomeUnavailable
+			}
+			if event.Outcome != want || event.FailedStage != screener.StageRecheck || !event.ReplyWritten || event.Candidates != 1 {
+				t.Fatalf("recheck observation = %+v", event)
+			}
+			if strings.Contains(probe.logs.String(), "private database") || strings.Contains(probe.logs.String(), "recheck-test") {
+				t.Fatal("private error/client ID entered operational logs")
 			}
 		})
 	}

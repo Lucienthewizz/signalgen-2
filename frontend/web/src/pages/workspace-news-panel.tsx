@@ -191,7 +191,9 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                 onValueChange={(value) => setTicker(value ?? "all")}
               >
                 <SelectTrigger id="news-stock">
-                  <SelectValue>{ticker === "all" ? "Semua saham" : ticker}</SelectValue>
+                  <SelectValue>
+                    {ticker === "all" ? "Semua saham" : ticker}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>

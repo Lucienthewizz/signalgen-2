@@ -2,6 +2,7 @@ import { api, ApiError } from "@/api/client";
 import { extractDatasetFeatures } from "./screener-engine";
 import { packCandidateBatches } from "./screener-batches";
 import { evaluateOverSocket } from "./screener-socket";
+import { universeSelectionLimit } from "@/lib/stock-catalog";
 import type {
   DatasetManifest,
   ScreenerDecision,
@@ -37,40 +38,47 @@ export type LiveScreenerRun = {
   };
 };
 
+function ensureNotCancelled(signal: AbortSignal) {
+  if (signal.aborted) throw new ApiError("Analisis dibatalkan.", 0);
+}
+
 export async function runLiveScreener(
   ruleId: string,
   universeId: string,
   signal: AbortSignal,
   onStage: (stage: ScreenerStage) => void,
 ): Promise<LiveScreenerRun> {
+  ensureNotCancelled(signal);
   const start = performance.now();
   onStage("validating_access");
   await api.ensureAppSession();
-  signal.throwIfAborted();
+  ensureNotCancelled(signal);
   onStage("preparing_data");
   const [manifest, rule] = await Promise.all([
     api.prepareDataset(ruleId, universeId),
     api.getRule(ruleId),
   ]);
   const dataset = await api.getDatasetContent(manifest.dataset_id);
-  signal.throwIfAborted();
-  if (!dataset.series.length)
+  ensureNotCancelled(signal);
+  if (!dataset.series.length || dataset.series.length > universeSelectionLimit)
     throw new ApiError(
-      "Dataset tidak memiliki seri saham yang dapat dianalisis.",
+      "Dataset harus berisi 1–10 saham untuk dianalisis.",
       0,
     );
 
   onStage("loading_engine");
   const featureStart = performance.now();
   const featureRuns = await extractDatasetFeatures(dataset.series, signal);
-  signal.throwIfAborted();
+  ensureNotCancelled(signal);
   const featureMs = performance.now() - featureStart;
+  // Reject corrupt/empty feature groups before consuming an access grant.
+  packCandidateBatches(featureRuns, 1000);
   onStage("private_scoring");
   const scoringStart = performance.now();
   const grant = await api.createComputeGrant(manifest, rule);
-  signal.throwIfAborted();
+  ensureNotCancelled(signal);
   let ticket = await api.createScreenerSocketTicket(grant.id);
-  signal.throwIfAborted();
+  ensureNotCancelled(signal);
   let batches;
   try {
     batches = packCandidateBatches(featureRuns, ticket.max_candidates);
@@ -83,9 +91,9 @@ export async function runLiveScreener(
   if (!batches.length) throw new ApiError("Tidak ada kandidat screening.", 0);
   const results: ScreenerResult[] = [];
   for (const [index, featureResult] of batches.entries()) {
-    signal.throwIfAborted();
+    ensureNotCancelled(signal);
     if (index > 0) ticket = await api.createScreenerSocketTicket(grant.id);
-    signal.throwIfAborted();
+    ensureNotCancelled(signal);
     if (
       ticket.feature_schema_version !== featureResult.feature_schema_version ||
       featureResult.candidates.length > ticket.max_candidates
