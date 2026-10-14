@@ -198,32 +198,41 @@
 }
 .monitor-strip {
   display: flex;
+  gap: 12px;
   overflow-x: auto;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
+  padding: 4px 2px 12px;
 }
-.monitor-strip > span {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 20px;
-  color: var(--green);
-  font-weight: 650;
-}
-.monitor-strip > span svg {
-  width: 20px;
-}
-.monitor-strip button {
-  min-width: 150px;
-  flex: 1 0 auto;
+.monitor-lineup-heading {
   display: grid;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  align-items: end;
+  gap: 20px;
+}
+.monitor-lineup-heading h3 { margin: 0 0 6px; font-size: 20px; }
+.monitor-lineup-heading p { margin: 0; color: var(--muted); font-size: 14px; }
+.monitor-stock-mark {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--accent-surface);
+  color: var(--green);
+}
+.monitor-stock-mark svg { width: 22px; height: 22px; }
+.monitor-strip button {
+  width: 160px;
+  min-width: 160px;
+  min-height: 172px;
+  flex: 0 0 160px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
   text-align: left;
-  padding: 14px 20px;
-  border: 0;
-  border-left: 1px solid var(--line-soft);
-  background: transparent;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(145deg, var(--accent-surface), var(--surface));
   color: var(--text);
   font-size: 16px;
   font-weight: 650;
@@ -233,9 +242,16 @@
   color: var(--muted);
   font-size: 12px;
   font-weight: 400;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 .monitor-strip button[aria-pressed="true"] {
   background: var(--accent-surface);
+  border-color: var(--green);
+}
+.monitor-strip button:hover { border-color: var(--green); }
+@media (max-width: 600px) {
+  .monitor-lineup-heading { grid-template-columns: minmax(0, 1fr); }
 }
 .monitor-chart,
 .monitor-ledger,

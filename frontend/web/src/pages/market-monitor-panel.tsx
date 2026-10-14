@@ -9,6 +9,8 @@ import {
   X,
 } from "lucide-react";
 import { TradingViewChart } from "@/components/tradingview-chart";
+import { api } from "@/api/client";
+import type { StockInstrument, StockUniverse } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +73,63 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [runs, setRuns] = useState(() => monitorRuns(userId));
   const [sort, setSort] = useState("watchlist");
+  const [universes, setUniverses] = useState<StockUniverse[]>([]);
+  const [catalog, setCatalog] = useState<StockInstrument[]>([]);
+  const [universeId, setUniverseId] = useState("watchlist");
+  const [loadingUniverses, setLoadingUniverses] = useState(false);
+  const [universeError, setUniverseError] = useState(false);
+  const universe = universes.find((item) => item.id === universeId);
+  const activeStocks = universe
+    ? [
+        ...new Set(
+          universe.symbols
+            .map(idxTicker)
+            .filter((ticker): ticker is string => Boolean(ticker)),
+        ),
+      ]
+    : watchlist;
+  const stockName = (ticker: string) =>
+    catalog.find((stock) => idxTicker(stock.symbol) === ticker)?.name ??
+    names[ticker] ??
+    "IDX stock";
+  useEffect(() => {
+    let cancelled = false;
+    setUniverses([]);
+    setCatalog([]);
+    setUniverseId("watchlist");
+    if (!userId) return;
+    setLoadingUniverses(true);
+    setUniverseError(false);
+    Promise.all([api.listStockUniverses(), api.listStocks()])
+      .then(([groups, stocks]) => {
+        if (cancelled) return;
+        setUniverses(groups.items);
+        setCatalog(stocks.items);
+        const first = groups.items.find((group) => group.symbols.length);
+        if (first) {
+          setUniverseId(first.id);
+          setSelected(idxTicker(first.symbols[0]) ?? "BBCA");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setUniverseError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingUniverses(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+  function chooseUniverse(value: string | null) {
+    const id = value ?? "watchlist";
+    const group = universes.find((item) => item.id === id);
+    const stocks = group
+      ? group.symbols.map(idxTicker).filter(Boolean)
+      : watchlist;
+    setUniverseId(id);
+    if (!stocks.includes(selected)) setSelected(stocks[0] ?? "BBCA");
+  }
   const snapshots = useMemo(() => {
     const items = new Map<
       string,
@@ -86,7 +145,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
     return items;
   }, [runs]);
   const displayedWatchlist = useMemo(() => {
-    if (sort === "watchlist") return watchlist;
+    if (sort === "watchlist") return activeStocks;
     const score = (ticker: string) => {
       const item = snapshots.get(ticker);
       if (!item) return -Infinity;
@@ -95,12 +154,12 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
       if (sort === "matched") return Number(item.decision.matched);
       return Date.parse(item.decision.timestamp) || -Infinity;
     };
-    return [...watchlist].sort((a, b) => {
+    return [...activeStocks].sort((a, b) => {
       const x = score(a),
         y = score(b);
       return (x === y ? 0 : x > y ? -1 : 1) || a.localeCompare(b);
     });
-  }, [watchlist, snapshots, sort]);
+  }, [activeStocks, snapshots, sort]);
   useEffect(() => {
     let items = defaults;
     try {
@@ -167,89 +226,142 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   );
   return (
     <div className="market-monitor">
+      <header className="monitor-lineup-heading">
+        <div>
+          <h3>Your stock lineup</h3>
+          <p>Choose a stock to inspect its chart and screening results.</p>
+        </div>
+        <Field>
+          <FieldLabel htmlFor="monitor-universe">Stock universe</FieldLabel>
+          <Select
+            value={universeId}
+            onValueChange={chooseUniverse}
+            disabled={loadingUniverses}
+            items={[
+              { value: "watchlist", label: "Personal watchlist" },
+              ...universes.map((item) => ({
+                value: item.id,
+                label: item.name,
+              })),
+            ]}
+          >
+            <SelectTrigger id="monitor-universe">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="watchlist">Personal watchlist</SelectItem>
+                {universes.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
+      </header>
+      {universeError && (
+        <p role="alert">
+          Stock universes could not be loaded. Your personal watchlist is still
+          available. Reopen Market Monitor to retry.
+        </p>
+      )}
       <nav className="monitor-strip" aria-label="Stock selection">
-        <span>
-          <Activity aria-hidden="true" /> IDX
-        </span>
-        {watchlist.map((ticker) => (
+        {activeStocks.map((ticker) => (
           <button
             type="button"
             key={ticker}
             aria-pressed={selected === ticker}
             onClick={() => setSelected(ticker)}
           >
-            {ticker}
-            <small>{names[ticker] ?? "IDX stock"}</small>
+            <span className="monitor-stock-mark" aria-hidden="true">
+              <Activity />
+            </span>
+            <strong>{ticker}</strong>
+            <small>{stockName(ticker)}</small>
           </button>
         ))}
       </nav>
-      <section className="monitor-chart" aria-label={`Chart ${selected}`}>
-        <header>
-          <span className="monitor-window-dots" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
-          <div className="monitor-chart__title">
-            <h3>{selected}</h3>
-            <p>{names[selected] ?? "IDX stock"}</p>
-            <Badge variant="outline">Daily · IDR</Badge>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            nativeButton={false}
-            render={
-              <a
-                href={`https://www.tradingview.com/symbols/IDX-${selected}/`}
-                target="_blank"
-                rel="noreferrer"
-              />
-            }
-          >
-            TradingView
-            <ExternalLink data-icon="inline-end" />
-          </Button>
-        </header>
-        <TradingViewChart symbol={`IDX:${selected}`} label={selected} />
-        <footer>
-          Chart by TradingView. Availability and delays follow the data
-          provider.
-        </footer>
-      </section>
+      {!activeStocks.length && (
+        <p>
+          This universe has no stocks.{" "}
+          <a href="#app/universes">Edit stock universes</a> to add stocks.
+        </p>
+      )}
+      {activeStocks.length > 0 && (
+        <section className="monitor-chart" aria-label={`Chart ${selected}`}>
+          <header>
+            <span className="monitor-window-dots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            <div className="monitor-chart__title">
+              <h3>{selected}</h3>
+              <p>{stockName(selected)}</p>
+              <Badge variant="outline">Daily · IDR</Badge>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={
+                <a
+                  href={`https://www.tradingview.com/symbols/IDX-${selected}/`}
+                  target="_blank"
+                  rel="noreferrer"
+                />
+              }
+            >
+              TradingView
+              <ExternalLink data-icon="inline-end" />
+            </Button>
+          </header>
+          <TradingViewChart symbol={`IDX:${selected}`} label={selected} />
+          <footer>
+            Chart by TradingView. Availability and delays follow the data
+            provider.
+          </footer>
+        </section>
+      )}
       <section
         className="monitor-ledger"
         aria-label="Watchlist and screening results"
       >
         <header>
           <div>
-            <h3>Watchlist & screening results</h3>
+            <h3>
+              {universe ? universe.name : "Watchlist"} & screening results
+            </h3>
             <p>Latest daily candle snapshots. Not live prices.</p>
           </div>
-          <form onSubmit={add}>
-            <Field data-invalid={Boolean(error)}>
-              <FieldLabel htmlFor="monitor-symbol" className="sr-only">
-                Add stock
-              </FieldLabel>
-              <div className="monitor-add">
-                <Input
-                  id="monitor-symbol"
-                  placeholder="IDX ticker, e.g. BBCA"
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setError(null);
-                  }}
-                  aria-invalid={Boolean(error)}
-                />
-                <Button type="submit" variant="outline">
-                  <Plus data-icon="inline-start" />
+          {!universe && (
+            <form onSubmit={add}>
+              <Field data-invalid={Boolean(error)}>
+                <FieldLabel htmlFor="monitor-symbol" className="sr-only">
                   Add stock
-                </Button>
-              </div>
-              {error && <FieldError>{error}</FieldError>}
-            </Field>
-          </form>
+                </FieldLabel>
+                <div className="monitor-add">
+                  <Input
+                    id="monitor-symbol"
+                    placeholder="IDX ticker, e.g. BBCA"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      setError(null);
+                    }}
+                    aria-invalid={Boolean(error)}
+                  />
+                  <Button type="submit" variant="outline">
+                    <Plus data-icon="inline-start" />
+                    Add stock
+                  </Button>
+                </div>
+                {error && <FieldError>{error}</FieldError>}
+              </Field>
+            </form>
+          )}
         </header>
         <div className="monitor-toolbar">
           <Field>
@@ -345,11 +457,8 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                     >
                       {ticker}
                     </Button>
-                    <span
-                      className="monitor-company"
-                      title={names[ticker] ?? "IDX stock"}
-                    >
-                      {names[ticker] ?? "IDX stock"}
+                    <span className="monitor-company" title={stockName(ticker)}>
+                      {stockName(ticker)}
                     </span>
                   </TableCell>
                   <TableCell data-label="Open · IDR">
@@ -440,29 +549,40 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Remove ${ticker} from watchlist`}
-                      onClick={() => remove(ticker)}
-                    >
-                      <X />
-                    </Button>
+                    {!universe && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove ${ticker} from watchlist`}
+                        onClick={() => remove(ticker)}
+                      >
+                        <X />
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               );
             })}
-            {!watchlist.length && (
+            {!activeStocks.length && (
               <TableRow>
                 <TableCell colSpan={8}>
-                  Add a stock ticker to start monitoring.
+                  {universe
+                    ? "Add stocks to this universe to start monitoring."
+                    : "Add a stock ticker to start monitoring."}
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
         <footer>
-          Your watchlist is saved in your workspace.{" "}
+          {universe ? (
+            <>
+              Stocks follow your saved universe.{" "}
+              <a href="#app/universes">Edit universe</a>.{" "}
+            </>
+          ) : (
+            "Your watchlist is saved in your workspace. "
+          )}
           <a href="#app/analysis">Run screener</a> to populate results and
           indicators. Snapshots older than seven calendar days are marked as
           older; this does not account for the exchange trading calendar.

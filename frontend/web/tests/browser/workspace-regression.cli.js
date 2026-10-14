@@ -78,12 +78,27 @@ async (page) => {
   await page.reload();
   if (await page.evaluate(key => localStorage.getItem(key), journalKey) !== "preserve-existing-drafts") throw Error("Old drafts were overwritten");
   if (await page.locator(".journal-capture").count()) throw Error("Journal form was persisted");
+  await page.route("**/api/v1/stock-universes", route => route.fulfill({ json: { items: [universe, { ...universe, id: "fixture-energy", name: "Energy selection", symbols: ["PTBA.JK"] }] } }));
   await page.goto("http://127.0.0.1:5174/#app/realtime");
+  await page.getByLabel("Stock universe", { exact: true }).waitFor();
+  await page.waitForFunction(() => document.querySelector("#monitor-universe")?.textContent.includes("Bank pilihan"));
+  if (await page.locator(".monitor-strip button").count() !== 2) throw Error("Monitor ignored saved universe");
+  await page.locator(".monitor-strip button").filter({ hasText: "BBRI" }).click();
+  if (await page.locator(".monitor-chart h3").innerText() !== "BBRI") throw Error("Stock card did not switch chart");
+  if (!await page.locator('.monitor-ledger tr[data-state="selected"]').innerText().then(text => text.includes("BBRI"))) throw Error("Stock card did not select table row");
+  if (await page.locator(".monitor-window-dots i").count() !== 3 || !await page.locator(".monitor-chart .tradingview-chart").count()) throw Error("TradingView Mac layout missing");
+  await page.getByLabel("Stock universe", { exact: true }).click();
+  await page.getByRole("option", { name: "Energy selection", exact: true }).click();
+  if (await page.locator(".monitor-strip button").count() !== 1 || await page.locator(".monitor-chart h3").innerText() !== "PTBA") throw Error("Universe switch retained unrelated stocks");
+  if (!await page.getByText("Not evaluated", { exact: true }).count()) throw Error("Missing snapshot must remain unevaluated");
+  await page.getByLabel("Stock universe", { exact: true }).click();
+  await page.getByRole("option", { name: "Bank pilihan", exact: true }).click();
   await page.getByLabel("Sort table", { exact: true }).click({ timeout: 5000 });
   await page.getByRole("option", { name: "Highest open-to-close change", exact: true }).click({ timeout: 5000 });
   if (!((await page.locator(".monitor-ledger tbody tr").first().innerText()).includes("BBRI"))) throw Error("Monitor change sort failed");
   if (await page.locator(".monitor-chart h3").innerText() !== "BBCA") throw Error("Sort changed selected chart");
   if (!((await page.locator(".monitor-change").first().innerText()).includes("%"))) throw Error("Missing open-close percentage");
+  await page.unroute("**/api/v1/stock-universes");
   const routes = ["overview", "analysis", "rules", "universes", "journal", "realtime", "news", "access", "subscription", "operator"];
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -96,7 +111,10 @@ async (page) => {
         const bounds = await close.boundingBox();
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
         await page.screenshot({ path: `/private/tmp/signalgen-${view}-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
-        if (view === "realtime") await page.locator(".monitor-ledger").screenshot({ path: `/private/tmp/signalgen-monitor-table-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+        if (view === "realtime") {
+          await page.locator(".monitor-ledger").screenshot({ path: `/private/tmp/signalgen-monitor-table-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+          await page.locator(".market-monitor").screenshot({ path: `/private/tmp/signalgen-monitor-lineup-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+        }
         if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Overflow: ${view} ${width}`);
         if (view === "analysis") {
           const offset = await page.evaluate(() => {

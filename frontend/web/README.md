@@ -151,3 +151,19 @@ for restrained operational hierarchy, not its palette or identity.
 limit, pagination, loading/empty states, and both themes at 1440/900/390px using a
 synthetic catalog. Set `SIGNALGEN_TEST_BROWSER_EXECUTABLE` to an existing Chromium
 executable when the Playwright CLI's expected browser is not installed.
+
+## Universe-linked Market Monitor
+
+Market Monitor loads saved universes and issuer names from the existing API. The
+first nonempty universe opens by default; choosing another universe replaces both
+the selectable stock cards and table without modifying the saved universe. A card
+selects the TradingView symbol and highlights the corresponding table row. The
+Mac-style chart frame remains above the results table. Personal watchlist mode
+retains its separate add/remove workflow, including when universe loading fails.
+
+Table values remain screening snapshots, not live TradingView quotes. Missing
+snapshots display dashes and `Not evaluated`; no 7D/30D returns are fabricated.
+Browser regression fixtures verify universe switching, card/chart/row selection,
+the retained chart frame, responsive layouts, and both themes. External chart
+requests are blocked in those isolated tests, so they do not verify the live
+TradingView provider.
