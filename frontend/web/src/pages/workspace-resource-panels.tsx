@@ -6,6 +6,7 @@ import {
   Boxes,
   CalendarClock,
   ChartNoAxesCombined,
+  ChevronDown,
   Check,
   CircleAlert,
   Compass,
@@ -568,7 +569,8 @@ export function SubscriptionPanel({
                 {
                   code: "backtest",
                   name: "Akses backtest",
-                  description: "Uji strategi menggunakan data historis.",
+                  description:
+                    "Izin termasuk dalam paket. Halaman backtest belum tersedia.",
                   icon: History,
                 },
               ].map(({ code, name, description, icon: Icon }) => {
@@ -590,7 +592,11 @@ export function SubscriptionPanel({
                       </CardTitle>
                       <CardAction>
                         <Badge variant={included ? "secondary" : "outline"}>
-                          {included ? "Bisa digunakan" : "Tidak aktif"}
+                          {included
+                            ? code === "backtest"
+                              ? "Belum tersedia"
+                              : "Aktif"
+                            : "Tidak termasuk"}
                         </Badge>
                       </CardAction>
                     </CardHeader>
@@ -601,15 +607,27 @@ export function SubscriptionPanel({
                 );
               })}
             </div>
-            <ResourceQuota
-              revision={
-                subscription.updated_at
-                  ? Date.parse(subscription.updated_at)
-                  : 0
-              }
-            />
-            <details className="subscription-manage">
-              <summary>Kelola paket</summary>
+            <section
+              className="subscription-usage"
+              aria-labelledby="subscription-usage-title"
+            >
+              <h4 id="subscription-usage-title">Penggunaan kuota</h4>
+              <ResourceQuota
+                revision={
+                  subscription.updated_at
+                    ? Date.parse(subscription.updated_at)
+                    : 0
+                }
+              />
+            </section>
+            <details className="subscription-manage subscription-manage--account">
+              <summary>
+                <span>
+                  <strong>Kelola paket</strong>
+                  <small>Lihat periode aktif dan opsi pembatalan</small>
+                </span>
+                <ChevronDown aria-hidden="true" />
+              </summary>
               <p>
                 Mulai {formatDate(subscription.current_period_start)} ·{" "}
                 {subscription.source === "manual"

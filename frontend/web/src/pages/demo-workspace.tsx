@@ -69,7 +69,6 @@ import {
   demoSignals,
   initialTransactions,
   type DemoRule,
-  type DemoTransaction,
 } from "@/data/demo";
 import type { User } from "@/types";
 import {
@@ -159,8 +158,7 @@ const viewMeta: Record<
   },
   rules: {
     title: "Kelola rule",
-    description:
-      "Buat kondisi screening sendiri atau tinjau rule yang tersimpan.",
+    description: "Buat kondisi screening sendiri atau tinjau rule yang tersimpan.",
     icon: ListChecks,
   },
   news: {
@@ -190,7 +188,8 @@ const viewMeta: Record<
   },
   operator: {
     title: "Administrasi",
-    description: "Kelola akses akun, paket, dan izin operator.",
+    description:
+      "Kelola akses akun, paket, dan izin operator.",
     icon: ShieldCheck,
   },
 };
@@ -1385,13 +1384,9 @@ function RulesPanel({
 function JournalPanel({
   draftSymbol,
   clearDraft,
-  transactions,
-  setTransactions,
 }: {
   draftSymbol: string | null;
   clearDraft: () => void;
-  transactions: DemoTransaction[];
-  setTransactions: Dispatch<SetStateAction<DemoTransaction[]>>;
 }) {
   const [journal, setJournal] = useState<
     "All journals" | JournalRecord["journal"]
@@ -1451,29 +1446,7 @@ function JournalPanel({
       );
       return;
     }
-    setTransactions((current) => [
-      {
-        id: crypto.randomUUID(),
-        symbol,
-        side: form.side,
-        quantity: Number(form.quantity),
-        price: Number(form.price),
-        fee: Number(form.fee),
-        date: form.date,
-      },
-      ...current,
-    ]);
-    setCaptureError(null);
-    setForm({
-      symbol: "",
-      side: "BUY",
-      quantity: "",
-      price: "",
-      fee: "0",
-      date: localJournalDate(),
-    });
-    clearDraft();
-    setCaptureOpen(false);
+    setCaptureError("Penyimpanan jurnal server belum diaktifkan. Form ini tidak disimpan sebagai draft lokal.");
   }
 
   const chartPoints = chartCoordinates
@@ -1528,7 +1501,7 @@ function JournalPanel({
             onClick={() => setCaptureOpen((open) => !open)}
             aria-expanded={captureOpen}
           >
-            <Plus data-icon="inline-start" /> Add trade
+            <Plus data-icon="inline-start" /> Buka form jurnal
           </Button>
         </div>
       </section>
@@ -1537,13 +1510,13 @@ function JournalPanel({
         <section className="panel journal-capture">
           <div className="panel-heading">
             <div>
-              <h3>Capture a trade draft</h3>
+              <h3>Catat transaksi</h3>
               <p>
-                Save an entry in this browser. Drafts stay separate from sample
-                closed trades.
+                Lengkapi transaksi Anda. Penyimpanan server belum tersedia;
+                isi form tidak disimpan dan akan hilang saat halaman ditutup.
               </p>
             </div>
-            {draftSymbol && <Badge variant="outline">From analysis</Badge>}
+            {draftSymbol && <Badge variant="outline">Dari screener</Badge>}
           </div>
           <form onSubmit={addTransaction} className="control-grid">
             {captureError && (
@@ -1614,9 +1587,11 @@ function JournalPanel({
             <Button
               className="ui-button ui-button--primary control-wide"
               type="submit"
+              disabled
             >
-              <Save data-icon="inline-start" /> Save local draft
+              <Save data-icon="inline-start" /> Penyimpanan belum tersedia
             </Button>
+            <Button variant="outline" type="button" onClick={() => { clearDraft(); setCaptureOpen(false); }}>Tutup form</Button>
           </form>
         </section>
       )}
@@ -1624,7 +1599,7 @@ function JournalPanel({
       <section className="journal-performance" aria-label="Trading performance">
         <div className="journal-performance__summary">
           <div>
-            <span>Closed trade performance</span>
+            <span>Contoh performa transaksi — bukan data akun Anda</span>
             <strong className={totalPnl >= 0 ? "positive" : "negative"}>
               {totalPnl >= 0 ? "+" : "-"}
               {formatRupiah(totalPnl)}
@@ -1761,75 +1736,41 @@ function JournalPanel({
       </section>
 
       {selectedRecord && (
-        <aside className="journal-detail" aria-live="polite">
-          <div className="journal-detail__title">
+        <aside className="journal-detail" aria-live="polite" aria-labelledby="journal-review-title">
+          <header className="journal-detail__title">
             <div>
-              <span>{selectedRecord.journal}</span>
-              <h3>
+              <h3 id="journal-review-title">
                 {selectedRecord.symbol} {selectedRecord.direction.toLowerCase()}{" "}
                 review
               </h3>
+              <p>{selectedRecord.journal}</p>
             </div>
-            <TrendingUp />
-          </div>
-          <p>{selectedRecord.note}</p>
-          <div className="journal-detail__evidence">
+            <Badge variant="outline">Contoh review</Badge>
+          </header>
+          <p className="journal-detail__note">{selectedRecord.note}</p>
+          <dl className="journal-detail__evidence">
             <div>
-              <span>Rule context</span>
-              <strong>{selectedRecord.rule}</strong>
+              <dt>Rule</dt>
+              <dd>{selectedRecord.rule}</dd>
             </div>
             <div>
-              <span>Entry / exit</span>
-              <strong>
-                {selectedRecord.entryAt} → {selectedRecord.exitAt}
-              </strong>
+              <dt>Waktu masuk</dt>
+              <dd>{selectedRecord.entryAt}</dd>
             </div>
-          </div>
+            <div>
+              <dt>Waktu keluar</dt>
+              <dd>{selectedRecord.exitAt}</dd>
+            </div>
+          </dl>
           <div className="journal-tags" aria-label="Trade tags">
             <Tag />
             {selectedRecord.tags.map((tag) => (
-              <span key={tag}>{tag}</span>
+              <Badge variant="outline" key={tag}>{tag}</Badge>
             ))}
           </div>
         </aside>
       )}
 
-      {transactions.length > 0 && (
-        <section
-          className="journal-drafts"
-          aria-label="Locally captured trade drafts"
-        >
-          <div>
-            <span>Local drafts</span>
-            <p>
-              {transactions.length} entries are waiting for an exit price and
-              remain only in this browser preview.
-            </p>
-          </div>
-          <div className="journal-drafts__items">
-            {transactions.map((tx) => (
-              <article key={tx.id}>
-                <strong>{tx.symbol}</strong>
-                <span>
-                  {tx.side} · {tx.quantity} lots at{" "}
-                  {tx.price.toLocaleString("id-ID")}
-                </span>
-                <button
-                  className="icon-action"
-                  onClick={() =>
-                    setTransactions(
-                      transactions.filter((item) => item.id !== tx.id),
-                    )
-                  }
-                  aria-label={`Remove ${tx.symbol} local draft`}
-                >
-                  <Trash2 />
-                </button>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }
@@ -2183,31 +2124,6 @@ function formatDeviceTime(value: string): string {
   }).format(parsed);
 }
 
-function readJournalDrafts(key: string): DemoTransaction[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return initialTransactions;
-    const value: unknown = JSON.parse(raw);
-    if (!Array.isArray(value)) return initialTransactions;
-    return value.filter(
-      (item): item is DemoTransaction =>
-        item &&
-        typeof item.id === "string" &&
-        typeof item.symbol === "string" &&
-        (item.side === "BUY" || item.side === "SELL") &&
-        Number.isInteger(item.quantity) &&
-        item.quantity > 0 &&
-        Number.isFinite(item.price) &&
-        item.price > 0 &&
-        Number.isFinite(item.fee) &&
-        item.fee >= 0 &&
-        typeof item.date === "string",
-    );
-  } catch {
-    return initialTransactions;
-  }
-}
-
 export function DemoWorkspace({
   view,
   backendOnline,
@@ -2254,39 +2170,6 @@ export function DemoWorkspace({
 
   useEffect(() => () => workspaceMotion.current?.cancel(), []);
   const [draftSymbol, setDraftSymbol] = useState<string | null>(null);
-  const journalKey = `signalgen:journal-drafts:${user?.id ?? "guest"}`;
-  const [journalState, setJournalState] = useState(() => ({
-    key: journalKey,
-    items: readJournalDrafts(journalKey),
-  }));
-  const transactions =
-    journalState.key === journalKey
-      ? journalState.items
-      : readJournalDrafts(journalKey);
-  const setTransactions: Dispatch<SetStateAction<DemoTransaction[]>> = (
-    update,
-  ) => {
-    setJournalState((current) => {
-      const previous =
-        current.key === journalKey
-          ? current.items
-          : readJournalDrafts(journalKey);
-      return {
-        key: journalKey,
-        items: typeof update === "function" ? update(previous) : update,
-      };
-    });
-  };
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        journalState.key,
-        JSON.stringify(journalState.items),
-      );
-    } catch {
-      // The journal remains usable in memory when browser storage is unavailable.
-    }
-  }, [journalState]);
   const [cacheState, setCacheState] = useState("14.8 MB · encrypted (sample)");
   const meta = viewMeta[view];
   const PageIcon = meta.icon;
@@ -2387,6 +2270,7 @@ export function DemoWorkspace({
         </header>
         <div className="workspace__content demo-content">
           <DemoNotice view={view} />
+          <div className="workspace-page-intro">
           <div className="page-heading">
             <span className="page-heading__icon" aria-hidden="true">
               <PageIcon />
@@ -2396,120 +2280,79 @@ export function DemoWorkspace({
               <p>{meta.description}</p>
             </div>
           </div>
-          {authenticated && (
+          {authenticated && view !== "journal" && (
             <div className="workspace-sync" role="status" aria-live="polite">
-              <span>
-                {sync.state === "saved"
-                  ? "Tersimpan di akun"
-                  : sync.state === "loading"
-                    ? "Memuat data akun…"
-                    : sync.state === "saving"
-                      ? "Menyimpan perubahan…"
-                      : sync.state === "conflict"
-                        ? "Ada perubahan di perangkat lain. Pilih salinan yang ingin digunakan."
-                        : "Salinan lokal tersedia. Sinkronisasi belum selesai."}
-              </span>
-              {sync.state === "local" && (
-                <Button variant="ghost" size="sm" onClick={sync.retry}>
-                  Coba sinkronkan
-                </Button>
-              )}
-              {sync.state === "conflict" && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void sync.useAccount()}
-                  >
-                    Gunakan versi akun
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void sync.useDevice()}
-                  >
-                    Simpan versi perangkat ini
-                  </Button>
-                </>
-              )}
+              <span>{sync.state === "saved" ? "Tersimpan di akun" : sync.state === "loading" ? "Memuat data akun…" : sync.state === "saving" ? "Menyimpan perubahan…" : sync.state === "conflict" ? "Ada perubahan di perangkat lain. Pilih salinan yang ingin digunakan." : "Salinan lokal tersedia. Sinkronisasi belum selesai."}</span>
+              {sync.state === "local" && <Button variant="ghost" size="sm" onClick={sync.retry}>Coba sinkronkan</Button>}
+              {sync.state === "conflict" && <><Button variant="outline" size="sm" onClick={() => void sync.useAccount()}>Gunakan versi akun</Button><Button variant="outline" size="sm" onClick={() => void sync.useDevice()}>Simpan versi perangkat ini</Button></>}
             </div>
           )}
+          </div>
           <div className="route-stage" key={`${view}:${sync.epoch}`}>
             <RouteBoundary>
               <Suspense fallback={<RouteLoading />}>
-                {!sync.ready ? (
-                  <RouteLoading />
-                ) : (
-                  <>
-                    {view === "overview" && (
-                      <WorkspaceOverviewPanel
-                        authenticated={authenticated}
-                        userId={user?.id}
-                        backendOnline={backendOnline}
-                        go={go}
-                      />
-                    )}
-                    {view === "analysis" && (
-                      <WorkspaceScreenerPanel
-                        onDraft={draft}
-                        userId={user?.id}
-                        authenticated={authenticated}
-                        backendOnline={backendOnline}
-                      />
-                    )}
-                    {view === "realtime" && (
-                      <MarketMonitorPanel userId={user?.id} />
-                    )}
-                    {view === "news" && (
-                      <WorkspaceNewsPanel
-                        key={user?.id ?? "guest"}
-                        userId={user?.id}
-                      />
-                    )}
-                    {view === "rules" && (
-                      <ServerRulesPanel
-                        authenticated={authenticated}
-                        userId={user?.id}
-                        backendOnline={backendOnline}
-                        onRun={() => go("analysis")}
-                      />
-                    )}
-                    {view === "journal" && (
-                      <JournalPanel
-                        draftSymbol={draftSymbol}
-                        clearDraft={() => setDraftSymbol(null)}
-                        transactions={transactions}
-                        setTransactions={setTransactions}
-                      />
-                    )}
-                    {view === "access" && (
-                      <AccessPanel
-                        backendOnline={backendOnline}
-                        authenticated={authenticated}
-                        cacheState={cacheState}
-                        setCacheState={setCacheState}
-                      />
-                    )}
-                    {view === "universes" && (
-                      <StockUniversesPanel
-                        authenticated={authenticated}
-                        backendOnline={backendOnline}
-                      />
-                    )}
-                    {view === "subscription" && (
-                      <SubscriptionPanel
-                        authenticated={authenticated}
-                        backendOnline={backendOnline}
-                      />
-                    )}
-                    {view === "operator" && (
-                      <AdminPage
-                        authenticated={authenticated}
-                        backendOnline={backendOnline}
-                      />
-                    )}
-                  </>
+                {!sync.ready ? <RouteLoading /> : <>
+                {view === "overview" && (
+                  <WorkspaceOverviewPanel
+                    authenticated={authenticated}
+                    userId={user?.id}
+                    backendOnline={backendOnline}
+                    go={go}
+                  />
                 )}
+                {view === "analysis" && (
+                  <WorkspaceScreenerPanel
+                    onDraft={draft}
+                    userId={user?.id}
+                    authenticated={authenticated}
+                    backendOnline={backendOnline}
+                  />
+                )}
+                {view === "realtime" && (
+                  <MarketMonitorPanel userId={user?.id} />
+                )}
+                {view === "news" && <WorkspaceNewsPanel key={user?.id ?? "guest"} userId={user?.id} />}
+                {view === "rules" && (
+                  <ServerRulesPanel
+                    authenticated={authenticated}
+                    userId={user?.id}
+                    backendOnline={backendOnline}
+                    onRun={() => go("analysis")}
+                  />
+                )}
+                {view === "journal" && (
+                  <JournalPanel
+                    draftSymbol={draftSymbol}
+                    clearDraft={() => setDraftSymbol(null)}
+                  />
+                )}
+                {view === "access" && (
+                  <AccessPanel
+                    backendOnline={backendOnline}
+                    authenticated={authenticated}
+                    cacheState={cacheState}
+                    setCacheState={setCacheState}
+                  />
+                )}
+                {view === "universes" && (
+                  <StockUniversesPanel
+                    authenticated={authenticated}
+                    backendOnline={backendOnline}
+                  />
+                )}
+                {view === "subscription" && (
+                  <SubscriptionPanel
+                    authenticated={authenticated}
+                    backendOnline={backendOnline}
+                  />
+                )}
+                {view === "operator" && (
+                  <AdminPage
+                    authenticated={authenticated}
+                    backendOnline={backendOnline}
+                  />
+                )}
+                </>}
               </Suspense>
             </RouteBoundary>
           </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Activity,
   ArrowDownRight,
@@ -14,6 +14,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -21,7 +29,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { idxTicker, monitorRuns, priceMovement } from "@/lib/market-monitor";
+import {
+  idxTicker,
+  monitorRuns,
+  priceMovement,
+  openCloseChange,
+  snapshotAge,
+} from "@/lib/market-monitor";
 import {
   hasWorkspaceData,
   readWorkspaceData,
@@ -56,6 +70,37 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [runs, setRuns] = useState(() => monitorRuns(userId));
+  const [sort, setSort] = useState("watchlist");
+  const snapshots = useMemo(() => {
+    const items = new Map<
+      string,
+      (typeof runs)[number]["run"]["rows"][number] & {
+        record: (typeof runs)[number];
+      }
+    >();
+    for (const record of runs)
+      for (const row of record.run.rows) {
+        const ticker = idxTicker(row.decision.symbol);
+        if (ticker && !items.has(ticker)) items.set(ticker, { ...row, record });
+      }
+    return items;
+  }, [runs]);
+  const displayedWatchlist = useMemo(() => {
+    if (sort === "watchlist") return watchlist;
+    const score = (ticker: string) => {
+      const item = snapshots.get(ticker);
+      if (!item) return -Infinity;
+      if (sort === "change")
+        return openCloseChange(item.latestOpen, item.latestClose) ?? -Infinity;
+      if (sort === "matched") return Number(item.decision.matched);
+      return Date.parse(item.decision.timestamp) || -Infinity;
+    };
+    return [...watchlist].sort((a, b) => {
+      const x = score(a),
+        y = score(b);
+      return (x === y ? 0 : x > y ? -1 : 1) || a.localeCompare(b);
+    });
+  }, [watchlist, snapshots, sort]);
   useEffect(() => {
     let items = defaults;
     try {
@@ -206,6 +251,41 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             </Field>
           </form>
         </header>
+        <div className="monitor-toolbar">
+          <Field>
+            <FieldLabel htmlFor="monitor-sort">Urutkan tabel</FieldLabel>
+            <Select
+              value={sort}
+              onValueChange={(value) => setSort(value ?? "watchlist")}
+              items={[
+                { value: "watchlist", label: "Urutan watchlist" },
+                { value: "change", label: "Perubahan buka–tutup tertinggi" },
+                { value: "matched", label: "Memenuhi rule terlebih dahulu" },
+                { value: "latest", label: "Candle terbaru" },
+              ]}
+            >
+              <SelectTrigger id="monitor-sort">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="watchlist">Urutan watchlist</SelectItem>
+                  <SelectItem value="change">
+                    Perubahan buka–tutup tertinggi
+                  </SelectItem>
+                  <SelectItem value="matched">
+                    Memenuhi rule terlebih dahulu
+                  </SelectItem>
+                  <SelectItem value="latest">Candle terbaru</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <p>
+            Persentase dihitung dari buka ke tutup pada candle yang sama, bukan
+            dari penutupan hari sebelumnya.
+          </p>
+        </div>
         <Table>
           <colgroup>
             <col style={{ width: "18%" }} />
@@ -236,12 +316,13 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {watchlist.map((ticker) => {
-              const snapshot = runs.flatMap((record) =>
-                record.run.rows
-                  .filter((row) => idxTicker(row.decision.symbol) === ticker)
-                  .map((row) => ({ ...row, record })),
-              )[0];
+            {displayedWatchlist.map((ticker) => {
+              const snapshot = snapshots.get(ticker);
+              const change = openCloseChange(
+                snapshot?.latestOpen,
+                snapshot?.latestClose,
+              );
+              const age = snapshotAge(snapshot?.decision.timestamp);
               const movement = priceMovement(
                 snapshot?.latestOpen,
                 snapshot?.latestClose,
@@ -302,6 +383,15 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                         </span>
                       )}
                     </span>
+                    {change !== null && (
+                      <small
+                        className="monitor-change"
+                        data-direction={movement}
+                      >
+                        {change > 0 ? "+" : ""}
+                        {number(change)}%
+                      </small>
+                    )}
                   </TableCell>
                   <TableCell data-label="RSI 14">
                     {snapshot ? number(snapshot.features.rsi14) : "—"}
@@ -344,6 +434,12 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                     ) : (
                       "—"
                     )}
+                    {age === "old" && (
+                      <Badge variant="outline">Snapshot lama</Badge>
+                    )}
+                    {age === "future" && (
+                      <Badge variant="destructive">Periksa waktu data</Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Button
@@ -370,7 +466,8 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
         <footer>
           Watchlist disimpan di workspace Anda.{" "}
           <a href="#app/analysis">Jalankan screener</a> untuk mengisi hasil dan
-          indikator.
+          indikator. Snapshot lebih dari 7 hari kalender ditandai lama; penanda
+          ini bukan penilaian jadwal perdagangan bursa.
         </footer>
       </section>
       <section

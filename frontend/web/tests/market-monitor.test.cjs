@@ -23,7 +23,17 @@ vm.runInNewContext(
     ),
     { compilerOptions: { module: ts.ModuleKind.CommonJS } },
   ).outputText,
-  { exports: storageModule, TextEncoder, CustomEvent: class { constructor(type, init) {this.type = type; this.detail = init.detail;} }, window: browser },
+  {
+    exports: storageModule,
+    TextEncoder,
+    CustomEvent: class {
+      constructor(type, init) {
+        this.type = type;
+        this.detail = init.detail;
+      }
+    },
+    window: browser,
+  },
 );
 function loadMonitor() {
   const exports = {};
@@ -33,7 +43,7 @@ function loadMonitor() {
         path.join(__dirname, "../src/lib/market-monitor.ts"),
         "utf8",
       ),
-      { compilerOptions: { module: ts.ModuleKind.CommonJS } },
+      { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
     ).outputText,
     {
       exports,
@@ -192,4 +202,75 @@ test("closing price direction compares against open without inventing missing da
     [null, null],
   ])
     assert.equal(output.priceMovement(open, close), "unknown");
+});
+test("history freezes user-rule evidence, strips extras, and never stores private system definitions", () => {
+  const rule = {
+    version: 3,
+    definition_hash: "hash-3",
+    owner_type: "user",
+    definition: {
+      name: "Snapshot",
+      logic: "AND",
+      signal_type: "BUY",
+      cooldown_sec: 60,
+      conditions: [
+        { left: "PRICE", op: ">", right: "EMA20", token: "secret-condition" },
+      ],
+      token: "secret-definition",
+    },
+  };
+  output.recordMonitorRun("frozen-rule", "Snapshot", fixture(), {
+    ruleId: "rule",
+    universeId: "u",
+    universeName: "Banks",
+    ruleSnapshot: output.frozenRule(rule),
+  });
+  rule.definition.conditions[0].right = 999;
+  const snapshot =
+    loadMonitor().monitorRuns("frozen-rule")[0].context.ruleSnapshot;
+  assert.equal(snapshot.version, 3);
+  assert.equal(snapshot.definition.conditions[0].right, "EMA20");
+  assert.equal(JSON.stringify(snapshot).includes("secret-"), false);
+  assert.equal(
+    output.frozenRule({ ...rule, owner_type: "system" }).definition,
+    undefined,
+  );
+});
+test("run comparison only evaluates overlapping symbols, not missing stocks", () => {
+  const before = {
+    run: fixture(),
+    context: { ruleId: "r", ruleSnapshot: { definition_hash: "one" } },
+  };
+  const after = {
+    run: fixture(),
+    context: { ruleId: "r", ruleSnapshot: { definition_hash: "two" } },
+  };
+  before.run.rows[0].decision.matched = false;
+  after.run.rows.push({
+    ...after.run.rows[0],
+    decision: {
+      ...after.run.rows[0].decision,
+      symbol: "TLKM.JK",
+      matched: true,
+    },
+  });
+  const diff = output.compareMonitorRuns(before, after);
+  assert.equal(diff.common, 1);
+  assert.equal(diff.gained.join(), "BBCA");
+  assert.equal(diff.unpaired.join(), "TLKM");
+  assert.equal(diff.lost.length, 0);
+  assert.equal(diff.sameRule, false);
+});
+test("open-close percentages never use missing, zero or invalid opening prices", () => {
+  assert.equal(output.openCloseChange(100, 110), 10);
+  assert.equal(output.openCloseChange(100, 90), -10);
+  assert.equal(output.openCloseChange(100, 100), 0);
+  for (const [open, close] of [[0,100],[-1,100],[null,100],[100,NaN],[100,Infinity],[100,-5]]) assert.equal(output.openCloseChange(open, close), null);
+});
+test("snapshot age uses a conservative seven-calendar-day threshold and rejects future clocks", () => {
+  const now = Date.parse("2026-10-14T12:00:00Z");
+  assert.equal(output.snapshotAge("2026-10-09T12:00:00Z", now), "recent");
+  assert.equal(output.snapshotAge("2026-10-01T12:00:00Z", now), "old");
+  assert.equal(output.snapshotAge("2026-11-01T12:00:00Z", now), "future");
+  assert.equal(output.snapshotAge("invalid", now), "unknown");
 });

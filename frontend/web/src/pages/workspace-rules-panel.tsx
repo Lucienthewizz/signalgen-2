@@ -561,11 +561,7 @@ export function ServerRulesPanel({
             <p>Pilih rule pribadi untuk diedit, atau jalankan dari screener.</p>
           </div>
           <div>
-            <Button
-              variant="ghost"
-              onClick={() => void load()}
-              disabled={loading}
-            >
+            <Button onClick={() => void load()} disabled={loading}>
               <RefreshCw
                 data-icon="inline-start"
                 className={loading ? "is-spinning" : ""}
@@ -608,7 +604,6 @@ export function ServerRulesPanel({
                         <strong>{rule.name}</strong>
                         <p>{summary(rule.definition)}</p>
                       </div>
-                      <Badge variant="outline">v{rule.version}</Badge>
                       <div>
                         <Button
                           variant="ghost"

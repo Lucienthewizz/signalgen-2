@@ -29,6 +29,7 @@
   font-family: "Manrope Variable", "Avenir Next", sans-serif;
   font-synthesis: none;
   --canvas: #070a08;
+  --workspace-panel-gutter: 24px;
   --sidebar: #090c0a;
   --surface: #0d110e;
   --surface-2: #111612;
@@ -77,6 +78,9 @@
 
 * {
   box-sizing: border-box;
+}
+@media (max-width: 760px) {
+  :root { --workspace-panel-gutter: 20px; }
 }
 html {
   color-scheme: dark;
