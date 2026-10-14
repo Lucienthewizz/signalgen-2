@@ -15,7 +15,7 @@ export function evaluateOverSocket(
     const requestId = crypto.randomUUID();
     let settled = false;
     const timeout = window.setTimeout(
-      () => finishError("Private scoring melewati batas waktu."),
+      () => finishError("Scoring timed out."),
       10000,
     );
 
@@ -39,12 +39,12 @@ export function evaluateOverSocket(
       reject(new ApiError(message, 0));
     }
     function cancelled() {
-      finishError("Analisis dibatalkan.");
+      finishError("Analysis cancelled.");
     }
     signal.addEventListener("abort", cancelled, { once: true });
-    socket.onerror = () => finishError("Koneksi private scoring gagal.");
+    socket.onerror = () => finishError("The scoring connection failed.");
     socket.onclose = (event) => {
-      finishError("Koneksi private scoring ditutup sebelum hasil lengkap.");
+      finishError("The scoring connection closed before all results arrived.");
     };
     socket.onopen = () => {
       if (signal.aborted) {
@@ -63,7 +63,7 @@ export function evaluateOverSocket(
           }),
         );
       } catch {
-        finishError("Kandidat tidak dapat dikirim ke private scoring.");
+        finishError("Candidates could not be sent for scoring.");
       }
     };
     socket.onmessage = (event) => {
@@ -72,15 +72,15 @@ export function evaluateOverSocket(
       try {
         payload = JSON.parse(String(event.data));
       } catch {
-        finishError("Respons private scoring tidak valid.");
+        finishError("The scoring response is invalid.");
         return;
       }
       if (!payload || typeof payload !== "object") {
-        finishError("Respons private scoring tidak valid.");
+        finishError("The scoring response is invalid.");
         return;
       }
       if (payload.type === "screener.error") {
-        finishError(payload.message ?? "Private scoring ditolak.");
+        finishError(payload.message ?? "Scoring was denied.");
         return;
       }
       if (payload.type !== "screener.result") return;
@@ -100,7 +100,7 @@ export function evaluateOverSocket(
             row.reason_codes.every((code) => typeof code === "string"),
         )
       ) {
-        finishError("Respons private scoring tidak cocok dengan request.");
+        finishError("The scoring response does not match this request.");
         return;
       }
       settled = true;

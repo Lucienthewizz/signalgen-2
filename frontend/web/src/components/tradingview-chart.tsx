@@ -92,7 +92,7 @@ export function TradingViewChart({
       gridColor:
         theme === "dark" ? "rgba(54, 73, 62, 0.24)" : "rgba(57, 98, 73, 0.14)",
       style: "1",
-      locale: "id",
+      locale: "en",
       allow_symbol_change: false,
       calendar: false,
       details: false,
@@ -136,21 +136,21 @@ export function TradingViewChart({
           {widgetState === "error" ? (
             <>
               <CircleAlert />
-              <strong>Chart belum dapat dimuat</strong>
+              <strong>Chart unavailable</strong>
               <span>
-                Periksa koneksi internet atau buka simbol langsung di
+                Check your connection or open this symbol directly on
                 TradingView.
               </span>
               <a href={tradingViewUrl} target="_blank" rel="noreferrer">
-                Buka {label}
+                Open {label}
                 <ExternalLink aria-hidden="true" />
               </a>
             </>
           ) : (
             <>
               <i aria-hidden="true" />
-              <strong>Memuat feed TradingView</strong>
-              <span>Menyiapkan {label} · interval harian</span>
+              <strong>Loading TradingView</strong>
+              <span>Preparing {label} · daily interval</span>
             </>
           )}
         </div>

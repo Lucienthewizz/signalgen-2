@@ -37,19 +37,19 @@ export function ResourceQuota({
     <div className="resource-quota" role="status" aria-live="polite">
       {error ? (
         <span>
-          Kuota belum dapat diperiksa. Server tetap memvalidasi saat menyimpan.
+          Usage is unavailable. Limits are still checked when you save.
         </span>
       ) : !usage ? (
-        <span>Memeriksa kuota…</span>
+        <span>Checking usage…</span>
       ) : (
         keys.map((key) => (
           <span key={key}>
             <strong>
               {usage.used[key]} / {usage.limits[key]}
             </strong>{" "}
-            {key === "custom_rules" ? "rule pribadi" : "stock universe"}
+            {key === "custom_rules" ? "personal rules" : "stock universes"}
             <small>
-              {Math.max(0, usage.limits[key] - usage.used[key])} slot tersisa
+              {Math.max(0, usage.limits[key] - usage.used[key])} slots remaining
             </small>
           </span>
         ))

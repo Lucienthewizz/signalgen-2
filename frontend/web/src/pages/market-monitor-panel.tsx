@@ -52,12 +52,12 @@ const names: Record<string, string> = {
 const defaults = ["BBCA", "BBRI", "TLKM", "BMRI", "ASII"];
 const number = (value: number) =>
   Number.isFinite(value)
-    ? new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value)
+    ? new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value)
     : "—";
 const date = (value: string) => {
   const parsed = new Date(value);
-  if (!Number.isFinite(parsed.getTime())) return "Waktu tidak tersedia";
-  return new Intl.DateTimeFormat("id-ID", {
+  if (!Number.isFinite(parsed.getTime())) return "Time unavailable";
+  return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(parsed);
@@ -136,18 +136,18 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           throw Error("storage");
       } else localStorage.setItem(key, JSON.stringify(items));
     } catch {
-      setError("Watchlist hanya tersimpan selama halaman ini terbuka.");
+      setError("Your watchlist is available only while this page is open.");
     }
   }
   function add(event: FormEvent) {
     event.preventDefault();
     const ticker = idxTicker(query);
     if (!ticker) {
-      setError("Masukkan kode IDX 4 huruf, misalnya BBCA.");
+      setError("Enter a four-letter IDX ticker, such as BBCA.");
       return;
     }
     if (watchlist.length >= 30 && !watchlist.includes(ticker)) {
-      setError("Maksimal 30 saham dalam watchlist.");
+      setError("Your watchlist can contain up to 30 stocks.");
       return;
     }
     setError(null);
@@ -167,7 +167,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   );
   return (
     <div className="market-monitor">
-      <nav className="monitor-strip" aria-label="Pilihan saham">
+      <nav className="monitor-strip" aria-label="Stock selection">
         <span>
           <Activity aria-hidden="true" /> IDX
         </span>
@@ -179,7 +179,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             onClick={() => setSelected(ticker)}
           >
             {ticker}
-            <small>{names[ticker] ?? "Saham IDX"}</small>
+            <small>{names[ticker] ?? "IDX stock"}</small>
           </button>
         ))}
       </nav>
@@ -192,8 +192,8 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           </span>
           <div className="monitor-chart__title">
             <h3>{selected}</h3>
-            <p>{names[selected] ?? "Saham IDX"}</p>
-            <Badge variant="outline">Harian · IDR</Badge>
+            <p>{names[selected] ?? "IDX stock"}</p>
+            <Badge variant="outline">Daily · IDR</Badge>
           </div>
           <Button
             variant="outline"
@@ -213,28 +213,28 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
         </header>
         <TradingViewChart symbol={`IDX:${selected}`} label={selected} />
         <footer>
-          Chart dari TradingView. Ketersediaan dan delay mengikuti penyedia
-          data.
+          Chart by TradingView. Availability and delays follow the data
+          provider.
         </footer>
       </section>
       <section
         className="monitor-ledger"
-        aria-label="Watchlist dan hasil screening"
+        aria-label="Watchlist and screening results"
       >
         <header>
           <div>
-            <h3>Watchlist & hasil screening</h3>
-            <p>Snapshot candle harian terakhir. Bukan harga live.</p>
+            <h3>Watchlist & screening results</h3>
+            <p>Latest daily candle snapshots. Not live prices.</p>
           </div>
           <form onSubmit={add}>
             <Field data-invalid={Boolean(error)}>
               <FieldLabel htmlFor="monitor-symbol" className="sr-only">
-                Tambah saham
+                Add stock
               </FieldLabel>
               <div className="monitor-add">
                 <Input
                   id="monitor-symbol"
-                  placeholder="Kode IDX, misalnya BBCA"
+                  placeholder="IDX ticker, e.g. BBCA"
                   value={query}
                   onChange={(e) => {
                     setQuery(e.target.value);
@@ -244,7 +244,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                 />
                 <Button type="submit" variant="outline">
                   <Plus data-icon="inline-start" />
-                  Tambah saham
+                  Add stock
                 </Button>
               </div>
               {error && <FieldError>{error}</FieldError>}
@@ -253,15 +253,15 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
         </header>
         <div className="monitor-toolbar">
           <Field>
-            <FieldLabel htmlFor="monitor-sort">Urutkan tabel</FieldLabel>
+            <FieldLabel htmlFor="monitor-sort">Sort table</FieldLabel>
             <Select
               value={sort}
               onValueChange={(value) => setSort(value ?? "watchlist")}
               items={[
-                { value: "watchlist", label: "Urutan watchlist" },
-                { value: "change", label: "Perubahan buka–tutup tertinggi" },
-                { value: "matched", label: "Memenuhi rule terlebih dahulu" },
-                { value: "latest", label: "Candle terbaru" },
+                { value: "watchlist", label: "Watchlist order" },
+                { value: "change", label: "Highest open-to-close change" },
+                { value: "matched", label: "Matches first" },
+                { value: "latest", label: "Latest candle" },
               ]}
             >
               <SelectTrigger id="monitor-sort">
@@ -269,21 +269,19 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="watchlist">Urutan watchlist</SelectItem>
+                  <SelectItem value="watchlist">Watchlist order</SelectItem>
                   <SelectItem value="change">
-                    Perubahan buka–tutup tertinggi
+                    Highest open-to-close change
                   </SelectItem>
-                  <SelectItem value="matched">
-                    Memenuhi rule terlebih dahulu
-                  </SelectItem>
-                  <SelectItem value="latest">Candle terbaru</SelectItem>
+                  <SelectItem value="matched">Matches first</SelectItem>
+                  <SelectItem value="latest">Latest candle</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
           <p>
-            Persentase dihitung dari buka ke tutup pada candle yang sama, bukan
-            dari penutupan hari sebelumnya.
+            Percentages compare the open and close of the same candle, not the
+            previous day's close.
           </p>
         </div>
         <Table>
@@ -299,19 +297,19 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           </colgroup>
           <TableHeader>
             <TableRow>
-              <TableHead>Saham</TableHead>
+              <TableHead>Stock</TableHead>
               <TableHead className="monitor-price-heading--open">
-                Buka <span className="monitor-unit">IDR</span>
+                Open <span className="monitor-unit">IDR</span>
               </TableHead>
               <TableHead className="monitor-price-heading--close">
-                Tutup <span className="monitor-unit">IDR</span>
+                Close <span className="monitor-unit">IDR</span>
               </TableHead>
               <TableHead>RSI 14</TableHead>
               <TableHead>EMA 20</TableHead>
-              <TableHead>Hasil rule</TableHead>
-              <TableHead>Waktu data</TableHead>
+              <TableHead>Rule result</TableHead>
+              <TableHead>Data time</TableHead>
               <TableHead>
-                <span className="sr-only">Hapus saham</span>
+                <span className="sr-only">Remove stock</span>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -338,7 +336,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                   key={ticker}
                   data-state={selected === ticker ? "selected" : undefined}
                 >
-                  <TableCell data-label="Saham">
+                  <TableCell data-label="Stock">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -349,12 +347,12 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                     </Button>
                     <span
                       className="monitor-company"
-                      title={names[ticker] ?? "Saham IDX"}
+                      title={names[ticker] ?? "IDX stock"}
                     >
-                      {names[ticker] ?? "Saham IDX"}
+                      {names[ticker] ?? "IDX stock"}
                     </span>
                   </TableCell>
-                  <TableCell data-label="Buka · IDR">
+                  <TableCell data-label="Open · IDR">
                     <span
                       className="monitor-price"
                       data-price={hasOpen ? "open" : "missing"}
@@ -362,7 +360,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                       {hasOpen ? number(snapshot.latestOpen!) : "—"}
                     </span>
                   </TableCell>
-                  <TableCell data-label="Tutup · IDR">
+                  <TableCell data-label="Close · IDR">
                     <span
                       className="monitor-price"
                       data-price={hasClose ? movement : "missing"}
@@ -376,10 +374,10 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                       {movement !== "unknown" && (
                         <span className="sr-only">
                           {movement === "up"
-                            ? "Naik dari harga buka"
+                            ? "Above opening price"
                             : movement === "down"
-                              ? "Turun dari harga buka"
-                              : "Sama dengan harga buka"}
+                              ? "Below opening price"
+                              : "Unchanged from opening price"}
                         </span>
                       )}
                     </span>
@@ -399,7 +397,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                   <TableCell data-label="EMA 20">
                     {snapshot ? number(snapshot.features.ema20) : "—"}
                   </TableCell>
-                  <TableCell data-label="Hasil rule">
+                  <TableCell data-label="Rule result">
                     <div className="monitor-result">
                       {snapshot ? (
                         <>
@@ -411,8 +409,8 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                             }
                           >
                             {snapshot.decision.matched
-                              ? "Sesuai rule"
-                              : "Tidak sesuai"}
+                              ? "Matched"
+                              : "Not matched"}
                           </Badge>
                           <span
                             className="monitor-company"
@@ -422,11 +420,11 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                           </span>
                         </>
                       ) : (
-                        <Badge variant="outline">Belum dievaluasi</Badge>
+                        <Badge variant="outline">Not evaluated</Badge>
                       )}
                     </div>
                   </TableCell>
-                  <TableCell data-label="Waktu data">
+                  <TableCell data-label="Data time">
                     {snapshot ? (
                       <time dateTime={snapshot.decision.timestamp}>
                         {date(snapshot.decision.timestamp)}
@@ -435,17 +433,17 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                       "—"
                     )}
                     {age === "old" && (
-                      <Badge variant="outline">Snapshot lama</Badge>
+                      <Badge variant="outline">Older snapshot</Badge>
                     )}
                     {age === "future" && (
-                      <Badge variant="destructive">Periksa waktu data</Badge>
+                      <Badge variant="destructive">Check data time</Badge>
                     )}
                   </TableCell>
                   <TableCell>
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Hapus ${ticker} dari watchlist`}
+                      aria-label={`Remove ${ticker} from watchlist`}
                       onClick={() => remove(ticker)}
                     >
                       <X />
@@ -457,17 +455,17 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             {!watchlist.length && (
               <TableRow>
                 <TableCell colSpan={8}>
-                  Tambahkan kode saham untuk mulai memantau.
+                  Add a stock ticker to start monitoring.
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
         <footer>
-          Watchlist disimpan di workspace Anda.{" "}
-          <a href="#app/analysis">Jalankan screener</a> untuk mengisi hasil dan
-          indikator. Snapshot lebih dari 7 hari kalender ditandai lama; penanda
-          ini bukan penilaian jadwal perdagangan bursa.
+          Your watchlist is saved in your workspace.{" "}
+          <a href="#app/analysis">Run screener</a> to populate results and
+          indicators. Snapshots older than seven calendar days are marked as
+          older; this does not account for the exchange trading calendar.
         </footer>
       </section>
       <section
@@ -475,8 +473,8 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
         aria-labelledby="monitor-history-title"
       >
         <header>
-          <h3 id="monitor-history-title">Riwayat screening {selected}</h3>
-          <span>Riwayat tersimpan · bukan sinyal otomatis</span>
+          <h3 id="monitor-history-title">Screening history {selected}</h3>
+          <span>Saved history · not automated signals</span>
         </header>
         {entries.length ? (
           <ol>
@@ -487,15 +485,15 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                 </time>
                 <strong>{record.rule}</strong>
                 <Badge variant={decision.matched ? "secondary" : "outline"}>
-                  {decision.matched ? "Sesuai rule" : "Tidak sesuai"}
+                  {decision.matched ? "Matched" : "Not matched"}
                 </Badge>
               </li>
             ))}
           </ol>
         ) : (
           <p>
-            Hasil screening saham ini akan muncul setelah run selesai. Sepuluh
-            screening terbaru tersedia hingga 30 hari.
+            Results for this stock appear after a completed run. The ten most
+            recent runs are available for up to 30 days.
           </p>
         )}
       </section>

@@ -58,7 +58,7 @@ export type MarketNewsResult = {
 };
 const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN ?? "").replace(/\/$/, "");
 const STALE_WARNING =
-  "Sumber belum dapat diperbarui. Daftar terakhir tetap ditampilkan; coba lagi dalam satu menit.";
+  "News could not be refreshed. Showing the previous articles; try again in a minute.";
 let cached: MarketNewsResult | null = null;
 let nextAttempt = 0;
 export function getCachedMarketNews() {
@@ -66,10 +66,10 @@ export function getCachedMarketNews() {
 }
 export function parseMarketNews(payload: unknown): MarketArticle[] {
   if (!payload || typeof payload !== "object" || !("articles" in payload))
-    throw new Error("Format respons berita tidak valid.");
+    throw new Error("The news response is invalid.");
   const rows = (payload as { articles: unknown }).articles;
   if (!Array.isArray(rows))
-    throw new Error("Format respons berita tidak valid.");
+    throw new Error("The news response is invalid.");
   const seen = new Set<string>();
   return rows
     .flatMap((row): MarketArticle[] => {
@@ -118,7 +118,7 @@ export async function fetchMarketNews(
   if (Date.now() < nextAttempt) {
     if (previous) return { ...previous, warning: STALE_WARNING };
     throw new Error(
-      "Sumber berita belum tersedia. Coba lagi dalam satu menit.",
+      "News is unavailable. Try again in a minute.",
     );
   }
   try {
@@ -131,7 +131,7 @@ export async function fetchMarketNews(
     });
     if (!response.ok)
       throw new Error(
-        "Sumber berita belum tersedia. Coba lagi dalam satu menit.",
+        "News is unavailable. Try again in a minute.",
       );
     const payload: unknown = await response.json();
     const items = parseMarketNews(payload);
@@ -153,7 +153,7 @@ export async function fetchMarketNews(
     nextAttempt = Date.now() + 60_000;
     if (previous) return { ...previous, warning: STALE_WARNING };
     throw new Error(
-      "Koneksi ke sumber berita belum berhasil. Coba lagi dalam satu menit.",
+      "Could not connect to the news service. Try again in a minute.",
     );
   }
 }

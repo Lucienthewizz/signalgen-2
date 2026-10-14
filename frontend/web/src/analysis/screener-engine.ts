@@ -26,7 +26,7 @@ export function extractDatasetFeatures(
   if (activeCancel)
     return Promise.reject(
       new ApiError(
-        "Komputasi lain masih berjalan. Tunggu atau batalkan terlebih dahulu.",
+        "Another computation is running. Wait for it to finish or cancel it first.",
         0,
       ),
     );
@@ -40,7 +40,7 @@ export function extractDatasetFeatures(
     const jobId = crypto.randomUUID();
     let settled = false;
     const timeout = setTimeout(
-      () => finishError("Komputasi Go/WASM melewati batas 45 detik."),
+      () => finishError("Go/WASM computation exceeded the 45-second limit."),
       45000,
     );
     function cleanup() {
@@ -59,18 +59,18 @@ export function extractDatasetFeatures(
       reject(new ApiError(message, 0));
     }
     function cancelled() {
-      finishError("Analisis dibatalkan.");
+      finishError("Analysis cancelled.");
     }
     activeCancel = cancelled;
     signal.addEventListener("abort", cancelled, { once: true });
-    engine.onerror = () => finishError("Worker Go/WASM gagal dimuat.");
+    engine.onerror = () => finishError("The Go/WASM worker could not be loaded.");
     engine.onmessageerror = () =>
-      finishError("Respons worker Go/WASM tidak dapat dibaca.");
+      finishError("The Go/WASM worker response could not be read.");
     engine.onmessage = (event) => {
       const message = event.data;
       if (!message || message.jobId !== jobId || settled) return;
       if (message.type === "error") {
-        finishError(message.message ?? "WASM gagal menghitung indikator.");
+        finishError(message.message ?? "WASM could not calculate indicators.");
         return;
       }
       if (
@@ -78,7 +78,7 @@ export function extractDatasetFeatures(
         !Array.isArray(message.results) ||
         message.results.length !== series.length
       ) {
-        finishError("Respons batch worker tidak cocok dengan dataset.");
+        finishError("The worker batch response does not match the dataset.");
         return;
       }
       settled = true;
@@ -89,7 +89,7 @@ export function extractDatasetFeatures(
     try {
       engine.postMessage({ type: "extract-batch", jobId, series });
     } catch {
-      finishError("Dataset tidak dapat dikirim ke worker.");
+      finishError("The dataset could not be sent to the worker.");
     }
   });
 }

@@ -84,10 +84,10 @@ type Props = {
 type RunState = "idle" | "loading" | "completed" | "failed";
 
 const stages: Record<ScreenerStage, [string, number]> = {
-  validating_access: ["Memeriksa akses akun", 15],
-  preparing_data: ["Menyiapkan data harian", 40],
-  loading_engine: ["Menghitung indikator", 68],
-  private_scoring: ["Memeriksa kondisi rule", 88],
+  validating_access: ["Checking account access", 15],
+  preparing_data: ["Preparing daily data", 40],
+  loading_engine: ["Calculating indicators", 68],
+  private_scoring: ["Checking rule conditions", 88],
 };
 
 function ruleSummary(rule?: RuleResource) {
@@ -98,13 +98,13 @@ function ruleSummary(rule?: RuleResource) {
 }
 
 function decisionReasons(reasons: string[]) {
-  if (!reasons.length) return "Server tidak menyertakan alasan.";
+  if (!reasons.length) return "No decision reason was provided.";
   return reasons
     .map((reason) =>
       reason === "RULE_MATCHED"
-        ? "Semua kondisi terpenuhi."
+        ? "All conditions met."
         : reason === "CONDITIONS_NOT_MET"
-          ? "Ada kondisi yang belum terpenuhi."
+          ? "Some conditions were not met."
           : reason.toLowerCase().replaceAll("_", " "),
     )
     .join(", ");
@@ -123,7 +123,7 @@ export function WorkspaceScreenerPanel({
   const [universeId, setUniverseId] = useState("");
   const [loadingResources, setLoadingResources] = useState(true);
   const [state, setState] = useState<RunState>("idle");
-  const [stage, setStage] = useState("Siap screening");
+  const [stage, setStage] = useState("Ready to screen");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [run, setRun] = useState<LiveScreenerRun | null>(null);
@@ -217,7 +217,7 @@ export function WorkspaceScreenerPanel({
       setError(
         caught instanceof Error
           ? caught.message
-          : "Resource screener belum dapat dimuat.",
+          : "Screener resources could not be loaded.",
       );
     } finally {
       if (mounted.current && version === resourceVersion.current)
@@ -293,7 +293,7 @@ export function WorkspaceScreenerPanel({
     setFailure(null);
     setState("loading");
     setProgress(5);
-    setStage("Memulai screening");
+    setStage("Starting screening");
     setError(null);
     try {
       const result = await runLiveScreener(
@@ -324,7 +324,7 @@ export function WorkspaceScreenerPanel({
         setHistory(monitorRuns(account.user.id));
       }
       setProgress(100);
-      setStage("Screening selesai");
+      setStage("Screening complete");
       setState("completed");
     } catch (caught) {
       if (!mounted.current || activeController.signal.aborted) return;
@@ -338,10 +338,10 @@ export function WorkspaceScreenerPanel({
       setError(
         caught instanceof Error
           ? caught.message
-          : "Screening tidak dapat diselesaikan.",
+          : "Screening could not be completed.",
       );
       setProgress(0);
-      setStage("Screening gagal");
+      setStage("Screening failed");
       setState("failed");
     } finally {
       if (controller.current === activeController) running.current = false;
@@ -353,7 +353,7 @@ export function WorkspaceScreenerPanel({
     running.current = false;
     setState(run ? "completed" : "idle");
     setProgress(0);
-    setStage("Screening dibatalkan");
+    setStage("Screening cancelled");
   }
 
   if (!authenticated || !backendOnline) {
@@ -363,17 +363,17 @@ export function WorkspaceScreenerPanel({
           <EmptyMedia variant="icon">
             <ShieldCheck />
           </EmptyMedia>
-          <EmptyTitle>Screener belum terhubung</EmptyTitle>
+          <EmptyTitle>Screener unavailable</EmptyTitle>
           <EmptyDescription>
             {!backendOnline
-              ? "Jalankan Go API untuk memakai private scoring."
-              : "Masuk agar Signalgen dapat memverifikasi akses screener."}
+              ? "Start the Go API to use the screener."
+              : "Sign in to verify your screener access."}
           </EmptyDescription>
         </EmptyHeader>
         {backendOnline && (
           <EmptyContent>
             <Button nativeButton={false} render={<a href="#login" />}>
-              Masuk
+              Sign in
             </Button>
           </EmptyContent>
         )}
@@ -393,8 +393,8 @@ export function WorkspaceScreenerPanel({
               <SearchCheck />
             </span>
             <div>
-              <h3 id="screener-console-title">Pilih saham, jalankan rule</h3>
-              <p>Dua pilihan untuk memulai. Hasil screening tampil di bawah.</p>
+              <h3 id="screener-console-title">Choose stocks, run your rule</h3>
+              <p>Choose a rule and universe. Screening results appear below.</p>
             </div>
           </div>
           <Badge variant="outline">Daily data · Yahoo Finance</Badge>
@@ -404,7 +404,7 @@ export function WorkspaceScreenerPanel({
           <div
             className="screener-resource-loading"
             role="status"
-            aria-label="Memuat rules dan stock universes"
+            aria-label="Loading rules and stock universes"
             aria-busy="true"
           >
             <Skeleton />
@@ -431,8 +431,8 @@ export function WorkspaceScreenerPanel({
               </EmptyMedia>
               <EmptyTitle>Screener access is not active</EmptyTitle>
               <EmptyDescription>
-                Buka Plan & access untuk melihat paket, atau minta operator
-                memberikan grant screener.
+                Open Plan & access to review your plan, or ask an operator for
+                screener access.
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
@@ -458,8 +458,8 @@ export function WorkspaceScreenerPanel({
                 </EmptyTitle>
                 <EmptyDescription>
                   {!rules.length
-                    ? "Screener membutuhkan minimal satu rule aktif."
-                    : "Pilih 1–10 saham yang ingin dianalisis bersama; 3 saham juga bisa."}
+                    ? "You need at least one active rule to run screening."
+                    : "Choose 1–10 stocks to analyze together."}
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
@@ -504,8 +504,8 @@ export function WorkspaceScreenerPanel({
                 </Select>
                 <FieldDescription>
                   {selectedRule?.owner_type === "system"
-                    ? "Rule sistem, dikelola Signalgen."
-                    : "Rule yang Anda simpan."}
+                    ? "System rule managed by Signalgen."
+                    : "Your saved rule."}
                 </FieldDescription>
               </Field>
               <Field>
@@ -545,11 +545,11 @@ export function WorkspaceScreenerPanel({
                 <div className="screener-run-summary__title">
                   <strong>{selectedRule?.name}</strong>
                   <small>
-                    {selectedUniverse?.symbols.length ?? 0} saham · Harian
+                    {selectedUniverse?.symbols.length ?? 0} stocks · Daily
                   </small>
                 </div>
                 {!conditions.length && (
-                  <p>Kondisi rule sistem diperiksa oleh server.</p>
+                  <p>System rule conditions are checked automatically.</p>
                 )}
                 {conditions.length > 0 && (
                   <div>
@@ -577,13 +577,11 @@ export function WorkspaceScreenerPanel({
                   ) : (
                     <BarChart3 data-icon="inline-start" />
                   )}
-                  {state === "loading"
-                    ? "Memeriksa saham…"
-                    : "Jalankan screening"}
+                  {state === "loading" ? "Screening stocks…" : "Run screening"}
                 </Button>
                 {state === "loading" && (
                   <Button variant="ghost" onClick={cancel}>
-                    <XCircle data-icon="inline-start" /> Batalkan
+                    <XCircle data-icon="inline-start" /> Cancel
                   </Button>
                 )}
               </div>
@@ -636,24 +634,24 @@ export function WorkspaceScreenerPanel({
       {storageUnavailable && (
         <Alert>
           <CircleAlert />
-          <AlertTitle>Preferensi belum tersimpan</AlertTitle>
+          <AlertTitle>Preferences not saved</AlertTitle>
           <AlertDescription>
-            Penyimpanan browser tidak tersedia. Pilihan dan hasil tetap dapat
-            digunakan selama halaman ini terbuka.
+            Browser storage is unavailable. Your selections and results remain
+            available while this page is open.
           </AlertDescription>
         </Alert>
       )}
 
       {history.length > 0 && (
         <details className="screener-history">
-          <summary>Riwayat screening ({history.length})</summary>
+          <summary>Screening history ({history.length})</summary>
           <ul>
             {history.map((item) => (
               <li key={item.recordedAt}>
                 <div>
                   <strong>{item.rule}</strong>
                   <time dateTime={item.recordedAt}>
-                    {new Date(item.recordedAt).toLocaleString("id-ID")}
+                    {new Date(item.recordedAt).toLocaleString("en-GB")}
                   </time>
                 </div>
                 <Button
@@ -670,7 +668,7 @@ export function WorkspaceScreenerPanel({
                     setError(null);
                   }}
                 >
-                  Tinjau hasil
+                  Review result
                 </Button>
               </li>
             ))}
@@ -678,11 +676,11 @@ export function WorkspaceScreenerPanel({
           {history.length > 1 && (
             <section
               className="screener-comparison"
-              aria-label="Perbandingan riwayat"
+              aria-label="Compare screening history"
             >
               <Field>
                 <FieldLabel htmlFor="compare-run">
-                  Bandingkan hasil terbaru dengan
+                  Compare the latest result with
                 </FieldLabel>
                 <Select
                   value={compareIndex}
@@ -691,8 +689,8 @@ export function WorkspaceScreenerPanel({
                   <SelectTrigger id="compare-run">
                     <SelectValue>
                       {history[Number(compareIndex)]
-                        ? `${history[Number(compareIndex)].rule} · ${new Date(history[Number(compareIndex)].recordedAt).toLocaleString("id-ID")}`
-                        : "Pilih riwayat"}
+                        ? `${history[Number(compareIndex)].rule} · ${new Date(history[Number(compareIndex)].recordedAt).toLocaleString("en-GB")}`
+                        : "Choose a past run"}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
@@ -703,7 +701,7 @@ export function WorkspaceScreenerPanel({
                           value={String(index + 1)}
                         >
                           {item.rule} ·{" "}
-                          {new Date(item.recordedAt).toLocaleString("id-ID")}
+                          {new Date(item.recordedAt).toLocaleString("en-GB")}
                         </SelectItem>
                       ))}
                     </SelectGroup>
@@ -713,16 +711,16 @@ export function WorkspaceScreenerPanel({
               {comparison && (
                 <>
                   <p>
-                    {comparison.common} saham tersedia pada kedua hasil.{" "}
+                    {comparison.common} stocks appear in both results.{" "}
                     {!comparison.sameRule &&
-                      "Versi rule berbeda atau belum tercatat; ini hanya perbandingan hasil, bukan perubahan sinyal dengan rule yang sama."}
+                      "Rule versions differ or were not recorded. This compares results, not signal changes under the same rule."}
                   </p>
                   <dl>
                     {[
-                      ["Baru memenuhi", comparison.gained],
-                      ["Tidak lagi memenuhi", comparison.lost],
-                      ["Tetap memenuhi", comparison.retained],
-                      ["Tidak dibandingkan", comparison.unpaired],
+                      ["New matches", comparison.gained],
+                      ["No longer matched", comparison.lost],
+                      ["Still matched", comparison.retained],
+                      ["Not compared", comparison.unpaired],
                     ].map(([label, symbols]) => (
                       <div key={String(label)}>
                         <dt>{label}</dt>
@@ -731,8 +729,8 @@ export function WorkspaceScreenerPanel({
                     ))}
                   </dl>
                   <p>
-                    Saham yang hanya ada pada satu hasil tidak dianggap gagal.
-                    Hasil snapshot bukan sinyal otomatis.
+                    Stocks present in only one result are not counted as
+                    failures. Snapshots are not automated signals.
                   </p>
                 </>
               )}
@@ -751,23 +749,24 @@ export function WorkspaceScreenerPanel({
               <BarChart3 />
             </span>
             <div>
-              <h3 id="screener-results-title">Hasil screening</h3>
+              <h3 id="screener-results-title">Screening results</h3>
               <p>
-                Saham yang cocok, harga harian, dan alasan setiap keputusan.
+                Matching stocks, daily prices, and the evidence behind each
+                decision.
               </p>
             </div>
           </div>
           <Badge variant="outline">
             {run
-              ? `${run.rows.filter((row) => row.decision.matched).length} memenuhi · ${run.rows.filter((row) => !row.decision.matched).length} tidak memenuhi`
-              : "Belum dijalankan"}
+              ? `${run.rows.filter((row) => row.decision.matched).length} matched · ${run.rows.filter((row) => !row.decision.matched).length} not matched`
+              : "Not run yet"}
           </Badge>
         </header>
         {state === "loading" && !run ? (
           <div
             className="screener-result-loading"
             role="status"
-            aria-label="Menyiapkan hasil screening"
+            aria-label="Preparing screening results"
             aria-busy="true"
           >
             <Skeleton />
@@ -781,10 +780,10 @@ export function WorkspaceScreenerPanel({
               <EmptyMedia variant="icon">
                 <BarChart3 />
               </EmptyMedia>
-              <EmptyTitle>Mulai dari rule dan stock universe</EmptyTitle>
+              <EmptyTitle>Start with a rule and stock universe</EmptyTitle>
               <EmptyDescription>
-                Jalankan screening di atas. Setiap saham akan ditampilkan dengan
-                keputusan dan alasannya.
+                Run screening above to see each stock's result and decision
+                evidence.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -796,20 +795,20 @@ export function WorkspaceScreenerPanel({
                 <p>
                   {historicalRun?.context?.universeName ??
                     runContext?.universe ??
-                    "Riwayat tersimpan"}{" "}
-                  · {run.rows.length} saham diperiksa.
+                    "Saved history"}{" "}
+                  · {run.rows.length} stocks screened.
                 </p>
                 <p>
                   {state === "loading"
-                    ? "Screening baru sedang berjalan. Hasil terakhir tetap ditampilkan."
+                    ? "A new screening is running. Your last result is still shown."
                     : historicalRun
-                      ? `Hasil tersimpan ${new Date(historicalRun.recordedAt).toLocaleString("id-ID")}. Bukan harga live.`
-                      : "Harga buka dan tutup harian · IDR · bukan harga live."}
+                      ? `Result saved ${new Date(historicalRun.recordedAt).toLocaleString("en-GB")}. Not live prices.`
+                      : "Daily open and close · IDR · not live prices."}
                 </p>
                 <p>
-                  Snapshot harian · candle terakhir{" "}
-                  {candleDate(run.latestDecision.timestamp)} · bukan harga
-                  real-time.
+                  Daily snapshot · latest candle{" "}
+                  {candleDate(run.latestDecision.timestamp)} · not real-time
+                  prices.
                 </p>
               </div>
               <Button
@@ -817,19 +816,19 @@ export function WorkspaceScreenerPanel({
                 onClick={() =>
                   downloadCsv("signalgen-screening.csv", [
                     [
-                      "Saham",
-                      "Keputusan",
-                      "Buka IDR",
-                      "Tutup IDR",
+                      "Stock",
+                      "Decision",
+                      "Open IDR",
+                      "Close IDR",
                       "RSI14",
                       "EMA20",
-                      "Waktu candle",
+                      "Candle time",
                       "Rule",
-                      "Versi rule",
+                      "Rule version",
                     ],
                     ...visibleRows.map((row) => [
                       row.decision.symbol,
-                      row.decision.matched ? "Memenuhi" : "Tidak memenuhi",
+                      row.decision.matched ? "Matched" : "Not matched",
                       row.latestOpen,
                       row.latestClose,
                       row.features.rsi14,
@@ -841,7 +840,7 @@ export function WorkspaceScreenerPanel({
                   ])
                 }
               >
-                <Download data-icon="inline-start" /> Ekspor CSV
+                <Download data-icon="inline-start" /> Export CSV
               </Button>
             </div>
             {detailRow && (
@@ -857,8 +856,8 @@ export function WorkspaceScreenerPanel({
                     <p>
                       Candle {candleDate(detailRow.decision.timestamp)} ·{" "}
                       {detailRow.decision.matched
-                        ? "Memenuhi rule"
-                        : "Tidak memenuhi rule"}
+                        ? "Matched rule"
+                        : "Did not match rule"}
                     </p>
                   </div>
                   <Button
@@ -866,13 +865,13 @@ export function WorkspaceScreenerPanel({
                     size="sm"
                     onClick={() => setDetailSymbol(null)}
                   >
-                    Tutup detail
+                    Close details
                   </Button>
                 </header>
                 <dl className="stock-detail__values">
                   {[
-                    ["Harga buka", detailRow.latestOpen],
-                    ["Harga tutup", detailRow.latestClose],
+                    ["Open price", detailRow.latestOpen],
+                    ["Close price", detailRow.latestClose],
                     ["EMA 9", detailRow.features.ema9],
                     ["EMA 20", detailRow.features.ema20],
                     ["RSI 14", detailRow.features.rsi14],
@@ -881,7 +880,7 @@ export function WorkspaceScreenerPanel({
                       <dt>{label}</dt>
                       <dd>
                         {typeof value === "number"
-                          ? new Intl.NumberFormat("id-ID", {
+                          ? new Intl.NumberFormat("en-GB", {
                               maximumFractionDigits: 2,
                             }).format(value)
                           : "—"}
@@ -892,8 +891,10 @@ export function WorkspaceScreenerPanel({
                 <p>{decisionReasons(detailRow.decision.reason_codes)}</p>
                 <div className="stock-detail__evidence">
                   <h4>
-                    Bukti kondisi{" "}
-                    {evidenceRule ? `· rule versi ${evidenceRule.version}` : ""}
+                    Condition evidence{" "}
+                    {evidenceRule
+                      ? `· rule version ${evidenceRule.version}`
+                      : ""}
                   </h4>
                   {evidenceRule?.definition ? (
                     <ul>
@@ -914,25 +915,23 @@ export function WorkspaceScreenerPanel({
                                         : "destructive"
                                     }
                                   >
-                                    {evidence.passed
-                                      ? "Terpenuhi"
-                                      : "Belum terpenuhi"}
+                                    {evidence.passed ? "Met" : "Not met"}
                                   </Badge>
                                   <span className="stock-detail__condition">
                                     <strong>{evidence.label}</strong>
                                     <small>
-                                      {new Intl.NumberFormat("id-ID", {
+                                      {new Intl.NumberFormat("en-GB", {
                                         maximumFractionDigits: 2,
                                       }).format(evidence.left)}{" "}
-                                      dibanding{" "}
-                                      {new Intl.NumberFormat("id-ID", {
+                                      compared with{" "}
+                                      {new Intl.NumberFormat("en-GB", {
                                         maximumFractionDigits: 2,
                                       }).format(evidence.right)}
                                     </small>
                                   </span>
                                 </>
                               ) : (
-                                "Nilai kondisi belum tersedia."
+                                "Condition values are unavailable."
                               )}
                             </li>
                           );
@@ -942,8 +941,8 @@ export function WorkspaceScreenerPanel({
                   ) : (
                     <p>
                       {historicalRun
-                        ? "Definisi rule pada saat screening tidak tersedia. Hasil lama tidak dihitung ulang dengan rule terbaru."
-                        : "Detail kondisi rule sistem tidak ditampilkan."}
+                        ? "The rule definition from this run is unavailable. Past results are not recalculated using the current rule."
+                        : "System rule condition details are not shown."}
                     </p>
                   )}
                 </div>
@@ -954,31 +953,31 @@ export function WorkspaceScreenerPanel({
                   />
                 </div>
                 <p className="stock-detail__note">
-                  Chart dari penyedia dapat diperbarui terpisah. Angka dan
-                  keputusan di atas berasal dari snapshot screening, bukan harga
-                  pada chart.
+                  The provider's chart may update separately. The values and
+                  decisions above come from the screening snapshot, not the
+                  chart.
                 </p>
               </section>
             )}
             <FieldGroup className="screener-result-filters">
               <Field>
-                <FieldLabel htmlFor="screen-search">Cari saham</FieldLabel>
+                <FieldLabel htmlFor="screen-search">Search stocks</FieldLabel>
                 <Input
                   id="screen-search"
-                  placeholder="Misalnya BBCA"
+                  placeholder="e.g. BBCA"
                   value={search}
                   maxLength={80}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="screen-filter">Tampilkan</FieldLabel>
+                <FieldLabel htmlFor="screen-filter">Show</FieldLabel>
                 <Select
                   value={resultFilter}
                   items={[
-                    { value: "all", label: "Semua saham" },
-                    { value: "matched", label: "Memenuhi" },
-                    { value: "rejected", label: "Tidak memenuhi" },
+                    { value: "all", label: "All stocks" },
+                    { value: "matched", label: "Matched" },
+                    { value: "rejected", label: "Not matched" },
                   ]}
                   onValueChange={(value) => setResultFilter(value || "all")}
                 >
@@ -987,22 +986,22 @@ export function WorkspaceScreenerPanel({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value="all">Semua saham</SelectItem>
-                      <SelectItem value="matched">Memenuhi</SelectItem>
-                      <SelectItem value="rejected">Tidak memenuhi</SelectItem>
+                      <SelectItem value="all">All stocks</SelectItem>
+                      <SelectItem value="matched">Matched</SelectItem>
+                      <SelectItem value="rejected">Not matched</SelectItem>
                     </SelectGroup>
                   </SelectContent>
                 </Select>
               </Field>
               <Field>
-                <FieldLabel htmlFor="screen-sort">Urutkan</FieldLabel>
+                <FieldLabel htmlFor="screen-sort">Sort by</FieldLabel>
                 <Select
                   value={sort}
                   items={[
-                    { value: "symbol", label: "Nama saham" },
-                    { value: "matched", label: "Memenuhi terlebih dahulu" },
-                    { value: "close", label: "Harga tutup tertinggi" },
-                    { value: "rsi", label: "RSI tertinggi" },
+                    { value: "symbol", label: "Stock symbol" },
+                    { value: "matched", label: "Matches first" },
+                    { value: "close", label: "Highest close price" },
+                    { value: "rsi", label: "Highest RSI" },
                   ]}
                   onValueChange={(v) =>
                     setSort((v ?? "symbol") as ScreenerPreferences["sort"])
@@ -1013,33 +1012,29 @@ export function WorkspaceScreenerPanel({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value="symbol">Nama saham</SelectItem>
-                      <SelectItem value="matched">
-                        Memenuhi terlebih dahulu
-                      </SelectItem>
-                      <SelectItem value="close">
-                        Harga tutup tertinggi
-                      </SelectItem>
-                      <SelectItem value="rsi">RSI tertinggi</SelectItem>
+                      <SelectItem value="symbol">Stock symbol</SelectItem>
+                      <SelectItem value="matched">Matches first</SelectItem>
+                      <SelectItem value="close">Highest close price</SelectItem>
+                      <SelectItem value="rsi">Highest RSI</SelectItem>
                     </SelectGroup>
                   </SelectContent>
                 </Select>
               </Field>
             </FieldGroup>
             <p className="screener-result-count" role="status">
-              {visibleRows.length} dari {run.rows.length} saham ditampilkan
+              {visibleRows.length} of {run.rows.length} stocks shown
             </p>
             <div className="screener-result-ledger">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Saham</TableHead>
-                    <TableHead>Keputusan</TableHead>
-                    <TableHead>Harga buka (IDR)</TableHead>
-                    <TableHead>Harga tutup (IDR)</TableHead>
+                    <TableHead>Stock</TableHead>
+                    <TableHead>Decision</TableHead>
+                    <TableHead>Open price (IDR)</TableHead>
+                    <TableHead>Close price (IDR)</TableHead>
                     <TableHead>RSI14</TableHead>
                     <TableHead>EMA20</TableHead>
-                    <TableHead>Alasan</TableHead>
+                    <TableHead>Reason</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -1073,19 +1068,19 @@ export function WorkspaceScreenerPanel({
                               aria-hidden="true"
                             />
                           )}
-                          {row.decision.matched ? "Memenuhi" : "Tidak memenuhi"}
+                          {row.decision.matched ? "Matched" : "Not matched"}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         {row.latestOpen != null &&
                         Number.isFinite(row.latestOpen)
-                          ? new Intl.NumberFormat("id-ID").format(
+                          ? new Intl.NumberFormat("en-GB").format(
                               row.latestOpen,
                             )
                           : "—"}
                       </TableCell>
                       <TableCell>
-                        {new Intl.NumberFormat("id-ID").format(row.latestClose)}
+                        {new Intl.NumberFormat("en-GB").format(row.latestClose)}
                       </TableCell>
                       <TableCell>{row.features.rsi14.toFixed(2)}</TableCell>
                       <TableCell>{row.features.ema20.toFixed(2)}</TableCell>
@@ -1096,7 +1091,7 @@ export function WorkspaceScreenerPanel({
                           size="sm"
                           onClick={() => setDetailSymbol(row.decision.symbol)}
                         >
-                          Lihat detail
+                          View details
                         </Button>
                       </TableCell>
                       <TableCell>
@@ -1107,7 +1102,7 @@ export function WorkspaceScreenerPanel({
                             onDraft(row.decision.symbol.replace(".JK", ""))
                           }
                         >
-                          Catat jurnal
+                          Add to journal
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -1115,7 +1110,7 @@ export function WorkspaceScreenerPanel({
                   {!visibleRows.length && (
                     <TableRow>
                       <TableCell colSpan={8}>
-                        Tidak ada saham untuk filter ini.{" "}
+                        No stocks match these filters.{" "}
                         <Button
                           variant="ghost"
                           onClick={() => {
@@ -1123,7 +1118,7 @@ export function WorkspaceScreenerPanel({
                             setResultFilter("all");
                           }}
                         >
-                          Reset filter
+                          Reset filters
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -1139,7 +1134,7 @@ export function WorkspaceScreenerPanel({
           className="screener-technical"
           aria-labelledby="screener-technical-title"
         >
-          <h4 id="screener-technical-title">Informasi teknis data</h4>
+          <h4 id="screener-technical-title">Data information</h4>
           <footer className="dataset-provenance">
             <div>
               <span>Provider</span>
@@ -1167,11 +1162,11 @@ export function WorkspaceScreenerPanel({
             {run.metrics && (
               <>
                 <div>
-                  <span>Komputasi client</span>
+                  <span>Client computation</span>
                   <strong>{run.metrics.feature_ms.toFixed(1)} ms</strong>
                 </div>
                 <div>
-                  <span>Kandidat / koneksi</span>
+                  <span>Candidates / connections</span>
                   <strong>
                     {run.metrics.candidates} / {run.metrics.sockets}
                   </strong>
