@@ -170,6 +170,11 @@ async (page) => {
           if (layout.alignment > 1) throw Error(`Universe content edges differ: ${JSON.stringify(layout)}`);
           if (width >= 1440 && (!layout.sideBySide || layout.baseline > 1)) throw Error(`Universe selection panel baseline differs: ${JSON.stringify(layout)}`);
           if (layout.wrap !== "wrap") throw Error("Saved universe stocks cannot wrap");
+          if (await page.locator('.universe-window-bar .news-window-dots i').count() !== 3) throw Error("Mac window controls missing");
+          if (await categories.locator('button svg').count() !== 7) throw Error("Category icons missing");
+          const selectionStyle = await page.locator('.universe-selection__card').evaluate(el=>({radius:parseFloat(getComputedStyle(el).borderTopLeftRadius),padding:parseFloat(getComputedStyle(el.querySelector('[data-slot="card-content"]')).paddingLeft)}));
+          if(selectionStyle.radius < 12 || selectionStyle.padding < 16) throw Error("Selected stocks card missing inset spacing");
+          if(!(await page.locator('.stock-catalog-picker__table').evaluate(el=>getComputedStyle(el).backgroundImage)).includes('linear-gradient')) throw Error("Stock table gradient missing");
           if (await page.locator(".universe-library").getByText(/^v\d+$/).count()) throw Error("Universe version badge still visible");
         }
         if (view === "journal") {
@@ -215,6 +220,9 @@ async (page) => {
   await page.screenshot({ path: "/private/tmp/signalgen-account.png", animations: "disabled", timeout: 10000 });
   await page.goto("http://127.0.0.1:5174/#app/universes");
   await page.getByRole("button", { name: "Edit Bank pilihan", exact: true }).click({ timeout: 5000 });
+  if(await page.locator('.universe-selection__stocks li').count() !== 2) throw Error("Selected stock cards missing");
+  const stockCard = await page.locator('.universe-selection__stocks li').first().evaluate(el=>({radius:parseFloat(getComputedStyle(el).borderTopLeftRadius),padding:parseFloat(getComputedStyle(el).paddingLeft)}));
+  if(stockCard.radius < 8 || stockCard.padding < 12) throw Error("Selected stock item card spacing missing");
   if (await page.getByLabel("Universe name", {exact:true}).inputValue() !== "Bank pilihan") throw Error("Universe edit did not preserve its name");
   await page.getByLabel("Universe name", {exact:true}).fill("Bank pilihan edited");
   await page.getByRole("button", { name: "Save changes", exact:true }).click({ timeout: 5000 });

@@ -1,6 +1,28 @@
 import { type ReactNode, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Info, Plus, X } from "lucide-react";
+import {
+  Building2,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Cpu,
+  Fuel,
+  Info,
+  Landmark,
+  LayoutGrid,
+  Plus,
+  ShieldCheck,
+  ShoppingBag,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardAction,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
 import {
   Empty,
   EmptyHeader,
@@ -29,6 +51,16 @@ import {
 } from "@/lib/stock-catalog";
 import type { StockInstrument } from "@/types";
 import "./stock-catalog-picker.css";
+
+const categoryIcons = {
+  all: LayoutGrid,
+  "blue-chip": ShieldCheck,
+  banks: Landmark,
+  energy: Fuel,
+  consumer: ShoppingBag,
+  property: Building2,
+  technology: Cpu,
+};
 
 type Props = {
   catalog: StockInstrument[];
@@ -126,36 +158,45 @@ export function StockCatalogPicker({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {groups.map((item) => (
-                <TableRow
-                  key={item.id}
-                  data-state={category === item.id ? "selected" : undefined}
-                >
-                  <TableCell>
-                    <ToggleGroupItem value={item.id}>
-                      {item.label}
-                    </ToggleGroupItem>
-                  </TableCell>
-                  <TableCell className="stock-catalog-picker__samples">
-                    <div>
-                      {item.stocks.slice(0, 5).map((stock) => (
-                        <span key={stock.symbol}>
-                          {stock.symbol.replace(/\.JK$/, "")}
-                        </span>
-                      ))}
-                      {item.stocks.length === 0 && <span>—</span>}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {loading ? "—" : item.stocks.length.toLocaleString("en-GB")}
-                  </TableCell>
-                  <TableCell>
-                    {item.stocks.filter((stock) =>
-                      selected.includes(stock.symbol),
-                    ).length || "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {groups.map((item) => {
+                const CategoryIcon = categoryIcons[item.id];
+                return (
+                  <TableRow
+                    key={item.id}
+                    data-state={category === item.id ? "selected" : undefined}
+                  >
+                    <TableCell>
+                      <ToggleGroupItem value={item.id}>
+                        <CategoryIcon
+                          data-icon="inline-start"
+                          aria-hidden="true"
+                        />
+                        {item.label}
+                      </ToggleGroupItem>
+                    </TableCell>
+                    <TableCell className="stock-catalog-picker__samples">
+                      <div>
+                        {item.stocks.slice(0, 5).map((stock) => (
+                          <span key={stock.symbol}>
+                            {stock.symbol.replace(/\.JK$/, "")}
+                          </span>
+                        ))}
+                        {item.stocks.length === 0 && <span>—</span>}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {loading
+                        ? "—"
+                        : item.stocks.length.toLocaleString("en-GB")}
+                    </TableCell>
+                    <TableCell>
+                      {item.stocks.filter((stock) =>
+                        selected.includes(stock.symbol),
+                      ).length || "—"}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </ToggleGroup>
@@ -255,13 +296,23 @@ export function StockCatalogPicker({
                 : result.items.map((stock) => {
                     const active = selected.includes(stock.symbol);
                     const code = stock.symbol.replace(/\.JK$/, "");
+                    const group = stockCategories.find(
+                      (item) =>
+                        item.id !== "all" &&
+                        item.id !== "blue-chip" &&
+                        stockInCategory(stock, item.id),
+                    );
+                    const StockIcon = categoryIcons[group?.id ?? "all"];
                     return (
                       <TableRow
                         key={stock.symbol}
                         data-state={active ? "selected" : undefined}
                       >
                         <TableCell>
-                          <strong>{code}</strong>
+                          <span className="stock-catalog-picker__identity">
+                            <StockIcon aria-hidden="true" />
+                            <strong>{code}</strong>
+                          </span>
                         </TableCell>
                         <TableCell>{stock.name}</TableCell>
                         <TableCell className="stock-catalog-picker__group">
@@ -357,45 +408,55 @@ export function StockCatalogPicker({
           className="universe-selection"
           aria-labelledby="universe-selection-title"
         >
-          <header>
-            <h4 id="universe-selection-title">Selected stocks</h4>
-            <span role="status">
-              {selected.length} / {universeSelectionLimit}
-            </span>
-          </header>
-          {selected.length ? (
-            <ul
-              aria-label="Selected stocks"
-              className="universe-selection__stocks"
-            >
-              {selected.map((symbol) => {
-                const stock = catalog.find((item) => item.symbol === symbol);
-                const code = symbol.replace(/\.JK$/, "");
-                return (
-                  <li key={symbol}>
-                    <div>
-                      <strong>{code}</strong>
-                      <span>{stock?.name ?? symbol}</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={disabled || loading}
-                      aria-label={`Remove ${code} from selection`}
-                      onClick={() => onToggle(symbol)}
-                    >
-                      <X aria-hidden="true" />
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="universe-selection__empty">
-              Add stocks from the table to build your universe.
-            </p>
-          )}
-          {children}
+          <Card className="universe-selection__card">
+            <CardHeader>
+              <CardTitle>
+                <h4 id="universe-selection-title">Selected stocks</h4>
+              </CardTitle>
+              <CardAction>
+                <span role="status">
+                  {selected.length} / {universeSelectionLimit}
+                </span>
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              {selected.length ? (
+                <ul
+                  aria-label="Selected stocks"
+                  className="universe-selection__stocks"
+                >
+                  {selected.map((symbol) => {
+                    const stock = catalog.find(
+                      (item) => item.symbol === symbol,
+                    );
+                    const code = symbol.replace(/\.JK$/, "");
+                    return (
+                      <li key={symbol}>
+                        <div>
+                          <strong>{code}</strong>
+                          <span>{stock?.name ?? symbol}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={disabled || loading}
+                          aria-label={`Remove ${code} from selection`}
+                          onClick={() => onToggle(symbol)}
+                        >
+                          <X aria-hidden="true" />
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="universe-selection__empty">
+                  Add stocks from the table to build your universe.
+                </p>
+              )}
+            </CardContent>
+            <CardFooter>{children}</CardFooter>
+          </Card>
         </aside>
       )}
     </div>
