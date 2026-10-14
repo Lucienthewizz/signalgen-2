@@ -1487,17 +1487,13 @@ function JournalPanel({
               <option>BMRI</option>
             </select>
           </label>
-          <span className="journal-date">
-            <CalendarRange />
-            01–16 Sep 2026
-          </span>
+          <div className="journal-period">
+            <span>Periode</span>
+            <span className="journal-date"><CalendarRange />01–16 Sep 2026</span>
+          </div>
         </div>
         <div className="journal-toolbar__actions">
-          <span>
-            <SlidersHorizontal /> Static preview
-          </span>
           <Button
-            className="ui-button ui-button--primary"
             onClick={() => setCaptureOpen((open) => !open)}
             aria-expanded={captureOpen}
           >

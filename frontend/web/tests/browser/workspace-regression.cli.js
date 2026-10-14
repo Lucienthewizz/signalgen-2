@@ -135,6 +135,13 @@ async (page) => {
           if (offset > 1) throw Error(`Rule header/form gutters differ: ${offset}px`);
         }
         if (view === "journal") {
+          if (await page.getByText("Static preview", { exact: true }).count()) throw Error("Journal preview label remains");
+          const controlAlignment = await page.locator(".journal-toolbar").evaluate(el => {
+            const controls = [...el.querySelectorAll("select, .journal-date, button")].map(control => control.getBoundingClientRect());
+            return { sizes: controls.map(c => c.height), heights: Math.max(...controls.map(c => c.height)) - Math.min(...controls.map(c => c.height)), bottoms: Math.max(...controls.map(c => c.bottom)) - Math.min(...controls.map(c => c.bottom)) };
+          });
+          if (controlAlignment.heights > 2 || (width >= 1440 && controlAlignment.bottoms > 2)) throw Error(`Journal controls misaligned: ${JSON.stringify(controlAlignment)}`);
+          await page.locator(".journal-toolbar").screenshot({ path: `/private/tmp/signalgen-journal-toolbar-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           const review = page.locator(".journal-detail");
           await review.screenshot({ path: `/private/tmp/signalgen-journal-review-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           if (await review.locator("dt").allTextContents().then(labels => labels.join(",")) !== "Rule,Waktu masuk,Waktu keluar") throw Error("Journal review metadata not separated");
