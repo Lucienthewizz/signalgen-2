@@ -29,6 +29,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
+import {
   Card,
   CardAction,
   CardContent,
@@ -824,18 +830,20 @@ export function SubscriptionPanel({
               </Card>
             ))}
         </div>
-        <p className="subscription-plan-note">
-          Analyst dan Pro memakai fitur screening yang sama; Pro memberi kuota
-          lebih besar. Paket diaktifkan melalui operator, tanpa checkout online.
-        </p>
-        <details className="subscription-manage">
-          <summary>Apa yang terjadi jika paket berubah?</summary>
-          <p>
-            Data yang tersimpan tidak dihapus. Jika penggunaan melebihi kuota
-            paket baru, kurangi jumlah rule atau universe sebelum membuat yang
-            baru.
-          </p>
-        </details>
+        <Accordion className="subscription-faq">
+          <AccordionItem value="plan-change">
+            <AccordionTrigger>
+              Apa yang terjadi jika paket berubah?
+            </AccordionTrigger>
+            <AccordionContent>
+              <p>
+                Data yang tersimpan tidak dihapus. Jika penggunaan melebihi
+                kuota paket baru, kurangi jumlah rule atau universe sebelum
+                membuat yang baru.
+              </p>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
         {error && (
           <Alert variant="destructive">
             <CircleAlert />

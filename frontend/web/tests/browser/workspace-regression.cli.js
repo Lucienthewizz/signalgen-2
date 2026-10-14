@@ -191,6 +191,13 @@ async (page) => {
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     for (let theme = 0; theme < 2; theme++) {
+      const question = page.getByRole("button", { name: "Apa yang terjadi jika paket berubah?", exact: true });
+      if (await question.getAttribute("aria-expanded") !== "false") throw Error("Package FAQ should start collapsed");
+      await question.click({ timeout: 5000 });
+      await page.locator(".subscription-faq [data-slot=accordion-content]").waitFor({ state: "visible", timeout: 5000 });
+      await page.locator(".subscription-faq").screenshot({ path: `/private/tmp/signalgen-package-faq-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+      await question.click({ timeout: 5000 });
+      if (await page.getByText(/Analyst dan Pro memakai fitur screening/).count()) throw Error("Removed package explanation remains");
       await page.locator(".subscription-current").screenshot({ path: `/private/tmp/signalgen-access-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
       if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error("Subscription overflow");
       const inset = await page.locator(".subscription-current").evaluate(el => {

@@ -1345,13 +1345,13 @@
 .subscription-workspace--simple .plan-columns [data-slot="card-footer"] {
   border-radius: 0 0 13px 13px;
 }
-.subscription-plan-note {
-  margin: 16px 0 0;
-  color: var(--muted);
-  font-size: 14px;
-  max-width: 75ch;
-  line-height: 1.65;
-}
+.subscription-faq { margin: 20px var(--workspace-panel-gutter) var(--workspace-panel-gutter); width: auto; }
+.subscription-faq [data-slot="accordion-item"] { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); overflow: hidden; }
+.subscription-faq [data-slot="accordion-trigger"] { align-items: center; gap: 16px; min-height: 64px; padding: 18px var(--workspace-panel-gutter); color: var(--text); font-size: 14px; line-height: 1.5; font-weight: 650; text-decoration: none; cursor: pointer; }
+.subscription-faq [data-slot="accordion-trigger"]:hover { background: var(--accent-surface); }
+.subscription-faq [data-slot="accordion-content"] { color: var(--muted); }
+.subscription-faq [data-slot="accordion-content"] > div { padding: 0 var(--workspace-panel-gutter) 20px; }
+.subscription-faq p { margin: 0; max-width: 75ch; font-size: 14px; line-height: 1.7; }
 @media (max-width: 760px) {
   .subscription-workspace--simple .subscription-current { padding: var(--workspace-panel-gutter); }
   .subscription-workspace--simple .subscription-empty {
