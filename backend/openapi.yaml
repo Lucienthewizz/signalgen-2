@@ -2290,7 +2290,7 @@ components:
       type: object
       required: [symbol, name, exchange, currency]
       properties:
-        symbol: {type: string, enum: [BBCA.JK, BBRI.JK, TLKM.JK]}
+        symbol: {type: string, pattern: '^[A-Z0-9]+[.]JK$'}
         name: {type: string}
         exchange: {type: string, enum: [XIDX]}
         currency: {type: string, enum: [IDR]}
@@ -2305,7 +2305,7 @@ components:
           minItems: 1
           maxItems: 3
           uniqueItems: true
-          items: {type: string, enum: [BBCA.JK, BBRI.JK, TLKM.JK]}
+          items: {type: string, pattern: '^[A-Z0-9]+[.]JK$'}
     StockUniverse:
       allOf:
         - $ref: "#/components/schemas/StockUniverseWrite"
@@ -2400,7 +2400,7 @@ components:
       type: object
       required: [symbol, timezone, candles]
       properties:
-        symbol: {type: string, enum: [BBCA.JK, BBRI.JK, TLKM.JK]}
+        symbol: {type: string, pattern: '^[A-Z0-9]+[.]JK$'}
         timezone: {type: string, enum: [UTC]}
         candles:
           type: array

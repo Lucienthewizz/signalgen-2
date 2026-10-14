@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ResourceQuota } from "@/components/resource-quota";
+import { StockCatalogPicker } from "@/components/stock-catalog-picker";
 import {
   BadgeCheck,
   Boxes,
@@ -280,28 +281,16 @@ export function StockUniversesPanel({
             <FieldSet>
               <FieldLegend>Anggota universe</FieldLegend>
               <FieldDescription>
-                Katalog saat ini dibatasi backend pada tiga instrumen IDX.
+                Cari saham dari katalog IDX. Batas per universe tetap tiga;
+                ketersediaan OHLCV diperiksa ketika screening dijalankan.
               </FieldDescription>
-              <div className="instrument-choices">
-                {catalog.map((stock) => {
-                  const selected = symbols.includes(stock.symbol);
-                  return (
-                    <button
-                      key={stock.symbol}
-                      type="button"
-                      className={selected ? "is-selected" : ""}
-                      aria-pressed={selected}
-                      onClick={() => toggleSymbol(stock.symbol)}
-                    >
-                      <span>{stock.symbol.replace(".JK", "")}</span>
-                      <small>{stock.name}</small>
-                      <i aria-hidden="true">
-                        {selected ? <Check /> : <Plus />}
-                      </i>
-                    </button>
-                  );
-                })}
-              </div>
+              <StockCatalogPicker
+                catalog={catalog}
+                selected={symbols}
+                loading={loading}
+                disabled={saving}
+                onToggle={toggleSymbol}
+              />
             </FieldSet>
             {error && <FieldError>{error}</FieldError>}
           </FieldGroup>
