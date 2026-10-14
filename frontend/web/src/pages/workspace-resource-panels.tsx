@@ -251,52 +251,49 @@ export function StockUniversesPanel({
 
   return (
     <div className="universe-workspace">
-      <Card className="universe-editor" aria-labelledby="universe-editor-title">
-        <CardHeader>
-          <CardTitle>
+      <section
+        className="universe-editor"
+        aria-labelledby="universe-editor-title"
+      >
+        <header className="universe-section-heading">
+          <div>
             <h3 id="universe-editor-title">
               {editing ? "Edit stock universe" : "Build a stock universe"}
             </h3>
-          </CardTitle>
-          <CardDescription>
-            Select up to {universeSelectionLimit} IDX stocks for your next
-            screening.
-          </CardDescription>
-          <CardAction>
-            <ResourceQuota kind="stock_universes" revision={universes.length} />
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={save} className="universe-form">
-            <FieldGroup>
-              <FieldSet>
-                <FieldLegend className="sr-only">Universe stocks</FieldLegend>
-                <StockCatalogPicker
-                  key={editing?.id ?? "new"}
-                  catalog={catalog}
-                  selected={symbols}
-                  loading={loading}
-                  disabled={saving}
-                  onToggle={toggleSymbol}
-                />
-              </FieldSet>
-            </FieldGroup>
+            <p>
+              Select up to {universeSelectionLimit} IDX stocks for your next
+              screening.
+            </p>
+          </div>
+          <ResourceQuota kind="stock_universes" revision={universes.length} />
+        </header>
+        <form onSubmit={save} className="universe-form">
+          <StockCatalogPicker
+            key={editing?.id ?? "new"}
+            catalog={catalog}
+            selected={symbols}
+            loading={loading}
+            disabled={saving}
+            onToggle={toggleSymbol}
+          >
             <div className="universe-form__save">
-              <Field
-                data-invalid={Boolean(error && !name.trim())}
-                data-disabled={saving}
-              >
-                <FieldLabel htmlFor="universe-name">Universe name</FieldLabel>
-                <Input
-                  id="universe-name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="e.g. Banking watchlist"
-                  maxLength={100}
-                  disabled={saving}
-                  aria-invalid={Boolean(error && !name.trim())}
-                />
-              </Field>
+              <FieldGroup>
+                <Field
+                  data-invalid={Boolean(error && !name.trim())}
+                  data-disabled={saving}
+                >
+                  <FieldLabel htmlFor="universe-name">Universe name</FieldLabel>
+                  <Input
+                    id="universe-name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="e.g. Banking watchlist"
+                    maxLength={100}
+                    disabled={saving}
+                    aria-invalid={Boolean(error && !name.trim())}
+                  />
+                </Field>
+              </FieldGroup>
               <div className="universe-form__actions">
                 {editing && (
                   <Button
@@ -332,117 +329,105 @@ export function StockUniversesPanel({
               </div>
             </div>
             {error && <FieldError>{error}</FieldError>}
-          </form>
-        </CardContent>
-        <CardFooter>
-          <p>Daily price data is checked when you run a screening.</p>
-        </CardFooter>
-      </Card>
+          </StockCatalogPicker>
+        </form>
+      </section>
 
-      <Card
+      <section
         className="universe-library"
         aria-labelledby="universe-library-title"
       >
-        <CardHeader>
-          <CardTitle>
+        <header className="universe-section-heading">
+          <div>
             <h3 id="universe-library-title">Your stock universes</h3>
-          </CardTitle>
-          <CardDescription>
-            Saved groups, ready to use in the screener.
-          </CardDescription>
-          <CardAction>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void load()}
-              disabled={loading || saving}
-            >
-              <RefreshCw
-                data-icon="inline-start"
-                className={loading ? "is-spinning" : ""}
-              />
-              Refresh
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          {loading && universes.length === 0 ? (
-            <div
-              className="resource-loading"
-              aria-label="Loading stock universes"
-            >
-              <Skeleton />
-              <Skeleton />
-              <Skeleton />
-            </div>
-          ) : universes.length === 0 ? (
-            <Empty>
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <Layers3 />
-                </EmptyMedia>
-                <EmptyTitle>No stock universes yet</EmptyTitle>
-                <EmptyDescription>
-                  Select stocks above and give your first universe a name.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : (
-            <div className="universe-library__rows">
-              {universes.map((universe) => (
-                <article
-                  key={universe.id}
-                  data-editing={editing?.id === universe.id || undefined}
-                >
-                  <div className="universe-library__identity">
-                    <div>
-                      <strong>{universe.name}</strong>
-                      <small>
-                        {universe.symbols.length} stocks · Updated{" "}
-                        {formatDate(universe.updated_at)}
-                      </small>
-                    </div>
+            <p>
+              {universes.length} saved{" "}
+              {universes.length === 1 ? "universe" : "universes"}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void load()}
+            disabled={loading || saving}
+          >
+            <RefreshCw
+              data-icon="inline-start"
+              className={loading ? "is-spinning" : ""}
+            />
+            Refresh
+          </Button>
+        </header>
+        {loading && universes.length === 0 ? (
+          <div
+            className="resource-loading"
+            aria-label="Loading stock universes"
+          >
+            <Skeleton />
+            <Skeleton />
+            <Skeleton />
+          </div>
+        ) : universes.length === 0 ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Layers3 />
+              </EmptyMedia>
+              <EmptyTitle>No stock universes yet</EmptyTitle>
+              <EmptyDescription>
+                Select stocks above and give your first universe a name.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <div className="universe-library__rows">
+            {universes.map((universe) => (
+              <article
+                key={universe.id}
+                data-editing={editing?.id === universe.id || undefined}
+              >
+                <div className="universe-library__identity">
+                  <div>
+                    <strong>{universe.name}</strong>
+                    <small>
+                      {universe.symbols.length} stocks · Updated{" "}
+                      {formatDate(universe.updated_at)}
+                    </small>
                   </div>
-                  <div className="universe-library__symbols">
-                    {universe.symbols.map((symbol) => (
-                      <Badge key={symbol} variant="outline">
-                        {symbol.replace(".JK", "")}
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="universe-library__actions">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => edit(universe)}
-                      disabled={saving || loading}
-                      aria-label={`Edit ${universe.name}`}
-                    >
-                      <Pencil data-icon="inline-start" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      onClick={() => void remove(universe)}
-                      disabled={saving || loading}
-                      aria-label={`Delete ${universe.name}`}
-                    >
-                      <Trash2 />
-                    </Button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </CardContent>
-        <CardFooter>
-          <span>
-            {universes.length} saved{" "}
-            {universes.length === 1 ? "universe" : "universes"}
-          </span>
-        </CardFooter>
-      </Card>
+                </div>
+                <div className="universe-library__symbols">
+                  {universe.symbols.map((symbol) => (
+                    <Badge key={symbol} variant="outline">
+                      {symbol.replace(".JK", "")}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="universe-library__actions">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => edit(universe)}
+                    disabled={saving || loading}
+                    aria-label={`Edit ${universe.name}`}
+                  >
+                    <Pencil data-icon="inline-start" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => void remove(universe)}
+                    disabled={saving || loading}
+                    aria-label={`Delete ${universe.name}`}
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

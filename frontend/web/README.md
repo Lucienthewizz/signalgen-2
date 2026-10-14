@@ -123,9 +123,14 @@ using synthetic API/account fixtures only.
 
 ## Stock universe catalog and English interface
 
-The stock universe editor uses a bounded, scrollable table with category shortcuts,
-search, persistent in-form selections (up to 10 stocks), and a naming/save footer.
-Saved universes are listed below the editor. Category/query changes reset pagination,
+The stock universe editor opens with a compact group overview inspired by
+[StocksUniverse](https://stocksuniverse.io/stocks): group name, sample symbols,
+available catalog count, and selected count. Sort by group size or name, then click
+a group to filter the bounded stock table and search below. These counts overlap
+across curated groups; they are not market-cap or performance rankings.
+A right-side panel holds selected stocks (up to 10), the universe
+name, and the save action; it stacks below the table on narrow screens. Saved universes
+are compact rows below the editor, without an enclosing card. Category/query changes reset pagination,
 not the selected stocks. Company names and user-created resource names are preserved.
 Website controls, descriptions, notifications, and client errors use English; external
 news headlines retain their source text.
@@ -137,7 +142,7 @@ The category vocabulary follows [IDX product information](https://www.idx.co.id/
 Refresh category lists deliberately when issuer classifications change; unknown groups
 display a dash instead of an inferred classification.
 
-The local stylesheet owns universe spacing and liquid-glass controls without changing
+The local stylesheet owns universe spacing and the single liquid-glass save action without changing
 other resource layouts. Reduced-motion and reduced-transparency preferences have static,
 opaque alternatives. The layout reference is [DesignMD Command Center](https://designmd.ai/frknaykc/command-center)
 for restrained operational hierarchy, not its palette or identity.

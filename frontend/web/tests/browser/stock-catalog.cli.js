@@ -7,6 +7,12 @@ async (page) => {
   const search = page.getByRole("searchbox", { name: "Search stocks" });
   const choices = page.locator(".stock-catalog-picker__table button");
   const categories = page.getByRole("group", { name: "Stock categories" });
+  await page.getByRole("table", {name:"Stock groups",exact:true}).waitFor();
+  const sorts = page.getByRole("group",{name:"Sort stock groups",exact:true});
+  await sorts.getByRole("button",{name:"A–Z",exact:true}).click();
+  if (await categories.getByRole("button").nth(1).innerText() !== "Banks") throw Error("Group name sorting failed");
+  await sorts.getByRole("button",{name:"Most stocks",exact:true}).click();
+  if (await categories.getByRole("button").nth(1).innerText() !== "Blue chip") throw Error("Group count sorting failed");
   if ((await choices.count()) !== 12) throw Error("Unbounded catalog DOM");
   await categories.getByRole("button", { name: "Banks", exact: true }).click();
   if ((await choices.count()) !== 2) throw Error("Banks category not applied");

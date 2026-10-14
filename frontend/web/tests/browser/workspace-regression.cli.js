@@ -156,16 +156,19 @@ async (page) => {
           const layout = await page.locator(".universe-workspace").evaluate(el => {
             const editor = el.querySelector(".universe-editor"), library = el.querySelector(".universe-library");
             const a = editor.getBoundingClientRect(), b = library.getBoundingClientRect();
-            const content = [editor, library].map(card => {
-              const outer = card.getBoundingClientRect(), inner = card.querySelector('[data-slot="card-content"]').getBoundingClientRect();
-              const styles = getComputedStyle(card.querySelector('[data-slot="card-content"]'));
-              return { left: inner.left - outer.left + parseFloat(styles.paddingLeft), right: outer.right - inner.right + parseFloat(styles.paddingRight) };
-            });
+            const browse = editor.querySelector('.stock-catalog-picker__browse').getBoundingClientRect();
+            const selected = editor.querySelector('.universe-selection').getBoundingClientRect();
+            const catalog = editor.querySelector('.stock-catalog-picker__table').getBoundingClientRect();
+            const title = editor.querySelector('h3').getBoundingClientRect();
+            const savedTitle = library.querySelector('h3').getBoundingClientRect();
+            const row = library.querySelector('article').getBoundingClientRect();
+            const alignment = Math.max(Math.abs(title.left - browse.left), Math.abs(browse.left - catalog.left), Math.abs(savedTitle.left - row.left), Math.abs(savedTitle.left - title.left));
             const chips = library.querySelector(".universe-library__symbols");
-            return { gap: b.top - a.bottom, left: Math.abs(a.left - b.left), right: Math.abs(a.right - b.right), content, wrap: chips && getComputedStyle(chips).flexWrap };
+            return { gap: b.top - a.bottom, left: Math.abs(a.left - b.left), right: Math.abs(a.right - b.right), alignment, sideBySide: selected.left >= browse.right, baseline: Math.abs(selected.top - browse.top), wrap: chips && getComputedStyle(chips).flexWrap };
           });
           if (layout.gap < 16 || layout.left > 1 || layout.right > 1) throw Error(`Universe cards are not stacked/aligned: ${JSON.stringify(layout)}`);
-          if (layout.content.some(inset => inset.left < 16 || inset.right < 16 || Math.abs(inset.left - inset.right) > 1) || Math.abs(layout.content[0].left - layout.content[1].left) > 1) throw Error(`Universe content insets differ: ${JSON.stringify(layout)}`);
+          if (layout.alignment > 1) throw Error(`Universe content edges differ: ${JSON.stringify(layout)}`);
+          if (width >= 1440 && (!layout.sideBySide || layout.baseline > 1)) throw Error(`Universe selection panel baseline differs: ${JSON.stringify(layout)}`);
           if (layout.wrap !== "wrap") throw Error("Saved universe stocks cannot wrap");
           if (await page.locator(".universe-library").getByText(/^v\d+$/).count()) throw Error("Universe version badge still visible");
         }
