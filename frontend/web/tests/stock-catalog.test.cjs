@@ -17,7 +17,7 @@ vm.runInNewContext(
   ).outputText,
   { exports: exportsForTest },
 );
-const { catalogPage, catalogPageSize } = exportsForTest;
+const { catalogPage, catalogPageSize, universeSelectionLimit } = exportsForTest;
 const stocks = [
   {
     symbol: "ASII.JK",
@@ -68,6 +68,7 @@ test("a 962-item catalog renders only a bounded page and preserves input", () =>
 });
 
 test("picker integrates search, persistent selection, loading and pagination", () => {
+  assert.equal(universeSelectionLimit, 10);
   const panel = fs.readFileSync(
     path.join(__dirname, "../src/pages/workspace-resource-panels.tsx"),
     "utf8",

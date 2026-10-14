@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { StockCatalogPicker } from "../../src/components/stock-catalog-picker";
+import { universeSelectionLimit } from "../../src/lib/stock-catalog";
 import type { StockInstrument } from "../../src/types";
 import "../../src/styles.css";
 
@@ -83,7 +84,7 @@ function Fixture() {
             setSelected((current) =>
               current.includes(symbol)
                 ? current.filter((item) => item !== symbol)
-                : current.length < 3
+                : current.length < universeSelectionLimit
                   ? [...current, symbol]
                   : current,
             )

@@ -1,7 +1,7 @@
 import type { StockInstrument } from "@/types";
 
 // This is a UX bound, not authorization. The API and database enforce it too.
-export const universeSelectionLimit = 3;
+export const universeSelectionLimit = 10;
 export const catalogPageSize = 12;
 
 // Match code or company name, without modifying/sorting the API's source array.

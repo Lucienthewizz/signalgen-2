@@ -459,7 +459,7 @@ export function WorkspaceScreenerPanel({
                 <EmptyDescription>
                   {!rules.length
                     ? "Screener membutuhkan minimal satu rule aktif."
-                    : "Pilih satu sampai tiga saham yang ingin dianalisis bersama."}
+                    : "Pilih 1–10 saham yang ingin dianalisis bersama; 3 saham juga bisa."}
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>

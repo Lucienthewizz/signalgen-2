@@ -62,7 +62,7 @@ test("larger batches split only between stocks, preserving per-stock cooldown hi
   assert.throws(() => pack([group("BBCA.JK", 5)], 1000, 10), /tidak dipotong/);
 });
 
-function harness() {
+function harness(stockCount = 3) {
   const counts = {
     workers: 0,
     terminated: 0,
@@ -91,7 +91,8 @@ function harness() {
       this.status = status;
     }
   }
-  const series = ["BBCA.JK", "BBRI.JK", "TLKM.JK"].map((symbol) => ({
+  const symbols = Array.from({ length: stockCount }, (_, i) => ["BBCA.JK", "BBRI.JK", "TLKM.JK"][i] ?? `TEST${i}.JK`);
+  const series = symbols.map((symbol) => ({
     symbol,
     candles: [{ open: 95, close: 100 }],
   }));
@@ -191,6 +192,7 @@ function harness() {
   const run = load("screener", {
     ...base,
     require(name) {
+      if (name === "@/lib/stock-catalog") return { universeSelectionLimit: 10 };
       return name === "./screener-engine"
         ? engine
         : name === "./screener-batches"
@@ -240,6 +242,32 @@ test("three-stock run uses one worker, one grant/ticket/socket and a warm second
   await h.run.runLiveScreener("r", "u", new AbortController().signal, () => {});
   assert.equal(h.counts.workers, 1);
   h.engine.disposeScreenerEngine();
+});
+test("ten stocks share one warm worker, one grant and one bounded scoring socket", async () => {
+  const h = harness(10);
+  const run = await h.run.runLiveScreener("r", "u", new AbortController().signal, () => {});
+  assert.equal(run.rows.length, 10);
+  assert.equal(run.result.results.length, 400);
+  assert.equal(h.counts.workers, 1);
+  assert.equal(h.counts.grants, 1);
+  assert.equal(h.counts.sockets, 1);
+  assert.deepEqual(Array.from(run.rows, r => r.decision.symbol), h.series.map(s => s.symbol));
+  h.engine.disposeScreenerEngine();
+});
+test("an eleventh stock is rejected before starting a worker or consuming a grant", async () => {
+  const h = harness(11);
+  await assert.rejects(h.run.runLiveScreener("r", "u", new AbortController().signal, () => {}), /1–10/);
+  assert.equal(h.counts.workers, 0);
+  assert.equal(h.counts.grants, 0);
+});
+test("a pre-cancelled run never begins access checks, compute, or scoring", async () => {
+  const h = harness(10);
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(h.run.runLiveScreener("r", "u", controller.signal, () => {}), /dibatalkan/);
+  assert.equal(h.counts.workers, 0);
+  assert.equal(h.counts.grants, 0);
+  assert.equal(h.counts.sockets, 0);
 });
 test("candidate limits use sequential bounded sockets and still only one grant", async () => {
   const h = harness();

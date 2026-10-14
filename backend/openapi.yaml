@@ -2195,7 +2195,7 @@ components:
             decision_execution: {type: string, enum: [server_private]}
             dataset_content: {type: string, enum: [series]}
             requires_universe: {type: boolean, enum: [true]}
-            max_symbols_per_batch: {type: integer, enum: [3]}
+            max_symbols_per_batch: {type: integer, enum: [10]}
             max_candidates: {type: integer, enum: [1000]}
             max_message_bytes: {type: integer, enum: [262144]}
     RuleCondition:
@@ -2303,7 +2303,7 @@ components:
         symbols:
           type: array
           minItems: 1
-          maxItems: 3
+          maxItems: 10
           uniqueItems: true
           items: {type: string, pattern: '^[A-Z0-9]+[.]JK$'}
     StockUniverse:
@@ -2393,7 +2393,7 @@ components:
         series:
           type: array
           minItems: 1
-          maxItems: 3
+          maxItems: 10
           items:
             $ref: "#/components/schemas/DatasetSeries"
     DatasetSeries:

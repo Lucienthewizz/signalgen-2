@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ResourceQuota } from "@/components/resource-quota";
 import { StockCatalogPicker } from "@/components/stock-catalog-picker";
+import { universeSelectionLimit } from "@/lib/stock-catalog";
 import {
   BadgeCheck,
   Boxes,
@@ -155,7 +156,7 @@ export function StockUniversesPanel({
     setSymbols((current) =>
       current.includes(symbol)
         ? current.filter((item) => item !== symbol)
-        : current.length < 3
+        : current.length < universeSelectionLimit
           ? [...current, symbol]
           : current,
     );
@@ -248,7 +249,7 @@ export function StockUniversesPanel({
                 {editing ? "Edit stock universe" : "Buat stock universe"}
               </h3>
               <p>
-                Pilih satu sampai tiga saham IDX untuk satu proses screening.
+                Pilih 1–10 saham IDX untuk satu proses screening. Pilihan 3 saham tetap bisa digunakan.
               </p>
               <ResourceQuota
                 kind="stock_universes"
@@ -282,7 +283,7 @@ export function StockUniversesPanel({
             <FieldSet>
               <FieldLegend>Anggota universe</FieldLegend>
               <FieldDescription>
-                Cari saham dari katalog IDX. Batas per universe tetap tiga;
+                Cari saham dari katalog IDX. Maksimal {universeSelectionLimit} saham per universe;
                 ketersediaan OHLCV diperiksa ketika screening dijalankan.
               </FieldDescription>
               <StockCatalogPicker
@@ -296,7 +297,7 @@ export function StockUniversesPanel({
             {error && <FieldError>{error}</FieldError>}
           </FieldGroup>
           <div className="resource-form__actions">
-            <span>{symbols.length}/3 saham dipilih</span>
+            <span>{symbols.length}/{universeSelectionLimit} saham dipilih</span>
             <Button type="submit" size="lg" disabled={saving}>
               {saving ? (
                 <LoaderCircle

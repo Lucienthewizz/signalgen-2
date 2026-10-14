@@ -10,7 +10,7 @@ yang sama dengan koleksi historis sebelumnya. Harga tetap berasal dari Yahoo.
 | --- | --- |
 | 962 | Kode saham dalam snapshot katalog IDX yang diimpor |
 | 921 / 41 | Riwayat berhasil / Yahoo HTTP 404 pada koleksi sebelumnya |
-| 3 | Maksimum anggota satu universe/screening request saat ini |
+| 10 | Maksimum anggota satu universe/screening request; 1–3 tetap valid |
 | 5 | Sesi aplikasi per akun pada override testing lokal, bukan jumlah saham |
 
 Metadata yang tersedia di katalog tidak menjamin OHLCV tersedia di Yahoo atau
@@ -91,10 +91,37 @@ untuk tiga saham terpilih, bukan benchmark/coverage seluruh 962 saham.
 
 ## Tahap berikutnya
 
-Batas 3 tetap dikunci pada validation Go, API/OpenAPI, dan constraint posisi
-database (0..2). Menaikkannya memerlukan migration/batas yang konsisten, batching,
-warmup/ukuran dataset, grants/tickets, worker/socket bounds dan benchmark. Jangan
-hanya mengubah angka di UI. Multi-bursa, pembaruan harian/incremental, data-client
-ciphertext dan benchmark CPU/RAM kedua sisi tetap merupakan pekerjaan terpisah.
+Update 14 Oktober: batas dinaikkan menjadi **1–10 saham**, konsisten pada
+validation Go, API/OpenAPI, picker, dataset dan scope private scoring. Migration
+`20261014014443_expand_universe_to_ten_symbols.sql` memperluas posisi dari 0..2
+menjadi 0..9, tanpa mengubah ownership, RLS, unique key atau data universe lama.
+Riwayat di atas tetap merupakan bukti run tiga saham, bukan diubah menjadi run 10.
+
+Frontend `origin/frontend/website` commit `2e44bbf` digabungkan. Worker WASM
+persisten memproses seri secara berurutan; batch kandidat memakai batas 1000
+kandidat/ukuran pesan yang sudah ada. Jika perlu lebih dari satu pesan, socket
+dibuka berurutan dengan ticket berbeda; bukan 10 koneksi paralel. Core per-seri
+tetap satu simbol: batas `max_symbols_per_run: 1` tidak sama dengan batas universe.
+
+Tes otomatis mencakup 3/10 diterima dan 11 ditolak, create/update 3→10→3 di
+Postgres lokal, owner isolation, constraint/RLS dua pengguna, worker/socket
+orchestration serta picker 1440/390px dan kedua tema. Tes memakai fixture,
+bukan benchmark Yahoo atau bukti realtime. Limit sesi testing tetap 5.
+
+Multi-bursa, pembaruan harian/incremental, data-client ciphertext dan benchmark
+CPU/RAM kedua sisi tetap merupakan pekerjaan terpisah.
+
+Run akun asli 14 Oktober setelah kenaikan batas: universe baru
+`Uji 10 saham — 14 Oktober 2026` disimpan melalui UI dan diuji dengan rule sistem
+`Default Scalping`. BBCA, BBRI, TLKM, ASII, ANTM, INDF, BBNI, BMRI, ICBP dan UNVR
+semuanya menghasilkan keputusan (10/10; pada snapshot ini 0 memenuhi, 10 tidak).
+Candle terakhir 13 Oktober 2026. Universe tiga saham sebelumnya tetap ada.
+Ini membuktikan alur 10 saham di lingkungan lokal + Supabase cloud saat uji,
+bukan kapasitas production, realtime, atau rekomendasi membeli/menjual.
+
+Advisor cloud masih menandai leaked-password protection Auth yang belum aktif
+(konfigurasi terpisah, tidak diubah slice ini). Tabel arsip `legacy` sengaja tidak
+mempunyai policy akses klien. Panduan:
+[password security](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
 
 Tidak ada klaim bahwa semua empat tahap roadmap selesai pada slice katalog ini.
