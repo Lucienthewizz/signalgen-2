@@ -21,7 +21,7 @@ function load(name, context) {
         target: ts.ScriptTarget.ES2022,
       },
     }).outputText,
-    { exports, TextEncoder, URL, crypto: webcrypto, performance, ...context },
+    { exports, TextEncoder, URL, AbortController, crypto: webcrypto, performance, ...context },
   );
   return exports;
 }
@@ -182,7 +182,7 @@ function harness(stockCount = 3) {
   };
   const base = {
     require: () => client,
-    window: { ...clock, addEventListener() {} },
+    window: { ...clock, addEventListener() {}, removeEventListener() {} },
     ...clock,
     Worker,
     WebSocket: Socket,
@@ -193,6 +193,8 @@ function harness(stockCount = 3) {
     ...base,
     require(name) {
       if (name === "@/lib/stock-catalog") return { universeSelectionLimit: 10 };
+      if (name === "./screener-dataset") return { loadScreenerDataset: () => api.getDatasetContent() };
+      if (name === "../data/historical-cache") return { CACHE_RESET_EVENT: "signalgen:historical-cache-reset" };
       return name === "./screener-engine"
         ? engine
         : name === "./screener-batches"

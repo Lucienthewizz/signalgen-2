@@ -32,6 +32,12 @@ const APP_SESSION_ORIGIN_KEY = "signalgen.app-session-origin";
 const INSTALLATION_KEY = "signalgen.installation-id";
 const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN ?? "").replace(/\/$/, "");
 let identityRevision = 0;
+const identityListeners = new Set<() => void>();
+
+function identityChanged() {
+  identityRevision++;
+  for (const listener of identityListeners) listener();
+}
 
 export class ApiError extends Error {
   constructor(
@@ -49,7 +55,7 @@ export const session = {
   getToken: () => sessionStorage.getItem(TOKEN_KEY),
   setToken: (token: string) => {
     ++authGeneration;
-    identityRevision++;
+    identityChanged();
     // A new login must not inherit the previous account's workspace secret.
     // Track the login lifecycle even when the provider reuses a token string.
     session.clearAppSession();
@@ -65,7 +71,7 @@ export const session = {
   ) => {
     if (!refreshed) {
       ++authGeneration;
-      identityRevision++;
+      identityChanged();
       session.clearAppSession();
     }
     sessionStorage.setItem(TOKEN_KEY, value.access_token);
@@ -80,6 +86,15 @@ export const session = {
     else sessionStorage.removeItem(EXPIRY_KEY);
   },
   getRefreshToken: () => sessionStorage.getItem(REFRESH_KEY),
+  // Cache isolation uses the verified /me identity, not a decoded JWT claim.
+  getIdentityRevision: () => identityRevision,
+  getApiOrigin: () => API_ORIGIN || window.location.origin,
+  onIdentityChange: (listener: () => void) => {
+    identityListeners.add(listener);
+    return () => {
+      identityListeners.delete(listener);
+    };
+  },
   needsRefresh: () => {
     const expiry = Number(sessionStorage.getItem(EXPIRY_KEY));
     return Boolean(
@@ -104,7 +119,7 @@ export const session = {
   },
   clear: () => {
     ++authGeneration;
-    identityRevision++;
+    identityChanged();
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(REFRESH_KEY);
     sessionStorage.removeItem(EXPIRY_KEY);
@@ -254,20 +269,25 @@ function request<T>(
   path: string,
   init: RequestInit = {},
   retryExpiredSession = true,
+  rawText = false,
 ): Promise<T> {
   if (init.method && init.method !== "GET")
-    return performRequest<T>(path, init, retryExpiredSession);
+    return performRequest<T>(path, init, retryExpiredSession, rawText);
   const key = JSON.stringify([
     path,
     session.getToken(),
     session.getAppSession(),
     retryExpiredSession,
+    rawText,
   ]);
   const existing = pendingReads.get(key);
   if (existing) return existing as Promise<T>;
-  const pending = performRequest<T>(path, init, retryExpiredSession).finally(
-    () => pendingReads.delete(key),
-  );
+  const pending = performRequest<T>(
+    path,
+    init,
+    retryExpiredSession,
+    rawText,
+  ).finally(() => pendingReads.delete(key));
   pendingReads.set(key, pending);
   return pending;
 }
@@ -276,6 +296,7 @@ async function performRequest<T>(
   path: string,
   init: RequestInit = {},
   retryExpiredSession = true,
+  rawText = false,
 ): Promise<T> {
   if (
     session.needsRefresh() &&
@@ -310,7 +331,20 @@ async function performRequest<T>(
     clearTimeout(timeout);
   }
 
-  const payload = await response.json().catch(() => ({}));
+  // Preserve the exact UTF-8 content bytes for the dataset's server checksum.
+  // Re-serializing parsed JSON changes whitespace/number formatting in Go JSON.
+  const text = rawText ? await response.text() : "";
+  let payload: unknown;
+  if (rawText) {
+    // Successful snapshots are parsed once by the checksum/schema validator.
+    if (!response.ok) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = {};
+      }
+    }
+  } else payload = await response.json().catch(() => ({}));
   if (identity !== authGeneration)
     throw new ApiError("Akun berubah. Permintaan sebelumnya dibatalkan.", 401);
   if (!response.ok) {
@@ -341,14 +375,14 @@ async function performRequest<T>(
       path !== "/api/v1/sessions"
     ) {
       await api.ensureAppSession();
-      return request<T>(path, init, false);
+      return request<T>(path, init, false, rawText);
     }
     const identityRequired =
       path === "/api/auth/me" || path.startsWith("/api/v1/");
     if (response.status === 401 && identityRequired && sameIdentity) {
       if (retryExpiredSession && session.getRefreshToken()) {
         await refreshAuth();
-        return performRequest<T>(path, init, false);
+        return performRequest<T>(path, init, false, rawText);
       }
       unauthorized();
     }
@@ -363,7 +397,7 @@ async function performRequest<T>(
       envelope?.request_id,
     );
   }
-  return payload as T;
+  return (rawText ? text : payload) as T;
 }
 
 function errorDetail(payload: unknown, status: number): string {
@@ -551,6 +585,17 @@ export const api = {
   getDatasetContent: (datasetId: string) =>
     request<DatasetContent>(
       `/api/v1/datasets/${encodeURIComponent(datasetId)}/content`,
+    ),
+  getDatasetManifest: (datasetId: string) =>
+    request<DatasetManifest>(
+      `/api/v1/datasets/${encodeURIComponent(datasetId)}`,
+    ),
+  getDatasetContentText: (datasetId: string) =>
+    request<string>(
+      `/api/v1/datasets/${encodeURIComponent(datasetId)}/content`,
+      {},
+      true,
+      true,
     ),
   createComputeGrant: (manifest: DatasetManifest, rule: RuleResource) =>
     request<ComputeGrant>("/api/v1/compute-grants", {

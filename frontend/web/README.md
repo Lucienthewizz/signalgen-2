@@ -1,9 +1,15 @@
 # Signalgen Web
 
-React + TypeScript + Vite web application. It currently contains public/account
-work and will become the primary analysis surface under `../../docs/frontend/FRONTEND_MVP_PRD.md`.
-FastAPI is the current legacy backend; the revised target is the versioned Go API
-and Go/WASM worker defined in `../../docs/backend/MVP_API_CONTRACT.md`.
+Historical OHLCV/screener snapshot caching uses gzip + AES-256-GCM in IndexedDB,
+scoped to a verified user/installation/API and exact manifest version/checksum.
+Logout/user switch removes snapshot ciphertext and keys. Every run still checks
+online authorization. See [cache security and limitations](../../docs/frontend/HISTORICAL_CACHE_SECURITY.md).
+This protects browser cache at rest; it does not replace production HTTPS/WSS.
+
+React + TypeScript + Vite is the active multi-user web application. The current
+backend is Go/Gin with a Go/WASM analysis worker; Python/FastAPI is archived legacy.
+Scope: `../../docs/frontend/FRONTEND_MVP_PRD.md`. Current routes follow
+`../../backend/openapi.yaml`; `../../docs/backend/MVP_API_CONTRACT.md` also contains proposed targets.
 
 ```sh
 npm ci

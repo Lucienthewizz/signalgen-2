@@ -108,8 +108,9 @@ subscription, rule, compute grant, dan audit. Effective entitlement berasal dari
 manual grant aktif atau subscription aktif yang memuat fitur tersebut. Semua
 tabel aplikasi mempunyai ownership yang jelas dan RLS; backend tetap memeriksa
 owner/role/entitlement di setiap operasi. Database URL hanya berada di backend.
-Cache client ciphertext terkompresi; pilihan storage browser diputuskan pada
-gate P1. P0 boleh in-memory.
+Cache client ciphertext terkompresi; pengguna memilih IndexedDB + AES-256-GCM
+pada 15 Oktober 2026, dengan key/snapshot dihapus saat logout. Keputusan, lifecycle,
+dan batas proteksi dijelaskan di [cache security](frontend/HISTORICAL_CACHE_SECURITY.md).
 
 WASM bukan enkripsi kode; ID instalasi browser bukan hardware ID; IP bukan identitas tetap. Hard-lock IP bukan default MVP. Hasil WASM unverified, tidak menentukan izin/payment; draft jurnal butuh konfirmasi.
 
@@ -145,7 +146,7 @@ MVP selesai: **seluruh P0/P1** lulus; slice API Go teruji; provider berizin, mig
 | Strategi, indikator, exit/sizing, fees dan baseline engine path | BE/core + pembimbing | M0 |
 | Provider/hak distribusi data | Product + BE | P1 data |
 | Supabase Postgres backup/recovery, least privilege dan RLS | BE/security | P1 storage |
-| Pilihan storage ciphertext browser | FE + BE + product/pembimbing | P1 cache |
+| Storage ciphertext browser: pengguna memilih IndexedDB + AES-GCM pada 15 Oktober 2026; [keputusan dan batas](frontend/HISTORICAL_CACHE_SECURITY.md) | FE + BE; validasi pembimbing terpisah | P1 cache |
 | Device/session/grant limits dan IP policy | Product + BE/security | P1 device |
 | Browser/perangkat target dan budget final | FE + BE | M0 |
 | Benefit/harga/provider pembayaran | Product | P2 komersial; tidak memblokir grant MVP |

@@ -64,6 +64,7 @@ export type AppSessionResponse = {
 export type DatasetManifest = {
   dataset_id: string;
   version: string;
+  expires_at?: string;
   schema_version: "ohlcv-multi-1";
   provider: "yahoo_finance";
   purpose: "screen";

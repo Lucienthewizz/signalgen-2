@@ -121,12 +121,13 @@ function screener(options = {}) {
   const exports = {};
   vm.runInNewContext(compiled, {
     exports,
-    require: (name) => name.startsWith("./") ? load(name.slice(2)) : name === "@/lib/stock-catalog" ? { universeSelectionLimit: 10 } : ({
+    require: (name) => name === "./screener-dataset" ? { loadScreenerDataset: () => api.getDatasetContent() } : name === "../data/historical-cache" ? { CACHE_RESET_EVENT: "signalgen:historical-cache-reset" } : name.startsWith("./") ? load(name.slice(2)) : name === "@/lib/stock-catalog" ? { universeSelectionLimit: 10 } : ({
       api,
       ApiError,
       websocketURL: () => "ws://localhost/test",
     }),
     Worker,
+    AbortController,
     WebSocket,
     URL,
     crypto: webcrypto,
@@ -135,7 +136,7 @@ function screener(options = {}) {
     performance,
     TextEncoder,
     setTimeout: (...args) => { const timer = setTimeout(...args); timer.unref(); return timer; },
-    window: { setTimeout, addEventListener() {} },
+    window: { setTimeout, addEventListener() {}, removeEventListener() {} },
   });
   modules[name] = exports;
   return exports;

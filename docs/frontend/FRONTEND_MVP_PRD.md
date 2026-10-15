@@ -83,9 +83,9 @@ Metadata hasil: job_id, execution=client_wasm, engine/schema/data version, check
 
 ## 7. Cache, sesi dan privasi
 
-P0 memory-only dapat diterima. P1 cache adalah compressed ciphertext. Pilih SQLite browser encrypted atau alternatif ciphertext setelah spike/decision tercatat; PRD tidak menganggap SQLCipher browser sudah tersedia.
+P0 memory-only dapat diterima. P1 cache adalah compressed ciphertext. Keputusan alternatif storage sudah dicatat pada 15 Oktober 2026 di bawah; PRD tidak menganggap SQLCipher browser sudah tersedia.
 
-Usulan jika storage ciphertext alternatif disetujui: IndexedDB + Web Crypto AES-GCM, nonce unik, key per-user/instalasi non-extractable dan versioned. Ini mengurangi accidental key export, **tidak melindungi dari XSS/pemilik browser yang mengendalikan runtime**. Kunci/nonce tidak hardcoded/global; key lifecycle dan user switch diuji.
+Disetujui pengguna 15 Oktober 2026: IndexedDB + Web Crypto AES-256-GCM, nonce unik, key per-user/instalasi non-extractable dan versioned, dihapus saat logout. Implementasi/batas: [cache security](HISTORICAL_CACHE_SECURITY.md). Ini mengurangi accidental key export, **tidak melindungi dari XSS/pemilik browser yang mengendalikan runtime**. Kunci/nonce tidak hardcoded/global; key lifecycle dan user switch diuji. Bukan klaim validasi pembimbing atau audit production.
 
 Jurnal tidak disimpan offline sebagai database authoritative. Session secrets di memory default; reload dapat meminta login ulang sampai mekanisme persistence aman disepakati. Jika cookie/token persistence diusulkan, dokumentasikan CSRF/XSS, expiry dan cleanup sebelum implementasi. Jangan memindahkan raw refresh token ke localStorage sekadar agar reload nyaman.
 

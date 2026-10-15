@@ -15,7 +15,10 @@ function client(reply) {
     .readFileSync(path.join(__dirname, "../src/api/client.ts"), "utf8")
     .replace("import.meta.env.VITE_API_ORIGIN", '"https://api.example.test/"');
   const compiled = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS },
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
   }).outputText;
   const exports = {};
   vm.runInNewContext(compiled, {
@@ -362,6 +365,47 @@ test("hybrid screener calls use the implemented Go API contract", async () => {
     compute_grant_id: "cgr_1",
     protocol: "screener-private-1",
   });
+});
+
+test("raw snapshot reads preserve exact bytes and private headers across read-only session renewal", async () => {
+  const text = '{ "series": [], "value": 1.00 }\n';
+  let first = true;
+  const c = client((url) => {
+    if (url.endsWith("/api/v1/sessions"))
+      return response({ session_token: "renewed" }, 201);
+    if (first) {
+      first = false;
+      return response({ error: { code: "SESSION_EXPIRED" } }, 403);
+    }
+    return new Response(text, {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  c.session.setToken("synthetic");
+  c.session.setAppSession("old-session");
+  assert.equal(await c.api.getDatasetContentText("snapshot/a"), text);
+  assert.ok(c.calls.at(-1).url.endsWith("/datasets/snapshot%2Fa/content"));
+  assert.equal(c.calls.at(-1).init.headers.get("X-App-Session"), "renewed");
+  assert.equal(
+    c.calls.at(-1).init.headers.get("Authorization"),
+    "Bearer synthetic",
+  );
+});
+
+test("identity lifecycle listeners fire on logout/new login but not a token refresh", () => {
+  const c = client(() => response({}));
+  let changes = 0;
+  const stop = c.session.onIdentityChange(() => changes++);
+  c.session.setAuth({ access_token: "synthetic" });
+  const revision = c.session.getIdentityRevision();
+  c.session.setAuth({ access_token: "rotated" }, true);
+  assert.equal(c.session.getIdentityRevision(), revision);
+  assert.equal(changes, 1);
+  c.session.clear();
+  assert.equal(changes, 2);
+  stop();
+  c.session.setToken("another-login");
+  assert.equal(changes, 2);
 });
 
 test("websocket URL upgrades HTTPS and only carries the one-use ticket", () => {

@@ -3,6 +3,8 @@ import { extractDatasetFeatures } from "./screener-engine";
 import { packCandidateBatches } from "./screener-batches";
 import { evaluateOverSocket } from "./screener-socket";
 import { universeSelectionLimit } from "@/lib/stock-catalog";
+import { loadScreenerDataset } from "./screener-dataset";
+import { CACHE_RESET_EVENT } from "../data/historical-cache";
 import type {
   DatasetManifest,
   ScreenerDecision,
@@ -48,6 +50,31 @@ export async function runLiveScreener(
   signal: AbortSignal,
   onStage: (stage: ScreenerStage) => void,
 ): Promise<LiveScreenerRun> {
+  // A logout/clear in this or another tab cancels network/worker/socket continuations.
+  const lifetime = new AbortController();
+  const cancel = () => lifetime.abort();
+  signal.addEventListener("abort", cancel, { once: true });
+  window.addEventListener(CACHE_RESET_EVENT, cancel);
+  if (signal.aborted) lifetime.abort();
+  try {
+    return await runAuthorizedScreener(
+      ruleId,
+      universeId,
+      lifetime.signal,
+      onStage,
+    );
+  } finally {
+    signal.removeEventListener("abort", cancel);
+    window.removeEventListener(CACHE_RESET_EVENT, cancel);
+  }
+}
+
+async function runAuthorizedScreener(
+  ruleId: string,
+  universeId: string,
+  signal: AbortSignal,
+  onStage: (stage: ScreenerStage) => void,
+): Promise<LiveScreenerRun> {
   ensureNotCancelled(signal);
   const start = performance.now();
   onStage("validating_access");
@@ -58,13 +85,10 @@ export async function runLiveScreener(
     api.prepareDataset(ruleId, universeId),
     api.getRule(ruleId),
   ]);
-  const dataset = await api.getDatasetContent(manifest.dataset_id);
+  const dataset = await loadScreenerDataset(manifest, signal);
   ensureNotCancelled(signal);
   if (!dataset.series.length || dataset.series.length > universeSelectionLimit)
-    throw new ApiError(
-      "Dataset harus berisi 1–10 saham untuk dianalisis.",
-      0,
-    );
+    throw new ApiError("Dataset harus berisi 1–10 saham untuk dianalisis.", 0);
 
   onStage("loading_engine");
   const featureStart = performance.now();

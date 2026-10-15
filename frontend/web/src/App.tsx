@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { AuthView } from "@/pages/auth-page";
 import type { DemoView } from "@/pages/demo-workspace";
 import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
+import { startHistoricalCacheLifecycle } from "@/data/historical-lifecycle";
 const AccountPage = lazy(() =>
   import("@/pages/account-page").then((m) => ({ default: m.AccountPage })),
 );
@@ -72,6 +73,8 @@ function RoutedApp() {
   const [backendOnline, setBackendOnline] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
+
+  useEffect(startHistoricalCacheLifecycle, []);
 
   useEffect(() => {
     const navigate = () => setRoute(currentRoute());
