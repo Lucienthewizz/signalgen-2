@@ -125,6 +125,14 @@ The dashboard's launch area shares a rounded, theme-aware charcoal-to-green
 gradient frame. Its content, navigation, account data, and actions are unchanged;
 the quick-access inset stacks with aligned gutters on narrower screens.
 
+`styles/workspace-materials.css` owns the landing-inspired page and card gradients
+for all workspace routes and account forms. Its explicit surface opt-ins preserve
+controls, selected rows, notification semantics, and embedded chart canvases.
+The gradients resolve existing theme tokens, have no animation or image requests,
+and become solid surfaces in forced-colors mode. Browser tests check every
+workspace route in both themes and two viewport sizes, including shared text
+contrast against the surface stops.
+
 ## Stock universe catalog and English interface
 
 The stock universe editor opens with a compact group overview inspired by

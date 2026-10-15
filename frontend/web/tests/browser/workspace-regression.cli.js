@@ -122,6 +122,34 @@ async (page) => {
         const close = page.getByRole("button", { name: "Close menu" });
         const bounds = await close.boundingBox();
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
+        const surfaceSelector = {
+          overview: ".overview-launch", analysis: ".screener-console", rules: ".rule-composer",
+          universes: ".universe-editor", journal: ".journal-toolbar", realtime: ".monitor-chart",
+          news: ".news-feed", access: ".panel", subscription: ".subscription-current", operator: ".admin-console, .admin-account, .workspace-empty-state",
+        }[view];
+        await page.locator(surfaceSelector).first().waitFor({ timeout: 10000 });
+        if (!await page.locator(surfaceSelector).first().evaluate(el => getComputedStyle(el).backgroundImage.includes("gradient"))) throw Error(`Missing shared card gradient: ${view} ${width} ${theme}`);
+        const surfaceContrast = await page.locator(".workspace").evaluate(host => {
+          if (!getComputedStyle(host).backgroundImage.includes("gradient")) throw Error("Workspace background is not graded");
+          const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
+          const ctx = canvas.getContext("2d");
+          const probe = document.createElement("span"); probe.style.transition = "none"; host.append(probe);
+          const palette = [];
+          const rgb = value => {
+            probe.style.backgroundColor = value;
+            ctx.fillStyle = getComputedStyle(probe).backgroundColor;
+            ctx.fillRect(0, 0, 1, 1);
+            const color = [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3);
+            palette.push([value, getComputedStyle(probe).backgroundColor, color]);
+            return color;
+          };
+          const luminance = channels => channels.map(v => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }).reduce((a, v, i) => a + v * [.2126, .7152, .0722][i], 0);
+          const backgrounds = ["var(--canvas)", "var(--surface)", "color-mix(in srgb, var(--surface-3) 65%, var(--surface))", "color-mix(in srgb, var(--green-deep) 9%, var(--surface))"].map(value => luminance(rgb(value)));
+          const contrasts = ["var(--text)", "var(--muted)"].flatMap(value => { const l = luminance(rgb(value)); return backgrounds.map(bg => (Math.max(l, bg) + .05) / (Math.min(l, bg) + .05)); });
+          probe.remove();
+          return { min: Math.min(...contrasts), palette };
+        });
+        if (surfaceContrast.min < 4.5) throw Error(`Shared surface text contrast below AA: ${JSON.stringify(surfaceContrast)}`);
         await page.screenshot({ path: `/private/tmp/signalgen-${view}-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
         if (view === "realtime") {
           const geometry = await page.locator(".monitor-board-grid").evaluate(el => {
@@ -357,6 +385,7 @@ async (page) => {
     await page.goto(`http://127.0.0.1:5174/#${route}`);
     await page.locator("main").waitFor({ timeout: 10000 });
     await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
+    if (await page.locator(".auth-layout").count() && !await page.locator(".auth-layout").evaluate(el => getComputedStyle(el).backgroundImage.includes("gradient"))) throw Error(`Auth surface gradient missing: ${route}`);
     await page.screenshot({ path: `/private/tmp/signalgen-public-${route}.png`, animations: "disabled", timeout: 10000 });
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Public page overflow: ${route}`);
   }
