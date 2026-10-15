@@ -40,6 +40,15 @@ export type MessageResponse = {
   message: string;
 };
 
+// Display fields only. Role, entitlement, email and ownership are not editable.
+export type EditableProfile = {
+  user_id: string;
+  display_name: string;
+  bio: string;
+  version: number;
+  updated_at: string;
+};
+
 export type AppSessionResponse = {
   session: {
     id: string;

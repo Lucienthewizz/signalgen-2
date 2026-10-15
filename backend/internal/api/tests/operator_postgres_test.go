@@ -66,7 +66,9 @@ func TestPostgresOperatorManagement(t *testing.T) {
 	if err := store.BootstrapOperator(ctx, "local:test", "bootstrap", actor, "test operator"); err != nil {
 		t.Fatal(err)
 	}
-	sessions, err := session.NewPostgresRepository(db, 1, time.Hour)
+	runtimeDB := runtimeTestPool(t, ctx, raw)
+	store = account.NewPostgresRepository(runtimeDB)
+	sessions, err := session.NewPostgresRepository(runtimeDB, 1, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -21,6 +21,7 @@ import type {
   FeatureGrant,
   AccountRole,
   SessionListResponse,
+  EditableProfile,
 } from "../types";
 
 const TOKEN_KEY = "signalgen.access-token";
@@ -30,6 +31,7 @@ const APP_SESSION_KEY = "signalgen.app-session";
 const APP_SESSION_ORIGIN_KEY = "signalgen.app-session-origin";
 const INSTALLATION_KEY = "signalgen.installation-id";
 const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN ?? "").replace(/\/$/, "");
+let identityRevision = 0;
 
 export class ApiError extends Error {
   constructor(
@@ -47,6 +49,10 @@ export const session = {
   getToken: () => sessionStorage.getItem(TOKEN_KEY),
   setToken: (token: string) => {
     ++authGeneration;
+    identityRevision++;
+    // A new login must not inherit the previous account's workspace secret.
+    // Track the login lifecycle even when the provider reuses a token string.
+    session.clearAppSession();
     sessionStorage.setItem(TOKEN_KEY, token);
   },
   setAuth: (
@@ -57,7 +63,11 @@ export const session = {
     },
     refreshed = false,
   ) => {
-    if (!refreshed) ++authGeneration;
+    if (!refreshed) {
+      ++authGeneration;
+      identityRevision++;
+      session.clearAppSession();
+    }
     sessionStorage.setItem(TOKEN_KEY, value.access_token);
     if (value.refresh_token)
       sessionStorage.setItem(REFRESH_KEY, value.refresh_token);
@@ -94,12 +104,72 @@ export const session = {
   },
   clear: () => {
     ++authGeneration;
+    identityRevision++;
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(REFRESH_KEY);
     sessionStorage.removeItem(EXPIRY_KEY);
     session.clearAppSession();
   },
 };
+
+// Bootstrap requests from concurrent page loaders share one creation. Otherwise
+// each creation on this installation revokes the session created just before it.
+let pendingAppSession: {
+  identity: string | null;
+  revision: number;
+  promise: Promise<string>;
+} | null = null;
+
+async function ensureAppSession(): Promise<string> {
+  if (session.needsRefresh()) await refreshAuth();
+  const existing = session.getAppSession();
+  const storedOrigin = sessionStorage.getItem(APP_SESSION_ORIGIN_KEY);
+  if (existing && storedOrigin === (API_ORIGIN || "same-origin"))
+    return existing;
+
+  const identity = session.getToken();
+  const revision = identityRevision;
+  if (
+    pendingAppSession?.identity === identity &&
+    pendingAppSession.revision === revision
+  )
+    return pendingAppSession.promise;
+
+  session.clearAppSession();
+  const pending = {
+    identity,
+    revision,
+    promise: api
+      .createAppSession()
+      .then((created) => {
+        // Logout/account switching while the server responds must not restore
+        // an old secret into the new local account. No credential is logged.
+        if (session.getToken() !== identity || identityRevision !== revision)
+          throw new ApiError(
+            "The account changed. Sign in again if needed.",
+            0,
+          );
+        session.setAppSession(created.session_token);
+        return created.session_token;
+      })
+      .catch((error) => {
+        // performRequest also rejects stale responses. Normalize that rejection
+        // as a harmless local cancellation for this bootstrap lifecycle.
+        if (session.getToken() !== identity || identityRevision !== revision)
+          throw new ApiError(
+            "The account changed. Sign in again if needed.",
+            0,
+          );
+        throw error;
+      }),
+  };
+  pendingAppSession = pending;
+  try {
+    return await pending.promise;
+  } finally {
+    if (pendingAppSession === pending) pendingAppSession = null;
+  }
+}
 
 type ErrorEnvelope = {
   code?: string;
@@ -118,7 +188,6 @@ function errorEnvelope(payload: unknown): ErrorEnvelope | undefined {
 
 // Share simultaneous reads only. Never cache authorization or mutation responses.
 const pendingReads = new Map<string, Promise<unknown>>();
-let sessionCreation: Promise<string> | null = null;
 let tokenRefresh: Promise<void> | null = null;
 
 function unauthorized() {
@@ -215,6 +284,7 @@ async function performRequest<T>(
     await refreshAuth();
   const identity = authGeneration;
   const token = session.getToken();
+  const requestIdentityRevision = identityRevision;
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   if (init.body) headers.set("Content-Type", "application/json");
@@ -245,34 +315,43 @@ async function performRequest<T>(
     throw new ApiError("Akun berubah. Permintaan sebelumnya dibatalkan.", 401);
   if (!response.ok) {
     const envelope = errorEnvelope(payload);
+    const sameIdentity =
+      session.getToken() === token &&
+      identityRevision === requestIdentityRevision;
+    const currentSessionResponse =
+      sameIdentity && session.getAppSession() === appSession;
     const expiredAppSession =
       response.status === 403 && envelope?.code === "SESSION_EXPIRED";
+    const revokedAppSession =
+      response.status === 403 && envelope?.code === "SESSION_REVOKED";
+    const readOnly =
+      !init.method || ["GET", "HEAD"].includes(init.method.toUpperCase());
+    if (revokedAppSession && currentSessionResponse) {
+      // Revocation is an explicit security action, not a reason to silently
+      // recreate a workspace session. Require a deliberate login instead.
+      session.clear();
+      window.dispatchEvent(new Event("signalgen:unauthorized"));
+    }
+    if (expiredAppSession && currentSessionResponse) session.clearAppSession();
     if (
       retryExpiredSession &&
       expiredAppSession &&
+      sameIdentity &&
+      readOnly &&
       path !== "/api/v1/sessions"
     ) {
-      session.clearAppSession();
       await api.ensureAppSession();
       return request<T>(path, init, false);
     }
-    if (
-      response.status === 401 &&
-      !path.startsWith("/api/auth/login") &&
-      !path.startsWith("/api/auth/register") &&
-      !path.startsWith("/api/auth/password")
-    ) {
-      if (
-        retryExpiredSession &&
-        session.getRefreshToken() &&
-        !path.startsWith("/api/auth/password")
-      ) {
-        if (token === session.getToken()) await refreshAuth();
+    const identityRequired =
+      path === "/api/auth/me" || path.startsWith("/api/v1/");
+    if (response.status === 401 && identityRequired && sameIdentity) {
+      if (retryExpiredSession && session.getRefreshToken()) {
+        await refreshAuth();
         return performRequest<T>(path, init, false);
       }
       unauthorized();
     }
-    if (envelope?.code === "SESSION_REVOKED") unauthorized();
     let message = errorDetail(payload, response.status);
     const retryAfter = Number(response.headers.get("Retry-After"));
     if (envelope?.code === "DEVICE_SWITCH_COOLDOWN" && retryAfter > 0)
@@ -300,9 +379,9 @@ function errorDetail(payload: unknown, status: number): string {
   if (apiError?.code === "ENTITLEMENT_REQUIRED")
     return "Akun ini belum memiliki akses fitur screener.";
   if (apiError?.code === "SESSION_EXPIRED")
-    return "Your workspace session expired. Run the screen again to reconnect.";
+    return "Your workspace session expired. Try the action again to reconnect.";
   if (apiError?.code === "SESSION_REVOKED")
-    return "This workspace session was revoked. Run the screen again to reconnect.";
+    return "This workspace session was revoked. Sign in again to continue.";
   if (apiError?.code === "ROLE_REQUIRED")
     return "Your account role does not allow this screening action.";
   if (apiError?.code === "RATE_LIMITED")
@@ -389,31 +468,17 @@ export const api = {
         },
       }),
     }),
-  ensureAppSession: async () => {
-    if (session.needsRefresh()) await refreshAuth();
-    const existing = session.getAppSession();
-    const storedOrigin = sessionStorage.getItem(APP_SESSION_ORIGIN_KEY);
-    if (existing && storedOrigin === (API_ORIGIN || "same-origin"))
-      return existing;
-    session.clearAppSession();
-    if (sessionCreation) return sessionCreation;
-    const identity = authGeneration;
-    sessionCreation = api
-      .createAppSession()
-      .then((created) => {
-        if (identity !== authGeneration)
-          throw new ApiError("Account changed. Sign in again.", 401);
-        session.setAppSession(created.session_token);
-        return created.session_token;
-      })
-      .finally(() => {
-        sessionCreation = null;
-      });
-    return sessionCreation;
-  },
+  ensureAppSession,
   revokeCurrentAppSession: () =>
     request<void>("/api/v1/sessions/current", { method: "DELETE" }),
   account: () => request<AccountState>("/api/v1/account/me"),
+  getProfile: () => request<EditableProfile>("/api/v1/account/profile"),
+  updateProfile: (version: number, displayName: string) =>
+    request<EditableProfile>("/api/v1/account/profile", {
+      method: "PATCH",
+      // The server derives owner. Do not send user ID, role or Auth metadata.
+      body: JSON.stringify({ version, display_name: displayName }),
+    }),
   listSessions: () => request<SessionListResponse>("/api/v1/account/sessions"),
   revokeSession: (id: string) =>
     request<void>(`/api/v1/account/sessions/${encodeURIComponent(id)}`, {

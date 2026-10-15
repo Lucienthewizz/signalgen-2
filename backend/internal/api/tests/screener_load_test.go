@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"runtime/metrics"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -162,8 +163,10 @@ func executeScreenerLoadSession(serverURL string, index int, payload screenerapi
 	if err != nil {
 		return 0, 0, err
 	}
-	request.Header.Set("Authorization", "Bearer load-user-token")
-	request.Header.Set("X-App-Session", "sgs_load_session")
+	// A load round represents distinct users, not 30 sockets on one account.
+	// Keep the real per-user connection limit enabled in the test server.
+	request.Header.Set("Authorization", fmt.Sprintf("Bearer load-user-token-%d", index))
+	request.Header.Set("X-App-Session", fmt.Sprintf("sgs_load-user-%d", index))
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return 0, 0, err
@@ -223,7 +226,7 @@ func executeScreenerLoadSession(serverURL string, index int, payload screenerapi
 func newScreenerLoadServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	server, err := api.NewServer(
-		loadIdentity{}, loadSessions{}, &fakeAccess{features: []string{access.FeatureScreener}},
+		loadIdentity{}, loadSessions{}, loadAccess{&fakeAccess{features: []string{access.FeatureScreener}}},
 		&fakeDatasets{manifest: screenerTestManifest()}, loadCompute{},
 	)
 	if err != nil {
@@ -234,8 +237,21 @@ func newScreenerLoadServer(t *testing.T) *httptest.Server {
 
 type loadIdentity struct{}
 
-func (loadIdentity) Verify(context.Context, string) (auth.Principal, error) {
-	return auth.Principal{ID: "load-user", Email: "load@example.test"}, nil
+func (loadIdentity) Verify(_ context.Context, token string) (auth.Principal, error) {
+	suffix, ok := strings.CutPrefix(token, "load-user-token-")
+	index, err := strconv.Atoi(suffix)
+	if !ok || err != nil || index < 0 || index >= 30 {
+		return auth.Principal{}, fmt.Errorf("invalid synthetic load identity")
+	}
+	return auth.Principal{ID: fmt.Sprintf("load-user-%d", index), Email: fmt.Sprintf("load-%d@example.test", index)}, nil
+}
+
+// The shared fakeAccess records calls for ordinary single-user assertions.
+// Load users must not concurrently write those recorder fields.
+type loadAccess struct{ *fakeAccess }
+
+func (loadAccess) EnsureProfile(_ context.Context, userID, email string) (access.Account, error) {
+	return access.Account{UserID: userID, Email: email, Role: access.RoleUser, Status: access.StatusActive}, nil
 }
 
 type loadSessions struct{}
@@ -244,12 +260,18 @@ func (loadSessions) Create(context.Context, string, string, string) (session.Cre
 	return session.Created{}, nil
 }
 
-func (loadSessions) Verify(context.Context, string, string) (session.Session, error) {
-	return session.Session{ID: "ses-load", UserID: "load-user"}, nil
+func (loadSessions) Verify(_ context.Context, userID, token string) (session.Session, error) {
+	if !strings.HasPrefix(userID, "load-user-") || token != "sgs_"+userID {
+		return session.Session{}, session.ErrInvalid
+	}
+	return session.Session{ID: "ses-" + userID, UserID: userID}, nil
 }
 
-func (loadSessions) VerifyByID(context.Context, string, string) (session.Session, error) {
-	return session.Session{ID: "ses-load", UserID: "load-user"}, nil
+func (loadSessions) VerifyByID(_ context.Context, userID, sessionID string) (session.Session, error) {
+	if !strings.HasPrefix(userID, "load-user-") || sessionID != "ses-"+userID {
+		return session.Session{}, session.ErrInvalid
+	}
+	return session.Session{ID: sessionID, UserID: userID}, nil
 }
 
 func (loadSessions) Revoke(context.Context, string, string) error { return nil }
@@ -274,8 +296,31 @@ func (loadCompute) Create(context.Context, compute.CreateRequest) (compute.Grant
 	return loadComputeGrant(), nil
 }
 
-func (loadCompute) Verify(context.Context, string, string, string) (compute.Grant, error) {
+func (loadCompute) Verify(_ context.Context, userID, sessionID, grantID string) (compute.Grant, error) {
+	if !strings.HasPrefix(userID, "load-user-") || sessionID != "ses-"+userID || grantID != "cgr-load" {
+		return compute.Grant{}, fmt.Errorf("invalid synthetic grant binding")
+	}
 	return loadComputeGrant(), nil
+}
+
+// Always-on regression: multiple users can screen with unchanged defaults.
+// The longer timed profile remains opt-in and is not a CI performance budget.
+func TestScreenerLoadRoundUsesDistinctUsers(t *testing.T) {
+	server := newScreenerLoadServer(t)
+	defer server.Close()
+	result := runScreenerLoadRound(t, server.URL, 10, screenerLoadPayload(20))
+	if result.failures != 0 || len(result.latencies) != 10 {
+		t.Fatalf("distinct-user round failed: completed=%d failures=%d error=%v", len(result.latencies), result.failures, result.firstError)
+	}
+	for index := range 10 {
+		principal, err := (loadIdentity{}).Verify(context.Background(), fmt.Sprintf("load-user-token-%d", index))
+		if err != nil || principal.ID != fmt.Sprintf("load-user-%d", index) {
+			t.Fatal("load identities collapsed into one user")
+		}
+		if _, err := (loadSessions{}).Verify(context.Background(), principal.ID, "sgs_load-user-29"); err == nil {
+			t.Fatal("load session accepted another user's secret")
+		}
+	}
 }
 
 func loadComputeGrant() compute.Grant {

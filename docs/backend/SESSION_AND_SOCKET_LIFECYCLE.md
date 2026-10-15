@@ -26,6 +26,25 @@ If the response is lost after the commit, the old secret is invalid: do not
 blindly retry a mutation. Recover through explicit session setup with the valid
 Supabase identity, respecting the normal device limit/cooldown.
 
+## Web client safeguards — 6 October 2026
+
+Concurrent page loaders share one app-session bootstrap per tab and login
+lifecycle. Explicit logout/login increments a local lifecycle revision, even
+when the provider returns the same bearer string. Late bootstrap/401 responses
+from the old login cannot restore a secret or log out the new account. A late
+expired/revoked response for an old app-session cannot clear its replacement.
+
+`SESSION_EXPIRED` clears the matching cached app-session. GET/HEAD may bootstrap
+and retry once; POST/PATCH/DELETE are not replayed automatically. The user must
+review and retry the action. `SESSION_REVOKED` clears matching local credentials
+and returns to login instead of silently creating a new session. These safeguards
+do not weaken backend revocation checks or change device/session limits.
+
+This is single-flight within one tab, not a cross-tab rotation coordinator.
+Automatic Supabase identity refresh-token retention/renewal and app-session
+rotation remain frontend work. The backend contracts above already exist;
+bootstrap recovery is not identity renewal.
+
 ## WebSocket checks and limits
 
 A consumed ticket is verified against the session, active account, entitlement,
@@ -72,10 +91,13 @@ of expired/revoked sessions. Real HTTP/WebSocket transport tests simulate
 authorization changes after upgrade plus shutdown cancellation; provider/Auth
 identity fixtures are deterministic, not live cloud authentication.
 
-OpenAPI, the WebSocket JSON schema and Postman collection describe the new
-contracts. No Supabase migration or frontend change is required for this slice.
+OpenAPI, the WebSocket JSON schema and Postman collection describe the backend
+contracts. The rotation endpoint itself needed no migration; frontend adoption
+is separate work. The client safeguards added on 6 October are covered by the
+42-test frontend suite (mocked transport), including same-token re-login races,
+revocation, non-replayed writes and versioned profile requests.
 
-Verification on 2026-10-05: full `go test -race ./...` with the isolated
+Historical verification on 2026-10-05: full `go test -race ./...` with the isolated
 Postgres integration enabled and `go vet ./...` passed. Five migrations and
 two SQL policy checks passed on the empty test database. The Go 1.26 Docker
 runtime built, returned 200 from health/readiness, and exited with code 0 on

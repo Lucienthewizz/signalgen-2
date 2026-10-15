@@ -15,8 +15,10 @@
 | Subscription | Plans, state, cancel, operator activation | Checkout/provider/webhook payment belum ada |
 
 Jurnal/portfolio/P&L belum diklaim selesai. Policy transaksi/cost basis perlu
-dipastikan sebelum implementasi. Frontend masih perlu mengikuti kontrak multi-
-series Model A yang didokumentasikan di `MODEL_A_FRONTEND_HANDOFF.md`.
+dipastikan sebelum implementasi. Frontend sekarang memakai kontrak multi-series
+Model A dengan satu batch/socket; demo login-to-screening tiga saham dengan
+akun berizin sudah lolos. Automatic identity refresh masih terbuka.
+Lihat [handoff](MODEL_A_FRONTEND_HANDOFF.md).
 
 ## Alur tes profile di Postman
 
@@ -56,20 +58,21 @@ ada, dan role authenticated tidak mendapat UPDATE. Jumlah akun tetap tiga.
 Jangan menganggap konfigurasi `.env` atau file SQL sebagai bukti migrasi cloud.
 Account auth email sync tidak mengubah profile version atau menimpa nama/bio.
 
-Konfigurasi lokal `backend/.env` saat deployment ini hanya memuat URL/key Auth.
-Untuk menjalankan Go dari checkout ini atau komputer teman, isi juga
-`SUPABASE_DB_URL` dari Connect → session pooler secara privat. File `.env` tidak
-dipush; jangan salin password database ke frontend, chat atau dokumentasi publik.
+Konfigurasi lokal `backend/.env` sekarang memuat Auth dan koneksi runtime
+Postgres dengan role terbatas `signalgen_api`; admin/migration memakai file
+terpisah. Komputer teman tetap harus mengisi konfigurasi privat sendiri sesuai
+[migration guide](POSTGRES_MIGRATION.md), bukan memakai user `postgres` sebagai
+runtime. File `.env` tidak dipush; jangan salin password database ke frontend,
+chat atau dokumentasi publik.
 
 ## Advisor Supabase yang masih perlu ditindaklanjuti
 
-Pemeriksaan setelah migration tidak menambah warning baru. Advisor masih
-melaporkan EXECUTE fungsi SECURITY DEFINER lama `public.handle_new_user`
-(return type trigger) dan `public.rls_auto_enable` (event_trigger) bagi client
-roles, serta leaked-password protection yang belum aktif. Fungsi/settings lama
-ini tidak diubah dalam deployment profile; audit konfigurasi terpisah diperlukan.
-Panduan: [function privileges](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable)
-dan [password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+Pemeriksaan 6 Oktober setelah hardening: peringatan EXECUTE fungsi helper
+SECURITY DEFINER publik lama sudah diperbaiki. Tersisa satu WARN leaked-password
+protection belum aktif dan tiga INFO tabel arsip dengan RLS tanpa policy.
+Password protection memerlukan paket Pro+; tidak ada upgrade berbayar yang
+dilakukan. Panduan: [password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
+dan [hardening](SECURITY_HARDENING.md).
 Info RLS tanpa policy pada tabel server-only/arsip bukan alasan membuka policy
 browser; pertahankan deny-by-default dan grant minimum.
 

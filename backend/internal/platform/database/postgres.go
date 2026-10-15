@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -48,14 +49,25 @@ func (check PostgresReadiness) Ready(ctx context.Context) error {
 	if check.Pool == nil {
 		return fmt.Errorf("Postgres pool is unavailable")
 	}
+	return schemaReady(ctx, check.Pool)
+}
+
+type rowQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+// Accepting a transaction allows destructive regression fixtures to remain
+// uncommitted and invisible to tests sharing the isolated database.
+func schemaReady(ctx context.Context, db rowQuerier) error {
 	var migrated bool
-	err := check.Pool.QueryRow(ctx, `select
+	err := db.QueryRow(ctx, `select
   to_regclass('signalgen.account_profiles') is not null and
   to_regclass('signalgen.feature_grants') is not null and
   to_regclass('signalgen.app_sessions') is not null and
   to_regclass('signalgen.account_device_state') is not null and
   to_regclass('signalgen.user_rules') is not null and
   to_regclass('signalgen.compute_grants') is not null and
+  to_regclass('signalgen.operator_bootstrap_state') is not null and
   to_regclass('signalgen.audit_events') is not null and
   to_regclass('signalgen.subscription_plans') is not null and
   to_regclass('signalgen.subscription_plan_features') is not null and
@@ -67,7 +79,24 @@ func (check PostgresReadiness) Ready(ctx context.Context) error {
   (select count(*)=4 from pg_attribute
    where attrelid=to_regclass('signalgen.account_profiles')
      and attname in ('display_name','bio','profile_version','profile_updated_at')
-     and not attisdropped)`).Scan(&migrated)
+     and not attisdropped) and
+  exists (select 1 from pg_constraint
+    where conrelid=to_regclass('signalgen.audit_events')
+      and conname='audit_events_action_check' and contype='c' and convalidated
+      and pg_get_constraintdef(oid) like '%account.status_changed%') and
+  exists (select 1 from pg_index
+    where indexrelid=to_regclass('signalgen.audit_events_target_id_idx')
+      and indrelid=to_regclass('signalgen.audit_events') and indisvalid and indisready) and
+  exists (select 1 from pg_trigger
+    where tgrelid=to_regclass('signalgen.audit_events')
+      and tgname='reject_audit_update' and tgenabled in ('O','A') and not tgisinternal) and
+  (select count(*)=15 and bool_and(relrowsecurity) from pg_class
+    where relnamespace=to_regnamespace('signalgen') and relkind='r'
+      and relname in ('account_profiles','feature_grants','app_sessions',
+        'account_device_state','user_rules','compute_grants','operator_bootstrap_state',
+        'audit_events','subscription_plans','subscription_plan_features',
+        'subscriptions','subscription_events','stock_catalog','stock_universes',
+        'stock_universe_members'))`).Scan(&migrated)
 	if err != nil {
 		return fmt.Errorf("Postgres readiness: %w", err)
 	}
@@ -75,4 +104,39 @@ func (check PostgresReadiness) Ready(ctx context.Context) error {
 		return fmt.Errorf("Postgres migration is incomplete")
 	}
 	return nil
+}
+
+// RuntimePrivileges is intentionally separate from schema readiness: migration
+// tools/tests may use an admin pool, but the HTTP process must not use one.
+type RuntimePrivileges struct{ Pool *pgxpool.Pool }
+
+func (check RuntimePrivileges) Ready(ctx context.Context) error {
+	if check.Pool == nil {
+		return fmt.Errorf("Postgres pool is unavailable")
+	}
+	return runtimeReady(ctx, check.Pool)
+}
+
+// A transaction lets local tests revoke privileges without changing the
+// shared test database or any cloud role. Production passes the runtime pool.
+func runtimeReady(ctx context.Context, db rowQuerier) error {
+	var safe bool
+	err := db.QueryRow(ctx, `select
+  current_user='signalgen_api' and session_user=current_user
+  and not rolsuper and not rolbypassrls
+  and not rolcreaterole and not rolcreatedb and not rolreplication
+  and not has_schema_privilege(current_user,'signalgen','CREATE')
+  and not has_schema_privilege(current_user,'public','CREATE')
+  and not has_schema_privilege(current_user,'legacy','USAGE')
+  and not has_table_privilege(current_user,'signalgen.audit_events','UPDATE,DELETE,TRUNCATE')
+  and not has_table_privilege(current_user,'signalgen.operator_bootstrap_state','INSERT,UPDATE,DELETE')
+  and not exists (select 1 from pg_auth_members where member=(select oid from pg_roles where rolname=current_user))
+from pg_roles where rolname=current_user`).Scan(&safe)
+	if err != nil {
+		return fmt.Errorf("inspect runtime privileges: %w", err)
+	}
+	if !safe {
+		return fmt.Errorf("HTTP runtime requires the restricted signalgen_api role")
+	}
+	return runtimeAccessReady(ctx, db)
 }

@@ -7,6 +7,12 @@ project on 29 September 2026. Their remote versions are `20260929041140`,
 `supabase/migrations`. The active Go API now connects through
 `SUPABASE_DB_URL`; it does not open SQLite.
 
+Update 6 October 2026: the subscription, stock-universe, editable-profile,
+operator-status and backend-runtime-privileges migrations are also applied.
+All eight migration versions match the local files. HTTP runtime now uses
+`signalgen_api`; migration/admin credentials are separate. See
+[`SECURITY_HARDENING.md`](SECURITY_HARDENING.md) for the current setup.
+
 ## Ownership
 
 - Supabase Auth keeps passwords and user identities (`auth.users`).
@@ -27,8 +33,8 @@ approved later, authenticated users can read only their own profile/grants and
 CRUD only their own rules. Session tokens, operator state, and audit events
 have no direct client policies. The Go API uses its verified principal for
 every owner filter and checks role/entitlement before serving private
-requests. A privileged backend connection can bypass RLS, so the API checks
-remain essential.
+requests. The restricted trusted-server role has explicit operation policies;
+these are not tenant filters, so verified-owner API checks remain essential.
 
 Schema boundaries are verified by `supabase/tests/schema_boundaries.sql`.
 Active application tables belong in `signalgen`; the `legacy` schema remains a
@@ -41,8 +47,10 @@ client-inaccessible archive; SignalGen application tables must not be added to
    project URL, publishable key, and Session Pooler connection string. Keep
    `.env` out of Git. The password in a URL must be percent-encoded.
 2. Apply migrations from `supabase/migrations` to a fresh project before
-   starting the API. For the connected SignalGen project, all three migrations
-   are already recorded remotely; do not apply them a second time.
+   starting the API, then provision the restricted runtime role. Use a separate
+   migration secret, never the runtime URL, for migration commands. For the
+   connected SignalGen project, the current eight migrations are already
+   recorded remotely; do not apply them a second time.
 3. Run `docker compose up --build go-api` and check `GET /health` and
    `GET /ready` at port 8080.
 4. Run `cd backend && go test ./...`. The opt-in connection check uses
@@ -50,7 +58,7 @@ client-inaccessible archive; SignalGen application tables must not be added to
    '^TestPostgresConnection$'` with `SUPABASE_DB_URL` loaded in the process
    environment. It checks only metadata and does not print the URL.
 5. The isolated API integration test uses `postgres:16`,
-   `supabase/tests/local_auth_stub.sql`, and both migration files. Set
+   `supabase/tests/local_auth_stub.sql`, and all migration files. Set
    `SIGNALGEN_TEST_PG_URL` to a dedicated loopback PostgreSQL database named
    `signalgen_test` before running
    `go test ./internal/api/tests -run '^TestPostgresAPIContractsAndOwnership$'`.
@@ -83,12 +91,16 @@ candles may also be stale and are not the current screener dataset.
 To archive another consistent SQLite snapshot, from `backend/` run
 `go run ./cmd/importlegacy --sqlite /absolute/path/to/snapshot.db --label
 descriptive_name` first for a read-only dry run, then repeat with
-`--env-file .env --expected-project-ref <project-ref> --apply`. The importer
+`--env-file /absolute/path/to/legacy-admin.env --expected-project-ref <project-ref>
+--apply`. That separate administrative environment must define the importer's
+`SUPABASE_DB_URL`; the restricted runtime URL cannot write the archive. If
+runtime `SUPABASE_DB_URL` is already exported, unset it only for that command
+with `env -u SUPABASE_DB_URL go run ...` so the importer reads the intended file. The importer
 checks SQLite integrity and uses the file SHA-256 to avoid duplicate imports.
 Keep the original SQLite files and volumes until retention is decided. App
 sessions require a fresh login after the runtime migration.
 
-The Go API and CLI currently use the project database connection from
-`SUPABASE_DB_URL`. Before production deployment, use a dedicated least-
-privilege database role, rehearse backup/restore, and decide how to share
+The Go API uses the restricted runtime connection from `SUPABASE_DB_URL`;
+the admin CLI prefers `SUPABASE_ADMIN_DB_URL` outside the API container.
+Before production deployment, rehearse backup/restore and decide how to share
 short-lived WebSocket tickets/rate limits across multiple API replicas.

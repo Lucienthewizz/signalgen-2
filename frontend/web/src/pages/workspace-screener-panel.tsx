@@ -490,7 +490,7 @@ export function WorkspaceScreenerPanel({
                   onValueChange={(value) => setRuleId(value ?? "")}
                 >
                   <SelectTrigger id="screen-rule">
-                    <SelectValue />
+                    <SelectValue>{selectedRule?.name}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
@@ -522,7 +522,7 @@ export function WorkspaceScreenerPanel({
                   onValueChange={(value) => setUniverseId(value ?? "")}
                 >
                   <SelectTrigger id="screen-universe">
-                    <SelectValue />
+                    <SelectValue>{selectedUniverse?.name}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>

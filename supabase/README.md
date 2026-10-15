@@ -20,6 +20,12 @@ defense-in-depth contract. They do not replace authorization in the Go API.
 Every backend repository query must still filter by the verified owner and
 the API must enforce session, account status, role, and entitlement rules.
 
+The HTTP runtime uses the restricted `signalgen_api` role with NOBYPASSRLS;
+its policies permit trusted server operations, not automatic tenant isolation.
+Migration/admin credentials must stay outside the HTTP container. See
+[`SECURITY_HARDENING.md`](../docs/backend/SECURITY_HARDENING.md) for provisioning,
+secret separation and permission limits.
+
 ## Change rules
 
 1. Create schema changes as versioned files under `supabase/migrations`.
@@ -34,7 +40,7 @@ the API must enforce session, account status, role, and entitlement rules.
 ## Automated local check
 
 The runner applies every migration to a fresh local database, then verifies
-schema boundaries and two-user RLS ownership:
+schema boundaries, two-user RLS ownership, runtime privileges and trigger ACLs:
 
 ```sh
 cd backend

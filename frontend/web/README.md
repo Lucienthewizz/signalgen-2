@@ -120,3 +120,11 @@ are left untouched, and sample performance/review content is labelled as illustr
 `npm run test:browser` checks the workspace routes in both themes, responsive overflow,
 dashboard content alignment, primary Refresh styling, and journal form/non-persistence
 using synthetic API/account fixtures only.
+
+The initial account in 6 October browser verification lacked this feature and
+was correctly denied. The user's replacement account already had access and
+completed login-to-screening for a three-symbol demo universe: three latest
+`No match` decisions, quality `complete`, one grant/ticket/socket. No permission
+or role was changed. New grants still require an authorized operator, expiry
+and audit reason; guards must not be bypassed. Signup/recovery lifecycle and
+automatic identity refresh are not claimed complete by this successful run.

@@ -1,5 +1,11 @@
 # Progress Asistensi SignalGen 2.0
 
+Catatan eksperimen awal, termasuk fixture dan pengukuran September 2026.
+Jangan gunakan angka/status di sini sebagai status runtime terbaru. Untuk asis
+berikutnya gunakan [laporan 7 Oktober 2026](ASIS_2026_10_07.md) dan
+[progress aktif](backend/BACKEND_PROGRESS.md). Arahan dan penjelasan model di
+bawah dipertahankan sebagai konteks historis.
+
 ## 1. Arahan Prof minggu lalu
 
 Prof meminta agar proses screener tidak dijalankan seluruhnya di server karena beban server akan membesar ketika pengguna bertambah.

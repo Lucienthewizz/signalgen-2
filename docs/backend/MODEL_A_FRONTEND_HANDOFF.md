@@ -1,11 +1,10 @@
 # Model A — frontend integration checkpoint
 
-Verified remote inspection: 5 October 2026, `git fetch origin` completed.
-Latest frontend-specific branch:
-`origin/frontend/website-account-recovery-and-landing-polish`, commit `c2198eb`
-(29 September 2026). Its frontend commits are already ancestors of the current
-backend branch; no new frontend commit needed merging at this checkpoint.
-Do not replace newer local frontend files with an older branch snapshot.
+Checkpoint checkout: 6 October 2026, `feature/backend-web-integration`.
+Merge `b62e30c` includes the collaborator's `frontend/website` commit `1378033`.
+The subsequent hardening and demo fixes remain local and uncommitted. This is
+not a fresh claim that no newer remote commits exist. Do not replace these
+frontend files with an older branch snapshot.
 
 ## Implementation choice
 
@@ -49,16 +48,23 @@ This choice is not a claim of proven production efficiency or advisor approval.
 
 ## Current frontend changes still required
 
-The checked-in connector still sends the old fixture body from
-`frontend/web/src/api/client.ts::prepareDataset`, including `symbols` and fixed
-dates. `frontend/web/src/analysis/screener.ts` reads a top-level `symbol/candles`,
-and its worker accepts only one series. These do not match the dynamic backend.
-The client also does not yet retain/rotate the Supabase refresh token.
+The current connector sends `purpose/rule_id/universe_id` and reads `series[]`.
+The orchestrator runs the feature worker per series, then concatenates all
+candidates into one grant/ticket/WebSocket batch. Opening a socket per symbol
+would exceed the two-sockets-per-user limit for a three-symbol universe; the
+server limit is deliberately unchanged. It verifies combined candidate limits
+and decision symbol/timestamp order before attaching feature evidence.
 
-Backend guards must not be weakened to conceal this mismatch. Connecting the
-UI requires changing the API connector, dataset types and worker orchestration;
-no visual redesign is necessary. Browser login-to-screening verification must
-be repeated after that work. A Node-hosted WASM test is not a browser UI test.
+These changes have five focused orchestration regression tests. The frontend
+still needs automatic Supabase refresh-token retention/refresh and app-session
+rotation; backend contracts already exist. Browser login was observed, but the
+first real account lacked `screener` entitlement and was correctly denied.
+The user's replacement account already had access: login, creation of a
+three-symbol demo universe and screening with Default Scalping succeeded on
+6 October. All three latest decisions were `No match`, quality `complete`.
+There was one grant/ticket/socket; no role or entitlement was changed. Do not
+weaken guards or fabricate permissions/results. A Node-hosted WASM test alone
+is not a browser UI test. See [current progress](BACKEND_PROGRESS.md).
 
 ## Repeatable backend verification
 
@@ -82,7 +88,7 @@ Identity and market data remain deterministic adapters in this test.
 
 Backtest fills/P&L and journal accounting still require final entry/exit,
 fees/slippage, ordering and rounding policy. Provider rights and production
-availability need external verification. Cloud backup recovery, least-privilege
-deployment, browser integration and separated CPU/RAM measurements are not
-claimed complete by local test success. No automatic payment or broker trading
-is implemented.
+availability need external verification. The restricted runtime database role
+is configured and tested, but cloud backup recovery, full browser integration,
+production deployment and separated CPU/RAM measurements are not claimed
+complete by local test success. No automatic payment or broker trading is implemented.

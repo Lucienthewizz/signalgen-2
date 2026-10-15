@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { api, session } from "@/api/client";
+import { monitorBackendStatus } from "@/api/backend-status";
 import { Brand } from "@/components/brand";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AuthView } from "@/pages/auth-page";
@@ -84,10 +85,11 @@ function RoutedApp() {
 
   useEffect(() => {
     let active = true;
+    const stopBackendMonitor = monitorBackendStatus(
+      api.status,
+      setBackendOnline,
+    );
     Promise.allSettled([
-      api.status().then(() => {
-        if (active) setBackendOnline(true);
-      }),
       session.getToken()
         ? Promise.all([api.me(), api.ensureAppSession()]).then(([profile]) => {
             if (active) {
@@ -106,6 +108,7 @@ function RoutedApp() {
     addEventListener("signalgen:unauthorized", unauthorized);
     return () => {
       active = false;
+      stopBackendMonitor();
       removeEventListener("signalgen:unauthorized", unauthorized);
     };
   }, []);

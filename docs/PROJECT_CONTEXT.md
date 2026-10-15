@@ -1,6 +1,9 @@
 # SignalGen 2.0 — Project Context and Architecture
 
-Versi 2.1 · 29 September 2026. Keputusan terbaru pengguna: SignalGen adalah aplikasi web multi-user dengan backend Go/Gin dan Supabase Postgres. **Dokumen target bukan bukti migrasi selesai**.
+Versi 2.2 · 6 Oktober 2026. SignalGen adalah aplikasi web multi-user dengan
+backend Go/Gin dan Supabase Postgres. Scope target bukan bukti semua fitur selesai;
+status terverifikasi berada di [backend progress](backend/BACKEND_PROGRESS.md) dan
+[laporan asis](ASIS_2026_10_07.md).
 
 Keputusan implementasi 5 Oktober 2026: pengguna memilih **Model A** untuk alur
 aktif. Client Go/WASM menghitung indikator, server menjalankan private decision
@@ -70,7 +73,11 @@ FE tidak menentukan izin, memegang server secrets atau mengirim order broker. Co
 
 ## 4. Migrasi dan kontrak
 
-Satu API boundary /api; setiap route punya satu pemilik selama transisi. /api/v1 merupakan desain target, bukan route yang telah tersedia. P0 boleh API legacy sebagai jembatan jika adapter/tes jelas. MVP end-to-end mensyaratkan Go API slice teruji. Tidak dual-write database tanpa rencana migrasi.
+Satu API boundary `/api`; setiap route punya satu pemilik. Route `/api/v1` untuk
+account/session/rules/universe/dataset/compute/screener/subscription/operator
+sudah diimplementasikan di Go. Daftar aktual mengikuti `backend/openapi.yaml`
+(0.10.0), bukan semua endpoint dalam kontrak target. Jurnal/portfolio/backtest
+tetap pekerjaan terbuka. Runtime aktif tidak dual-write SQLite/Postgres.
 
 Legacy auth /api/auth/register, /api/auth/login, /api/auth/me tetap kompatibel; field/response tidak diganti diam-diam. Kontrak API dan worker dibekukan M0 lalu diterbitkan OpenAPI/schema. Base URL/version/WASM URL terpusat; FE mengikuti runtime yang benar.
 
@@ -87,10 +94,12 @@ akun aplikasi, suspend/aktifkan kembali dengan pencabutan sesi dan audit atomik,
 serta riwayat audit per target. Semua operator-only, tanpa akses otomatis ke
 rules/dataset/jurnal privat. Reactivation membutuhkan sesi baru. Migration audit
 dan index baru sudah diterapkan ke Supabase cloud pada 6 Oktober 2026, dengan
-riwayat ketujuh migration sinkron serta RLS/privilege audit tetap terjaga.
+riwayat delapan migration sinkron (termasuk runtime privilege) serta
+RLS/privilege audit tetap terjaga.
 Deployment schema bukan bukti pengujian operator nyata atau deployment image API.
-UI admin/payment/full admin suite
-tetap terpisah; lihat `docs/backend/ADMIN_BACKEND.md`.
+Frontend memiliki surface operator/grant/subscription; admin account/status/audit
+backend tidak berarti seluruh UI admin selesai. Payment/full admin suite tetap
+terpisah; lihat [admin backend](backend/ADMIN_BACKEND.md).
 
 ## 5. Data dan proteksi
 
