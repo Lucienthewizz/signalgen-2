@@ -52,6 +52,7 @@ import {
   priceMovement,
   openCloseChange,
   snapshotAge,
+  formatSignedPercent,
 } from "@/lib/market-monitor";
 import {
   hasWorkspaceData,
@@ -499,10 +500,13 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                     {selectedChange !== null && (
                       <span
                         className="monitor-change"
-                        data-direction={selectedMovement}
+                        data-direction={
+                          Math.abs(selectedChange) < 0.005
+                            ? "flat"
+                            : selectedMovement
+                        }
                       >
-                        {selectedChange > 0 ? "+" : ""}
-                        {number(selectedChange)}% from open
+                        {formatSignedPercent(selectedChange)} from open
                       </span>
                     )}
                   </div>
@@ -641,14 +645,15 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
         </div>
         <Table>
           <colgroup>
-            <col style={{ width: "18%" }} />
+            <col style={{ width: "17%" }} />
+            <col style={{ width: "9%" }} />
             <col style={{ width: "10%" }} />
-            <col style={{ width: "11%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "11%" }} />
-            <col style={{ width: "20%" }} />
-            <col style={{ width: "16%" }} />
-            <col style={{ width: "6%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "17%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "5%" }} />
           </colgroup>
           <TableHeader>
             <TableRow>
@@ -659,6 +664,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
               <TableHead className="monitor-price-heading--close">
                 Close <span className="monitor-unit">IDR</span>
               </TableHead>
+              <TableHead className="monitor-change-cell">Change</TableHead>
               <TableHead>RSI 14</TableHead>
               <TableHead>EMA 20</TableHead>
               <TableHead>Rule result</TableHead>
@@ -736,15 +742,21 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                         </span>
                       )}
                     </span>
-                    {change !== null && (
-                      <small
-                        className="monitor-change"
-                        data-direction={movement}
-                      >
-                        {change > 0 ? "+" : ""}
-                        {number(change)}%
-                      </small>
-                    )}
+                  </TableCell>
+                  <TableCell
+                    data-label="Change · open to close"
+                    className="monitor-change-cell"
+                  >
+                    <span
+                      className="monitor-change"
+                      data-direction={
+                        change !== null && Math.abs(change) < 0.005
+                          ? "flat"
+                          : movement
+                      }
+                    >
+                      {formatSignedPercent(change)}
+                    </span>
                   </TableCell>
                   <TableCell data-label="RSI 14">
                     {snapshot ? number(snapshot.features.rsi14) : "—"}
@@ -811,7 +823,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             })}
             {!activeStocks.length && (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={9}>
                   {universe
                     ? "Add stocks to this universe to start monitoring."
                     : "Add a stock ticker to start monitoring."}

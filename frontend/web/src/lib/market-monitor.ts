@@ -390,3 +390,16 @@ export function snapshotAge(timestamp?: string, now = Date.now()) {
   if (stamp > now + 300_000) return "future";
   return now - stamp > 7 * 86400000 ? "old" : "recent";
 }
+
+export function formatSignedPercent(value?: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  // Do not show a signed zero after rounding a very small movement.
+  const display = Math.abs(value) < 0.005 ? 0 : value;
+  return (
+    new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      signDisplay: "exceptZero",
+    }).format(display) + "%"
+  );
+}

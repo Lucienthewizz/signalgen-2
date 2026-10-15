@@ -186,6 +186,8 @@ retains its separate add/remove workflow, including when universe loading fails.
 
 Table values remain screening snapshots, not live TradingView quotes. Missing
 snapshots display dashes and `Not evaluated`; no 7D/30D returns are fabricated.
+Open-to-close percentages have a separate Change column with explicit signs,
+two decimal places, green/red direction, and unsigned neutral rounded zero.
 Browser regression fixtures verify universe switching, card/chart/row selection,
 the retained chart frame, responsive layouts, and both themes. External chart
 requests are blocked in those isolated tests, so they do not verify the live

@@ -118,6 +118,8 @@ async (page) => {
   if (!((await page.locator(".monitor-ledger tbody tr").first().innerText()).includes("BBRI"))) throw Error("Monitor change sort failed");
   if (await page.locator(".monitor-chart h3").innerText() !== "BBCA") throw Error("Sort changed selected chart");
   if (!((await page.locator(".monitor-change").first().innerText()).includes("%"))) throw Error("Missing open-close percentage");
+  await page.getByRole("columnheader", { name: "Change", exact: true }).waitFor();
+  if (await page.locator(".monitor-ledger .monitor-change").first().innerText() !== "+6.32%") throw Error("Monitor percentages must show a sign and two decimals");
   await page.unroute("**/api/v1/stock-universes");
   await page.goto("http://127.0.0.1:5174/#app/access");
   const ended = page.locator(".account-session-ledger article").filter({ hasText: "Ended browser" });
