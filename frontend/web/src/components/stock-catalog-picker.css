@@ -226,8 +226,9 @@
   );
 }
 .stock-catalog-picker__table [data-slot="table-container"] {
-  max-height: 504px;
-  overflow: auto;
+  /* Each page is already bounded to 12 rows: use page scroll, not a second
+     vertical scroll area that clips rows and competes with pagination. */
+  overflow-x: auto;
   scrollbar-color: var(--line) transparent;
   scrollbar-width: thin;
 }
@@ -236,8 +237,6 @@
   width: 100%;
 }
 .stock-catalog-picker__table thead {
-  position: sticky;
-  top: 0;
   background: var(--surface-2);
 }
 .stock-catalog-picker__table th,
@@ -380,7 +379,6 @@
 }
 .universe-selection__empty {
   margin: 0;
-  min-height: 88px;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.7;

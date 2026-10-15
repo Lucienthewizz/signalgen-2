@@ -14,6 +14,8 @@ async (page) => {
   await sorts.getByRole("button",{name:"Most stocks",exact:true}).click();
   if (await categories.getByRole("button").nth(1).innerText() !== "Blue chip") throw Error("Group count sorting failed");
   if ((await choices.count()) !== 12) throw Error("Unbounded catalog DOM");
+  const clipping = await page.locator('.stock-catalog-picker__table [data-slot="table-container"]').evaluate(el => ({ client: el.clientHeight, content: el.scrollHeight }));
+  if (clipping.content > clipping.client + 1) throw Error("Paginated rows are clipped by a second vertical scroll");
   await categories.getByRole("button", { name: "Banks", exact: true }).click();
   if ((await choices.count()) !== 2) throw Error("Banks category not applied");
   await page.getByRole("button", { name: /Add BBCA Bank Central/ }).click();

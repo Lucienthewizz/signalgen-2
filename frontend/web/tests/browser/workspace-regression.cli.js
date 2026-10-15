@@ -243,6 +243,8 @@ async (page) => {
           const selectionStyle = await page.locator('.universe-selection__card').evaluate(el=>({radius:parseFloat(getComputedStyle(el).borderTopLeftRadius),padding:parseFloat(getComputedStyle(el.querySelector('[data-slot="card-content"]')).paddingLeft)}));
           if(selectionStyle.radius < 12 || selectionStyle.padding < 16) throw Error("Selected stocks card missing inset spacing");
           if(!(await page.locator('.stock-catalog-picker__table').evaluate(el=>getComputedStyle(el).backgroundImage)).includes('linear-gradient')) throw Error("Stock table gradient missing");
+          if(await page.locator('.stock-catalog-picker__table [data-slot="table-container"]').evaluate(el=>el.scrollHeight > el.clientHeight + 1)) throw Error("Catalog rows are vertically clipped");
+          if(await page.locator('.universe-selection__empty').evaluate(el=>parseFloat(getComputedStyle(el).minHeight) > 0)) throw Error("Empty selection still reserves blank space");
           if (await page.locator(".universe-library").getByText(/^v\d+$/).count()) throw Error("Universe version badge still visible");
         }
         if (view === "journal") {
