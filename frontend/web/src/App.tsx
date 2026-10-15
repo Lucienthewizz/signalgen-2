@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useState } from "react";
 import { api, session } from "@/api/client";
 import { Brand } from "@/components/brand";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -71,6 +71,15 @@ function RoutedApp() {
   const [backendOnline, setBackendOnline] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
+
+  // Put typography on the document so portalled controls and toasts match the route.
+  useLayoutEffect(() => {
+    document.documentElement.dataset.typography =
+      route === "home" ? "landing" : "workspace";
+    return () => {
+      delete document.documentElement.dataset.typography;
+    };
+  }, [route]);
 
   useEffect(() => {
     const navigate = () => setRoute(currentRoute());

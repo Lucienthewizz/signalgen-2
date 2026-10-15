@@ -47,8 +47,12 @@ configuration. Current screenshot values are illustrative, never live-market cla
 
 Tailwind v4 is wired through `@tailwindcss/vite`. Project-owned shadcn Base UI
 primitives live in `src/components/ui`, with the `@/` alias pointing to `src/`.
-The layout, Manrope typography, green/black tokens, flat ledger panels, focus
-states, and reduced-motion behavior match the desktop application.
+The landing page retains Manrope. Other routes use self-hosted Geist for body
+text/headings, Saira Condensed for navigation/table headings, and Geist Mono for
+market figures. The document-level `data-typography` route marker also covers
+portalled controls and toasts. Embedded third-party charts keep their own fonts.
+Typography roles live in `styles/workspace-typography.css`; colors, layout, focus
+states, and reduced-motion behavior remain independent of the font selection.
 
 ## Authorization contract
 

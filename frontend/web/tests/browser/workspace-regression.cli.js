@@ -148,6 +148,17 @@ async (page) => {
         await page.goto(`http://127.0.0.1:5174/#app/${view}`);
         await page.locator(".demo-workbench").waitFor({ timeout: 10000 });
         await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
+        await page.evaluate(() => Promise.all([
+          document.fonts.load('14px "Geist Variable"'),
+          document.fonts.load('500 14px "Saira Condensed"'),
+          document.fonts.load('13px "Geist Mono Variable"'),
+        ]));
+        const typography = await page.evaluate(() => ({
+          body: getComputedStyle(document.body).fontFamily,
+          nav: getComputedStyle(document.querySelector(".nav-group button")).fontFamily,
+          loaded: document.fonts.check('14px "Geist Variable"') && document.fonts.check('500 14px "Saira Condensed"'),
+        }));
+        if (!typography.body.includes("Geist Variable") || !typography.nav.includes("Saira Condensed") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
         const close = page.getByRole("button", { name: "Close menu" });
         const bounds = await close.boundingBox();
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
@@ -181,6 +192,7 @@ async (page) => {
         if (surfaceContrast.min < 4.5) throw Error(`Shared surface text contrast below AA: ${JSON.stringify(surfaceContrast)}`);
         await page.screenshot({ path: `/private/tmp/signalgen-${view}-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
         if (view === "realtime") {
+          if (!await page.locator(".monitor-change").first().evaluate(el => getComputedStyle(el).fontFamily.includes("Geist Mono Variable") && document.fonts.check('13px "Geist Mono Variable"'))) throw Error("Market numbers must use loaded Geist Mono");
           const geometry = await page.locator(".monitor-board-grid").evaluate(el => {
             const chart = el.querySelector(".monitor-chart").getBoundingClientRect();
             const detail = el.querySelector(".monitor-stock-detail").getBoundingClientRect();
@@ -416,6 +428,9 @@ async (page) => {
     await page.goto(`http://127.0.0.1:5174/#${route}`);
     await page.locator("main").waitFor({ timeout: 10000 });
     await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
+    await page.waitForFunction(expected => document.documentElement.dataset.typography === expected, route === "home" ? "landing" : "workspace");
+    const family = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
+    if (!family.includes(route === "home" ? "Manrope Variable" : "Geist Variable")) throw Error(`Public route font mismatch: ${route} ${family}`);
     if (await page.locator(".auth-layout").count() && !await page.locator(".auth-layout").evaluate(el => getComputedStyle(el).backgroundImage.includes("gradient"))) throw Error(`Auth surface gradient missing: ${route}`);
     await page.screenshot({ path: `/private/tmp/signalgen-public-${route}.png`, animations: "disabled", timeout: 10000 });
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Public page overflow: ${route}`);
