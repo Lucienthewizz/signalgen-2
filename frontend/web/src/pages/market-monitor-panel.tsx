@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
-  Activity,
+  Building2,
+  Landmark,
+  Fuel,
+  ShoppingBag,
+  Cpu,
+  ChevronLeft,
+  ChevronRight,
   ArrowDownRight,
   ArrowUpRight,
   ExternalLink,
@@ -13,6 +19,15 @@ import { api } from "@/api/client";
 import type { StockInstrument, StockUniverse } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import { stockGroupLabel } from "@/lib/stock-catalog";
 import { Input } from "@/components/ui/input";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import {
@@ -52,6 +67,25 @@ const names: Record<string, string> = {
   ASII: "Astra International",
 };
 const defaults = ["BBCA", "BBRI", "TLKM", "BMRI", "ASII"];
+function StockMark({ ticker }: { ticker: string }) {
+  const group = stockGroupLabel({
+    symbol: `${ticker}.JK`,
+    name: ticker,
+    exchange: "XIDX",
+    currency: "IDR",
+  });
+  const Icon =
+    (
+      {
+        Banks: Landmark,
+        Energy: Fuel,
+        Consumer: ShoppingBag,
+        Technology: Cpu,
+        Property: Building2,
+      } as Record<string, typeof Building2>
+    )[group] ?? Building2;
+  return <Icon aria-hidden="true" />;
+}
 const number = (value: number) =>
   Number.isFinite(value)
     ? new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value)
@@ -78,6 +112,9 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   const [universeId, setUniverseId] = useState("watchlist");
   const [loadingUniverses, setLoadingUniverses] = useState(false);
   const [universeError, setUniverseError] = useState(false);
+  const [showCards, setShowCards] = useState(true);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const ledgerRef = useRef<HTMLElement>(null);
   const universe = universes.find((item) => item.id === universeId);
   const activeStocks = universe
     ? [
@@ -97,6 +134,8 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
     setUniverses([]);
     setCatalog([]);
     setUniverseId("watchlist");
+    setLoadingUniverses(false);
+    setUniverseError(false);
     if (!userId) return;
     setLoadingUniverses(true);
     setUniverseError(false);
@@ -224,6 +263,24 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
       .filter((row) => idxTicker(row.decision.symbol) === selected)
       .map((row) => ({ ...row, record })),
   );
+  const selectedSnapshot = snapshots.get(selected);
+  const selectedChange = openCloseChange(
+    selectedSnapshot?.latestOpen,
+    selectedSnapshot?.latestClose,
+  );
+  const selectedMovement = priceMovement(
+    selectedSnapshot?.latestOpen,
+    selectedSnapshot?.latestClose,
+  );
+  const selectedIndex = activeStocks.indexOf(selected);
+  function moveStock(offset: number) {
+    const next = activeStocks[selectedIndex + offset];
+    if (next) setSelected(next);
+  }
+  function focusSection(target: HTMLElement | null) {
+    target?.scrollIntoView({ block: "start" });
+    target?.focus({ preventScroll: true });
+  }
   return (
     <div className="market-monitor">
       <header className="monitor-lineup-heading">
@@ -267,7 +324,27 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           available. Reopen Market Monitor to retry.
         </p>
       )}
-      <nav className="monitor-strip" aria-label="Stock selection">
+      <div className="monitor-lineup-actions">
+        <span>
+          {activeStocks.length} stocks ·{" "}
+          {universe?.name ?? "Personal watchlist"}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-expanded={showCards}
+          aria-controls="monitor-stock-lineup"
+          onClick={() => setShowCards((value) => !value)}
+        >
+          {showCards ? "Hide stock cards" : "Show stock cards"}
+        </Button>
+      </div>
+      <nav
+        id="monitor-stock-lineup"
+        className="monitor-strip"
+        aria-label="Stock selection"
+        hidden={!showCards}
+      >
         {activeStocks.map((ticker) => (
           <button
             type="button"
@@ -276,7 +353,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             onClick={() => setSelected(ticker)}
           >
             <span className="monitor-stock-mark" aria-hidden="true">
-              <Activity />
+              <StockMark ticker={ticker} />
             </span>
             <strong>{ticker}</strong>
             <small>{stockName(ticker)}</small>
@@ -290,43 +367,209 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
         </p>
       )}
       {activeStocks.length > 0 && (
-        <section className="monitor-chart" aria-label={`Chart ${selected}`}>
-          <header>
-            <span className="monitor-window-dots" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </span>
-            <div className="monitor-chart__title">
-              <h3>{selected}</h3>
-              <p>{stockName(selected)}</p>
-              <Badge variant="outline">Daily · IDR</Badge>
+        <div
+          className="monitor-board"
+          ref={boardRef}
+          tabIndex={-1}
+          aria-label="Stock analysis board"
+        >
+          <div className="monitor-board-toolbar">
+            <div className="monitor-board-actions">
+              <Button size="sm" onClick={() => focusSection(boardRef.current)}>
+                Analyze stock
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => focusSection(ledgerRef.current)}
+              >
+                Compare stocks
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={
-                <a
-                  href={`https://www.tradingview.com/symbols/IDX-${selected}/`}
-                  target="_blank"
-                  rel="noreferrer"
-                />
-              }
+            <Field orientation="horizontal">
+              <FieldLabel htmlFor="monitor-active-stock">Stock</FieldLabel>
+              <Select
+                value={selected}
+                onValueChange={(value) => {
+                  if (value) setSelected(value);
+                }}
+                items={activeStocks.map((ticker) => ({
+                  value: ticker,
+                  label: ticker,
+                }))}
+              >
+                <SelectTrigger id="monitor-active-stock">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {activeStocks.map((ticker) => (
+                      <SelectItem key={ticker} value={ticker}>
+                        {ticker}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <div className="monitor-board-grid">
+            <section className="monitor-chart" aria-label={`Chart ${selected}`}>
+              <header>
+                <span className="monitor-window-dots" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <div className="monitor-chart__title">
+                  <h3>{selected}</h3>
+                  <p>{stockName(selected)}</p>
+                  <Badge variant="outline">Daily · IDR</Badge>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={
+                    <a
+                      href={`https://www.tradingview.com/symbols/IDX-${selected}/`}
+                      target="_blank"
+                      rel="noreferrer"
+                    />
+                  }
+                >
+                  TradingView
+                  <ExternalLink data-icon="inline-end" />
+                </Button>
+              </header>
+              <TradingViewChart symbol={`IDX:${selected}`} label={selected} />
+              <footer>
+                Chart by TradingView. Availability and delays follow the data
+                provider.
+              </footer>
+            </section>
+            <aside
+              className="monitor-stock-detail"
+              aria-label={`Stock details ${selected}`}
             >
-              TradingView
-              <ExternalLink data-icon="inline-end" />
-            </Button>
-          </header>
-          <TradingViewChart symbol={`IDX:${selected}`} label={selected} />
-          <footer>
-            Chart by TradingView. Availability and delays follow the data
-            provider.
-          </footer>
-        </section>
+              <div className="monitor-detail-navigation">
+                <h3>Stock details</h3>
+                <div>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label="Previous stock"
+                    disabled={selectedIndex <= 0}
+                    onClick={() => moveStock(-1)}
+                  >
+                    <ChevronLeft />
+                  </Button>
+                  <span aria-live="polite">
+                    {selectedIndex + 1} / {activeStocks.length}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label="Next stock"
+                    disabled={selectedIndex >= activeStocks.length - 1}
+                    onClick={() => moveStock(1)}
+                  >
+                    <ChevronRight />
+                  </Button>
+                </div>
+              </div>
+              <Card className="monitor-detail-card">
+                <CardHeader>
+                  <CardTitle>
+                    <h4>{selected}</h4>
+                  </CardTitle>
+                  <CardDescription>{stockName(selected)}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="monitor-detail-identity">
+                    <StockMark ticker={selected} />
+                    <span>IDX · IDR</span>
+                  </div>
+                  <div className="monitor-detail-quote">
+                    <span>Latest screening close</span>
+                    <strong>
+                      {number(selectedSnapshot?.latestClose ?? NaN)}{" "}
+                      <small>IDR</small>
+                    </strong>
+                    {selectedChange !== null && (
+                      <span
+                        className="monitor-change"
+                        data-direction={selectedMovement}
+                      >
+                        {selectedChange > 0 ? "+" : ""}
+                        {number(selectedChange)}% from open
+                      </span>
+                    )}
+                  </div>
+                  <dl className="monitor-detail-metrics">
+                    <div>
+                      <dt>Open</dt>
+                      <dd>{number(selectedSnapshot?.latestOpen ?? NaN)}</dd>
+                    </div>
+                    <div>
+                      <dt>RSI 14</dt>
+                      <dd>{number(selectedSnapshot?.features.rsi14 ?? NaN)}</dd>
+                    </div>
+                    <div>
+                      <dt>EMA 9</dt>
+                      <dd>{number(selectedSnapshot?.features.ema9 ?? NaN)}</dd>
+                    </div>
+                    <div>
+                      <dt>EMA 20</dt>
+                      <dd>{number(selectedSnapshot?.features.ema20 ?? NaN)}</dd>
+                    </div>
+                  </dl>
+                  <div className="monitor-detail-result">
+                    <span>Latest rule result</span>
+                    <Badge
+                      variant={
+                        selectedSnapshot?.decision.matched
+                          ? "secondary"
+                          : "outline"
+                      }
+                    >
+                      {selectedSnapshot
+                        ? selectedSnapshot.decision.matched
+                          ? "Matched"
+                          : "Not matched"
+                        : "Not evaluated"}
+                    </Badge>
+                    <p>
+                      {selectedSnapshot?.record.rule ??
+                        "Run the screener to add a snapshot for this stock."}
+                    </p>
+                    {selectedSnapshot && (
+                      <time dateTime={selectedSnapshot.decision.timestamp}>
+                        {date(selectedSnapshot.decision.timestamp)}
+                      </time>
+                    )}
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <p>Screening snapshot, not a live quote.</p>
+                </CardFooter>
+              </Card>
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<a href="#app/analysis" />}
+              >
+                Open screener
+                <ExternalLink data-icon="inline-end" />
+              </Button>
+            </aside>
+          </div>
+        </div>
       )}
       <section
         className="monitor-ledger"
+        ref={ledgerRef}
+        tabIndex={-1}
         aria-label="Watchlist and screening results"
       >
         <header>
@@ -449,6 +692,9 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                   data-state={selected === ticker ? "selected" : undefined}
                 >
                   <TableCell data-label="Stock">
+                    <span className="monitor-table-mark">
+                      <StockMark ticker={ticker} />
+                    </span>
                     <Button
                       variant="ghost"
                       size="sm"

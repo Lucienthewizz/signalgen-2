@@ -158,7 +158,12 @@ Market Monitor loads saved universes and issuer names from the existing API. The
 first nonempty universe opens by default; choosing another universe replaces both
 the selectable stock cards and table without modifying the saved universe. A card
 selects the TradingView symbol and highlights the corresponding table row. The
-Mac-style chart frame remains above the results table. Personal watchlist mode
+Mac-style chart frame remains above the results table, beside a stock detail card
+on wide screens. The detail card uses actual screening snapshots for open/close,
+EMA 9/20, RSI 14, rule result, and data time. Sector icons represent curated groups,
+not issuer logos. Hide/show cards, stock selection, previous/next navigation, and
+analyze/compare focus controls share the same selection without writing a universe.
+Personal watchlist mode
 retains its separate add/remove workflow, including when universe loading fails.
 
 Table values remain screening snapshots, not live TradingView quotes. Missing

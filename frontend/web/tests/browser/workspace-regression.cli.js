@@ -83,6 +83,18 @@ async (page) => {
   await page.getByLabel("Stock universe", { exact: true }).waitFor();
   await page.waitForFunction(() => document.querySelector("#monitor-universe")?.textContent.includes("Bank pilihan"));
   if (await page.locator(".monitor-strip button").count() !== 2) throw Error("Monitor ignored saved universe");
+  await page.getByRole("button", { name: "Hide stock cards", exact: true }).click();
+  if (!await page.locator(".monitor-strip").isHidden()) throw Error("Hide cards did not hide the lineup");
+  await page.getByRole("button", { name: "Show stock cards", exact: true }).click();
+  if (!await page.getByRole("button", { name: "Previous stock", exact: true }).isDisabled()) throw Error("Previous stock boundary must be disabled");
+  await page.getByRole("button", { name: "Next stock", exact: true }).click();
+  if (await page.locator(".monitor-detail-card h4").innerText() !== "BBRI") throw Error("Next stock did not update detail card");
+  if (!await page.getByRole("button", { name: "Next stock", exact: true }).isDisabled()) throw Error("Next stock boundary must be disabled");
+  await page.getByRole("button", { name: "Previous stock", exact: true }).click();
+  await page.getByRole("button", { name: "Compare stocks", exact: true }).click();
+  if (!await page.locator(".monitor-ledger").evaluate(el => el === document.activeElement)) throw Error("Compare action did not focus the table");
+  await page.getByRole("button", { name: "Analyze stock", exact: true }).click();
+  if (!await page.locator(".monitor-board").evaluate(el => el === document.activeElement)) throw Error("Analyze action did not focus the board");
   await page.locator(".monitor-strip button").filter({ hasText: "BBRI" }).click();
   if (await page.locator(".monitor-chart h3").innerText() !== "BBRI") throw Error("Stock card did not switch chart");
   if (!await page.locator('.monitor-ledger tr[data-state="selected"]').innerText().then(text => text.includes("BBRI"))) throw Error("Stock card did not select table row");
@@ -112,6 +124,13 @@ async (page) => {
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
         await page.screenshot({ path: `/private/tmp/signalgen-${view}-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
         if (view === "realtime") {
+          const geometry = await page.locator(".monitor-board-grid").evaluate(el => {
+            const chart = el.querySelector(".monitor-chart").getBoundingClientRect();
+            const detail = el.querySelector(".monitor-stock-detail").getBoundingClientRect();
+            return { sideBySide: detail.x >= chart.right, below: detail.top >= chart.bottom, topOffset: Math.abs(chart.top - detail.top) };
+          });
+          if (width === 1440 && (!geometry.sideBySide || geometry.topOffset > 1)) throw Error("Chart and stock card are not aligned side by side");
+          if (width === 390 && !geometry.below) throw Error("Stock card must stack below chart on mobile");
           await page.locator(".monitor-ledger").screenshot({ path: `/private/tmp/signalgen-monitor-table-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           await page.locator(".market-monitor").screenshot({ path: `/private/tmp/signalgen-monitor-lineup-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
         }
