@@ -121,6 +121,10 @@ are left untouched, and sample performance/review content is labelled as illustr
 dashboard content alignment, primary Refresh styling, and journal form/non-persistence
 using synthetic API/account fixtures only.
 
+The dashboard's launch area shares a rounded, theme-aware charcoal-to-green
+gradient frame. Its content, navigation, account data, and actions are unchanged;
+the quick-access inset stacks with aligned gutters on narrower screens.
+
 ## Stock universe catalog and English interface
 
 The stock universe editor opens with a compact group overview inspired by

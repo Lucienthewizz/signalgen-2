@@ -164,6 +164,9 @@ async (page) => {
         }
         if (view === "overview") {
           await page.getByRole("heading", { name: "Follow the market", exact: true }).waitFor({ timeout: 5000 });
+          const box = await page.locator(".overview-launch").evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), background: getComputedStyle(el).backgroundImage }));
+          if (box.radius < 24 || !box.background.includes("linear-gradient")) throw Error("Dashboard rounded gradient box missing");
+          await page.locator(".overview-launch").screenshot({ path: `/private/tmp/signalgen-dashboard-gradient-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           const alignment = await page.evaluate(() => {
             const title = document.querySelector(".overview-next h3").getBoundingClientRect();
             const selection = document.querySelector(".overview-selection").getBoundingClientRect();
