@@ -918,11 +918,16 @@ export function WorkspaceScreenerPanel({
                                       ? "Terpenuhi"
                                       : "Belum terpenuhi"}
                                   </Badge>
-                                  <span>
-                                    {evidence.label}
+                                  <span className="stock-detail__condition">
+                                    <strong>{evidence.label}</strong>
                                     <small>
-                                      {evidence.left.toFixed(2)} dibanding{" "}
-                                      {evidence.right.toFixed(2)}
+                                      {new Intl.NumberFormat("id-ID", {
+                                        maximumFractionDigits: 2,
+                                      }).format(evidence.left)}{" "}
+                                      dibanding{" "}
+                                      {new Intl.NumberFormat("id-ID", {
+                                        maximumFractionDigits: 2,
+                                      }).format(evidence.right)}
                                     </small>
                                   </span>
                                 </>
@@ -938,13 +943,9 @@ export function WorkspaceScreenerPanel({
                     <p>
                       {historicalRun
                         ? "Definisi rule pada saat screening tidak tersedia. Hasil lama tidak dihitung ulang dengan rule terbaru."
-                        : "Definisi rule sistem bersifat privat. Keputusan dan alasan berasal dari server."}
+                        : "Detail kondisi rule sistem tidak ditampilkan."}
                     </p>
                   )}
-                  <p>
-                    Perbandingan angka dihitung di browser; keputusan akhir
-                    tetap dari server dan dapat memperhitungkan cooldown.
-                  </p>
                 </div>
                 <div className="stock-detail__chart">
                   <TradingViewChart
@@ -1130,51 +1131,56 @@ export function WorkspaceScreenerPanel({
                 </TableBody>
               </Table>
             </div>
-            <details className="screener-evidence">
-              <summary>Informasi teknis data</summary>
-              <footer className="dataset-provenance">
-                <div>
-                  <span>Provider</span>
-                  <strong>Yahoo Finance</strong>
-                </div>
-                <div>
-                  <span>Dataset</span>
-                  <strong>{run.manifest.schema_version}</strong>
-                </div>
-                <div>
-                  <span>Range</span>
-                  <strong>
-                    {run.manifest.available_range.from} —{" "}
-                    {run.manifest.available_range.to}
-                  </strong>
-                </div>
-                <div>
-                  <span>Quality</span>
-                  <strong>{run.manifest.quality.status}</strong>
-                </div>
-                <div>
-                  <span>Checksum</span>
-                  <code>{run.manifest.checksum.slice(0, 12)}…</code>
-                </div>
-                {run.metrics && (
-                  <>
-                    <div>
-                      <span>Komputasi client</span>
-                      <strong>{run.metrics.feature_ms.toFixed(1)} ms</strong>
-                    </div>
-                    <div>
-                      <span>Kandidat / koneksi</span>
-                      <strong>
-                        {run.metrics.candidates} / {run.metrics.sockets}
-                      </strong>
-                    </div>
-                  </>
-                )}
-              </footer>
-            </details>
           </>
         )}
       </section>
+      {run && (
+        <section
+          className="screener-technical"
+          aria-labelledby="screener-technical-title"
+        >
+          <h4 id="screener-technical-title">Informasi teknis data</h4>
+          <footer className="dataset-provenance">
+            <div>
+              <span>Provider</span>
+              <strong>Yahoo Finance</strong>
+            </div>
+            <div>
+              <span>Dataset</span>
+              <strong>{run.manifest.schema_version}</strong>
+            </div>
+            <div>
+              <span>Range</span>
+              <strong>
+                {run.manifest.available_range.from} —{" "}
+                {run.manifest.available_range.to}
+              </strong>
+            </div>
+            <div>
+              <span>Quality</span>
+              <strong>{run.manifest.quality.status}</strong>
+            </div>
+            <div>
+              <span>Checksum</span>
+              <code>{run.manifest.checksum.slice(0, 12)}…</code>
+            </div>
+            {run.metrics && (
+              <>
+                <div>
+                  <span>Komputasi client</span>
+                  <strong>{run.metrics.feature_ms.toFixed(1)} ms</strong>
+                </div>
+                <div>
+                  <span>Kandidat / koneksi</span>
+                  <strong>
+                    {run.metrics.candidates} / {run.metrics.sockets}
+                  </strong>
+                </div>
+              </>
+            )}
+          </footer>
+        </section>
+      )}
     </div>
   );
 }

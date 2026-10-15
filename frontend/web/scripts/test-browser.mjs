@@ -21,6 +21,8 @@ function cli(args) {
 try {
   cli(["open", "http://127.0.0.1:5174/#app/analysis", "--config", config]);
   cli(["run-code", "--filename", "tests/browser/workspace-regression.cli.js"]);
+  const result = cli(["eval", "() => document.body.getAttribute('data-signalgen-browser-tests')"]);
+  if (!/### Result\s+"complete"/.test(result)) throw Error(`Browser suite did not reach its final assertion:\n${result}`);
   console.log("PASS: 10 workspace routes × 2 viewport sizes × 2 themes; public/account routes; history/evidence/CSV; monitor sorting; sidebar navigation; expired-session cleanup. API/account fixtures only.");
 } finally {
   try { cli(["close"]); } catch { /* Preserve the original test failure. */ }

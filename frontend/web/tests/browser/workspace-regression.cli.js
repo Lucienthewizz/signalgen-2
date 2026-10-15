@@ -16,6 +16,7 @@ async (page) => {
   const subscription = { plan_code: "pro", plan_name: "Pro", status: "active", features: ["screener", "backtest"], source: "manual", current_period_start: now, current_period_end: new Date(Date.now()+30*86400000).toISOString(), cancel_at_period_end: false };
   let unauthorized = false;
   let systemRule = false;
+  let failUniverseDelete = false;
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -29,6 +30,7 @@ async (page) => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort();
     const p = url.pathname;
+    if (failUniverseDelete && p.startsWith("/api/v1/stock-universes/") && route.request().method() === "DELETE") return route.fulfill({ status: 500, json: { error: { code: "TEST_FAILURE", message: "Penghapusan fixture gagal." } } });
     if (p !== "/api" && !p.startsWith("/api/") && p !== "/ready") return route.continue();
     if (unauthorized && p === "/api/v1/account/me") return route.fulfill({ status: 401, json: { error: { code: "UNAUTHORIZED", message: "Fixture session expired" } } });
     let payload;
@@ -100,6 +102,23 @@ async (page) => {
             return Math.abs(range.getBoundingClientRect().x - label.getBoundingClientRect().x);
           });
           if (offset > 2) throw Error(`Misaligned screener explanation: ${offset}px`);
+          if (await page.locator(".screener-results .screener-technical").count()) throw Error("Technical card still nested in results");
+          const technical = page.locator(".screener-workspace > .screener-technical");
+          await technical.getByRole("heading", { name: "Informasi teknis data", exact: true }).waitFor({ timeout: 5000 });
+          if (await technical.locator("summary").count()) throw Error("Technical card still collapsible");
+          const layout = await technical.evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), text: parseFloat(getComputedStyle(el.querySelector(".dataset-provenance strong")).fontSize), left: el.getBoundingClientRect().left - document.querySelector(".screener-results").getBoundingClientRect().left }));
+          if (layout.radius < 12 || layout.text > 14 || Math.abs(layout.left) > 1) throw Error(`Technical card layout incorrect: ${JSON.stringify(layout)}`);
+          await technical.screenshot({ path: `/private/tmp/signalgen-technical-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+          await page.getByRole("button", { name: "BBCA", exact: true }).click({ timeout: 5000 });
+          const detail = page.locator(".stock-detail");
+          await detail.getByRole("heading", { name: /Bukti kondisi/ }).waitFor({ timeout: 5000 });
+          if (await detail.locator(".stock-detail__values > div").count() !== 5) throw Error("Indicator cards missing");
+          if ((await detail.innerText()).includes("Perbandingan angka dihitung di browser")) throw Error("Server calculation explanation remains");
+          const card = await detail.locator(".stock-detail__evidence li").first().evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), padding: parseFloat(getComputedStyle(el).paddingLeft) }));
+          if (card.radius < 12 || card.padding < 16) throw Error("Condition card styling missing");
+          await detail.screenshot({ path: `/private/tmp/signalgen-stock-detail-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+          if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error("Stock detail overflows page");
+          await page.getByRole("button", { name: "Tutup detail", exact: true }).click({ timeout: 5000 });
         }
         if (view === "overview") {
           await page.getByRole("heading", { name: "Pantau pasar", exact: true }).waitFor({ timeout: 5000 });
@@ -123,6 +142,13 @@ async (page) => {
           if (offset > 1) throw Error(`Rule header/form gutters differ: ${offset}px`);
         }
         if (view === "journal") {
+          if (await page.getByText("Static preview", { exact: true }).count()) throw Error("Journal preview label remains");
+          const controlAlignment = await page.locator(".journal-toolbar").evaluate(el => {
+            const controls = [...el.querySelectorAll("select, .journal-date, button")].map(control => control.getBoundingClientRect());
+            return { sizes: controls.map(c => c.height), heights: Math.max(...controls.map(c => c.height)) - Math.min(...controls.map(c => c.height)), bottoms: Math.max(...controls.map(c => c.bottom)) - Math.min(...controls.map(c => c.bottom)) };
+          });
+          if (controlAlignment.heights > 2 || (width >= 1440 && controlAlignment.bottoms > 2)) throw Error(`Journal controls misaligned: ${JSON.stringify(controlAlignment)}`);
+          await page.locator(".journal-toolbar").screenshot({ path: `/private/tmp/signalgen-journal-toolbar-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           const review = page.locator(".journal-detail");
           await review.screenshot({ path: `/private/tmp/signalgen-journal-review-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           if (await review.locator("dt").allTextContents().then(labels => labels.join(",")) !== "Rule,Waktu masuk,Waktu keluar") throw Error("Journal review metadata not separated");
@@ -143,6 +169,7 @@ async (page) => {
           if (offset > 2) throw Error(`Misaligned monitor explanation: ${offset}px`);
         }
         if (await page.getByText("This page could not be loaded", { exact: false }).count()) throw Error(`Route boundary: ${view}`);
+        if (await page.getByText("Tersimpan di akun", { exact: true }).count()) throw Error("Saved-account status still visible");
       }
       await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
     }
@@ -155,6 +182,31 @@ async (page) => {
   await page.goto("http://127.0.0.1:5174/#account");
   await page.locator("main").waitFor({ timeout: 10000 });
   await page.screenshot({ path: "/private/tmp/signalgen-account.png", animations: "disabled", timeout: 10000 });
+  await page.goto("http://127.0.0.1:5174/#app/universes");
+  await page.evaluate(() => { window.confirm = () => true; });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (let theme = 0; theme < 2; theme++) {
+      for (const failure of [false, true]) {
+        await page.mouse.move(1, 900);
+        failUniverseDelete = failure;
+        await page.getByRole("button", { name: "Hapus Bank pilihan", exact: true }).click({ timeout: 5000 });
+        const toast = page.locator(`.notification-toast[data-type=${failure ? "error" : "success"}]`).last();
+        await toast.waitFor({ state: "visible", timeout: 5000 });
+        await toast.hover({ timeout: 5000 });
+        const bounds = await page.locator(".notification-viewport").boundingBox();
+        if (!bounds || bounds.y > 24 || Math.abs(width - bounds.x - bounds.width - 16) > 2) throw Error("Notification not top-right");
+        await toast.screenshot({ path: `/private/tmp/signalgen-toast-${width}-${theme}-${failure}.png`, animations: "disabled", timeout: 10000 });
+        // Base UI announces the toast through its live region and hides the
+        // visual copy from AT until the viewport is keyboard-focused.
+        const closeToast = toast.getByRole("button", { name: "Tutup notifikasi", exact: true, includeHidden: true });
+        await closeToast.click({ timeout: 5000 });
+        await toast.waitFor({ state: "detached", timeout: 5000 });
+      }
+      await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
+    }
+  }
+  failUniverseDelete = false;
   systemRule = true;
   await page.goto("http://127.0.0.1:5174/#app/analysis");
   await page.getByText("Kondisi rule sistem diperiksa oleh server.", { exact: true }).waitFor({ timeout: 10000 });
@@ -180,6 +232,17 @@ async (page) => {
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     for (let theme = 0; theme < 2; theme++) {
+      const question = page.getByRole("button", { name: "Apa yang terjadi jika paket berubah?", exact: true });
+      if (await question.getAttribute("aria-expanded") !== "false") throw Error("Package FAQ should start collapsed");
+      await question.focus();
+      const type = await question.evaluate(el => ({ tracking: parseFloat(getComputedStyle(el).letterSpacing) || 0, weight: Number(getComputedStyle(el).fontWeight), shadow: getComputedStyle(el).boxShadow, headerMargin: getComputedStyle(el.parentElement).marginBottom }));
+      if (type.tracking !== 0 || type.weight > 600 || type.shadow !== "none" || type.headerMargin !== "0px") throw Error(`Package FAQ inherited display styling: ${JSON.stringify(type)}`);
+      await page.locator(".subscription-faq").screenshot({ path: `/private/tmp/signalgen-package-faq-closed-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+      await question.click({ timeout: 5000 });
+      await page.locator(".subscription-faq [data-slot=accordion-content]").waitFor({ state: "visible", timeout: 5000 });
+      await page.locator(".subscription-faq").screenshot({ path: `/private/tmp/signalgen-package-faq-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+      await question.click({ timeout: 5000 });
+      if (await page.getByText(/Analyst dan Pro memakai fitur screening/).count()) throw Error("Removed package explanation remains");
       await page.locator(".subscription-current").screenshot({ path: `/private/tmp/signalgen-access-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
       if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error("Subscription overflow");
       const inset = await page.locator(".subscription-current").evaluate(el => {
@@ -202,4 +265,5 @@ async (page) => {
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Public page overflow: ${route}`);
   }
   if (errors.length) throw Error(errors.join("; "));
+  await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));
 }

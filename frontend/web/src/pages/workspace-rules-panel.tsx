@@ -15,6 +15,7 @@ import {
 import { api, ApiError } from "@/api/client";
 import { ResourceQuota } from "@/components/resource-quota";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useActionNotifications } from "@/components/ui/toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -99,6 +100,7 @@ export function ServerRulesPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  useActionNotifications(notice, error);
   const [draftOwner, setDraftOwner] = useState<string | undefined>();
   const [pendingDraft, setPendingDraft] = useState<RuleDraft | null>(null);
   const [draftStorageFailed, setDraftStorageFailed] = useState(false);
@@ -255,6 +257,7 @@ export function ServerRulesPanel({
   async function remove(rule: RuleResource) {
     if (!window.confirm(`Hapus rule “${rule.name}”?`)) return;
     setError(null);
+    setNotice(null);
     const owner = userId;
     try {
       await api.deleteRule(rule.id, rule.version);
@@ -648,13 +651,6 @@ export function ServerRulesPanel({
               </div>
             )}
           </div>
-        )}
-        {notice && (
-          <Alert>
-            <Save />
-            <AlertTitle>Rules updated</AlertTitle>
-            <AlertDescription>{notice}</AlertDescription>
-          </Alert>
         )}
       </section>
     </div>
