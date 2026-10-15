@@ -1803,11 +1803,73 @@ function AccessPanel({
   const [account, setAccount] = useState<AccountState | null>(null);
   const [devices, setDevices] = useState<AccountDevice[]>([]);
   const [sessions, setSessions] = useState<AccountSession[]>([]);
+  const [hiddenHistory, setHiddenHistory] = useState<{
+    owner: string;
+    ids: string[];
+  }>({ owner: "", ids: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deviceLabel, setDeviceLabel] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const owner = account?.user.id ?? "";
+    let ids: string[] = [];
+    if (owner) {
+      try {
+        const value: unknown = JSON.parse(
+          localStorage.getItem(
+            `signalgen:hidden-session-history:v1:${owner}`,
+          ) ?? "[]",
+        );
+        if (Array.isArray(value))
+          ids = [
+            ...new Set(
+              value.filter(
+                (id): id is string =>
+                  typeof id === "string" && id.length > 0 && id.length <= 128,
+              ),
+            ),
+          ].slice(0, 1000);
+      } catch {
+        /* Unavailable or malformed preferences do not hide server records. */
+      }
+    }
+    setHiddenHistory({ owner, ids });
+  }, [account?.user.id]);
+  const hiddenIds =
+    hiddenHistory.owner === account?.user.id ? hiddenHistory.ids : [];
+  const visibleSessions = sessions.filter(
+    (item) =>
+      item.current || item.status === "active" || !hiddenIds.includes(item.id),
+  );
+  const endedSessions = visibleSessions.filter(
+    (item) => !item.current && item.status !== "active",
+  );
+  const hiddenCount = sessions.length - visibleSessions.length;
+  function updateHistoryVisibility(ids: string[]) {
+    if (!account) return;
+    try {
+      const next = [...new Set(ids)].slice(-1000);
+      localStorage.setItem(
+        `signalgen:hidden-session-history:v1:${account.user.id}`,
+        JSON.stringify(next),
+      );
+      setHiddenHistory({ owner: account.user.id, ids: next });
+      setError(null);
+    } catch {
+      setError(
+        "Session history could not be hidden. Allow browser storage and try again.",
+      );
+    }
+  }
+  function hideSessionHistory(id?: string) {
+    const removable = endedSessions
+      .filter((item) => !id || item.id === id)
+      .map((item) => item.id);
+    updateHistoryVisibility([...hiddenIds, ...removable]);
+  }
 
   async function loadAccess() {
     if (!authenticated || !backendOnline) return;
@@ -2074,11 +2136,37 @@ function AccessPanel({
         <div className="panel-heading">
           <div>
             <span>Web sessions</span>
-            <h3>Active sessions</h3>
+            <h3>Session history</h3>
           </div>
-          <span className="muted-meta">{sessions.length} sessions</span>
+          <div className="session-history-actions">
+            <span className="muted-meta" role="status">
+              {visibleSessions.length} sessions
+            </span>
+            {hiddenCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateHistoryVisibility([])}
+              >
+                Restore history
+              </Button>
+            )}
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={loading || savingId !== null || !endedSessions.length}
+              onClick={() => hideSessionHistory()}
+            >
+              <Trash2 data-icon="inline-start" />
+              Delete history
+            </Button>
+          </div>
         </div>
-        {sessions.length === 0 ? (
+        <p className="session-history-note">
+          Delete hides ended sessions on this device only. Active sessions and
+          server records are kept.
+        </p>
+        {visibleSessions.length === 0 ? (
           <div className="device-empty">
             <KeyRound />
             <strong>No sessions to show</strong>
@@ -2086,7 +2174,7 @@ function AccessPanel({
           </div>
         ) : (
           <div className="account-session-ledger">
-            {sessions.map((item) => (
+            {visibleSessions.map((item) => (
               <article key={item.id}>
                 <div>
                   <strong>{item.label}</strong>
@@ -2107,7 +2195,18 @@ function AccessPanel({
                     End session
                   </Button>
                 ) : (
-                  <Badge variant="secondary">{item.status}</Badge>
+                  <div className="session-history-row-actions">
+                    <Badge variant="secondary">{item.status}</Badge>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      aria-label={`Delete history for ${item.label}`}
+                      onClick={() => hideSessionHistory(item.id)}
+                    >
+                      <Trash2 data-icon="inline-start" />
+                      Delete
+                    </Button>
+                  </div>
                 )}
               </article>
             ))}

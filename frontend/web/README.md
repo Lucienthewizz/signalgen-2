@@ -133,6 +133,12 @@ and become solid surfaces in forced-colors mode. Browser tests check every
 workspace route in both themes and two viewport sizes, including shared text
 contrast against the surface stops.
 
+Session history has display-only Delete/Restore controls. Only ended, non-current
+sessions can be hidden. The preference is scoped to the account in this browser's
+local storage; active/current sessions always remain visible even if their IDs
+appear in that preference. No server session or audit record is deleted/revoked
+by these controls. The separate End session action retains its existing behavior.
+
 ## Stock universe catalog and English interface
 
 The stock universe editor opens with a compact group overview inspired by

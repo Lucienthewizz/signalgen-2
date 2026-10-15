@@ -462,6 +462,18 @@
 .account-session-ledger article:first-child {
   border-top: 0;
 }
+.account-session-ledger article { grid-template-columns: minmax(0, 1fr) auto; }
+.account-sessions-panel .session-history-actions,
+.account-session-ledger .session-history-row-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.session-history-note { margin: 0; padding: 16px 22px; color: var(--muted); font-size: 13px; line-height: 1.6; border-bottom: 1px solid var(--line-soft); }
+@media (max-width: 600px) {
+  .account-session-ledger article { grid-template-columns: minmax(0, 1fr); }
+}
 
 .resource-rows article.is-active {
   background: var(--accent-surface);

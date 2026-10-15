@@ -18,6 +18,12 @@ async (page) => {
   let systemRule = false;
   let failUniverseDelete = false;
   let universeWrite = null;
+  let sessionMutations = 0;
+  const sessionFixtures = [
+    { id: "fixture-current", label: "Current browser", status: "active", current: true, last_seen_at: now },
+    { id: "fixture-active", label: "Other active browser", status: "active", current: false, last_seen_at: now },
+    { id: "fixture-ended", label: "Ended browser", status: "expired", current: false, last_seen_at: now },
+  ];
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -31,6 +37,7 @@ async (page) => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort();
     const p = url.pathname;
+    if (p.startsWith("/api/v1/account/sessions/") && route.request().method() !== "GET") sessionMutations++;
     if (p.startsWith("/api/v1/stock-universes") && ["POST", "PATCH"].includes(route.request().method())) {
       universeWrite = { method: route.request().method(), body: route.request().postDataJSON() };
       return route.fulfill({ json: { ...universe, ...universeWrite.body } });
@@ -42,6 +49,7 @@ async (page) => {
     if (p === "/api" || p === "/ready") payload = { status: "ready", name: "Fixture API", version: "test" };
     else if (p === "/api/auth/me") payload = user;
     else if (p === "/api/v1/account/me") payload = { user, features: ["screener", "backtest"], session: { id: "fixture", expires_at: subscription.current_period_end }, device: { installation_id: "fixture", label: "Fixture browser", current: true }, capabilities_version: "fixture" };
+    else if (p === "/api/v1/account/sessions") payload = { items: sessionFixtures };
     else if (p === "/api/v1/rules") payload = { items: [systemRule ? { ...rule, name: "Default Scalping", owner_type: "system", definition: undefined } : rule], next_cursor: null };
     else if (p === "/api/v1/stock-universes") payload = { items: [universe] };
     else if (p === "/api/v1/stocks") payload = { items: universe.symbols.map(symbol => ({ symbol, name: symbol })) };
@@ -111,6 +119,25 @@ async (page) => {
   if (await page.locator(".monitor-chart h3").innerText() !== "BBCA") throw Error("Sort changed selected chart");
   if (!((await page.locator(".monitor-change").first().innerText()).includes("%"))) throw Error("Missing open-close percentage");
   await page.unroute("**/api/v1/stock-universes");
+  await page.goto("http://127.0.0.1:5174/#app/access");
+  const ended = page.locator(".account-session-ledger article").filter({ hasText: "Ended browser" });
+  await ended.waitFor();
+  await page.getByRole("button", { name: "Delete history for Ended browser", exact: true }).click();
+  await ended.waitFor({ state: "hidden" });
+  await page.reload();
+  await page.getByRole("button", { name: "Restore history", exact: true }).waitFor();
+  if (await ended.count()) throw Error("Hidden history did not persist on this device");
+  for (const name of ["Current browser", "Other active browser"]) {
+    const active = page.locator(".account-session-ledger article").filter({ hasText: name });
+    if (!await active.isVisible() || await active.getByRole("button", { name: /^Delete/ }).count()) throw Error("Active session was hidden or made deletable");
+  }
+  if (!await page.getByRole("button", { name: "Delete history", exact: true }).isDisabled()) throw Error("Delete history should disable when no ended records remain");
+  await page.getByRole("button", { name: "Restore history", exact: true }).click();
+  await ended.waitFor();
+  await page.getByRole("button", { name: "Delete history", exact: true }).click();
+  await ended.waitFor({ state: "hidden" });
+  if (sessionMutations) throw Error("Display-only history deletion mutated backend sessions");
+  await page.getByRole("button", { name: "Restore history", exact: true }).click();
   const routes = ["overview", "analysis", "rules", "universes", "journal", "realtime", "news", "access", "subscription", "operator"];
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
