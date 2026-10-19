@@ -367,6 +367,62 @@ test("hybrid screener calls use the implemented Go API contract", async () => {
   });
 });
 
+test("dataset manifest URL matches both runtime OpenAPI and registered Go route", async () => {
+  // Read the real backend contract instead of duplicating a permissive mock URL.
+  const openapi = fs.readFileSync(
+    path.join(__dirname, "../../../backend/openapi.yaml"),
+    "utf8",
+  );
+  const route = fs.readFileSync(
+    path.join(__dirname, "../../../backend/internal/dataset/routes.go"),
+    "utf8",
+  );
+  const template = openapi.match(
+    /^  (\/api\/v1\/datasets\/\{id\}\/manifest):$/m,
+  )?.[1];
+  assert.ok(template, "OpenAPI must publish the manifest route");
+  assert.ok(route.includes(`"${template.replace("{id}", ":id")}"`));
+  const datasetId = "snapshot/with space";
+  const pathname = template.replace("{id}", encodeURIComponent(datasetId));
+  const c = client((url) =>
+    new URL(url).pathname === pathname
+      ? response({ dataset_id: datasetId, version: "v1" })
+      : response({ error: { code: "RESOURCE_NOT_FOUND" } }, 404),
+  );
+  c.session.setToken("synthetic-access");
+  c.session.setAppSession("synthetic-app-session");
+  const manifest = await c.api.getDatasetManifest(datasetId);
+  assert.equal(manifest.dataset_id, datasetId);
+  assert.equal(c.calls.length, 1);
+  assert.equal(c.calls[0].url, `https://api.example.test${pathname}`);
+  assert.equal(
+    c.calls[0].init.headers.get("Authorization"),
+    "Bearer synthetic-access",
+  );
+  assert.equal(
+    c.calls[0].init.headers.get("X-App-Session"),
+    "synthetic-app-session",
+  );
+});
+
+test("missing dataset manifest fails without logging out or silently accepting content", async () => {
+  const c = client(() =>
+    response(
+      { error: { code: "RESOURCE_NOT_FOUND", message: "Dataset not found" } },
+      404,
+    ),
+  );
+  c.session.setToken("synthetic-access");
+  c.session.setAppSession("synthetic-app-session");
+  await assert.rejects(
+    c.api.getDatasetManifest("missing"),
+    (error) => error.status === 404 && error.code === "RESOURCE_NOT_FOUND",
+  );
+  assert.equal(c.calls.length, 1);
+  assert.equal(c.session.getToken(), "synthetic-access");
+  assert.equal(c.session.getAppSession(), "synthetic-app-session");
+});
+
 test("raw snapshot reads preserve exact bytes and private headers across read-only session renewal", async () => {
   const text = '{ "series": [], "value": 1.00 }\n';
   let first = true;

@@ -60,14 +60,20 @@ async (page) => {
         json: { id: owner, email: "fixture@example.test" },
       });
     const count = Number(pathname.match(/fixture-(\d+)/)?.[1]);
-    if (pathname.endsWith("/content")) {
+    if (
+      fixtures[count] &&
+      pathname === `/api/v1/datasets/fixture-${count}/content`
+    ) {
       contentRequests++;
       return route.fulfill({
         body: fixtures[count].text,
         contentType: "application/json",
       });
     }
-    if (pathname.includes("/datasets/")) {
+    if (
+      fixtures[count] &&
+      pathname === `/api/v1/datasets/fixture-${count}/manifest`
+    ) {
       manifestRequests++;
       return route.fulfill(
         denied
@@ -75,6 +81,11 @@ async (page) => {
           : { json: fixtures[count].manifest },
       );
     }
+    if (pathname.includes("/datasets/"))
+      return route.fulfill({
+        status: 404,
+        json: { error: { code: "RESOURCE_NOT_FOUND" } },
+      });
     return route.fulfill({ json: {} });
   });
   await page.goto(

@@ -101,3 +101,25 @@ Keamanan di luar scope: advisor Supabase masih melaporkan leaked-password protec
 Auth nonaktif ([panduan](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)).
 Tidak diaktifkan otomatis oleh fitur pasar AS. Arsip `legacy` tetap deny-by-default
 melalui RLS tanpa policy; tidak dibuka sebagai efek samping.
+
+## Uji akun asli setelah perbaikan manifest (19 Oktober 2026)
+
+Frontend kini membaca `GET /api/v1/datasets/{id}/manifest`, sesuai OpenAPI dan
+route Go. URL tanpa `/manifest` bukan alias yang tersedia. Tes kontrak membaca
+OpenAPI dan pendaftaran route Go; mock browser mengembalikan 404 untuk URL salah,
+bukan menganggap setiap URL dataset sebagai manifest.
+
+Uji melalui akun asli dan Yahoo Finance, bukan mock API: universe uji baru berisi
+AAPL/MSFT/BRK-B berhasil screening (243 kandidat, satu koneksi private scoring).
+Universe uji yang sama kemudian diperluas menjadi 10: AAPL, MSFT, BRK-B, NVDA,
+AMZN, META, TSLA, GOOG, GOOGL dan COST (810 kandidat, satu koneksi). Pilihan ke-11
+nonaktif. Universe/rule lama tidak diubah, entitlement tidak ditambahkan.
+
+Kedua run memakai snapshot harian 27 Mei–16 Oktober 2026, USD, kualitas
+`complete`, dengan rule yang sudah ada `RSI14 < 30`. Semua keputusan terakhir
+`Tidak memenuhi` konsisten dengan nilai RSI sampel, bukan error screening
+(misalnya NVDA 37,52 tidak kurang dari 30). Ini bukan harga real-time, rekomendasi
+investasi, benchmark kapasitas, atau bukti semua 5.600 ticker sudah diuji OHLCV.
+
+Regresi cache IndexedDB/AES-GCM dan browser AS juga lulus pada konteks browser
+uji yang terpisah; tes sintetis tidak menggantikan verifikasi akun asli di atas.

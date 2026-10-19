@@ -588,7 +588,7 @@ export const api = {
     ),
   getDatasetManifest: (datasetId: string) =>
     request<DatasetManifest>(
-      `/api/v1/datasets/${encodeURIComponent(datasetId)}`,
+      `/api/v1/datasets/${encodeURIComponent(datasetId)}/manifest`,
     ),
   getDatasetContentText: (datasetId: string) =>
     request<string>(

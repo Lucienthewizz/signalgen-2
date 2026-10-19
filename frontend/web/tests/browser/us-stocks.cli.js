@@ -182,11 +182,15 @@ async (page) => {
     }
     if (p.startsWith("/api/v1/datasets/")) {
       const f = fixtures.get(p.split("/")[4]);
-      return route.fulfill(
-        p.endsWith("/content")
-          ? { body: f.text, contentType: "application/json" }
-          : { json: f.manifest },
-      );
+      if (f && p === `/api/v1/datasets/${f.manifest.dataset_id}/content`)
+        return route.fulfill({ body: f.text, contentType: "application/json" });
+      if (f && p === `/api/v1/datasets/${f.manifest.dataset_id}/manifest`)
+        return route.fulfill({ json: f.manifest });
+      // The real backend has no GET /datasets/{id} alias. Never mask a typo.
+      return route.fulfill({
+        status: 404,
+        json: { error: { code: "RESOURCE_NOT_FOUND" } },
+      });
     }
     if (p === "/api/v1/compute-grants")
       return route.fulfill({ json: { id: "grant-us" } });
