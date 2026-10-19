@@ -3,10 +3,10 @@ async (page) => {
   const user = { id: "11111111-1111-4111-8111-111111111111", full_name: "Akun pengujian", email: "fixture@example.test", role: "operator", status: "active" };
   const now = new Date().toISOString();
   const day = now.slice(0, 10);
-  const definition = { name: "Rule fixture", logic: "AND", signal_type: "BUY", cooldown_sec: 0, conditions: [{ left: "PRICE", op: ">", right: "EMA20" }] };
+  const definition = { name: "Rule fixture", logic: "AND", signal_type: "BUY", cooldown_sec: 0, conditions: [{ left: "PRICE", op: ">", right: "EMA20" }, { left: "EMA9", op: ">", right: "EMA20" }] };
   const rule = { id: "fixture-rule", name: definition.name, owner_type: "user", read_only: false, version: 2, definition_hash: "fixture-hash", schema_version: "rule-1", engine_version: "core-0.3.0", definition };
   const universe = { id: "fixture-universe", name: "Bank pilihan", version: 1, symbols: ["BBCA.JK", "BBRI.JK"] };
-  const rows = [true, false].map((matched, i) => ({ decision: { symbol: universe.symbols[i], timestamp: now, matched, reason_codes: [matched ? "RULE_MATCHED" : "CONDITIONS_NOT_MET"] }, features: { price: 100 + i, ema9: 95, ema20: 98, rsi14: 60 }, latestOpen: 95, latestClose: 100 + i }));
+  const rows = [true, false].map((matched, i) => ({ decision: { symbol: universe.symbols[i], timestamp: now, matched, reason_codes: [matched ? "RULE_MATCHED" : "CONDITIONS_NOT_MET"] }, features: { price: 100 + i, ema9: matched ? 99 : 95, ema20: 98, rsi14: 60 }, latestOpen: 95, latestClose: 100 + i }));
   const run = { rows, latestDecision: rows[0].decision, features: rows[0].features, latestOpen: 95, latestClose: 100, result: { type: "screener.result", protocol: "screener-private-1", request_id: "fixture-request", decision_version: "fixture-decision", results: rows.map(row => row.decision) }, manifest: { dataset_id: "fixture-dataset", version: "1", schema_version: "ohlcv-multi-1", provider: "yahoo_finance", purpose: "screen", market: "IDX", currency: "IDR", symbols: universe.symbols, timeframe: "1d", timezone: "UTC", requested_range: { from: day, to: day }, available_range: { from: day, to: day }, warmup_candles: 20, adjustment: "split", candle_count: 100, decoded_bytes: 1000, checksum: "fixture-checksum", quality: { status: "complete", warnings: [] } }, execution: "client_wasm+server_private_scoring" };
   const before = JSON.parse(JSON.stringify(run));
   before.rows.forEach(row => { row.decision.matched = !row.decision.matched; });
@@ -547,6 +547,13 @@ async (page) => {
     if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: `/private/tmp/signalgen-screening-workflow-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
+    const cards = await page.locator('.screener-universe-stocks').evaluate(el => {
+      const outer = el.getBoundingClientRect(), rows = new Map();
+      for (const item of el.children) { const r = item.getBoundingClientRect(); const top = Math.round(r.top); if (!rows.has(top)) rows.set(top, []); rows.get(top).push(r); }
+      return [...rows.values()].every(row => Math.abs(row[0].left - outer.left) < 1 && Math.abs(row[row.length - 1].right - outer.right) < 1);
+    });
+    if (!cards) throw Error(`Stock cards do not fill every row: ${width} ${theme}`);
+    if (!await page.locator('.screener-criteria li').evaluateAll(items => items.length === 2 && items.every(el => parseFloat(getComputedStyle(el).borderRadius) >= 12 && parseFloat(getComputedStyle(el).borderTopWidth) >= 1))) throw Error('Rule preview is not presented as rounded cards');
   }
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));

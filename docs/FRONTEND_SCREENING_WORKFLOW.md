@@ -20,6 +20,8 @@ Condition editing uses aligned indicator/comparison/reference columns on desktop
 
 Presets fill the available width as green selection cards. Desktop criteria use centered column headings and a separate No column; mobile retains visible field labels. Screener previews show selected stocks as small wrapping cards, a compact condition summary, and consistently inset search/status filters.
 
+Selected-stock cards stretch to both edges of each wrapped row. The Screener condition preview uses separate rounded cards rather than divider-only rows, with two columns on desktop and one on mobile; condition order and matching logic remain unchanged.
+
 The existing `docs/DESIGN.md` still describes Manrope across workspace surfaces, while `frontend/web/src/styles/workspace-typography.css` already establishes Saira for the workspace. `docs/PRODUCT.md` also describes an IDX-focused workspace, while the incumbent frontend supports US/USD alongside IDX/IDR. These are pre-existing documentation differences. This feature preserves the approved Saira and market-aware implementation without rewriting the design specification or its sidecar.
 
 ## Verification and limits

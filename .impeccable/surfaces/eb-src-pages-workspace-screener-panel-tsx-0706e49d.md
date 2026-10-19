@@ -20,7 +20,7 @@ Preset → named criteria with ALL/ANY semantics and BUY/SELL → market-aware u
 One clear composer with user-requested full-width green preset cards, editable rows and one save action. Screener exposes saved rule, small wrapping selected-stock cards and compact readable criteria before its primary run button. Shared left/right gutters remain intact.
 
 ## FORM
-Compact ledger rows, a separated No column, centered desktop column headings, visible mobile labels and predictable alignment. Presets fill a responsive three/two-column green card grid as explicitly requested. Search/status filters share the result-panel gutters. Reuse existing surfaces and subtle green gradients; no decorative metric-card grid or new font. Use English, semantic status labels and keyboard controls.
+Compact ledger rows in the rule editor, a separated No column, centered desktop headings, visible mobile labels and predictable alignment. The Screener preview uses user-requested rounded condition cards, two columns on desktop and one on mobile; selected-stock cards stretch to both edges of every wrapped row. Presets fill a responsive three/two-column green card grid as explicitly requested. Search/status filters share the result-panel gutters. Reuse existing surfaces and subtle green gradients; no decorative metric-card grid or new font. Use English, semantic status labels and keyboard controls.
 
 ## FINISH
 Verify preset/validation, market isolation, BUY/SELL/cooldown filters, crossover history evidence and CSV. Run unit/build and isolated Playwright CLI in desktop/mobile and light/dark. Review screenshots with an independent finish reviewer, then compare docs without changing the incumbent design system.
