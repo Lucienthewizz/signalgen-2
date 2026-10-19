@@ -1,6 +1,8 @@
 # Panduan Lengkap & Cara Kerja Screener SignalGen 2.0 (Untuk Pemula)
 
-> **Catatan Penting (Disclaimer):** SignalGen 2.0 adalah sistem pendukung keputusan (*Decision Support System*) berbasis aturan historis (*rule-based historical screener*), **bukan** aplikasi broker jual-beli otomatis (*auto-execution*), bukan sinyal harga *real-time* detik ini, dan bukan jaminan keuntungan finansial. Sinyal **BUY** atau **SELL** berarti seluruh syarat yang kamu tentukan terpenuhi pada data penutupan harian (*daily candle*) terakhir yang sah.
+> **Catatan Penting:** SignalGen 2.0 adalah screener berbasis aturan historis, **bukan** broker, auto-trading, prediksi harga yang pasti, atau jaminan profit. Sinyal **BUY/SELL** berarti rule lolos sesuai logika **AND/OR** dan cooldown pada candle yang dievaluasi. Arah sinyal dipilih pembuat rule, bukan ditebak dari indikator. **Match tidak sama dengan BUY.**
+
+Untuk menjelaskan kode saat asis, baca [alur backend, contoh JSON, match/BUY/SELL dan bug riwayat](backend/SCREENER_DECISIONS.md).
 
 ---
 
@@ -14,9 +16,9 @@ Bayangkan kamu ingin mencari saham potensial dari ratusan saham di Bursa Efek In
    - Aturan harus memenuhi *semua* syarat (**Logika AND**) atau *salah satu* syarat saja (**Logika OR**)?
    - Apakah harga sedang memotong garis indikator ke atas (**`CROSS_UP` / Golden Cross**)?
 2. Kamu memilih **Kelompok Saham (*Stock Universe*)** — berisi 1 sampai 10 saham pilihanmu dalam pasar dan mata uang yang sama.
-3. **Screener** memeriksa seluruh saham tersebut dalam hitungan milidetik dan langsung memberikan rekomendasi aksi:
-   - 🟢 **`BUY`**: Saham memenuhi syarat masuk posisi beli.
-   - 🔴 **`SELL`**: Saham memenuhi syarat keluar posisi / ambil untung (*take profit*).
+3. **Screener** memeriksa saham tersebut; total waktu bergantung pada provider, jaringan, perangkat dan server. Hasilnya:
+   - 🟢 **`BUY`**: Lolos rule yang diberi arah BUY.
+   - 🔴 **`SELL`**: Lolos rule yang diberi arah SELL; bukan bukti pengguna memiliki saham atau memperoleh profit.
    - ⚪ **`Not matched`**: Saham belum memenuhi kriteria hari ini.
    - Dilengkapi **Bukti Angka (*Condition Evidence*)** transparan untuk setiap syarat!
 
@@ -24,7 +26,7 @@ Bayangkan kamu ingin mencari saham potensial dari ratusan saham di Bursa Efek In
 
 ## 2. Visualisasi Alur Kerja Screener (Arsitektur Hybrid Model A)
 
-Mengapa SignalGen 2.0 terasa sangat cepat, hemat beban server, sekaligus aman? Karena SignalGen 2.0 menggunakan arsitektur **Hybrid (Model A)**:
+SignalGen 2.0 menggunakan **Hybrid (Model A)** untuk membagi pekerjaan indikator dan evaluasi rule. Efisiensi serta kapasitas tetap perlu diukur; pilihan arsitektur sendiri bukan bukti performa atau keamanan mutlak.
 
 ```text
 +-----------------------------------------------------------------------------------+
@@ -61,7 +63,8 @@ Mengapa SignalGen 2.0 terasa sangat cepat, hemat beban server, sekaligus aman? K
    • Mengecek persilangan candle hari ini vs kemarin (CROSS_UP / CROSS_DOWN)
    • Mengecek logika kombinasi (AND / OR)
    • Memeriksa masa jeda proteksi (Cooldown)
-   (Rumus dan strategi pengguna terlindungi aman, tidak pernah bocor ke publik)
+   (Akses dibatasi per pengguna; rule milik sendiri dapat dibaca pemilik di browser.
+    Definisi rule sistem privat tidak dikirim; ini bukan jaminan anti-reverse-engineering.)
           │
           ▼
   [4. HASIL KEPUTUSAN & BUKTI INDIKATOR DI LAYAR]
@@ -72,7 +75,7 @@ Mengapa SignalGen 2.0 terasa sangat cepat, hemat beban server, sekaligus aman? K
 ```
 
 ### Analogi Sederhana: "Staf Hitung & Supervisor Rahasia"
-* **Go/WASM di Browser adalah Staf Hitung:** Ia bertugas mengerjakan kalkulasi matematika rumit (menghitung rata-rata bergerak dan momentum puluhan hari) langsung di komputermu, sehingga server tidak lemot saat ribuan pengguna screening bersamaan.
+* **Go/WASM di Browser adalah Staf Hitung:** Ia menghitung indikator di perangkat pengguna, sehingga pekerjaan indikator per pengguna tidak semuanya masuk server. Ini bukan jaminan server mampu melayani ribuan pengguna; CPU/RAM client dan server, latensi serta kegagalan perlu diuji.
 * **Server Go adalah Supervisor:** Staf hitung hanya mengirimkan ringkasan angka akhir. Supervisor yang menyimpan brankas strategi privat kemudian mencocokkannya dengan kriteria aturan pengguna dan memberi stempel keputusan: **BUY**, **SELL**, atau **Not matched**.
 
 ---
@@ -104,9 +107,8 @@ Mengapa SignalGen 2.0 terasa sangat cepat, hemat beban server, sekaligus aman? K
   VISUALISASI MOMENTUM (RSI 14 — Skala 0 sampai 100)
   0 ─────────── 30 ────────── 45 ─────────────── 70 ────────── 100
   [ Jenuh Jual  ]             [ Zona Momentum    ]   [ Jenuh Beli   ]
-  [ (Oversold)  ]             [ Sehat / Ideal    ]   [ (Overbought) ]
-  Harga sudah turun           Tenaga beli kuat,      Harga sudah naik terlalu
-  terlalu murah               belum kepanasan        tinggi, rawan koreksi turun
+  [ (Oversold)  ]             [ Rentang contoh   ]   [ (Overbought) ]
+  Label momentum ini bukan penilaian murah/mahal atau jaminan arah harga berikutnya.
 ```
 
 | Indikator | Kepanjangan | Penjelasan Praktis |
@@ -114,7 +116,7 @@ Mengapa SignalGen 2.0 terasa sangat cepat, hemat beban server, sekaligus aman? K
 | **`PRICE`** | *Close Price* | Harga penutupan resmi saham pada hari bursa terakhir. |
 | **`EMA9`** | *Exponential Moving Average (9)* | Rata-rata pergerakan harga selama **9 hari terakhir** dengan pembobotan lebih tinggi pada hari terkini. Garis ini bergerak lincah dan cepat. |
 | **`EMA20`** | *Exponential Moving Average (20)* | Rata-rata harga selama **20 hari terakhir** (sekitar 1 bulan perdagangan). Garis ini lebih stabil dan menjadi garis acuan tren (*trendline*). |
-| **`RSI14`** | *Relative Strength Index (14)* | Indikator pengukur kejenuhan dan kecepatan harga dengan skala **0 sampai 100**:<br>• **Di bawah 30 (`< 30`):** Jenuh jual (*oversold*), harga terdiskon dalam.<br>• **Rentang 45 – 70:** Momentum tren naik yang sehat dan bertenaga.<br>• **Di atas 70 (`> 70`):** Jenuh beli (*overbought*), harga rawan ambil untung (*profit taking*). |
+| **`RSI14`** | *Relative Strength Index (14)* | Mengukur momentum perubahan harga pada skala **0–100**. Angka 30/70 dapat dipakai sebagai batas contoh rule. RSI rendah bukan bukti saham murah, RSI tinggi bukan jaminan harga akan turun, dan keduanya tidak otomatis menentukan BUY/SELL. |
 
 ---
 
@@ -128,12 +130,15 @@ SignalGen 2.0 mendukung 6 jenis operator:
 | **`>=`** | Lebih Besar atau Sama | Memeriksa apakah nilai kiri setara atau lebih tinggi dari kanan. |
 | **`<`** | Lebih Kecil Dari | Memeriksa apakah nilai kiri lebih rendah dari kanan (misal `RSI14 < 30`). |
 | **`<=`** | Lebih Kecil atau Sama | Memeriksa apakah nilai kiri setara atau lebih rendah dari kanan. |
-| **`CROSS_UP`** | **Golden Cross / Melintas Naik** | **HANYA memicu sinyal tepat pada hari terjadinya persilangan ke atas!**<br>Rumus: $\text{Kemarin} \le \text{Batas} \ \land \ \text{Hari Ini} > \text{Batas}$.<br>Contoh: `EMA9 CROSS_UP EMA20` (Garis cepat memotong garis lambat ke atas = sinyal awal *bullish*). |
-| **`CROSS_DOWN`** | **Death Cross / Melintas Turun** | **HANYA memicu sinyal tepat pada hari terjadinya persilangan ke bawah!**<br>Rumus: $\text{Kemarin} \ge \text{Batas} \ \land \ \text{Hari Ini} < \text{Batas}$.<br>Contoh: `EMA9 CROSS_DOWN EMA20` (Garis cepat memotong ke bawah = sinyal awal *bearish*) atau `RSI14 CROSS_DOWN 70` (keluar dari zona bahaya jenuh beli). |
+| **`CROSS_UP`** | Melintas naik | Kondisi benar jika kiri sebelumnya ≤ kanan sebelumnya dan kiri sekarang > kanan sekarang. Contoh: `EMA9 CROSS_UP EMA20` atau `RSI14 CROSS_UP 30`. |
+| **`CROSS_DOWN`** | Melintas turun | Kondisi benar jika kiri sebelumnya ≥ kanan sebelumnya dan kiri sekarang < kanan sekarang. Contoh: `EMA9 CROSS_DOWN EMA20` atau `RSI14 CROSS_DOWN 70`. |
+
+Crossover adalah perbandingan dua candle. Istilah Golden/Death Cross tidak perlu dipakai untuk semua pasangan indikator atau batas angka. Sinyal akhir tetap mengikuti rule dan cooldown.
 
 #### 🔍 Perbedaan Penting: Operator `>` vs `CROSS_UP`
-* Jika kamu memakai `EMA9 > EMA20`: Sinyal akan muncul **setiap hari berturut-turut** selama EMA9 berada di atas EMA20 (bisa 20 hari berturut-turut).
-* Jika kamu memakai `EMA9 CROSS_UP EMA20`: Sinyal **hanya muncul 1 kali** tepat di hari persilangan pertama kali terjadi. Ini sangat disukai trader karena langsung menandai titik masuk (*entry timing*) yang presisi.
+* `EMA9 > EMA20` bernilai benar selama EMA9 berada di atas EMA20.
+* `EMA9 CROSS_UP EMA20` bernilai benar ketika EMA9 sebelumnya ≤ EMA20 sebelumnya, lalu EMA9 sekarang > EMA20 sekarang. Dua nilai EMA20 itu dapat berbeda. Tanpa kandidat sebelumnya, crossover tidak dipicu.
+* Itu hasil **satu kondisi**, bukan jaminan sinyal akhir. Kondisi lain pada AND, kondisi alternatif pada OR dan cooldown tetap berpengaruh. Pada rule OR, kondisi lain yang terus benar dapat membuat rule tetap lolos meskipun crossover tidak terjadi lagi.
 
 ---
 
@@ -151,10 +156,11 @@ SignalGen 2.0 mendukung 6 jenis operator:
 
 ### E. Status Keputusan Screener
 
-1. 🟢 **`BUY` (`RULE_MATCHED`)**: Seluruh kriteria aturan beli terpenuhi pada candle terakhir.
-2. 🔴 **`SELL` (`RULE_MATCHED`)**: Seluruh kriteria aturan jual terpenuhi pada candle terakhir.
+1. 🟢 **`BUY` (`RULE_MATCHED`)**: Rule berarah BUY lolos; AND membutuhkan semua kondisi, OR minimal satu, dan cooldown tidak menahan sinyal.
+2. 🔴 **`SELL` (`RULE_MATCHED`)**: Rule berarah SELL lolos dengan prinsip yang sama. Bukan transaksi jual otomatis.
 3. ⚪ **`Not matched` (`CONDITIONS_NOT_MET`)**: Saham belum memenuhi kriteria rumus aturan. (Bukan error aplikasi, melainkan kondisi pasar hari ini belum cocok dengan kriteriamu).
-4. 🟡 **`Not matched` (`COOLDOWN_ACTIVE`)**: Saham sebenarnya memenuhi rumus aturan, namun sinyal ditahan sementara karena masih berada dalam masa jeda waktu perlindungan (*cooldown period*).
+4. 🟡 **`Cooldown` (`COOLDOWN_ACTIVE`)**: Rumus cocok tetapi sinyal ditahan. Pada respons sekarang `matched` bernilai false dan arah sinyal tidak dikirim. Cooldown dilacak per saham dalam evaluasi batch, bukan alarm persisten lintas seluruh klik Run.
+5. **`Matched` tanpa arah**: Riwayat lama kehilangan `signal_type`. UI tidak boleh menebaknya sebagai BUY. Jika data candle sebelumnya juga hilang, bukti crossover dinyatakan tidak tersedia. Jalankan ulang untuk hasil lengkap.
 
 ---
 
@@ -184,14 +190,16 @@ SignalGen 2.0 mendukung 6 jenis operator:
 
 ---
 
-### 💡 5 Resep Strategi Saham Praktis untuk Pemula
+### 5 Contoh Rule untuk Belajar Operator
+
+Contoh berikut adalah latihan konfigurasi, bukan strategi yang sudah terbukti menguntungkan atau rekomendasi untuk membeli/menjual saham.
 
 #### Resep 1: Golden Cross Tren Naik (Aksi: BUY | Logika: AND)
 Cocok untuk mencari saham yang baru saja memulai tren kenaikan baru:
 1. `EMA9 CROSS_UP EMA20` *(Garis cepat memotong ke atas garis lambat)*
 2. `PRICE > EMA9` *(Harga tutup berada di atas EMA9)*
 3. `RSI14 > 45` *(Tenaga beli sudah mulai aktif)*
-4. `RSI14 < 70` *(Harga belum kemahalan / belum jenuh beli)*
+4. `RSI14 < 70` *(Batas oscillator dalam contoh ini; bukan penilaian saham murah/mahal)*
 
 #### Resep 2: Pantulan Jenuh Jual / Oversold Rebound (Aksi: BUY | Logika: AND)
 Mencari saham yang baru selesai terkoreksi dalam dan mulai memantul naik:
@@ -252,13 +260,13 @@ Untuk kebutuhan laporan atau sidang skripsi, berikut perbandingan arsitektur Sig
 
 | Fitur / Parameter | Legacy Desktop (Claudio) | SignalGen 2.0 (Sekarang) |
 | :--- | :--- | :--- |
-| **Arsitektur Sistem** | Monolitik Desktop (Electron + Python FastAPI + SQLite). | **Modern Web Monorepo** (Go API + React 19 + Supabase Postgres). |
-| **Komputasi Indikator** | Berat: Server mengunduh data mentah & menghitung semua indikator di server CPU. | **Ringan & Efisien (Model A)**: Komputasi indikator berjalan di browser client via Go/WASM Web Worker. |
-| **Keamanan Strategi** | File lokal di komputer user. | **Privat Server**: Evaluasi keputusan di server Go via WebSocket tiket sekali pakai, strategi user aman tidak bocor. |
+| **Arsitektur Sistem** | Baseline desktop/Python/SQLite; lihat source legacy untuk rincian. | Web multi-user Go/Gin + React 18 + Supabase Postgres. |
+| **Komputasi Indikator** | Komputasi pada runtime Python legacy. | Indikator di browser Go/WASM, keputusan di server. Dampak efisiensi harus diukur, bukan diasumsikan. |
+| **Keamanan Strategi** | File lokal di komputer user. | Akses resource dibatasi per pengguna; pemilik dapat membaca rule miliknya. Rule sistem privat tetap di server, bukan jaminan tidak dapat dianalisis ulang. |
 | **Logika Aturan** | Hanya mendukung `AND`. | Mendukung **`AND` & `OR`**. |
 | **Tipe Sinyal** | Hanya filter kecocokan matematis. | **`BUY` (Entry) & `SELL` (Exit)** terintegrasi dengan badge visual. |
 | **Operator Persilangan** | Didukung (`CROSS_UP`/`CROSS_DOWN`). | **Didukung (`CROSS_UP`/`CROSS_DOWN`)** dengan perbandingan strictly chronological terhadap candle sebelumnya. |
-| **Komentar Kode** | Minim / bahasa campur. | **100% Bahasa Indonesia** terstruktur dan mudah dijelaskan saat sidang. |
+| **Komentar Kode** | Mengikuti source legacy. | Penjelasan Indonesia ditambahkan pada bagian tertentu; bukan klaim seluruh source sudah dikomentari. |
 
 ---
 
@@ -267,9 +275,6 @@ Untuk kebutuhan laporan atau sidang skripsi, berikut perbandingan arsitektur Sig
 * **T: Kenapa saham saya berlabel "Not matched"? Apakah ada error?**
   * **J:** Tidak ada error! *Not matched* artinya data penutupan saham hari ini belum memenuhi rumus kriteriamu. Klik baris saham tersebut untuk melihat rincian syarat mana yang belum tercapai pada bagian *Condition evidence*.
 * **T: Mengapa satu universe dibatasi maksimal 10 saham?**
-  * **J:** Batasan 10 saham dirancang untuk menjaga fokus analisis, memastikan komputasi WASM berjalan instan di perangkat apa pun tanpa lag, serta mematuhi alokasi sumber daya komputasi akun secara adil.
+  * **J:** Ini batas screening per universe saat ini, bukan jumlah seluruh saham dalam katalog. Batas tersebut membatasi pekerjaan satu run; kinerja tetap bergantung pada jumlah candle, perangkat dan jaringan. Tidak ada jaminan instan pada setiap perangkat.
 * **T: Kapan sebaiknya saya menjalankan screener?**
-  * **J:** Waktu terbaik adalah **setelah pasar tutup** (sore atau malam hari):
-    - Untuk saham Indonesia (**IDX**): Setelah pukul **16.15 WIB**.
-    - Untuk saham Amerika (**US**): Setelah pukul **04.00 WIB** (pagi hari berikutnya).
-    Data penutupan resmi (*Daily Close*) pada jam tersebut sudah final dan akurat untuk analisis keesokan harinya.
+  * **J:** Untuk memahami hasil aplikasi, periksa tanggal candle terakhir, periode dataset, timezone dan kualitas pada snapshot. Jangan menyimpulkan data sudah final hanya dari satu jam WIB: kalender bursa, timezone dan keterlambatan provider perlu diperhatikan. WebSocket di aplikasi ini mengirim hasil penilaian, bukan bukti harga real-time.

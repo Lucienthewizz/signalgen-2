@@ -37,9 +37,9 @@ and local-session cleanup on 401. The web-only UX preview covers the MVP analysi
 rule management, explainable results, journal, entitlement, session/device and
 cache-clear surfaces. Analysis uses the live Go API + Go/WASM POC when
 authenticated, while account entitlements and owner-scoped devices are read
-from the Go API. Rules and journal remain local preview state that persists
-across hash-route changes, resets on reload, and never represents live-market
-data.
+from the Go API. User rules are persisted through the owner-scoped Go API;
+unfinished rule drafts are stored separately in the browser. Journal saving
+is not enabled. Analysis snapshots are historical, not live-market data.
 
 The landing page includes an interactive feature tour using screenshots captured
 from the web routes themselves. Loading feedback uses the project shadcn Skeleton
@@ -50,7 +50,7 @@ Demo routes:
 
 - `#app/overview` — feature map and integration status
 - `#app/analysis` — screening/backtest configuration, run/cancel and results
-- `#app/rules` — system rules and local user-rule CRUD
+- `#app/rules` — read-only system rules and owner-scoped user-rule CRUD
 - `#app/journal` — draft/manual transactions and example position/P&L
 - `#app/access` — entitlement, devices, revoke and local cache state
 
@@ -218,3 +218,30 @@ Browser regression fixtures verify universe switching, card/chart/row selection,
 the retained chart frame, responsive layouts, and both themes. External chart
 requests are blocked in those isolated tests, so they do not verify the live
 TradingView provider.
+
+## Decision correctness and demo checks
+
+`matched` is a result status, while `signal_type` is the BUY/SELL direction
+configured on the selected rule. Neither executes a broker order. History
+preserves both direction and previous-candle features so a SELL crossover keeps
+its meaning after reload and CSV export. Legacy history missing these fields is
+shown as `Matched` with unavailable crossover evidence, never guessed as BUY or
+recalculated using a newer rule. Rerun screening online for a fresh complete result.
+Prices and CSV headings use the snapshot's IDR/USD currency without FX conversion.
+
+Run the focused regression against your running Vite instance:
+
+```sh
+SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5175 npm run test:decisions
+```
+
+This uses synthetic API/account fixtures and checks BUY/SELL, AND/OR, crossover
+history, reload, details, CSV, legacy missing fields and cooldown at 1440/390px
+in both themes. It does not log into or change a real Supabase account.
+
+If Vite chooses 5175 because 5174 is occupied, the backend's local
+`SIGNALGEN_CORS_ORIGINS` must include that exact browser origin. HTTP proxying
+does not remove the WebSocket Origin check. After changing backend `.env`,
+recreate only `go-api` to reload its environment; do not use a wildcard.
+
+Indonesian backend walkthrough: [Match, BUY/SELL and the decision flow](../../docs/backend/SCREENER_DECISIONS.md).

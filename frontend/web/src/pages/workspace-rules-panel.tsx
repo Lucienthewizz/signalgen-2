@@ -302,7 +302,9 @@ export function ServerRulesPanel({
               <h3 id="rule-composer-title">
                 {editing ? `Edit ${editing.name}` : "Create a screening rule"}
               </h3>
-              <p>Build a checklist. Every condition must be met.</p>
+              <p>
+                Use AND for every condition, or OR for at least one condition.
+              </p>
             </div>
           </div>
           <Button variant="outline" onClick={startNew} disabled={saving}>
@@ -374,7 +376,9 @@ export function ServerRulesPanel({
                 </FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="rule-signal-type">Signal action</FieldLabel>
+                <FieldLabel htmlFor="rule-signal-type">
+                  Signal action
+                </FieldLabel>
                 <Select
                   value={definition.signal_type}
                   onValueChange={(value) =>
@@ -395,7 +399,8 @@ export function ServerRulesPanel({
                   </SelectContent>
                 </Select>
                 <FieldDescription>
-                  Direction of signal generated when conditions match.
+                  Direction of the signal when this rule matches; not an
+                  automatic order.
                 </FieldDescription>
               </Field>
               <Field>
@@ -414,7 +419,9 @@ export function ServerRulesPanel({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value="AND">AND (All conditions met)</SelectItem>
+                      <SelectItem value="AND">
+                        AND (All conditions met)
+                      </SelectItem>
                       <SelectItem value="OR">OR (Any condition met)</SelectItem>
                     </SelectGroup>
                   </SelectContent>
@@ -540,9 +547,9 @@ export function ServerRulesPanel({
                             ).map((value) => (
                               <SelectItem key={value} value={value}>
                                 {value === "CROSS_UP"
-                                  ? "CROSS_UP (Golden Cross)"
+                                  ? "CROSS_UP (Crosses above)"
                                   : value === "CROSS_DOWN"
-                                    ? "CROSS_DOWN (Death Cross)"
+                                    ? "CROSS_DOWN (Crosses below)"
                                     : value}
                               </SelectItem>
                             ))}
@@ -602,7 +609,9 @@ export function ServerRulesPanel({
               </Alert>
             )}
             <footer className="rule-composer__footer">
-              <span>{definition.conditions.length} conditions · Daily IDX</span>
+              <span>
+                {definition.conditions.length} conditions · Daily · IDX / US
+              </span>
               <Button type="submit" size="lg" disabled={saving}>
                 {saving ? (
                   <LoaderCircle

@@ -164,6 +164,8 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 			"EMA20": candidate.Features.EMA20,
 			"RSI14": candidate.Features.RSI14,
 		}
+		// Lolos kondisi belum menentukan arah transaksi: BUY/SELL berasal dari rule.
+		// Cooldown masih dapat menahan sinyal meskipun kondisi matematika terpenuhi.
 		matched, err := evaluateRule(request.Rule, values, prevValues)
 		if err != nil {
 			return DecisionResult{}, err
