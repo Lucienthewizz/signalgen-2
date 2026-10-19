@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -311,25 +312,75 @@ func ValidateRule(rule RuleSnapshot) error {
 		if !supportedOperators[condition.Op] {
 			return fmt.Errorf("unsupported operator %q", condition.Op)
 		}
-		switch right := condition.Right.(type) {
-		case string:
-			if !supportedOperands[right] {
-				parsed, err := strconv.ParseFloat(right, 64)
-				if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
-					return fmt.Errorf("unsupported right operand %q", right)
+
+		numericVal, isNumeric, err := extractNumericThreshold(condition.Right)
+		if err != nil {
+			return err
+		}
+
+		if isNumeric {
+			if condition.Left == "RSI14" {
+				if numericVal < 0 || numericVal > 100 {
+					return fmt.Errorf("RSI14 threshold must be between 0 and 100; got %v", numericVal)
+				}
+			} else {
+				if numericVal <= 0 {
+					return fmt.Errorf("%s threshold must be greater than 0; got %v", condition.Left, numericVal)
 				}
 			}
-		case float64:
-			if math.IsNaN(right) || math.IsInf(right, 0) {
-				return fmt.Errorf("right operand must be finite")
+		} else {
+			rightOperand, _ := condition.Right.(string)
+			if condition.Left == rightOperand {
+				return fmt.Errorf("condition cannot compare operand %q with itself", condition.Left)
 			}
-		case int:
-			// Programmatic callers may use int; JSON numbers decode as float64.
-		default:
-			return fmt.Errorf("unsupported right value type %T", condition.Right)
 		}
 	}
 	return nil
+}
+
+func extractNumericThreshold(raw interface{}) (float64, bool, error) {
+	switch right := raw.(type) {
+	case string:
+		if supportedOperands[right] {
+			return 0, false, nil
+		}
+		parsed, err := strconv.ParseFloat(right, 64)
+		if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+			return 0, false, fmt.Errorf("unsupported right operand %q", right)
+		}
+		return parsed, true, nil
+	case float64:
+		if math.IsNaN(right) || math.IsInf(right, 0) {
+			return 0, false, fmt.Errorf("right operand must be finite")
+		}
+		return right, true, nil
+	case float32:
+		val := float64(right)
+		if math.IsNaN(val) || math.IsInf(val, 0) {
+			return 0, false, fmt.Errorf("right operand must be finite")
+		}
+		return val, true, nil
+	case int:
+		return float64(right), true, nil
+	case int32:
+		return float64(right), true, nil
+	case int64:
+		return float64(right), true, nil
+	case uint:
+		return float64(right), true, nil
+	case uint32:
+		return float64(right), true, nil
+	case uint64:
+		return float64(right), true, nil
+	case json.Number:
+		parsed, err := right.Float64()
+		if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+			return 0, false, fmt.Errorf("right operand must be finite")
+		}
+		return parsed, true, nil
+	default:
+		return 0, false, fmt.Errorf("unsupported right value type %T", raw)
+	}
 }
 
 func evaluateRule(rule RuleSnapshot, values map[string]float64) (bool, error) {
@@ -384,8 +435,26 @@ func resolveValue(raw interface{}, values map[string]float64) (float64, error) {
 	switch value := raw.(type) {
 	case float64:
 		return value, nil
+	case float32:
+		return float64(value), nil
 	case int:
 		return float64(value), nil
+	case int32:
+		return float64(value), nil
+	case int64:
+		return float64(value), nil
+	case uint:
+		return float64(value), nil
+	case uint32:
+		return float64(value), nil
+	case uint64:
+		return float64(value), nil
+	case json.Number:
+		parsed, err := value.Float64()
+		if err != nil {
+			return 0, fmt.Errorf("unsupported right operand %q", value)
+		}
+		return parsed, nil
 	case string:
 		if resolved, ok := values[value]; ok {
 			return resolved, nil

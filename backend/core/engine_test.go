@@ -45,11 +45,17 @@ func TestValidateRuleAcceptsOnlyAdvertisedSubset(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, mutate := range map[string]func(*RuleSnapshot){
-		"logic":      func(rule *RuleSnapshot) { rule.Logic = "XOR" },
-		"signal":     func(rule *RuleSnapshot) { rule.SignalType = "SELL" },
-		"left":       func(rule *RuleSnapshot) { rule.Conditions[0].Left = "MACD" },
-		"operator":   func(rule *RuleSnapshot) { rule.Conditions[0].Op = "==" },
-		"right type": func(rule *RuleSnapshot) { rule.Conditions[0].Right = true },
+		"logic":           func(rule *RuleSnapshot) { rule.Logic = "XOR" },
+		"signal":          func(rule *RuleSnapshot) { rule.SignalType = "SELL" },
+		"left":            func(rule *RuleSnapshot) { rule.Conditions[0].Left = "MACD" },
+		"operator":        func(rule *RuleSnapshot) { rule.Conditions[0].Op = "==" },
+		"right type":      func(rule *RuleSnapshot) { rule.Conditions[0].Right = true },
+		"self comparison": func(rule *RuleSnapshot) { rule.Conditions[0].Right = "EMA9" },
+		"rsi over 100":    func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "RSI14", Op: ">", Right: 105} },
+		"rsi negative":    func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "RSI14", Op: "<", Right: -5} },
+		"price non-pos":   func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "PRICE", Op: ">", Right: 0} },
+		"price negative":  func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "PRICE", Op: ">", Right: -10} },
+		"ema non-pos":     func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "EMA9", Op: ">", Right: 0} },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := valid
@@ -333,3 +339,68 @@ func TestEvaluateDecisionMarksCooldownActive(t *testing.T) {
 		t.Fatalf("eval 3: want RULE_MATCHED, got %+v", decision.Evaluations[3])
 	}
 }
+
+func TestValidateRuleAndEvaluateAcceptsWideNumericTypes(t *testing.T) {
+	candidates := []FeatureCandidate{
+		{Symbol: "BBCA.JK", Timestamp: "2026-01-01T00:00:00Z", Features: FeatureVector{Price: 150, EMA9: 100, EMA20: 100, RSI14: 65}},
+	}
+
+	testCases := []struct {
+		name  string
+		right interface{}
+	}{
+		{"float64", float64(50)},
+		{"float32", float32(50)},
+		{"int", int(50)},
+		{"int32", int32(50)},
+		{"int64", int64(50)},
+		{"uint", uint(50)},
+		{"uint32", uint32(50)},
+		{"uint64", uint64(50)},
+		{"json.Number", json.Number("50")},
+		{"numeric string", "50"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rule := RuleSnapshot{
+				Name: "Numeric Rule", Logic: "AND", SignalType: "BUY", CooldownSec: 0,
+				Conditions: []Condition{
+					{Left: "RSI14", Op: ">", Right: tc.right},
+				},
+			}
+			if err := ValidateRule(rule); err != nil {
+				t.Fatalf("ValidateRule rejected valid numeric type %s: %v", tc.name, err)
+			}
+			res, err := EvaluateDecision(DecisionRequest{Rule: rule, Candidates: candidates})
+			if err != nil {
+				t.Fatalf("EvaluateDecision failed with %s: %v", tc.name, err)
+			}
+			if len(res.Signals) != 1 {
+				t.Fatalf("expected 1 signal with %s, got %d", tc.name, len(res.Signals))
+			}
+		})
+	}
+}
+
+func TestValidateRuleBoundaries(t *testing.T) {
+	// RSI14 exactly at boundaries 0, 50, and 100 should be accepted
+	for _, boundary := range []float64{0, 50, 100} {
+		rule := RuleSnapshot{
+			Name: "RSI Boundary", Logic: "AND", SignalType: "BUY", CooldownSec: 0,
+			Conditions: []Condition{{Left: "RSI14", Op: ">=", Right: boundary}},
+		}
+		if err := ValidateRule(rule); err != nil {
+			t.Fatalf("expected RSI14 with right=%v to be valid, got: %v", boundary, err)
+		}
+	}
+	// PRICE and EMA exactly above 0 should be accepted
+	rulePrice := RuleSnapshot{
+		Name: "Price Valid", Logic: "AND", SignalType: "BUY", CooldownSec: 0,
+		Conditions: []Condition{{Left: "PRICE", Op: ">", Right: 0.01}},
+	}
+	if err := ValidateRule(rulePrice); err != nil {
+		t.Fatalf("expected PRICE with right=0.01 to be valid, got: %v", err)
+	}
+}
+
