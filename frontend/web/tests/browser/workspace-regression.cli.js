@@ -149,16 +149,18 @@ async (page) => {
         await page.locator(".demo-workbench").waitFor({ timeout: 10000 });
         await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
         await page.evaluate(() => Promise.all([
-          document.fonts.load('14px "Geist Variable"'),
+          document.fonts.load('14px "Saira Variable"'),
+          document.fonts.load('600 28px "Saira Condensed"'),
           document.fonts.load('500 14px "Saira Condensed"'),
           document.fonts.load('13px "Geist Mono Variable"'),
         ]));
         const typography = await page.evaluate(() => ({
           body: getComputedStyle(document.body).fontFamily,
           nav: getComputedStyle(document.querySelector(".nav-group button")).fontFamily,
-          loaded: document.fonts.check('14px "Geist Variable"') && document.fonts.check('500 14px "Saira Condensed"'),
+          heading: getComputedStyle(document.querySelector(".workspace h1, .workspace h2")).fontFamily,
+          loaded: document.fonts.check('14px "Saira Variable"') && document.fonts.check('500 14px "Saira Condensed"') && document.fonts.check('600 28px "Saira Condensed"'),
         }));
-        if (!typography.body.includes("Geist Variable") || !typography.nav.includes("Saira Condensed") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
+        if (!typography.body.includes("Saira Variable") || !typography.nav.includes("Saira Condensed") || !typography.heading.includes("Saira Condensed") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
         const close = page.getByRole("button", { name: "Close menu" });
         const bounds = await close.boundingBox();
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
@@ -430,7 +432,7 @@ async (page) => {
     await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
     await page.waitForFunction(expected => document.documentElement.dataset.typography === expected, route === "home" ? "landing" : "workspace");
     const family = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
-    if (!family.includes(route === "home" ? "Manrope Variable" : "Geist Variable")) throw Error(`Public route font mismatch: ${route} ${family}`);
+    if (!family.includes(route === "home" ? "Manrope Variable" : "Saira Variable")) throw Error(`Public route font mismatch: ${route} ${family}`);
     if (await page.locator(".auth-layout").count() && !await page.locator(".auth-layout").evaluate(el => getComputedStyle(el).backgroundImage.includes("gradient"))) throw Error(`Auth surface gradient missing: ${route}`);
     await page.screenshot({ path: `/private/tmp/signalgen-public-${route}.png`, animations: "disabled", timeout: 10000 });
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Public page overflow: ${route}`);

@@ -47,9 +47,10 @@ configuration. Current screenshot values are illustrative, never live-market cla
 
 Tailwind v4 is wired through `@tailwindcss/vite`. Project-owned shadcn Base UI
 primitives live in `src/components/ui`, with the `@/` alias pointing to `src/`.
-The landing page retains Manrope. Other routes use self-hosted Geist for body
-text/headings, Saira Condensed for navigation/table headings, and Geist Mono for
-market figures. The document-level `data-typography` route marker also covers
+The landing page retains Manrope. Other routes use self-hosted Saira for body
+text, Saira Condensed for headings/navigation/buttons/table headings, and Geist
+Mono for market figures. Headings use the real 600 weight, navigation uses 500,
+and table headings use 700. The document-level `data-typography` route marker also covers
 portalled controls and toasts. Embedded third-party charts keep their own fonts.
 Typography roles live in `styles/workspace-typography.css`; colors, layout, focus
 states, and reduced-motion behavior remain independent of the font selection.
