@@ -1,14 +1,20 @@
 # Dukungan saham Amerika Serikat
 
 Permintaan pengguna 19 Oktober 2026: tambahkan saham AS ke web aktif. Ini perluasan
-bertahap, bukan klaim semua bursa/seluruh saham AS atau akses harga real-time.
+bertahap, bukan akses harga real-time atau cakupan seluruh venue AS/OTC.
 
-- Katalog awal 20 saham: AAPL, ADBE, AMD, AMZN, AVGO, BAC, BRK-B, DIS, GOOGL,
-  JPM, KO, MA, META, MSFT, NFLX, NVDA, QCOM, TSLA, V, XOM. Sebanyak 12 Nasdaq
-  (`XNAS`) dan 8 NYSE (`XNYS`), seluruhnya USD. Bukan rekomendasi investasi.
+- Katalog 20 pilihan awal **sudah diperluas**: impor 19 Oktober 2026 menerima
+  **5.600 listing** (3.439 Nasdaq `XNAS`, 2.161 NYSE `XNYS`), seluruhnya USD.
+  Seluruh row dari dua direktori diproses; tidak ada batas 20/100 pilihan manual.
+  Bukan rekomendasi investasi atau jaminan seluruh ticker mempunyai OHLCV Yahoo.
 - Metadata listing diperiksa dari direktori resmi [Nasdaq Trader](https://www.nasdaqtrader.com/trader.aspx?id=symboldirdefs):
-  `nasdaqlisted.txt` dan `otherlisted.txt` pada 19 Oktober 2026. Pilihan awal
-  ini bukan katalog lengkap dan perlu dipelihara bila listing berubah.
+  `nasdaqlisted.txt` dan `otherlisted.txt` pada 19 Oktober 2026. Metadata katalog
+  harus diperbarui operator bila listing berubah, bukan mengambil harga ribuan
+  saham saat login. Cakupan ini Nasdaq/NYSE, bukan NYSE American/Arca, OTC atau
+  semua instrumen keuangan AS. `ETF=Y`, `Test Issue=Y`, deskripsi preferred/debt,
+  waran, rights, units, serta simbol unsupported dilewati dengan hitungan alasan.
+  Filter deskripsi/simbol adalah heuristik konservatif, bukan klasifikasi CFI
+  resmi; ADR, saham biasa/ordinary dan saham REIT dapat diterima.
 - Yahoo Finance tetap adapter OHLCV. Simbol AS dikirim tanpa `.JK`; kelas saham
   memakai `BRK-B`. Range `6mo`, interval `1d`, maksimal 100 candle terakhir yang
   valid, minimal 20. Timestamp disimpan UTC, bukan zona waktu bursa Indonesia.
@@ -32,11 +38,63 @@ grant/session/entitlement, RLS dan exposed schema Supabase tidak diubah. Cloud
 migration version sudah dicocokkan dengan file repo; tidak perlu menjalankannya
 ulang pada project yang sudah mencatat version tersebut.
 
+## Memperbarui katalog tanpa mengubah batas screening
+
+Tool operator baru `backend/cmd/importus` memvalidasi **seluruh** file resmi:
+
+```sh
+cd backend
+go run ./cmd/importus -report /path/to/new-us-catalog-report.json
+# Tambahkan -apply hanya dengan SUPABASE_ADMIN_DB_URL di environment server.
+go run ./cmd/importus -apply
+# Alternatif offline: tambahkan -nasdaq /path/nasdaqlisted.txt -nyse /path/otherlisted.txt
+```
+
+Default dry-run tidak membaca credentials atau membuka koneksi DB. Unduhan hanya
+dua HTTPS URL tetap, dengan timeout, tanpa redirect, batas 8 MiB/file dan 30.000
+row/file. Header/footer, flag, nama, pasangan currency/exchange, duplikasi dan
+normalisasi `BRK.B` → `BRK-B` diverifikasi sebelum write. Report memuat timestamp
+pengambilan, creation time sumber, SHA-256, accepted/skipped dan metadata hasil.
+File report harus baru; tool menolak overwrite. Report ini bukan secret, tetapi
+artifact lokal tidak perlu dimasukkan Git.
+
+`ImportUSCatalog` memakai satu parameterized batch INSERT dan `ON CONFLICT DO
+NOTHING`: tidak menghapus, mengaktifkan ulang atau mengganti metadata lama,
+tidak menulis universe pengguna, dan tidak memberikan hak akses. Katalog IDX
+tetap dipertahankan. Tidak ada perubahan schema/migration/RLS untuk perluasan ini.
+Delisting/rename perlu review operator terpisah; additive refresh bukan sinkronisasi
+keanggotaan bursa secara otomatis. Jangan pakai runtime DB role untuk impor.
+
+### Bukti sumber impor 19 Oktober 2026
+
+Diambil 03:07:52 UTC; kedua file ber-footer `1016202621:31` (waktu sumber tanpa
+asumsi timezone tambahan). Penjumlahan accepted + semua skipped sama dengan row
+sumber; tidak ada saham dibuang hanya untuk mempertahankan angka 20.
+
+| File | Row | Diterima | Dilewati |
+| --- | ---: | ---: | --- |
+| nasdaqlisted.txt | 5.634 | 3.439 | 1.296 ETF; 891 deskripsi non-equity; 8 test |
+| otherlisted.txt | 7.674 | 2.161 | 4.752 di luar Nasdaq/NYSE; 79 ETF; 647 deskripsi non-equity; 29 test; 6 simbol unsupported |
+
+SHA-256 sumber Nasdaq: `9f5c42346e6ab594a9e16bed99757e38cda89645c776b987626c9f51813bc99b`.
+SHA-256 sumber otherlisted: `cb31dccc5b4ac680fb9170552d3b479c9f6fe21aae5c32ab21615b5fc8a78012`.
+
+Supabase cloud telah menerima 5.580 row tambahan (20 sebelumnya dipertahankan).
+Verifikasi pasca-impor: 5.600 AS aktif + 962 IDX aktif, RLS ketiga tabel
+katalog/universe/member tetap aktif; role runtime dan authenticated tetap tidak
+memiliki izin INSERT katalog. Tidak ada migration tambahan yang diperlukan.
+
+Frontend mengambil metadata katalog melalui endpoint privat yang sama, memakai
+pencarian seluruh katalog dan maksimum 12 tombol per halaman. Unit/browser test
+mencakup ribuan entri sintetis, pemilihan 3/10 dan penolakan pilihan ke-11. Data
+harga tetap diminta hanya untuk 1–10 anggota universe saat prepare screening;
+historis/cache terenkripsi dan private scoring tidak berubah.
+
 Verifikasi lokal: migration/RLS pada Postgres disposable, API ownership, unit
 isolasi pasar, histori/cache USD, dan test browser sintetis. Live Yahoo smoke
 memverifikasi AAPL/MSFT/BRK-B masing-masing 100 candle: 27 Mei–16 Oktober 2026,
 dengan timestamp pembukaan sesi 13:30 UTC pada sampel ini. Bukan janji seluruh
-20 ticker selalu tersedia atau SLA provider. `SIGNALGEN_TEST_YAHOO_LIVE=1` mengaktifkan
+ticker katalog selalu tersedia atau SLA provider. `SIGNALGEN_TEST_YAHOO_LIVE=1` mengaktifkan
 tes jaringan opt-in; CI default tidak mengambil harga live.
 
 Keamanan di luar scope: advisor Supabase masih melaporkan leaked-password protection

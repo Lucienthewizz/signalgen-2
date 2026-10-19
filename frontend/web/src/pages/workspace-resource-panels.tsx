@@ -314,8 +314,10 @@ export function StockUniversesPanel({
                 </SelectContent>
               </Select>
               <FieldDescription>
-                AS: katalog awal 20 saham, bukan seluruh saham AS. Tidak ada
-                konversi kurs.
+                {market === "US"
+                  ? "Katalog saham Nasdaq/NYSE dari direktori resmi; ETF, waran dan instrumen non-saham tidak disertakan."
+                  : "Katalog saham Indonesia dari daftar IDX."}{" "}
+                Maksimal 10 saham per screening. Tidak ada konversi kurs.
               </FieldDescription>
             </Field>
             <Field data-invalid={Boolean(error && !name.trim())}>

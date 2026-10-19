@@ -56,3 +56,44 @@ func ImportCatalog(ctx context.Context, db catalogExecutor, items []Instrument) 
 	command, err := db.Exec(ctx, catalogInsert, symbols, names)
 	return command.RowsAffected(), err
 }
+
+// US catalog size is independent of MaxSymbols (ten stocks per screening).
+// Importing metadata does not create a universe, grant access or fetch OHLCV.
+func ValidateUSCatalogImport(items []Instrument) error {
+	if len(items) < 1 || len(items) > 20000 {
+		return fmt.Errorf("US catalog import requires 1..20000 instruments")
+	}
+	seen := make(map[string]bool, len(items))
+	for _, item := range items {
+		if SymbolMarket(item.Symbol) != "US" || item.ProviderSymbol != item.Symbol ||
+			(item.Exchange != "XNAS" && item.Exchange != "XNYS") || item.Currency != "USD" ||
+			seen[item.Symbol] || strings.TrimSpace(item.Name) == "" || len([]rune(item.Name)) > 300 {
+			return fmt.Errorf("invalid or duplicate US catalog instrument")
+		}
+		seen[item.Symbol] = true
+	}
+	return nil
+}
+
+const usCatalogInsert = `insert into signalgen.stock_catalog
+  (symbol,provider,provider_symbol,name,exchange,currency)
+select symbol,'yahoo_finance',symbol,name,exchange,'USD'
+from unnest($1::text[],$2::text[],$3::text[]) as imported(symbol,name,exchange)
+on conflict(symbol) do nothing`
+
+// ImportUSCatalog preserves existing rows, including inactive listings. This is
+// additive ingestion, not a delisting/reactivation policy or a schema migration.
+func ImportUSCatalog(ctx context.Context, db catalogExecutor, items []Instrument) (int64, error) {
+	if err := ValidateUSCatalogImport(items); err != nil {
+		return 0, err
+	}
+	if db == nil {
+		return 0, fmt.Errorf("catalog database is required")
+	}
+	symbols, names, exchanges := make([]string, len(items)), make([]string, len(items)), make([]string, len(items))
+	for index, item := range items {
+		symbols[index], names[index], exchanges[index] = item.Symbol, strings.TrimSpace(item.Name), item.Exchange
+	}
+	command, err := db.Exec(ctx, usCatalogInsert, symbols, names, exchanges)
+	return command.RowsAffected(), err
+}

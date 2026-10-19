@@ -1,8 +1,12 @@
 # Signalgen Web
 
 US stocks: choose the US/Nasdaq/NYSE market in the universe editor, select 1–10
-stocks, then run that universe in the screener. Initial US catalog: 20 symbols,
-not all US listings. USD stays separate from IDX/IDR; no FX conversion. AS watchlist
+stocks, then run that universe in the screener. The catalog now imports eligible
+Nasdaq/NYSE stocks from the full official directories: 5,600 at the 19 October
+2026 import, not a fixed 20-symbol list. ETFs, preferred/debt, warrants, rights,
+units and test issues are filtered; OTC/other US venues are not covered. The
+screening maximum stays **10**, regardless of catalog size. USD stays separate
+from IDX/IDR; no FX conversion. AS watchlist
 keys use `US:AAPL`. See [US scope and verification](../../docs/backend/US_STOCKS.md).
 
 Historical OHLCV/screener snapshot caching uses gzip + AES-256-GCM in IndexedDB,

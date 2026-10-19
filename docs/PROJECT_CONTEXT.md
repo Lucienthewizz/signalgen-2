@@ -111,9 +111,12 @@ WASM dapat dianalisis; secret provider/signing/server tidak di client. Encryptio
 
 Normalisasi historis mencakup market/currency/UTC/adjustment/warmup. Provider server-side; hak redistribusi/cache diperiksa. Signal bukan order atau jaminan profit.
 
-Perluasan 19 Oktober 2026 atas permintaan pengguna: katalog awal 20 saham AS
-Nasdaq/NYSE, market `US` dan currency `USD`, selain katalog IDX/IDR. Satu universe
-tetap 1–10 saham satu pasar; bukan semua bursa sekaligus. [Kontrak dan batas](backend/US_STOCKS.md).
+Perluasan 19 Oktober 2026 atas permintaan pengguna: katalog AS diperluas dari
+20 pilihan awal menjadi seluruh listing Nasdaq/NYSE yang lolos filter saham
+pada direktori resmi (5.600 pada impor 19 Oktober), market `US` dan currency
+`USD`, selain katalog IDX/IDR. Katalog bukan batas screening: satu universe tetap
+1–10 saham satu pasar. ETF, preferred/debt, waran, rights, units dan instrumen
+uji tidak diimpor; cakupan bukan OTC/seluruh venue AS. [Kontrak dan batas](backend/US_STOCKS.md).
 
 ## 6. Runtime dan realtime
 
