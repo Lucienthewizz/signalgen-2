@@ -18,13 +18,15 @@ var supportedOperands = map[string]bool{
 	"RSI14": true,
 }
 
-// supportedOperators mendaftarkan seluruh operator pembanding matematis yang sah.
+// supportedOperators mendaftarkan seluruh operator pembanding matematis dan persilangan (crossover) yang sah.
 // Operator kesetaraan persis (==) sengaja ditiadakan untuk menghindari galat floating-point IEEE 754.
 var supportedOperators = map[string]bool{
-	">":  true,
-	"<":  true,
-	">=": true,
-	"<=": true,
+	">":          true,
+	"<":          true,
+	">=":         true,
+	"<=":         true,
+	"CROSS_UP":   true,
+	"CROSS_DOWN": true,
 }
 
 // GetCapabilities mengembalikan salinan baru profil kapabilitas engine.
@@ -42,7 +44,7 @@ func GetCapabilities() Capabilities {
 		Markets:              []string{"IDX", "US"},
 		Timeframes:           []string{"1d"},
 		Indicators:           []string{"PRICE", "EMA9", "EMA20", "RSI14"},
-		Operators:            []string{"<", "<=", ">", ">="},
+		Operators:            []string{"<", "<=", ">", ">=", "CROSS_UP", "CROSS_DOWN"},
 		RuleLogic:            []string{"AND", "OR"},
 		SignalTypes:          []string{"BUY", "SELL"},
 		MaxCandlesPerRun:     MaxCandlesPerRun,
@@ -153,6 +155,7 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 	signals := make([]Signal, 0)
 	evaluations := make([]CandidateEvaluation, 0, len(request.Candidates))
 	var lastSignal time.Time
+	var prevValues map[string]float64
 	for _, candidate := range request.Candidates {
 		parsed, _ := time.Parse(time.RFC3339, candidate.Timestamp)
 		values := map[string]float64{
@@ -161,10 +164,11 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 			"EMA20": candidate.Features.EMA20,
 			"RSI14": candidate.Features.RSI14,
 		}
-		matched, err := evaluateRule(request.Rule, values)
+		matched, err := evaluateRule(request.Rule, values, prevValues)
 		if err != nil {
 			return DecisionResult{}, err
 		}
+		prevValues = values
 		if !matched {
 			evaluations = append(evaluations, CandidateEvaluation{
 				Symbol:      candidate.Symbol,
@@ -401,16 +405,16 @@ func extractNumericThreshold(raw interface{}) (float64, bool, error) {
 	}
 }
 
-// evaluateRule mengevaluasi seluruh kondisi dalam aturan terhadap nilai kandidat saat ini:
+// evaluateRule mengevaluasi seluruh kondisi dalam aturan terhadap nilai kandidat saat ini dan sebelumnya:
 // - Logika "OR": Mengembalikan true jika ada MINIMAL SATU kondisi yang cocok (short-circuit).
 // - Logika "AND": Mengembalikan true HANYA JIKA SEMUA kondisi cocok (gagal jika ada satu kondisi false).
-func evaluateRule(rule RuleSnapshot, values map[string]float64) (bool, error) {
+func evaluateRule(rule RuleSnapshot, values map[string]float64, prevValues map[string]float64) (bool, error) {
 	if len(rule.Conditions) == 0 {
 		return false, fmt.Errorf("rule must contain at least one condition")
 	}
 	if rule.Logic == "OR" {
 		for _, condition := range rule.Conditions {
-			matched, err := evaluateCondition(condition, values)
+			matched, err := evaluateCondition(condition, values, prevValues)
 			if err != nil {
 				return false, err
 			}
@@ -421,7 +425,7 @@ func evaluateRule(rule RuleSnapshot, values map[string]float64) (bool, error) {
 		return false, nil
 	}
 	for _, condition := range rule.Conditions {
-		matched, err := evaluateCondition(condition, values)
+		matched, err := evaluateCondition(condition, values, prevValues)
 		if err != nil {
 			return false, err
 		}
@@ -432,8 +436,11 @@ func evaluateRule(rule RuleSnapshot, values map[string]float64) (bool, error) {
 	return true, nil
 }
 
-// evaluateCondition mengevaluasi perbandingan satu kondisi individual (misal: PRICE > EMA9).
-func evaluateCondition(condition Condition, values map[string]float64) (bool, error) {
+// evaluateCondition mengevaluasi perbandingan satu kondisi individual (misal: PRICE > EMA9 atau EMA9 CROSS_UP EMA20).
+// Untuk operator persilangan (CROSS_UP dan CROSS_DOWN), fungsi membandingkan posisi relatif pada candle saat ini
+// terhadap candle sebelumnya (prevValues). Jika candle sebelumnya tidak ada (misal candle pertama),
+// kondisi persilangan akan mengembalikan false karena belum ada data riwayat persilangan.
+func evaluateCondition(condition Condition, values map[string]float64, prevValues map[string]float64) (bool, error) {
 	left := values[condition.Left]
 	right, err := resolveValue(condition.Right, values)
 	if err != nil {
@@ -448,6 +455,26 @@ func evaluateCondition(condition Condition, values map[string]float64) (bool, er
 		return left >= right, nil
 	case "<=":
 		return left <= right, nil
+	case "CROSS_UP":
+		if prevValues == nil {
+			return false, nil
+		}
+		prevLeft := prevValues[condition.Left]
+		prevRight, err := resolveValue(condition.Right, prevValues)
+		if err != nil {
+			return false, err
+		}
+		return prevLeft <= prevRight && left > right, nil
+	case "CROSS_DOWN":
+		if prevValues == nil {
+			return false, nil
+		}
+		prevLeft := prevValues[condition.Left]
+		prevRight, err := resolveValue(condition.Right, prevValues)
+		if err != nil {
+			return false, err
+		}
+		return prevLeft >= prevRight && left < right, nil
 	default:
 		return false, fmt.Errorf("unsupported operator %q", condition.Op)
 	}

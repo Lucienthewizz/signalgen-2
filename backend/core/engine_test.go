@@ -433,4 +433,114 @@ func TestValidateRuleAcceptsSELLSignalType(t *testing.T) {
 	}
 }
 
+func TestValidateRuleAcceptsCrossOperators(t *testing.T) {
+	// Memastikan operator persilangan CROSS_UP dan CROSS_DOWN diterima oleh ValidateRule
+	rules := []RuleSnapshot{
+		{
+			Name: "Golden Cross Rule", Logic: "AND", SignalType: "BUY", CooldownSec: 60,
+			Conditions: []Condition{{Left: "EMA9", Op: "CROSS_UP", Right: "EMA20"}},
+		},
+		{
+			Name: "Death Cross Rule", Logic: "AND", SignalType: "SELL", CooldownSec: 60,
+			Conditions: []Condition{{Left: "EMA9", Op: "CROSS_DOWN", Right: "EMA20"}},
+		},
+		{
+			Name: "RSI Oversold Breakout", Logic: "AND", SignalType: "BUY", CooldownSec: 0,
+			Conditions: []Condition{{Left: "RSI14", Op: "CROSS_UP", Right: 30}},
+		},
+		{
+			Name: "RSI Overbought Breakdown", Logic: "AND", SignalType: "SELL", CooldownSec: 0,
+			Conditions: []Condition{{Left: "RSI14", Op: "CROSS_DOWN", Right: 70}},
+		},
+	}
+	for _, rule := range rules {
+		if err := ValidateRule(rule); err != nil {
+			t.Fatalf("expected rule %q to be valid, got: %v", rule.Name, err)
+		}
+	}
+}
+
+func TestEvaluateDecisionSupportsCrossUp(t *testing.T) {
+	// Rule: EMA9 CROSS_UP EMA20 (Golden Cross)
+	rule := RuleSnapshot{
+		Name: "Golden Cross", Logic: "AND", SignalType: "BUY", CooldownSec: 0,
+		Conditions: []Condition{{Left: "EMA9", Op: "CROSS_UP", Right: "EMA20"}},
+	}
+	candidates := []FeatureCandidate{
+		// Candle 0: EMA9 = 100, EMA20 = 105 (sebelum persilangan, lilin pertama tidak ada lilin riwayat sebelumnya -> false)
+		{Symbol: "BBRI.JK", Timestamp: "2026-01-01T00:00:00Z", Features: FeatureVector{Price: 100, EMA9: 100, EMA20: 105, RSI14: 50}},
+		// Candle 1: EMA9 = 103, EMA20 = 104 (masih di bawah EMA20 -> false)
+		{Symbol: "BBRI.JK", Timestamp: "2026-01-02T00:00:00Z", Features: FeatureVector{Price: 103, EMA9: 103, EMA20: 104, RSI14: 52}},
+		// Candle 2: EMA9 = 106, EMA20 = 103 (EMA9 melintas ke atas EMA20: kemarin 103 <= 104, sekarang 106 > 103 -> Golden Cross TRUE!)
+		{Symbol: "BBRI.JK", Timestamp: "2026-01-03T00:00:00Z", Features: FeatureVector{Price: 106, EMA9: 106, EMA20: 103, RSI14: 55}},
+		// Candle 3: EMA9 = 110, EMA20 = 104 (kemarin sudah di atas: kemarin 106 > 103, sehingga bukan persilangan baru -> false)
+		{Symbol: "BBRI.JK", Timestamp: "2026-01-04T00:00:00Z", Features: FeatureVector{Price: 110, EMA9: 110, EMA20: 104, RSI14: 58}},
+	}
+
+	res, err := EvaluateDecision(DecisionRequest{Rule: rule, Candidates: candidates})
+	if err != nil {
+		t.Fatalf("EvaluateDecision failed: %v", err)
+	}
+
+	if len(res.Signals) != 1 {
+		t.Fatalf("expected exactly 1 signal on Golden Cross, got %d", len(res.Signals))
+	}
+	if res.Signals[0].Timestamp != "2026-01-03T00:00:00Z" {
+		t.Fatalf("expected signal on 2026-01-03T00:00:00Z, got %s", res.Signals[0].Timestamp)
+	}
+	if res.Signals[0].SignalType != "BUY" {
+		t.Fatalf("expected BUY signal type, got %s", res.Signals[0].SignalType)
+	}
+
+	// Pastikan status matched pada setiap candle sesuai ekspektasi
+	if res.Evaluations[0].Matched != false || res.Evaluations[1].Matched != false {
+		t.Fatalf("expected candle 0 and 1 not matched")
+	}
+	if res.Evaluations[2].Matched != true {
+		t.Fatalf("expected candle 2 matched")
+	}
+	if res.Evaluations[3].Matched != false {
+		t.Fatalf("expected candle 3 not matched after crossover day")
+	}
+}
+
+func TestEvaluateDecisionSupportsCrossDown(t *testing.T) {
+	// Rule: RSI14 CROSS_DOWN 70 (Overbought Breakdown / Exit)
+	rule := RuleSnapshot{
+		Name: "RSI Overbought Breakdown", Logic: "AND", SignalType: "SELL", CooldownSec: 0,
+		Conditions: []Condition{{Left: "RSI14", Op: "CROSS_DOWN", Right: 70}},
+	}
+	candidates := []FeatureCandidate{
+		// Candle 0: RSI14 = 75 (candle awal -> false)
+		{Symbol: "TLKM.JK", Timestamp: "2026-01-01T00:00:00Z", Features: FeatureVector{Price: 100, EMA9: 100, EMA20: 100, RSI14: 75}},
+		// Candle 1: RSI14 = 72 (kemarin 75 >= 70, sekarang 72 >= 70 -> belum tembus ke bawah -> false)
+		{Symbol: "TLKM.JK", Timestamp: "2026-01-02T00:00:00Z", Features: FeatureVector{Price: 98, EMA9: 99, EMA20: 100, RSI14: 72}},
+		// Candle 2: RSI14 = 65 (kemarin 72 >= 70, sekarang 65 < 70 -> tembus ke bawah 70 -> Death Cross / Cross Down TRUE!)
+		{Symbol: "TLKM.JK", Timestamp: "2026-01-03T00:00:00Z", Features: FeatureVector{Price: 95, EMA9: 97, EMA20: 100, RSI14: 65}},
+		// Candle 3: RSI14 = 60 (kemarin 65 < 70, sekarang 60 < 70 -> bukan persilangan baru -> false)
+		{Symbol: "TLKM.JK", Timestamp: "2026-01-04T00:00:00Z", Features: FeatureVector{Price: 93, EMA9: 95, EMA20: 100, RSI14: 60}},
+	}
+
+	res, err := EvaluateDecision(DecisionRequest{Rule: rule, Candidates: candidates})
+	if err != nil {
+		t.Fatalf("EvaluateDecision failed: %v", err)
+	}
+
+	if len(res.Signals) != 1 {
+		t.Fatalf("expected exactly 1 signal on Cross Down, got %d", len(res.Signals))
+	}
+	if res.Signals[0].Timestamp != "2026-01-03T00:00:00Z" {
+		t.Fatalf("expected signal on 2026-01-03T00:00:00Z, got %s", res.Signals[0].Timestamp)
+	}
+	if res.Signals[0].SignalType != "SELL" {
+		t.Fatalf("expected SELL signal type, got %s", res.Signals[0].SignalType)
+	}
+	if res.Evaluations[2].Matched != true {
+		t.Fatalf("expected candle 2 matched")
+	}
+	if res.Evaluations[3].Matched != false {
+		t.Fatalf("expected candle 3 not matched after crossover day")
+	}
+}
+
 
