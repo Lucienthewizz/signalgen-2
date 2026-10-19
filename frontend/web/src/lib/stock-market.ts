@@ -10,7 +10,8 @@ export const marketLabels: Record<StockMarket, string> = {
   US: "Amerika Serikat · Nasdaq/NYSE · USD",
 };
 export function stockMarket(stock: StockInstrument): StockMarket {
-  return stock.exchange === "XIDX" ? "IDX" : "US";
+  if (stock.exchange === "XIDX" || stock.symbol?.endsWith(".JK")) return "IDX";
+  return "US";
 }
 export function symbolMarket(symbol: string): StockMarket {
   return symbol.endsWith(".JK") ? "IDX" : "US";
