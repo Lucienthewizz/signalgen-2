@@ -50,6 +50,7 @@ export function screeningFailure(error: {
 export function conditionEvidence(
   condition: RuleCondition,
   features: ScreenerFeatureVector,
+  prevFeatures?: ScreenerFeatureVector | null,
 ) {
   const values: Record<string, number> = {
     PRICE: features.price,
@@ -63,14 +64,59 @@ export function conditionEvidence(
       ? condition.right
       : values[condition.right];
   if (!Number.isFinite(left) || !Number.isFinite(right)) return null;
-  const passed =
-    condition.op === ">"
-      ? left > right
-      : condition.op === ">="
-        ? left >= right
-        : condition.op === "<"
-          ? left < right
-          : left <= right;
+
+  let passed = false;
+  switch (condition.op) {
+    case ">":
+      passed = left > right;
+      break;
+    case ">=":
+      passed = left >= right;
+      break;
+    case "<":
+      passed = left < right;
+      break;
+    case "<=":
+      passed = left <= right;
+      break;
+    case "CROSS_UP":
+      if (!prevFeatures) {
+        passed = false;
+      } else {
+        const prevValues: Record<string, number> = {
+          PRICE: prevFeatures.price,
+          EMA9: prevFeatures.ema9,
+          EMA20: prevFeatures.ema20,
+          RSI14: prevFeatures.rsi14,
+        };
+        const prevLeft = prevValues[condition.left];
+        const prevRight =
+          typeof condition.right === "number"
+            ? condition.right
+            : prevValues[condition.right];
+        passed = prevLeft <= prevRight && left > right;
+      }
+      break;
+    case "CROSS_DOWN":
+      if (!prevFeatures) {
+        passed = false;
+      } else {
+        const prevValues: Record<string, number> = {
+          PRICE: prevFeatures.price,
+          EMA9: prevFeatures.ema9,
+          EMA20: prevFeatures.ema20,
+          RSI14: prevFeatures.rsi14,
+        };
+        const prevLeft = prevValues[condition.left];
+        const prevRight =
+          typeof condition.right === "number"
+            ? condition.right
+            : prevValues[condition.right];
+        passed = prevLeft >= prevRight && left < right;
+      }
+      break;
+  }
+
   return {
     label: `${condition.left} ${condition.op} ${condition.right}`,
     left,

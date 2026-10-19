@@ -81,9 +81,10 @@ function rightValue(value: string): string | number {
 
 function summary(definition?: UserRuleDefinition) {
   if (!definition?.conditions.length) return "No conditions yet";
-  return definition.conditions
+  const conds = definition.conditions
     .map((item) => `${item.left} ${item.op} ${item.right}`)
-    .join(" · ");
+    .join(definition.logic === "OR" ? " OR " : " · ");
+  return `${definition.signal_type || "BUY"} (${definition.logic || "AND"}): ${conds}`;
 }
 
 export function ServerRulesPanel({
@@ -373,6 +374,56 @@ export function ServerRulesPanel({
                 </FieldDescription>
               </Field>
               <Field>
+                <FieldLabel htmlFor="rule-signal-type">Signal action</FieldLabel>
+                <Select
+                  value={definition.signal_type}
+                  onValueChange={(value) =>
+                    setDefinition((current) => ({
+                      ...current,
+                      signal_type: (value as "BUY" | "SELL") || "BUY",
+                    }))
+                  }
+                >
+                  <SelectTrigger id="rule-signal-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="BUY">BUY (Entry)</SelectItem>
+                      <SelectItem value="SELL">SELL (Exit)</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <FieldDescription>
+                  Direction of signal generated when conditions match.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="rule-logic">Rule logic</FieldLabel>
+                <Select
+                  value={definition.logic}
+                  onValueChange={(value) =>
+                    setDefinition((current) => ({
+                      ...current,
+                      logic: (value as "AND" | "OR") || "AND",
+                    }))
+                  }
+                >
+                  <SelectTrigger id="rule-logic">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="AND">AND (All conditions met)</SelectItem>
+                      <SelectItem value="OR">OR (Any condition met)</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <FieldDescription>
+                  Combine conditions using AND or OR.
+                </FieldDescription>
+              </Field>
+              <Field>
                 <FieldLabel htmlFor="rule-cooldown">
                   Cooldown (seconds)
                 </FieldLabel>
@@ -406,7 +457,9 @@ export function ServerRulesPanel({
                     indicator.
                   </p>
                 </div>
-                <Badge variant="outline">AND logic</Badge>
+                <Badge variant="outline">
+                  {definition.logic} logic · {definition.signal_type} signal
+                </Badge>
               </div>
               {definition.conditions.length === 0 ? (
                 <button
@@ -475,9 +528,22 @@ export function ServerRulesPanel({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            {([">", ">=", "<", "<="] as const).map((value) => (
+                            {(
+                              [
+                                ">",
+                                ">=",
+                                "<",
+                                "<=",
+                                "CROSS_UP",
+                                "CROSS_DOWN",
+                              ] as const
+                            ).map((value) => (
                               <SelectItem key={value} value={value}>
-                                {value}
+                                {value === "CROSS_UP"
+                                  ? "CROSS_UP (Golden Cross)"
+                                  : value === "CROSS_DOWN"
+                                    ? "CROSS_DOWN (Death Cross)"
+                                    : value}
                               </SelectItem>
                             ))}
                           </SelectGroup>

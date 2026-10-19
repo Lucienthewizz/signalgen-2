@@ -114,14 +114,14 @@ export type DatasetContent = {
 
 export type RuleCondition = {
   left: "PRICE" | "EMA9" | "EMA20" | "RSI14";
-  op: "<" | "<=" | ">" | ">=";
+  op: "<" | "<=" | ">" | ">=" | "CROSS_UP" | "CROSS_DOWN";
   right: string | number;
 };
 
 export type UserRuleDefinition = {
   name: string;
-  logic: "AND";
-  signal_type: "BUY";
+  logic: "AND" | "OR";
+  signal_type: "BUY" | "SELL";
   cooldown_sec: number;
   conditions: RuleCondition[];
 };
@@ -255,6 +255,7 @@ export type ScreenerDecision = {
   symbol: string;
   timestamp: string;
   matched: boolean;
+  signal_type?: "BUY" | "SELL";
   reason_codes: string[];
 };
 

@@ -834,7 +834,9 @@ export function WorkspaceScreenerPanel({
                     ],
                     ...visibleRows.map((row) => [
                       row.decision.symbol,
-                      row.decision.matched ? "Matched" : "Not matched",
+                      row.decision.matched
+                        ? row.decision.signal_type || "BUY"
+                        : "Not matched",
                       row.latestOpen,
                       row.latestClose,
                       row.features.rsi14,
@@ -862,7 +864,7 @@ export function WorkspaceScreenerPanel({
                     <p>
                       Candle {candleDate(detailRow.decision.timestamp)} ·{" "}
                       {detailRow.decision.matched
-                        ? "Matched rule"
+                        ? `Signal ${detailRow.decision.signal_type || "BUY"} (Matched rule)`
                         : "Did not match rule"}
                     </p>
                   </div>
@@ -909,6 +911,7 @@ export function WorkspaceScreenerPanel({
                           const evidence = conditionEvidence(
                             condition,
                             detailRow.features,
+                            detailRow.prevFeatures,
                           );
                           return (
                             <li key={index}>
@@ -1063,21 +1066,40 @@ export function WorkspaceScreenerPanel({
                       <TableCell>
                         <Badge
                           variant={
-                            row.decision.matched ? "success" : "destructive"
+                            row.decision.matched
+                              ? row.decision.signal_type === "SELL"
+                                ? "destructive"
+                                : "success"
+                              : "outline"
                           }
                         >
                           {row.decision.matched ? (
-                            <CircleCheck
-                              data-icon="inline-start"
-                              aria-hidden="true"
-                            />
+                            row.decision.signal_type === "SELL" ? (
+                              <>
+                                <CircleAlert
+                                  data-icon="inline-start"
+                                  aria-hidden="true"
+                                />
+                                SELL
+                              </>
+                            ) : (
+                              <>
+                                <CircleCheck
+                                  data-icon="inline-start"
+                                  aria-hidden="true"
+                                />
+                                BUY
+                              </>
+                            )
                           ) : (
-                            <XCircle
-                              data-icon="inline-start"
-                              aria-hidden="true"
-                            />
+                            <>
+                              <XCircle
+                                data-icon="inline-start"
+                                aria-hidden="true"
+                              />
+                              Not matched
+                            </>
                           )}
-                          {row.decision.matched ? "Matched" : "Not matched"}
                         </Badge>
                       </TableCell>
                       <TableCell>

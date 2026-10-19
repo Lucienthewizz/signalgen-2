@@ -57,6 +57,33 @@ test("condition evidence uses real feature values and handles unknown operands",
     ),
     null,
   );
+  // Test persilangan CROSS_UP dan CROSS_DOWN
+  const prevValues = { price: 98, ema9: 98, ema20: 101, rsi14: 48 };
+  assert.equal(
+    output.conditionEvidence(
+      { left: "EMA9", op: "CROSS_UP", right: "EMA20" },
+      values,
+      prevValues,
+    ).passed,
+    false,
+  );
+  const crossedValues = { price: 105, ema9: 102, ema20: 100, rsi14: 65 };
+  assert.equal(
+    output.conditionEvidence(
+      { left: "EMA9", op: "CROSS_UP", right: "EMA20" },
+      crossedValues,
+      prevValues,
+    ).passed,
+    true,
+  );
+  assert.equal(
+    output.conditionEvidence(
+      { left: "EMA9", op: "CROSS_UP", right: "EMA20" },
+      crossedValues,
+      null,
+    ).passed,
+    false,
+  );
 });
 test("expired, canceled and overdue subscriptions never claim usable subscription features", () => {
   const now = Date.parse("2026-10-06T00:00:00Z");

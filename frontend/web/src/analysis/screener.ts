@@ -26,6 +26,7 @@ export type LiveScreenerRun = {
   rows: Array<{
     decision: ScreenerDecision;
     features: ScreenerFeatureVector;
+    prevFeatures?: ScreenerFeatureVector | null;
     latestClose: number;
     latestOpen: number | null;
   }>;
@@ -151,7 +152,9 @@ async function runAuthorizedScreener(
     ]),
   );
   const rows = dataset.series.map((series, index) => {
-    const latest = featureRuns[index]?.candidates.at(-1);
+    const candidates = featureRuns[index]?.candidates ?? [];
+    const latest = candidates.at(-1);
+    const prev = candidates.length > 1 ? candidates.at(-2) : undefined;
     const decision =
       latest && decisions.get(`${latest.symbol}\u0000${latest.timestamp}`);
     if (!latest || !decision || latest.symbol !== series.symbol)
@@ -162,6 +165,7 @@ async function runAuthorizedScreener(
     return {
       decision,
       features: latest.features,
+      prevFeatures: prev?.features ?? null,
       latestClose: series.candles.at(-1)?.close ?? 0,
       latestOpen: series.candles.at(-1)?.open ?? null,
     };

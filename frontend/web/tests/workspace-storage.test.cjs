@@ -76,6 +76,19 @@ test("draft import validation rejects corrupt fields and strips extras", () => {
   );
   const valid = storage.validatedRuleDraft({ ...draft(), token: "secret" });
   assert.equal("token" in valid, false);
+  const sellOrDraft = storage.validatedRuleDraft({
+    ...draft(),
+    definition: {
+      name: "Exit Rule",
+      logic: "OR",
+      signal_type: "SELL",
+      cooldown_sec: 60,
+      conditions: [{ left: "EMA9", op: "CROSS_DOWN", right: "EMA20" }],
+    },
+  });
+  assert.equal(sellOrDraft.definition.logic, "OR");
+  assert.equal(sellOrDraft.definition.signal_type, "SELL");
+  assert.equal(sellOrDraft.definition.conditions[0].op, "CROSS_DOWN");
 });
 test("unavailable, malformed, oversized and expired storage degrade safely", () => {
   const blocked = load({
