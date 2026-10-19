@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 )
 
+// supportedOperands mendaftarkan seluruh variabel indikator teknikal yang didukung oleh engine M0.
+// Nilai indikator ini dihasilkan pada tahap ComputeFeatures (client/WASM).
 var supportedOperands = map[string]bool{
 	"PRICE": true,
 	"EMA9":  true,
@@ -15,6 +18,8 @@ var supportedOperands = map[string]bool{
 	"RSI14": true,
 }
 
+// supportedOperators mendaftarkan seluruh operator pembanding matematis yang sah.
+// Operator kesetaraan persis (==) sengaja ditiadakan untuk menghindari galat floating-point IEEE 754.
 var supportedOperators = map[string]bool{
 	">":  true,
 	"<":  true,
@@ -22,8 +27,8 @@ var supportedOperators = map[string]bool{
 	"<=": true,
 }
 
-// GetCapabilities returns a fresh value so callers cannot mutate shared
-// slices and accidentally change the advertised contract.
+// GetCapabilities mengembalikan salinan baru profil kapabilitas engine.
+// Mengembalikan nilai baru (bukan referensi) agar pemanggil tidak dapat memutasi slice bersama secara tidak sengaja.
 func GetCapabilities() Capabilities {
 	return Capabilities{
 		CapabilitiesVersion:  CapabilitiesVersion,
@@ -44,8 +49,7 @@ func GetCapabilities() Capabilities {
 	}
 }
 
-// GetBaselineRuleDefinition returns a fresh definition so API or WASM callers
-// cannot mutate the frozen system rule shared by later requests.
+// GetBaselineRuleDefinition mengembalikan salinan aturan bawaan ("Default Scalping") yang dibekukan untuk baseline sistem.
 func GetBaselineRuleDefinition() BaselineRuleDefinition {
 	return BaselineRuleDefinition{
 		ID: 1, Name: "Default Scalping", Type: "system", Logic: "AND", SignalType: "BUY", CooldownSec: 60,
@@ -58,9 +62,9 @@ func GetBaselineRuleDefinition() BaselineRuleDefinition {
 	}
 }
 
-// RunSignals executes the frozen M0 subset. It intentionally produces signals
-// only; trade fills and P&L remain outside this baseline until their policy is
-// selected and frozen separately.
+// RunSignals mengeksekusi pipeline sinyal lengkap untuk pengujian baseline M0.
+// Fungsi ini hanya menghasilkan sinyal masuk (BUY); eksekusi trade fill dan P&L
+// berada di luar baseline ini hingga kebijakan eksekusi dibekukan terpisah.
 func RunSignals(request RunRequest) (RunResult, error) {
 	features, err := ComputeFeatures(FeatureRequest{
 		Purpose: request.Purpose,
@@ -88,8 +92,9 @@ func RunSignals(request RunRequest) (RunResult, error) {
 	}, nil
 }
 
-// ComputeFeatures performs the expensive indicator calculation intended for
-// the client/WASM stage. It does not receive or evaluate a rule.
+// ComputeFeatures melakukan kalkulasi indikator teknikal (EMA9, EMA20, RSI14).
+// Fungsi ini dirancang untuk berjalan di sisi client/WASM sehingga server tidak perlu
+// mengolah data candle mentah yang berat. Fungsi ini tidak menerima aturan pengguna.
 func ComputeFeatures(request FeatureRequest) (FeatureResult, error) {
 	if err := validateFeatureRequest(request); err != nil {
 		return FeatureResult{}, err
@@ -106,8 +111,8 @@ func ComputeFeatures(request FeatureRequest) (FeatureResult, error) {
 
 	candidates := make([]FeatureCandidate, 0, len(request.Candles))
 	for i, candle := range request.Candles {
-		// The Python IndicatorEngine deliberately requires period+1 candles for
-		// RSI14, while EMA20 is available from candle 20.
+		// Mengikuti Python IndicatorEngine: RSI14 membutuhkan periode+1 (15) candle,
+		// sedangkan EMA20 mulai tersedia sejak candle ke-20.
 		if i+1 < 15 || math.IsNaN(ema9[i]) || math.IsNaN(ema20[i]) || math.IsNaN(rsi14[i]) {
 			continue
 		}
@@ -133,8 +138,9 @@ func ComputeFeatures(request FeatureRequest) (FeatureResult, error) {
 	}, nil
 }
 
-// EvaluateDecision applies the rule and cooldown to compact feature candidates.
-// This is the small stage proposed to remain private on the server.
+// EvaluateDecision mengevaluasi aturan screening pengguna dan status jeda waktu (cooldown)
+// terhadap kandidat fitur ringkas. Tahap ini dijalankan secara privat di server agar
+// logika strategi pengguna tidak pernah bocor ke publik atau client lain.
 func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 	if err := ValidateRule(request.Rule); err != nil {
 		return DecisionResult{}, err
@@ -205,6 +211,8 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 	}, nil
 }
 
+// validateFeatureRequest memvalidasi integritas candle mentah yang diterima untuk penghitungan fitur:
+// minimal 20 candle, kronologis strictly ascending, harga OHLC positif, dan hubungan High >= Low konsisten.
 func validateFeatureRequest(request FeatureRequest) error {
 	if request.Purpose != "screen" {
 		return fmt.Errorf("unsupported purpose %q; supported purposes: screen", request.Purpose)
@@ -240,6 +248,8 @@ func validateFeatureRequest(request FeatureRequest) error {
 	return nil
 }
 
+// validateCandidates memverifikasi validitas data kandidat fitur sebelum dievaluasi oleh aturan:
+// memastikan simbol konsisten, nilai indikator finite (bukan NaN/Inf), harga/EMA positif, dan RSI 0-100.
 func validateCandidates(candidates []FeatureCandidate) error {
 	if len(candidates) == 0 {
 		return fmt.Errorf("at least one feature candidate is required")
@@ -287,10 +297,12 @@ func validateCandidates(candidates []FeatureCandidate) error {
 	return nil
 }
 
-// ValidateRule is the shared validation boundary for persisted user rules and
-// portable execution. It accepts only the subset advertised by capabilities.
+// ValidateRule adalah gerbang validasi bersama untuk penyimpanan aturan kustom dan eksekusi screening.
+// Menjamin aturan sesuai spesifikasi kontrak kapabilitas: nama valid, logika AND/OR, cooldown sah,
+// batas nilai indikator (RSI 0-100, harga > 0), serta mencegah perbandingan kontradiktif dengan diri sendiri.
 func ValidateRule(rule RuleSnapshot) error {
-	if len(rule.Name) == 0 || len(rule.Name) > 100 {
+	trimmedName := strings.TrimSpace(rule.Name)
+	if len(trimmedName) == 0 || len(rule.Name) > 100 {
 		return fmt.Errorf("rule name must contain 1 to 100 characters")
 	}
 	if rule.Logic != "AND" && rule.Logic != "OR" {
@@ -324,11 +336,13 @@ func ValidateRule(rule RuleSnapshot) error {
 					return fmt.Errorf("RSI14 threshold must be between 0 and 100; got %v", numericVal)
 				}
 			} else {
+				// Ambang batas harga dan rata-rata bergerak (PRICE, EMA9, EMA20) wajib bernilai positif (> 0)
 				if numericVal <= 0 {
 					return fmt.Errorf("%s threshold must be greater than 0; got %v", condition.Left, numericVal)
 				}
 			}
 		} else {
+			// Operand kanan berupa indikator lain: tolak perbandingan variabel dengan dirinya sendiri
 			rightOperand, _ := condition.Right.(string)
 			if condition.Left == rightOperand {
 				return fmt.Errorf("condition cannot compare operand %q with itself", condition.Left)
@@ -338,6 +352,8 @@ func ValidateRule(rule RuleSnapshot) error {
 	return nil
 }
 
+// extractNumericThreshold mengekstrak dan memvalidasi nilai angka dari berbagai tipe data Go
+// (float64, float32, int, int32, int64, uint, uint32, uint64, json.Number, string).
 func extractNumericThreshold(raw interface{}) (float64, bool, error) {
 	switch right := raw.(type) {
 	case string:
@@ -383,6 +399,9 @@ func extractNumericThreshold(raw interface{}) (float64, bool, error) {
 	}
 }
 
+// evaluateRule mengevaluasi seluruh kondisi dalam aturan terhadap nilai kandidat saat ini:
+// - Logika "OR": Mengembalikan true jika ada MINIMAL SATU kondisi yang cocok (short-circuit).
+// - Logika "AND": Mengembalikan true HANYA JIKA SEMUA kondisi cocok (gagal jika ada satu kondisi false).
 func evaluateRule(rule RuleSnapshot, values map[string]float64) (bool, error) {
 	if len(rule.Conditions) == 0 {
 		return false, fmt.Errorf("rule must contain at least one condition")
@@ -411,6 +430,7 @@ func evaluateRule(rule RuleSnapshot, values map[string]float64) (bool, error) {
 	return true, nil
 }
 
+// evaluateCondition mengevaluasi perbandingan satu kondisi individual (misal: PRICE > EMA9).
 func evaluateCondition(condition Condition, values map[string]float64) (bool, error) {
 	left := values[condition.Left]
 	right, err := resolveValue(condition.Right, values)
@@ -431,6 +451,8 @@ func evaluateCondition(condition Condition, values map[string]float64) (bool, er
 	}
 }
 
+// resolveValue mengambil nilai aktual dari operand kanan:
+// baik dengan mencari nilai variabel indikator dari map kandidat, maupun mengonversi konstanta numerik.
 func resolveValue(raw interface{}, values map[string]float64) (float64, error) {
 	switch value := raw.(type) {
 	case float64:

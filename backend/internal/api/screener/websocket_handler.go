@@ -21,9 +21,8 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
 
-// ScreenerWebSocket consumes one ticket, rechecks server-owned permissions,
-// receives one feature batch, writes one private decision and closes. Measurements
-// are independent of HTTP 101: result_written means WriteJSON succeeded only.
+// ScreenerWebSocket mengonsumsi satu socket ticket, memverifikasi ulang otorisasi dan sesi pengguna,
+// menerima satu batch kandidat fitur dari client/WASM, menulis satu keputusan evaluasi privat, lalu menutup koneksi.
 func (server *Handler) ScreenerWebSocket(writer http.ResponseWriter, request *http.Request) {
 	trace := newEvaluationTrace(server.ScreeningObserver, platformhttp.RequestID(request.Context()))
 	defer trace.finish()
@@ -127,7 +126,7 @@ func (server *Handler) ScreenerWebSocket(writer http.ResponseWriter, request *ht
 		writeObservedSocketError(trace, ctx, connection, message.RequestID, "VERSION_MISMATCH", "Kontrak private scoring tidak cocok.", false)
 		return
 	}
-	// Count contract-valid candidate entries, not verified client computations.
+	// Hitung kandidat yang sesuai kontrak, bukan komputasi mentah client.
 	trace.event.Candidates = len(message.Candidates)
 	trace.begin(screener.StageRecheck)
 	rule, manifest, failure := server.screeningAuthorization().RecheckBatch(ctx, binding, grant)
@@ -149,6 +148,7 @@ func (server *Handler) ScreenerWebSocket(writer http.ResponseWriter, request *ht
 		writeObservedSocketError(trace, ctx, connection, message.RequestID, "INVALID_MESSAGE", "Feature candidate tidak valid.", false)
 		return
 	}
+	// Petakan hasil evaluasi ke map untuk menjaga urutan kandidat sama persis dengan yang dikirim client
 	evalMap := make(map[string]core.CandidateEvaluation, len(decision.Evaluations))
 	for _, eval := range decision.Evaluations {
 		evalMap[eval.Symbol+"\x00"+eval.Timestamp] = eval
@@ -190,8 +190,7 @@ func authorizationOutcome(err error) screener.Outcome {
 	return screener.OutcomeUnavailable
 }
 
-// Preserve the protocol error envelope. A successfully written error reply is
-// not a successful evaluation; failure outcome/stage remain those recorded above.
+// writeObservedSocketError menulis balasan error JSON sesuai protokol screener dan menutup koneksi dengan rapi.
 func writeObservedSocketError(trace *evaluationTrace, ctx context.Context, connection *platformws.Connection, requestID, code, message string, retryable bool) {
 	trace.begin(screener.StageWrite)
 	err := connection.WriteJSON(ctx, ErrorMessage{
@@ -203,7 +202,7 @@ func writeObservedSocketError(trace *evaluationTrace, ctx context.Context, conne
 	_ = connection.ClosePolicy(code)
 }
 
-// Reject unknown fields/trailing values without logging malformed JSON contents.
+// decodeStrictJSON mem-parsing JSON secara ketat: menolak atribut tak dikenal dan mencegah multiple JSON values.
 func decodeStrictJSON(raw []byte, target interface{}) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()

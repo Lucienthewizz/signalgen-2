@@ -56,6 +56,8 @@ func TestValidateRuleAcceptsOnlyAdvertisedSubset(t *testing.T) {
 		"price non-pos":   func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "PRICE", Op: ">", Right: 0} },
 		"price negative":  func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "PRICE", Op: ">", Right: -10} },
 		"ema non-pos":     func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "EMA9", Op: ">", Right: 0} },
+		"whitespace name": func(rule *RuleSnapshot) { rule.Name = "   " },
+		"empty name":      func(rule *RuleSnapshot) { rule.Name = "" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := valid
