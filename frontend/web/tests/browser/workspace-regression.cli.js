@@ -215,9 +215,10 @@ async (page) => {
           const geometry = await page.locator(".monitor-board-grid").evaluate(el => {
             const chart = el.querySelector(".monitor-chart").getBoundingClientRect();
             const detail = el.querySelector(".monitor-stock-detail").getBoundingClientRect();
-            return { sideBySide: detail.x >= chart.right, below: detail.top >= chart.bottom, topOffset: Math.abs(chart.top - detail.top) };
+            const card = el.querySelector(".monitor-detail-card").getBoundingClientRect();
+            return { sideBySide: detail.x >= chart.right, below: detail.top >= chart.bottom, topOffset: Math.abs(chart.top - card.top), bottomOffset: Math.abs(chart.bottom - card.bottom) };
           });
-          if (width === 1440 && (!geometry.sideBySide || geometry.topOffset > 1)) throw Error("Chart and stock card are not aligned side by side");
+          if (width === 1440 && (!geometry.sideBySide || geometry.topOffset > 1 || geometry.bottomOffset > 1)) throw Error(`Chart and detail card edges must align: ${JSON.stringify(geometry)}`);
           if (width === 390 && !geometry.below) throw Error("Stock card must stack below chart on mobile");
           await page.locator(".monitor-ledger").screenshot({ path: `/private/tmp/signalgen-monitor-table-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           await page.locator(".market-monitor").screenshot({ path: `/private/tmp/signalgen-monitor-lineup-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });

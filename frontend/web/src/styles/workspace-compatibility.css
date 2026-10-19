@@ -270,14 +270,17 @@
 .monitor-board { display: grid; gap: 20px; min-width: 0; scroll-margin-top: 100px; }
 .monitor-board-actions { justify-content: flex-start; flex-wrap: wrap; }
 .monitor-board-toolbar > [data-slot="field"] { width: 180px; }
-.monitor-board-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 24px; }
-.monitor-stock-detail { display: grid; gap: 16px; min-width: 0; }
+.monitor-board-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; align-items: stretch; gap: 24px; }
+.monitor-stock-detail { display: flex; min-width: 0; }
+.monitor-stock-detail > .monitor-detail-card { flex: 1; }
+.monitor-detail-navigation { width: 100%; margin-bottom: 16px; }
 .monitor-detail-navigation h3 { margin: 0; font-size: 16px; font-weight: 650; }
 .monitor-detail-navigation span { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .monitor-detail-card { --card-spacing: 24px; min-width: 0; border: 1px solid var(--line); box-shadow: none; background: linear-gradient(150deg, var(--accent-surface), var(--surface) 65%); }
 .monitor-detail-card h4 { margin: 0; font-size: 32px; line-height: 1.15; letter-spacing: -.025em; font-weight: 750; }
 .monitor-detail-card [data-slot="card-description"] { margin-top: 4px; overflow-wrap: anywhere; }
-.monitor-detail-card [data-slot="card-content"] { display: grid; gap: 24px; }
+.monitor-detail-card [data-slot="card-content"] { display: grid; gap: 24px; flex: 1; align-content: start; }
+.monitor-detail-card [data-slot="card-footer"] { flex-direction: column; align-items: stretch; gap: 12px; }
 .monitor-detail-identity { display: grid; place-items: center; gap: 20px; padding: 24px 0; border-block: 1px solid var(--line); color: var(--green); }
 .monitor-detail-identity > svg { width: 72px; height: 72px; stroke-width: 1.25; }
 .monitor-detail-identity > span { color: var(--muted); font-size: 12px; }
@@ -371,7 +374,10 @@
   height: clamp(540px, 65vh, 680px);
   min-height: 540px;
   background: var(--canvas);
+  flex: 1;
 }
+.monitor-chart { display: flex; flex-direction: column; }
+.monitor-chart > header, .monitor-chart > footer { flex-shrink: 0; }
 .monitor-ledger form {
   width: min(100%, 420px);
 }
