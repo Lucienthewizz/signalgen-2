@@ -1166,8 +1166,9 @@
 
 /* Subscription: the plan and expiry lead; each entitlement has its own surface. */
 .subscription-workspace--simple .plan-ledger {
-  border: 0;
-  border-radius: 0;
+  padding: var(--workspace-panel-gutter);
+  border: 1px solid var(--line);
+  border-radius: 16px;
   overflow: visible;
   background: transparent;
 }
@@ -1391,7 +1392,7 @@
 .subscription-workspace--simple .plan-columns [data-slot="card-footer"] {
   border-radius: 0 0 13px 13px;
 }
-.subscription-faq { margin: 20px var(--workspace-panel-gutter) var(--workspace-panel-gutter); width: auto; }
+.subscription-faq { margin: 20px 0 0; width: 100%; }
 .subscription-faq [data-slot="accordion-item"] { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
 .subscription-faq [data-slot="accordion-item"] > h3 { margin: 0; font: inherit; letter-spacing: normal; }
 .subscription-faq [data-slot="accordion-trigger"] { align-items: center; gap: 16px; min-height: 56px; padding: 16px var(--workspace-panel-gutter); border: 0; border-radius: 0; color: var(--text); font-size: 14px; line-height: 1.6; font-weight: 550; letter-spacing: 0; text-decoration: none; cursor: pointer; }

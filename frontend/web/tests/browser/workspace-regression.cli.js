@@ -439,6 +439,16 @@ async (page) => {
         return { left: inner.left - outer.left, right: outer.right - inner.right, radius: parseFloat(getComputedStyle(el).borderTopLeftRadius) };
       });
       if (inset.left < 16 || inset.right < 16 || inset.radius < 12) throw Error("Subscription cards lack rounded inset container");
+      const planAlignment = await page.locator('.plan-ledger').evaluate(el => {
+        const outer = el.getBoundingClientRect();
+        const header = el.querySelector(':scope > header').getBoundingClientRect();
+        const title = el.querySelector('#plan-heading').getBoundingClientRect();
+        const columns = el.querySelector('.plan-columns').getBoundingClientRect();
+        const faq = el.querySelector('.subscription-faq').getBoundingClientRect();
+        return { inset: columns.left - outer.left, edges: Math.max(Math.abs(header.left - columns.left), Math.abs(title.left - columns.left), Math.abs(columns.left - faq.left), Math.abs(columns.right - faq.right)) };
+      });
+      if (planAlignment.inset < 16 || planAlignment.edges > 1) throw Error(`Plan heading, cards and FAQ gutters differ: ${JSON.stringify(planAlignment)}`);
+      await page.locator('.plan-ledger').screenshot({ path: `/private/tmp/signalgen-plan-alignment-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
       await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
     }
   }
