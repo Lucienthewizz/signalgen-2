@@ -37,7 +37,7 @@ func GetCapabilities() Capabilities {
 		Timeframes:           []string{"1d"},
 		Indicators:           []string{"PRICE", "EMA9", "EMA20", "RSI14"},
 		Operators:            []string{"<", "<=", ">", ">="},
-		RuleLogic:            []string{"AND"},
+		RuleLogic:            []string{"AND", "OR"},
 		MaxCandlesPerRun:     MaxCandlesPerRun,
 		MaxSymbolsPerRun:     1,
 	}
@@ -143,12 +143,10 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 	}
 
 	signals := make([]Signal, 0)
+	evaluations := make([]CandidateEvaluation, 0, len(request.Candidates))
 	var lastSignal time.Time
 	for _, candidate := range request.Candidates {
 		parsed, _ := time.Parse(time.RFC3339, candidate.Timestamp)
-		if !lastSignal.IsZero() && parsed.Sub(lastSignal) < time.Duration(request.Rule.CooldownSec)*time.Second {
-			continue
-		}
 		values := map[string]float64{
 			"PRICE": candidate.Features.Price,
 			"EMA9":  candidate.Features.EMA9,
@@ -160,6 +158,21 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 			return DecisionResult{}, err
 		}
 		if !matched {
+			evaluations = append(evaluations, CandidateEvaluation{
+				Symbol:      candidate.Symbol,
+				Timestamp:   candidate.Timestamp,
+				Matched:     false,
+				ReasonCodes: []string{"CONDITIONS_NOT_MET"},
+			})
+			continue
+		}
+		if !lastSignal.IsZero() && parsed.Sub(lastSignal) < time.Duration(request.Rule.CooldownSec)*time.Second {
+			evaluations = append(evaluations, CandidateEvaluation{
+				Symbol:      candidate.Symbol,
+				Timestamp:   candidate.Timestamp,
+				Matched:     false,
+				ReasonCodes: []string{"COOLDOWN_ACTIVE"},
+			})
 			continue
 		}
 		signals = append(signals, Signal{
@@ -174,6 +187,12 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 				RSI14: candidate.Features.RSI14,
 			},
 		})
+		evaluations = append(evaluations, CandidateEvaluation{
+			Symbol:      candidate.Symbol,
+			Timestamp:   candidate.Timestamp,
+			Matched:     true,
+			ReasonCodes: []string{"RULE_MATCHED"},
+		})
 		lastSignal = parsed
 	}
 
@@ -181,6 +200,7 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 		DecisionVersion: DecisionVersion,
 		Signals:         signals,
 		CandidateCount:  len(request.Candidates),
+		Evaluations:     evaluations,
 	}, nil
 }
 
@@ -272,8 +292,8 @@ func ValidateRule(rule RuleSnapshot) error {
 	if len(rule.Name) == 0 || len(rule.Name) > 100 {
 		return fmt.Errorf("rule name must contain 1 to 100 characters")
 	}
-	if rule.Logic != "AND" {
-		return fmt.Errorf("unsupported rule logic %q", rule.Logic)
+	if rule.Logic != "AND" && rule.Logic != "OR" {
+		return fmt.Errorf("unsupported rule logic %q; supported: AND, OR", rule.Logic)
 	}
 	if rule.SignalType != "BUY" {
 		return fmt.Errorf("unsupported signal_type %q", rule.SignalType)
@@ -313,30 +333,51 @@ func ValidateRule(rule RuleSnapshot) error {
 }
 
 func evaluateRule(rule RuleSnapshot, values map[string]float64) (bool, error) {
+	if len(rule.Conditions) == 0 {
+		return false, fmt.Errorf("rule must contain at least one condition")
+	}
+	if rule.Logic == "OR" {
+		for _, condition := range rule.Conditions {
+			matched, err := evaluateCondition(condition, values)
+			if err != nil {
+				return false, err
+			}
+			if matched {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
 	for _, condition := range rule.Conditions {
-		left := values[condition.Left]
-		right, err := resolveValue(condition.Right, values)
+		matched, err := evaluateCondition(condition, values)
 		if err != nil {
 			return false, err
-		}
-		matched := false
-		switch condition.Op {
-		case ">":
-			matched = left > right
-		case "<":
-			matched = left < right
-		case ">=":
-			matched = left >= right
-		case "<=":
-			matched = left <= right
-		default:
-			return false, fmt.Errorf("unsupported operator %q", condition.Op)
 		}
 		if !matched {
 			return false, nil
 		}
 	}
 	return true, nil
+}
+
+func evaluateCondition(condition Condition, values map[string]float64) (bool, error) {
+	left := values[condition.Left]
+	right, err := resolveValue(condition.Right, values)
+	if err != nil {
+		return false, err
+	}
+	switch condition.Op {
+	case ">":
+		return left > right, nil
+	case "<":
+		return left < right, nil
+	case ">=":
+		return left >= right, nil
+	case "<=":
+		return left <= right, nil
+	default:
+		return false, fmt.Errorf("unsupported operator %q", condition.Op)
+	}
 }
 
 func resolveValue(raw interface{}, values map[string]float64) (float64, error) {

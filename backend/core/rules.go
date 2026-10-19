@@ -39,10 +39,18 @@ type DecisionRequest struct {
 	Candidates []FeatureCandidate `json:"candidates"`
 }
 
+type CandidateEvaluation struct {
+	Symbol      string   `json:"symbol"`
+	Timestamp   string   `json:"timestamp"`
+	Matched     bool     `json:"matched"`
+	ReasonCodes []string `json:"reason_codes"`
+}
+
 type DecisionResult struct {
-	DecisionVersion string   `json:"decision_version"`
-	Signals         []Signal `json:"signals"`
-	CandidateCount  int      `json:"candidate_count"`
+	DecisionVersion string                `json:"decision_version"`
+	Signals         []Signal              `json:"signals"`
+	CandidateCount  int                   `json:"candidate_count"`
+	Evaluations     []CandidateEvaluation `json:"evaluations,omitempty"`
 }
 
 type Signal struct {

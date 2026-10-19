@@ -47,7 +47,7 @@ func EvaluateBatch(rule core.RuleSnapshot, candidates []core.FeatureCandidate, s
 		}
 		groups[candidate.Symbol] = append(group, candidate)
 	}
-	result := core.DecisionResult{DecisionVersion: core.DecisionVersion, CandidateCount: len(candidates), Signals: []core.Signal{}}
+	result := core.DecisionResult{DecisionVersion: core.DecisionVersion, CandidateCount: len(candidates), Signals: []core.Signal{}, Evaluations: []core.CandidateEvaluation{}}
 	for _, symbol := range scope.Symbols {
 		if len(groups[symbol]) == 0 {
 			continue
@@ -57,6 +57,7 @@ func EvaluateBatch(rule core.RuleSnapshot, candidates []core.FeatureCandidate, s
 			return core.DecisionResult{}, err
 		}
 		result.Signals = append(result.Signals, decision.Signals...)
+		result.Evaluations = append(result.Evaluations, decision.Evaluations...)
 	}
 	return result, nil
 }

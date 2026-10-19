@@ -149,18 +149,28 @@ func (server *Handler) ScreenerWebSocket(writer http.ResponseWriter, request *ht
 		writeObservedSocketError(trace, ctx, connection, message.RequestID, "INVALID_MESSAGE", "Feature candidate tidak valid.", false)
 		return
 	}
-	matched := make(map[string]struct{}, len(decision.Signals))
-	for _, signal := range decision.Signals {
-		matched[signal.Symbol+"\x00"+signal.Timestamp] = struct{}{}
+	evalMap := make(map[string]core.CandidateEvaluation, len(decision.Evaluations))
+	for _, eval := range decision.Evaluations {
+		evalMap[eval.Symbol+"\x00"+eval.Timestamp] = eval
 	}
 	results := make([]Decision, 0, len(message.Candidates))
 	for _, candidate := range message.Candidates {
-		_, isMatch := matched[candidate.Symbol+"\x00"+candidate.Timestamp]
-		reasons := []string{"CONDITIONS_NOT_MET"}
-		if isMatch {
-			reasons = []string{"RULE_MATCHED"}
+		key := candidate.Symbol + "\x00" + candidate.Timestamp
+		if eval, ok := evalMap[key]; ok {
+			results = append(results, Decision{
+				Symbol:      candidate.Symbol,
+				Timestamp:   candidate.Timestamp,
+				Matched:     eval.Matched,
+				ReasonCodes: eval.ReasonCodes,
+			})
+		} else {
+			results = append(results, Decision{
+				Symbol:      candidate.Symbol,
+				Timestamp:   candidate.Timestamp,
+				Matched:     false,
+				ReasonCodes: []string{"CONDITIONS_NOT_MET"},
+			})
 		}
-		results = append(results, Decision{Symbol: candidate.Symbol, Timestamp: candidate.Timestamp, Matched: isMatch, ReasonCodes: reasons})
 	}
 	if !trace.writeResult(ctx, connection, ResultMessage{
 		Type: "screener.result", Protocol: core.PrivateProtocol, RequestID: message.RequestID,
