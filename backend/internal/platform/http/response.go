@@ -44,6 +44,11 @@ func WriteJSON(writer stdhttp.ResponseWriter, status int, value any) {
 }
 
 func WriteError(writer stdhttp.ResponseWriter, request *stdhttp.Request, status int, code, message string) {
+	// A dependency deadline is not an invalid login or a revoked entitlement.
+	// Preserve explicit 4xx denials; normalize only server-side failures.
+	if status >= 500 && errors.Is(request.Context().Err(), context.DeadlineExceeded) {
+		status, code, message = stdhttp.StatusGatewayTimeout, "REQUEST_TIMEOUT", "Permintaan terlalu lama. Silakan coba lagi."
+	}
 	writer.Header().Set("Cache-Control", "private, no-store")
 	WriteJSON(writer, status, map[string]any{
 		"error": map[string]string{

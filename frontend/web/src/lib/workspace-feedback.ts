@@ -33,6 +33,20 @@ export function screeningFailure(error: {
       detail: "Reload the rules and stock universes, then choose again.",
       action: "resources",
     };
+  if (error.code === "REQUEST_TIMEOUT" || error.status === 504)
+    return {
+      title: "Request timed out",
+      detail:
+        "The server took too long to respond. Your login is unchanged. Try again shortly.",
+      action: "retry",
+    };
+  if (error.status === 502 || error.status === 503)
+    return {
+      title: "Service temporarily unavailable",
+      detail:
+        "The service is temporarily unavailable. Try again shortly; signing in again is not required.",
+      action: "retry",
+    };
   if (error.status === 0)
     return {
       title: "Connection interrupted",

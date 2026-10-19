@@ -168,6 +168,7 @@ export function WorkspaceScreenerPanel({
     const version = ++resourceVersion.current;
     setLoadingResources(true);
     setError(null);
+    setFailure(null);
     try {
       const [accountResponse, ruleResponse, universeResponse] =
         await Promise.all([
@@ -208,6 +209,16 @@ export function WorkspaceScreenerPanel({
       setPreferencesReady(true);
     } catch (caught) {
       if (!mounted.current || version !== resourceVersion.current) return;
+      const feedback = screeningFailure(
+        caught instanceof ApiError
+          ? caught
+          : { message: "Screener resources could not be loaded." },
+      );
+      setFailure(
+        feedback.action === "retry"
+          ? { ...feedback, action: "resources" }
+          : feedback,
+      );
       setError(
         caught instanceof Error
           ? caught.message

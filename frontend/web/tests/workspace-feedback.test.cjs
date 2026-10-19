@@ -85,6 +85,17 @@ test("condition evidence uses real feature values and handles unknown operands",
     null,
   );
 });
+test("timeouts and service outages do not claim that the user must sign in again", () => {
+  const timeout = output.screeningFailure({
+    status: 0,
+    code: "REQUEST_TIMEOUT",
+  });
+  assert.equal(timeout.title, "Request timed out");
+  assert.equal(timeout.action, "retry");
+  const outage = output.screeningFailure({ status: 503 });
+  assert.equal(outage.title, "Service temporarily unavailable");
+  assert.equal(outage.action, "retry");
+});
 test("crossover evidence compares both candles and does not invent missing previous values", () => {
   const current = { price: 100, ema9: 99, ema20: 101, rsi14: 69 };
   const previous = { price: 102, ema9: 102, ema20: 100, rsi14: 71 };

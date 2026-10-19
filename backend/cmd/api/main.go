@@ -56,7 +56,8 @@ func main() {
 	}
 	// Supabase Postgres owns durable multi-user application state. SQL schema
 	// changes are versioned under supabase/migrations, not run at API startup.
-	database, err := platformdb.OpenPostgres(context.Background(), databaseURL)
+	operationalLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	database, err := platformdb.OpenPostgresObserved(shutdownContext, databaseURL, operationalLogger)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -110,7 +111,6 @@ func main() {
 	}
 	// NewServer is the composition boundary: concrete infrastructure is passed
 	// into the HTTP package through small interfaces for testing and migration.
-	operationalLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	traffic := platformhttp.NewTrafficObserver(operationalLogger)
 	screeningMetrics := observability.NewScreenerObserver(operationalLogger)
 	handler, err := apihttp.NewServer(
@@ -164,7 +164,9 @@ func main() {
 	telemetryDone := make(chan struct{})
 	go func() {
 		defer close(telemetryDone)
-		traffic.RunSummaries(shutdownContext, time.Minute, screeningMetrics.LogSummary)
+		traffic.RunSummaries(shutdownContext, time.Minute, screeningMetrics.LogSummary, func() {
+			platformdb.LogPoolSummary(operationalLogger, database)
+		})
 	}()
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)

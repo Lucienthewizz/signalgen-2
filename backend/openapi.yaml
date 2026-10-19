@@ -9,6 +9,9 @@ info:
     token. Proposed routes that are not implemented are intentionally excluded.
     Server-generated X-Request-ID correlates responses with private operational
     logs. Allowlisted browser origins may read X-Request-ID, Retry-After and ETag.
+    Ordinary GET/HEAD requests have a 10-second dependency-work deadline;
+    expiration returns HTTP 504 with code REQUEST_TIMEOUT, not a login denial.
+    Raw WebSocket has its own deadlines. Mutations are not automatically replayed.
     A recovered panic before response commitment uses the standard error
     envelope with HTTP 500 and code INTERNAL_ERROR. A WebSocket HTTP 101 means
     upgrade only; screening success is reported by the feature protocol.
@@ -43,6 +46,7 @@ paths:
         - supabaseBearer: []
           appSession: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Current account state only.
           headers:
@@ -122,6 +126,7 @@ paths:
       summary: Download the public contract embedded in this API build
       security: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: The same reviewed OpenAPI document used by the executable.
           content:
@@ -135,6 +140,7 @@ paths:
       summary: Frontend-compatible API status
       security: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: API identity and status.
           content:
@@ -243,6 +249,7 @@ paths:
       security:
         - supabaseBearer: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Server-verified public identity.
           content:
@@ -318,6 +325,7 @@ paths:
       summary: Process liveness
       security: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: API process is alive.
           content:
@@ -332,6 +340,7 @@ paths:
       summary: Storage and fixture readiness
       security: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Required local dependencies are ready.
           content:
@@ -454,6 +463,7 @@ paths:
         - supabaseBearer: []
           appSession: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Current profile; version is required for subsequent PATCH.
           headers:
@@ -531,6 +541,7 @@ paths:
         - supabaseBearer: []
           appSession: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Current account state from server-authoritative storage.
           headers:
@@ -555,6 +566,7 @@ paths:
         - supabaseBearer: []
           appSession: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Owner-scoped session metadata. No token or token hash is returned.
           headers:
@@ -602,6 +614,7 @@ paths:
         - supabaseBearer: []
           appSession: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Owner-scoped devices aggregated from app-session history.
           headers:
@@ -662,6 +675,7 @@ paths:
         - supabaseBearer: []
           appSession: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Versioned capabilities implemented by the current core.
           headers:
@@ -685,6 +699,7 @@ paths:
         - supabaseBearer: []
           appSession: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Rule list.
           headers:
@@ -755,6 +770,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/RuleId"
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: System or owner-scoped rule snapshot.
           headers:
@@ -870,6 +886,7 @@ paths:
         - supabaseBearer: []
           appSession: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Stock catalog.
           content:
@@ -891,6 +908,7 @@ paths:
         - supabaseBearer: []
           appSession: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Owner-scoped universe list.
           content:
@@ -938,6 +956,7 @@ paths:
         - supabaseBearer: []
           appSession: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Universe detail.
           content:
@@ -1043,6 +1062,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/DatasetId"
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Dataset manifest.
           headers:
@@ -1071,6 +1091,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/DatasetId"
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Canonical uncompressed fixture content.
           headers:
@@ -1208,6 +1229,7 @@ paths:
         - supabaseBearer: []
           appSession: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Effective capacity and current resource counts. System rules are excluded. Manual grants retain Analyst capacity; capacity does not grant feature access.
           content:
@@ -1228,6 +1250,7 @@ paths:
       description: Prices and checkout are intentionally excluded until commercial terms and a payment provider are approved.
       security: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Active plans. This response does not activate access.
           content:
@@ -1246,6 +1269,7 @@ paths:
         - supabaseBearer: []
           appSession: []
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Current subscription, or null when this account has none.
           headers:
@@ -1355,6 +1379,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/TargetUserIdQuery"
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Active, expired, and revoked grants for the requested account.
           headers:
@@ -1532,6 +1557,7 @@ paths:
           name: status
           schema: {type: string, enum: [active, suspended]}
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Page of application profiles, not every Supabase Auth identity.
           headers:
@@ -1608,6 +1634,7 @@ paths:
           description: Last id from previous page; descending ID keyset.
           schema: {type: string, pattern: '^[1-9][0-9]*$', maxLength: 19}
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Target-scoped page of audit metadata. No write/delete audit endpoint.
           headers:
@@ -1749,6 +1776,15 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
           example:
             error: {code: RATE_LIMITED, message: Terlalu banyak permintaan. Coba lagi nanti., request_id: req_opaque}
+    RequestTimeout:
+      description: A read exceeded its dependency-work deadline. Retry reads only; the response does not revoke login.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/PrivateNoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
     ServiceUnavailable:
       description: A required local or upstream dependency is unavailable.
       headers:

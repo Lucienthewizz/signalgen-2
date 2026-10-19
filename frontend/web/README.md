@@ -245,3 +245,22 @@ does not remove the WebSocket Origin check. After changing backend `.env`,
 recreate only `go-api` to reload its environment; do not use a wildcard.
 
 Indonesian backend walkthrough: [Match, BUY/SELL and the decision flow](../../docs/backend/SCREENER_DECISIONS.md).
+
+## Resource loading and recovery
+
+Account/rule/universe reads retry one transient network, timeout or 502/503/504
+failure. Duplicate reads share that recovery, with no persistent authorization
+cache. The 15-second browser timeout covers reading the body too; the Go boundary
+cancels ordinary reads after 10 seconds. Persistent errors offer Reload selections
+and distinguish timeout from an unavailable service. Outages do not clear login;
+real authentication/revocation failures retain their existing security behavior.
+Login, refresh exchange, saves and app-session creation are never replayed for
+transient failures. See [backend limits and safe timing logs](../../docs/backend/SECURITY_HARDENING.md#slow-reads-and-transient-recovery-19-october-2026).
+
+```sh
+SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5175 npm run test:recovery
+```
+
+The isolated browser fixture checks automatic recovery, exactly two attempts on
+persistent failure, timeout wording, explicit reload, preserved login and responsive
+overflow at 1440/390px in both themes. It never uses a real account or cloud data.

@@ -5,6 +5,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -15,6 +16,30 @@ import (
 // OpenPostgres creates the server-only pool used by SignalGen repositories.
 // The connection string must come from backend environment, never a browser.
 func OpenPostgres(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
+	return OpenPostgresObserved(ctx, databaseURL, nil)
+}
+
+// OpenPostgresObserved adds credential-free timing to the same bounded pool.
+// Tests/tools can keep using OpenPostgres without an operational logger.
+func OpenPostgresObserved(ctx context.Context, databaseURL string, logger *slog.Logger) (*pgxpool.Pool, error) {
+	config, err := postgresConfig(databaseURL, logger)
+	if err != nil {
+		return nil, err
+	}
+	connectCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	pool, err := pgxpool.NewWithConfig(connectCtx, config)
+	if err != nil {
+		return nil, fmt.Errorf("create Postgres pool: %w", err)
+	}
+	if err := pool.Ping(connectCtx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("connect to Postgres: %w", err)
+	}
+	return pool, nil
+}
+
+func postgresConfig(databaseURL string, logger *slog.Logger) (*pgxpool.Config, error) {
 	if strings.TrimSpace(databaseURL) == "" {
 		return nil, fmt.Errorf("SUPABASE_DB_URL is required")
 	}
@@ -28,17 +53,15 @@ func OpenPostgres(ctx context.Context, databaseURL string) (*pgxpool.Pool, error
 	config.MinConns = 0
 	config.MaxConnIdleTime = 2 * time.Minute
 	config.MaxConnLifetime = 30 * time.Minute
-	connectCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
-	defer cancel()
-	pool, err := pgxpool.NewWithConfig(connectCtx, config)
-	if err != nil {
-		return nil, fmt.Errorf("create Postgres pool: %w", err)
+	// Pool connection construction may outlive the canceled Acquire caller.
+	// Bound every new connection, not only the initial startup Ping.
+	if config.ConnConfig.ConnectTimeout == 0 || config.ConnConfig.ConnectTimeout > 5*time.Second {
+		config.ConnConfig.ConnectTimeout = 5 * time.Second
 	}
-	if err := pool.Ping(connectCtx); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("connect to Postgres: %w", err)
+	if logger != nil {
+		config.ConnConfig.Tracer = &poolTracer{logger: logger, slow: time.Second}
 	}
-	return pool, nil
+	return config, nil
 }
 
 // PostgresReadiness is kept separate from liveness, so dependency outages
