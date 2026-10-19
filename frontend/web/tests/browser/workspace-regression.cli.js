@@ -20,6 +20,7 @@ async (page) => {
   let universeWrite = null;
   let ruleWrite = null;
   let largeUniverse = false;
+  let healthOffline = false;
   let sessionMutations = 0;
   const sessionFixtures = [
     { id: "fixture-current", label: "Current browser", status: "active", current: true, last_seen_at: now },
@@ -56,6 +57,7 @@ async (page) => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort();
     const p = url.pathname;
+    if (healthOffline && p === "/api") return route.fulfill({ status: 503, json: { error: { code: "UNAVAILABLE", message: "Fixture health interruption" } } });
     if (p === "/api/v1/rules" && route.request().method() === "POST") {
       ruleWrite = route.request().postDataJSON();
       return route.fulfill({ json: { ...rule, name: ruleWrite.definition.name, definition: ruleWrite.definition } });
@@ -293,19 +295,27 @@ async (page) => {
             const a = editor.getBoundingClientRect(), b = library.getBoundingClientRect();
             const browse = editor.querySelector('.stock-catalog-picker__browse').getBoundingClientRect();
             const selected = editor.querySelector('.universe-selection').getBoundingClientRect();
+            if (innerWidth > 1100 && Math.abs(editor.querySelector('.stock-catalog-picker__current').getBoundingClientRect().top - editor.querySelector('.universe-selection h4').getBoundingClientRect().top) > 1) throw Error('Search and selected card headings are not aligned');
             const catalog = editor.querySelector('.stock-catalog-picker__table').getBoundingClientRect();
             const catalogCard = editor.querySelector('.stock-catalog-picker__catalog').getBoundingClientRect();
             const title = editor.querySelector('h3').getBoundingClientRect();
             const savedTitle = library.querySelector('h3').getBoundingClientRect();
             const row = library.querySelector('article').getBoundingClientRect();
-            const alignment = Math.max(Math.abs(title.left - browse.left), Math.abs(browse.left - catalog.left), Math.abs(savedTitle.left - row.left), Math.abs(savedTitle.left - title.left));
+            const alignment = Math.max(Math.abs(savedTitle.left - row.left), Math.abs(savedTitle.left - title.left));
             const chips = library.querySelector(".universe-library__symbols");
-            return { gap: b.top - a.bottom, left: Math.abs(a.left - b.left), right: Math.abs(a.right - b.right), alignment, selectionGap: selected.top - catalogCard.bottom, cardEdges: Math.max(Math.abs(selected.left - catalogCard.left), Math.abs(selected.right - catalogCard.right)), tableInset: catalogCard.width - catalog.width, wrap: chips && getComputedStyle(chips).flexWrap };
+            return { gap: b.top - a.bottom, left: Math.abs(a.left - b.left), right: Math.abs(a.right - b.right), alignment, belowGroups: Math.min(selected.top, browse.top) - catalogCard.bottom, sideBySide: Math.abs(selected.top - browse.top) < 1 && selected.left > browse.right, stacked: selected.top > browse.bottom, tableInset: browse.width - catalog.width, wrap: chips && getComputedStyle(chips).flexWrap };
           });
           if (layout.gap < 16 || layout.left > 1 || layout.right > 1) throw Error(`Universe cards are not stacked/aligned: ${JSON.stringify(layout)}`);
           if (layout.alignment > 1) throw Error(`Universe content edges differ: ${JSON.stringify(layout)}`);
-          if (layout.selectionGap < 16 || layout.cardEdges > 1 || layout.tableInset > 50) throw Error(`Universe catalog must be full-width above selection: ${JSON.stringify(layout)}`);
+          if (layout.belowGroups < 16 || layout.tableInset > 50 || !(width > 1100 ? layout.sideBySide : layout.stacked)) throw Error(`Universe groups/search/selection layout incorrect: ${JSON.stringify(layout)}`);
           await page.locator('.universe-selection').screenshot({ path: `/private/tmp/signalgen-selected-stacked-${width}-${theme}.png`, animations: "disabled" });
+          const marketContained = await page.locator('.universe-market-field').evaluate(el => {
+            const outer = el.closest('.stock-catalog-picker__catalog').getBoundingClientRect();
+            return [...el.children].every(child => { const r = child.getBoundingClientRect(); return r.left >= outer.left + 15 && r.right <= outer.right - 15; });
+          });
+          if (!marketContained) throw Error('Market description escapes the category card padding');
+          await page.evaluate(() => window.scrollTo(0, 0));
+          await page.screenshot({ path: `/private/tmp/signalgen-universe-layout-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
           if (layout.wrap !== "wrap") throw Error("Saved universe stocks cannot wrap");
           if (await page.locator('.universe-window-bar .news-window-dots i').count() !== 3) throw Error("Mac window controls missing");
           if (await categories.locator('button svg').count() !== 7) throw Error("Category icons missing");
@@ -480,6 +490,22 @@ async (page) => {
   await page.goto("http://127.0.0.1:5174/#app/rules");
   await page.getByRole("button", { name: "New blank rule", exact: true }).click();
   await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
+  const draftInput = page.getByLabel("Rule name", { exact: true });
+  await draftInput.fill("Draft stability check");
+  const draftNode = await draftInput.elementHandle();
+  const initialTimeOrigin = await page.evaluate(() => performance.timeOrigin);
+  await page.waitForTimeout(6200); // Covers autosave and the next backend health probe.
+  if (await draftInput.inputValue() !== "Draft stability check" || !await draftNode.evaluate(el => el.isConnected) || await page.evaluate(() => performance.timeOrigin) !== initialTimeOrigin) throw Error("Draft autosave reloads or remounts the rule editor");
+  await draftInput.fill("Bullish EMA cross");
+  healthOffline = true;
+  await page.getByText("Connection interrupted", { exact: true }).waitFor({ timeout: 10000 });
+  if (!await draftNode.evaluate(el => el.isConnected)) throw Error("Health interruption replaced the editor DOM");
+  await draftInput.fill("Offline draft retained");
+  if (!await page.getByRole("button", { name: "Save rule", exact: true }).isDisabled()) throw Error("Offline rule save is enabled");
+  healthOffline = false;
+  await page.getByText("Connection interrupted", { exact: true }).waitFor({ state: "hidden", timeout: 10000 });
+  if (await draftInput.inputValue() !== "Offline draft retained" || !await draftNode.evaluate(el => el.isConnected)) throw Error("Connection recovery resets the draft editor");
+  await draftInput.fill("Bullish EMA cross");
   await page.getByRole("button", { name: "Add condition", exact: true }).click();
   await page.getByRole("button", { name: "Add condition", exact: true }).click();
   if (await page.getByLabel("Rule name", { exact: true }).inputValue() !== "Bullish EMA cross") throw Error("Preset did not populate rule name");
@@ -554,6 +580,28 @@ async (page) => {
     });
     if (!cards) throw Error(`Stock cards do not fill every row: ${width} ${theme}`);
     if (!await page.locator('.screener-criteria li').evaluateAll(items => items.length === 2 && items.every(el => parseFloat(getComputedStyle(el).borderRadius) >= 12 && parseFloat(getComputedStyle(el).borderTopWidth) >= 1))) throw Error('Rule preview is not presented as rounded cards');
+  }
+  unauthorized = true;
+  await page.reload();
+  await page.waitForURL('**/#login', { timeout: 10000 });
+  unauthorized = false;
+  for (const view of ['login', 'register', 'forgot-password', 'reset-password']) {
+    await page.goto(`http://127.0.0.1:5174/#${view}`);
+    await page.locator('.auth-card').waitFor();
+    for (const width of [1440, 900, 390, 320]) for (const theme of ['dark', 'light']) {
+      await page.setViewportSize({ width, height: 1000 });
+      if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole('button', { name: /Switch to .* mode/ }).click();
+      const geometry = await page.locator('.auth-card').evaluate(el => {
+        const r = el.getBoundingClientRect(), css = getComputedStyle(el), form = el.querySelector('form').getBoundingClientRect(), heading = el.querySelector('.auth-heading').getBoundingClientRect(), toggle = document.querySelector('.auth-theme-toggle').getBoundingClientRect();
+        return { radius: parseFloat(css.borderRadius), padding: parseFloat(css.paddingLeft), left: r.left, right:r.right, alignment:Math.abs(form.left-heading.left), overlap: toggle.bottom > r.top && toggle.left < r.right && toggle.right > r.left, viewport: innerWidth };
+      });
+      if (geometry.radius < 16 || geometry.padding < 24 || geometry.left < 15 || geometry.right > geometry.viewport - 15 || geometry.alignment > 1 || geometry.overlap) throw Error(`Auth card geometry invalid: ${view} ${width} ${theme} ${JSON.stringify(geometry)}`);
+      if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Auth page overflow: ${view} ${width} ${theme}`);
+      if (view === 'login' && [1440, 390].includes(width)) {
+        await page.evaluate(() => window.scrollTo(0,0));
+        await page.screenshot({ path: `/private/tmp/signalgen-auth-card-${width}-${theme}.png`, fullPage:true, animations:'disabled' });
+      }
+    }
   }
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));

@@ -237,6 +237,10 @@ export function ServerRulesPanel({
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    if (!backendOnline) {
+      setError("Your draft is retained. Reconnect before saving the rule.");
+      return;
+    }
     setSubmitted(true);
     if (!validation.valid) {
       setError("Check the highlighted rule fields before saving.");
@@ -289,7 +293,9 @@ export function ServerRulesPanel({
     }
   }
 
-  if (!authenticated || !backendOnline) {
+  // A failed health probe must not replace a live editor and drop its focus.
+  // Keep local drafting available; only server mutations require a connection.
+  if (!authenticated) {
     return (
       <Empty className="workspace-empty-state">
         <EmptyHeader>
@@ -309,6 +315,16 @@ export function ServerRulesPanel({
 
   return (
     <div className="rules-workspace">
+      {!backendOnline && (
+        <Alert>
+          <CircleAlert />
+          <AlertTitle>Connection interrupted</AlertTitle>
+          <AlertDescription>
+            Keep editing your draft. Saving to your account will be available
+            when the connection returns.
+          </AlertDescription>
+        </Alert>
+      )}
       <section className="rule-composer" aria-labelledby="rule-composer-title">
         <header className="rule-composer__header">
           <div className="resource-title-lockup">
@@ -785,7 +801,11 @@ export function ServerRulesPanel({
                 {definition.conditions.length} / 20 conditions · Daily · IDX or
                 US
               </span>
-              <Button type="submit" size="lg" disabled={saving}>
+              <Button
+                type="submit"
+                size="lg"
+                disabled={saving || !backendOnline}
+              >
                 {saving ? (
                   <LoaderCircle
                     data-icon="inline-start"
@@ -811,7 +831,10 @@ export function ServerRulesPanel({
             <p>Edit a private rule or run it from the screener.</p>
           </div>
           <div>
-            <Button onClick={() => void load()} disabled={loading}>
+            <Button
+              onClick={() => void load()}
+              disabled={loading || !backendOnline}
+            >
               <RefreshCw
                 data-icon="inline-start"
                 className={loading ? "is-spinning" : ""}
@@ -867,7 +890,7 @@ export function ServerRulesPanel({
                           variant="destructive"
                           size="icon"
                           onClick={() => void remove(rule)}
-                          disabled={saving}
+                          disabled={saving || !backendOnline}
                           aria-label={`Delete ${rule.name}`}
                         >
                           <Trash2 />

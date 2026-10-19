@@ -22,6 +22,10 @@ Presets fill the available width as green selection cards. Desktop criteria use 
 
 Selected-stock cards stretch to both edges of each wrapped row. The Screener condition preview uses separate rounded cards rather than divider-only rows, with two columns on desktop and one on mobile; condition order and matching logic remain unchanged.
 
+Stock Universe keeps the category table first and full-width. Separate Search stocks and Selected stocks cards follow side by side on wide screens, stacking at 1,100px and below. Your stock universes follows both. The browse card and selected ticker items use existing green surface roles; category, search, selection, and save behavior remain unchanged.
+
+Login and registration use an inset, rounded card with a compact header and shared form/heading alignment. The auth layout collapses before its desktop minimum columns overflow. A failed backend health probe no longer replaces the Rules editor: the current draft and input DOM remain available, with server save/delete disabled until reconnection. This prevents connection-related form disappearance; it does not disable development-server hot reload when source files change.
+
 The existing `docs/DESIGN.md` still describes Manrope across workspace surfaces, while `frontend/web/src/styles/workspace-typography.css` already establishes Saira for the workspace. `docs/PRODUCT.md` also describes an IDX-focused workspace, while the incumbent frontend supports US/USD alongside IDX/IDR. These are pre-existing documentation differences. This feature preserves the approved Saira and market-aware implementation without rewriting the design specification or its sidecar.
 
 ## Verification and limits
