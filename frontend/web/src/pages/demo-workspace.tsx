@@ -50,6 +50,7 @@ import {
 import { Brand } from "@/components/brand";
 import { AccountMenu } from "@/components/account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { HistoricalCachePanel } from "@/components/historical-cache-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1792,13 +1793,9 @@ function JournalPanel({
 function AccessPanel({
   backendOnline,
   authenticated,
-  cacheState,
-  setCacheState,
 }: {
   backendOnline: boolean;
   authenticated: boolean;
-  cacheState: string;
-  setCacheState: Dispatch<SetStateAction<string>>;
 }) {
   const [account, setAccount] = useState<AccountState | null>(null);
   const [devices, setDevices] = useState<AccountDevice[]>([]);
@@ -2213,21 +2210,7 @@ function AccessPanel({
           </div>
         )}
       </section>
-      <section className="panel cache-panel">
-        <div>
-          <Database />
-          <span>
-            <strong>User cache</strong>
-            <small>{cacheState}</small>
-          </span>
-        </div>
-        <Button
-          className="ui-button"
-          onClick={() => setCacheState("Empty · cleared just now")}
-        >
-          <Trash2 /> Clear cache
-        </Button>
-      </section>
+      <HistoricalCachePanel authenticated={authenticated} />
     </div>
   );
 }
@@ -2287,7 +2270,6 @@ export function DemoWorkspace({
 
   useEffect(() => () => workspaceMotion.current?.cancel(), []);
   const [draftSymbol, setDraftSymbol] = useState<string | null>(null);
-  const [cacheState, setCacheState] = useState("14.8 MB · encrypted (sample)");
   const meta = viewMeta[view];
   const PageIcon = meta.icon;
   function go(next: DemoView) {
@@ -2484,8 +2466,6 @@ export function DemoWorkspace({
                       <AccessPanel
                         backendOnline={backendOnline}
                         authenticated={authenticated}
-                        cacheState={cacheState}
-                        setCacheState={setCacheState}
                       />
                     )}
                     {view === "universes" && (

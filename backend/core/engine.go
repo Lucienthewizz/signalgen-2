@@ -1,12 +1,16 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 )
 
+// supportedOperands mendaftarkan seluruh variabel indikator teknikal yang didukung oleh engine M0.
+// Nilai indikator ini dihasilkan pada tahap ComputeFeatures (client/WASM).
 var supportedOperands = map[string]bool{
 	"PRICE": true,
 	"EMA9":  true,
@@ -14,15 +18,19 @@ var supportedOperands = map[string]bool{
 	"RSI14": true,
 }
 
+// supportedOperators mendaftarkan seluruh operator pembanding matematis dan persilangan (crossover) yang sah.
+// Operator kesetaraan persis (==) sengaja ditiadakan untuk menghindari galat floating-point IEEE 754.
 var supportedOperators = map[string]bool{
-	">":  true,
-	"<":  true,
-	">=": true,
-	"<=": true,
+	">":          true,
+	"<":          true,
+	">=":         true,
+	"<=":         true,
+	"CROSS_UP":   true,
+	"CROSS_DOWN": true,
 }
 
-// GetCapabilities returns a fresh value so callers cannot mutate shared
-// slices and accidentally change the advertised contract.
+// GetCapabilities mengembalikan salinan baru profil kapabilitas engine.
+// Mengembalikan nilai baru (bukan referensi) agar pemanggil tidak dapat memutasi slice bersama secara tidak sengaja.
 func GetCapabilities() Capabilities {
 	return Capabilities{
 		CapabilitiesVersion:  CapabilitiesVersion,
@@ -33,18 +41,18 @@ func GetCapabilities() Capabilities {
 		PrivateProtocol:      PrivateProtocol,
 		WorkerProtocol:       WorkerProtocol,
 		Purposes:             []string{"screen"},
-		Markets:              []string{"IDX"},
+		Markets:              []string{"IDX", "US"},
 		Timeframes:           []string{"1d"},
 		Indicators:           []string{"PRICE", "EMA9", "EMA20", "RSI14"},
-		Operators:            []string{"<", "<=", ">", ">="},
-		RuleLogic:            []string{"AND"},
+		Operators:            []string{"<", "<=", ">", ">=", "CROSS_UP", "CROSS_DOWN"},
+		RuleLogic:            []string{"AND", "OR"},
+		SignalTypes:          []string{"BUY", "SELL"},
 		MaxCandlesPerRun:     MaxCandlesPerRun,
 		MaxSymbolsPerRun:     1,
 	}
 }
 
-// GetBaselineRuleDefinition returns a fresh definition so API or WASM callers
-// cannot mutate the frozen system rule shared by later requests.
+// GetBaselineRuleDefinition mengembalikan salinan aturan bawaan ("Default Scalping") yang dibekukan untuk baseline sistem.
 func GetBaselineRuleDefinition() BaselineRuleDefinition {
 	return BaselineRuleDefinition{
 		ID: 1, Name: "Default Scalping", Type: "system", Logic: "AND", SignalType: "BUY", CooldownSec: 60,
@@ -57,9 +65,9 @@ func GetBaselineRuleDefinition() BaselineRuleDefinition {
 	}
 }
 
-// RunSignals executes the frozen M0 subset. It intentionally produces signals
-// only; trade fills and P&L remain outside this baseline until their policy is
-// selected and frozen separately.
+// RunSignals mengeksekusi pipeline sinyal lengkap untuk pengujian baseline M0.
+// Fungsi ini hanya menghasilkan sinyal masuk (BUY); eksekusi trade fill dan P&L
+// berada di luar baseline ini hingga kebijakan eksekusi dibekukan terpisah.
 func RunSignals(request RunRequest) (RunResult, error) {
 	features, err := ComputeFeatures(FeatureRequest{
 		Purpose: request.Purpose,
@@ -87,8 +95,9 @@ func RunSignals(request RunRequest) (RunResult, error) {
 	}, nil
 }
 
-// ComputeFeatures performs the expensive indicator calculation intended for
-// the client/WASM stage. It does not receive or evaluate a rule.
+// ComputeFeatures melakukan kalkulasi indikator teknikal (EMA9, EMA20, RSI14).
+// Fungsi ini dirancang untuk berjalan di sisi client/WASM sehingga server tidak perlu
+// mengolah data candle mentah yang berat. Fungsi ini tidak menerima aturan pengguna.
 func ComputeFeatures(request FeatureRequest) (FeatureResult, error) {
 	if err := validateFeatureRequest(request); err != nil {
 		return FeatureResult{}, err
@@ -105,8 +114,8 @@ func ComputeFeatures(request FeatureRequest) (FeatureResult, error) {
 
 	candidates := make([]FeatureCandidate, 0, len(request.Candles))
 	for i, candle := range request.Candles {
-		// The Python IndicatorEngine deliberately requires period+1 candles for
-		// RSI14, while EMA20 is available from candle 20.
+		// Mengikuti Python IndicatorEngine: RSI14 membutuhkan periode+1 (15) candle,
+		// sedangkan EMA20 mulai tersedia sejak candle ke-20.
 		if i+1 < 15 || math.IsNaN(ema9[i]) || math.IsNaN(ema20[i]) || math.IsNaN(rsi14[i]) {
 			continue
 		}
@@ -132,8 +141,9 @@ func ComputeFeatures(request FeatureRequest) (FeatureResult, error) {
 	}, nil
 }
 
-// EvaluateDecision applies the rule and cooldown to compact feature candidates.
-// This is the small stage proposed to remain private on the server.
+// EvaluateDecision mengevaluasi aturan screening pengguna dan status jeda waktu (cooldown)
+// terhadap kandidat fitur ringkas. Tahap ini dijalankan secara privat di server agar
+// logika strategi pengguna tidak pernah bocor ke publik atau client lain.
 func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 	if err := ValidateRule(request.Rule); err != nil {
 		return DecisionResult{}, err
@@ -143,23 +153,38 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 	}
 
 	signals := make([]Signal, 0)
+	evaluations := make([]CandidateEvaluation, 0, len(request.Candidates))
 	var lastSignal time.Time
+	var prevValues map[string]float64
 	for _, candidate := range request.Candidates {
 		parsed, _ := time.Parse(time.RFC3339, candidate.Timestamp)
-		if !lastSignal.IsZero() && parsed.Sub(lastSignal) < time.Duration(request.Rule.CooldownSec)*time.Second {
-			continue
-		}
 		values := map[string]float64{
 			"PRICE": candidate.Features.Price,
 			"EMA9":  candidate.Features.EMA9,
 			"EMA20": candidate.Features.EMA20,
 			"RSI14": candidate.Features.RSI14,
 		}
-		matched, err := evaluateRule(request.Rule, values)
+		matched, err := evaluateRule(request.Rule, values, prevValues)
 		if err != nil {
 			return DecisionResult{}, err
 		}
+		prevValues = values
 		if !matched {
+			evaluations = append(evaluations, CandidateEvaluation{
+				Symbol:      candidate.Symbol,
+				Timestamp:   candidate.Timestamp,
+				Matched:     false,
+				ReasonCodes: []string{"CONDITIONS_NOT_MET"},
+			})
+			continue
+		}
+		if !lastSignal.IsZero() && parsed.Sub(lastSignal) < time.Duration(request.Rule.CooldownSec)*time.Second {
+			evaluations = append(evaluations, CandidateEvaluation{
+				Symbol:      candidate.Symbol,
+				Timestamp:   candidate.Timestamp,
+				Matched:     false,
+				ReasonCodes: []string{"COOLDOWN_ACTIVE"},
+			})
 			continue
 		}
 		signals = append(signals, Signal{
@@ -174,6 +199,13 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 				RSI14: candidate.Features.RSI14,
 			},
 		})
+		evaluations = append(evaluations, CandidateEvaluation{
+			Symbol:      candidate.Symbol,
+			Timestamp:   candidate.Timestamp,
+			Matched:     true,
+			SignalType:  request.Rule.SignalType,
+			ReasonCodes: []string{"RULE_MATCHED"},
+		})
 		lastSignal = parsed
 	}
 
@@ -181,9 +213,12 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 		DecisionVersion: DecisionVersion,
 		Signals:         signals,
 		CandidateCount:  len(request.Candidates),
+		Evaluations:     evaluations,
 	}, nil
 }
 
+// validateFeatureRequest memvalidasi integritas candle mentah yang diterima untuk penghitungan fitur:
+// minimal 20 candle, kronologis strictly ascending, harga OHLC positif, dan hubungan High >= Low konsisten.
 func validateFeatureRequest(request FeatureRequest) error {
 	if request.Purpose != "screen" {
 		return fmt.Errorf("unsupported purpose %q; supported purposes: screen", request.Purpose)
@@ -219,6 +254,8 @@ func validateFeatureRequest(request FeatureRequest) error {
 	return nil
 }
 
+// validateCandidates memverifikasi validitas data kandidat fitur sebelum dievaluasi oleh aturan:
+// memastikan simbol konsisten, nilai indikator finite (bukan NaN/Inf), harga/EMA positif, dan RSI 0-100.
 func validateCandidates(candidates []FeatureCandidate) error {
 	if len(candidates) == 0 {
 		return fmt.Errorf("at least one feature candidate is required")
@@ -266,17 +303,19 @@ func validateCandidates(candidates []FeatureCandidate) error {
 	return nil
 }
 
-// ValidateRule is the shared validation boundary for persisted user rules and
-// portable execution. It accepts only the subset advertised by capabilities.
+// ValidateRule adalah gerbang validasi bersama untuk penyimpanan aturan kustom dan eksekusi screening.
+// Menjamin aturan sesuai spesifikasi kontrak kapabilitas: nama valid, logika AND/OR, cooldown sah,
+// batas nilai indikator (RSI 0-100, harga > 0), serta mencegah perbandingan kontradiktif dengan diri sendiri.
 func ValidateRule(rule RuleSnapshot) error {
-	if len(rule.Name) == 0 || len(rule.Name) > 100 {
+	trimmedName := strings.TrimSpace(rule.Name)
+	if len(trimmedName) == 0 || len(rule.Name) > 100 {
 		return fmt.Errorf("rule name must contain 1 to 100 characters")
 	}
-	if rule.Logic != "AND" {
-		return fmt.Errorf("unsupported rule logic %q", rule.Logic)
+	if rule.Logic != "AND" && rule.Logic != "OR" {
+		return fmt.Errorf("unsupported rule logic %q; supported: AND, OR", rule.Logic)
 	}
-	if rule.SignalType != "BUY" {
-		return fmt.Errorf("unsupported signal_type %q", rule.SignalType)
+	if rule.SignalType != "BUY" && rule.SignalType != "SELL" {
+		return fmt.Errorf("unsupported signal_type %q; supported: BUY, SELL", rule.SignalType)
 	}
 	if rule.CooldownSec < 0 || rule.CooldownSec > 86400 {
 		return fmt.Errorf("cooldown_sec must be between 0 and 86400")
@@ -291,46 +330,104 @@ func ValidateRule(rule RuleSnapshot) error {
 		if !supportedOperators[condition.Op] {
 			return fmt.Errorf("unsupported operator %q", condition.Op)
 		}
-		switch right := condition.Right.(type) {
-		case string:
-			if !supportedOperands[right] {
-				parsed, err := strconv.ParseFloat(right, 64)
-				if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
-					return fmt.Errorf("unsupported right operand %q", right)
+
+		numericVal, isNumeric, err := extractNumericThreshold(condition.Right)
+		if err != nil {
+			return err
+		}
+
+		if isNumeric {
+			if condition.Left == "RSI14" {
+				if numericVal < 0 || numericVal > 100 {
+					return fmt.Errorf("RSI14 threshold must be between 0 and 100; got %v", numericVal)
+				}
+			} else {
+				// Ambang batas harga dan rata-rata bergerak (PRICE, EMA9, EMA20) wajib bernilai positif (> 0)
+				if numericVal <= 0 {
+					return fmt.Errorf("%s threshold must be greater than 0; got %v", condition.Left, numericVal)
 				}
 			}
-		case float64:
-			if math.IsNaN(right) || math.IsInf(right, 0) {
-				return fmt.Errorf("right operand must be finite")
+		} else {
+			// Operand kanan berupa indikator lain: tolak perbandingan variabel dengan dirinya sendiri
+			rightOperand, _ := condition.Right.(string)
+			if condition.Left == rightOperand {
+				return fmt.Errorf("condition cannot compare operand %q with itself", condition.Left)
 			}
-		case int:
-			// Programmatic callers may use int; JSON numbers decode as float64.
-		default:
-			return fmt.Errorf("unsupported right value type %T", condition.Right)
 		}
 	}
 	return nil
 }
 
-func evaluateRule(rule RuleSnapshot, values map[string]float64) (bool, error) {
+// extractNumericThreshold mengekstrak dan memvalidasi nilai angka dari berbagai tipe data Go
+// (float64, float32, int, int32, int64, uint, uint32, uint64, json.Number, string).
+func extractNumericThreshold(raw interface{}) (float64, bool, error) {
+	switch right := raw.(type) {
+	case string:
+		if supportedOperands[right] {
+			return 0, false, nil
+		}
+		parsed, err := strconv.ParseFloat(right, 64)
+		if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+			return 0, false, fmt.Errorf("unsupported right operand %q", right)
+		}
+		return parsed, true, nil
+	case float64:
+		if math.IsNaN(right) || math.IsInf(right, 0) {
+			return 0, false, fmt.Errorf("right operand must be finite")
+		}
+		return right, true, nil
+	case float32:
+		val := float64(right)
+		if math.IsNaN(val) || math.IsInf(val, 0) {
+			return 0, false, fmt.Errorf("right operand must be finite")
+		}
+		return val, true, nil
+	case int:
+		return float64(right), true, nil
+	case int32:
+		return float64(right), true, nil
+	case int64:
+		return float64(right), true, nil
+	case uint:
+		return float64(right), true, nil
+	case uint32:
+		return float64(right), true, nil
+	case uint64:
+		return float64(right), true, nil
+	case json.Number:
+		parsed, err := right.Float64()
+		if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+			return 0, false, fmt.Errorf("right operand must be finite")
+		}
+		return parsed, true, nil
+	default:
+		return 0, false, fmt.Errorf("unsupported right value type %T", raw)
+	}
+}
+
+// evaluateRule mengevaluasi seluruh kondisi dalam aturan terhadap nilai kandidat saat ini dan sebelumnya:
+// - Logika "OR": Mengembalikan true jika ada MINIMAL SATU kondisi yang cocok (short-circuit).
+// - Logika "AND": Mengembalikan true HANYA JIKA SEMUA kondisi cocok (gagal jika ada satu kondisi false).
+func evaluateRule(rule RuleSnapshot, values map[string]float64, prevValues map[string]float64) (bool, error) {
+	if len(rule.Conditions) == 0 {
+		return false, fmt.Errorf("rule must contain at least one condition")
+	}
+	if rule.Logic == "OR" {
+		for _, condition := range rule.Conditions {
+			matched, err := evaluateCondition(condition, values, prevValues)
+			if err != nil {
+				return false, err
+			}
+			if matched {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
 	for _, condition := range rule.Conditions {
-		left := values[condition.Left]
-		right, err := resolveValue(condition.Right, values)
+		matched, err := evaluateCondition(condition, values, prevValues)
 		if err != nil {
 			return false, err
-		}
-		matched := false
-		switch condition.Op {
-		case ">":
-			matched = left > right
-		case "<":
-			matched = left < right
-		case ">=":
-			matched = left >= right
-		case "<=":
-			matched = left <= right
-		default:
-			return false, fmt.Errorf("unsupported operator %q", condition.Op)
 		}
 		if !matched {
 			return false, nil
@@ -339,12 +436,76 @@ func evaluateRule(rule RuleSnapshot, values map[string]float64) (bool, error) {
 	return true, nil
 }
 
+// evaluateCondition mengevaluasi perbandingan satu kondisi individual (misal: PRICE > EMA9 atau EMA9 CROSS_UP EMA20).
+// Untuk operator persilangan (CROSS_UP dan CROSS_DOWN), fungsi membandingkan posisi relatif pada candle saat ini
+// terhadap candle sebelumnya (prevValues). Jika candle sebelumnya tidak ada (misal candle pertama),
+// kondisi persilangan akan mengembalikan false karena belum ada data riwayat persilangan.
+func evaluateCondition(condition Condition, values map[string]float64, prevValues map[string]float64) (bool, error) {
+	left := values[condition.Left]
+	right, err := resolveValue(condition.Right, values)
+	if err != nil {
+		return false, err
+	}
+	switch condition.Op {
+	case ">":
+		return left > right, nil
+	case "<":
+		return left < right, nil
+	case ">=":
+		return left >= right, nil
+	case "<=":
+		return left <= right, nil
+	case "CROSS_UP":
+		if prevValues == nil {
+			return false, nil
+		}
+		prevLeft := prevValues[condition.Left]
+		prevRight, err := resolveValue(condition.Right, prevValues)
+		if err != nil {
+			return false, err
+		}
+		return prevLeft <= prevRight && left > right, nil
+	case "CROSS_DOWN":
+		if prevValues == nil {
+			return false, nil
+		}
+		prevLeft := prevValues[condition.Left]
+		prevRight, err := resolveValue(condition.Right, prevValues)
+		if err != nil {
+			return false, err
+		}
+		return prevLeft >= prevRight && left < right, nil
+	default:
+		return false, fmt.Errorf("unsupported operator %q", condition.Op)
+	}
+}
+
+// resolveValue mengambil nilai aktual dari operand kanan:
+// baik dengan mencari nilai variabel indikator dari map kandidat, maupun mengonversi konstanta numerik.
 func resolveValue(raw interface{}, values map[string]float64) (float64, error) {
 	switch value := raw.(type) {
 	case float64:
 		return value, nil
+	case float32:
+		return float64(value), nil
 	case int:
 		return float64(value), nil
+	case int32:
+		return float64(value), nil
+	case int64:
+		return float64(value), nil
+	case uint:
+		return float64(value), nil
+	case uint32:
+		return float64(value), nil
+	case uint64:
+		return float64(value), nil
+	case json.Number:
+		parsed, err := value.Float64()
+		if err != nil {
+			return 0, fmt.Errorf("unsupported right operand %q", value)
+		}
+		return parsed, nil
 	case string:
 		if resolved, ok := values[value]; ok {
 			return resolved, nil

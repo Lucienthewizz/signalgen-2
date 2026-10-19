@@ -15,9 +15,18 @@ type Router struct {
 func NewRouter() *Router {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
+	engine.HandleMethodNotAllowed = true
 	// Gin's default recovery logger can dump requests/panic values, including
 	// custom session headers or ticket query strings. Recover without that dump.
 	engine.Use(safeRecovery)
+	// Gin's text defaults must not bypass our stable, non-cacheable error
+	// envelope. Do not echo the URL: it may contain private IDs or tickets.
+	engine.NoRoute(func(ctx *gin.Context) {
+		WriteError(ctx.Writer, ctx.Request, stdhttp.StatusNotFound, "RESOURCE_NOT_FOUND", "Endpoint tidak ditemukan.")
+	})
+	engine.NoMethod(func(ctx *gin.Context) {
+		WriteError(ctx.Writer, ctx.Request, stdhttp.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Metode HTTP tidak diizinkan untuk endpoint ini.")
+	})
 	return &Router{engine: engine}
 }
 

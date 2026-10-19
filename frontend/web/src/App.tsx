@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useState } from "react";
 import { api, session } from "@/api/client";
+import { monitorBackendStatus } from "@/api/backend-status";
 import { Brand } from "@/components/brand";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AuthView } from "@/pages/auth-page";
 import type { DemoView } from "@/pages/demo-workspace";
 import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
+import { startHistoricalCacheLifecycle } from "@/data/historical-lifecycle";
 const AccountPage = lazy(() =>
   import("@/pages/account-page").then((m) => ({ default: m.AccountPage })),
 );
@@ -72,6 +74,7 @@ function RoutedApp() {
   const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
 
+  useEffect(startHistoricalCacheLifecycle, []);
   // Put typography on the document so portalled controls and toasts match the route.
   useLayoutEffect(() => {
     document.documentElement.dataset.typography =
@@ -93,10 +96,11 @@ function RoutedApp() {
 
   useEffect(() => {
     let active = true;
+    const stopBackendMonitor = monitorBackendStatus(
+      api.status,
+      setBackendOnline,
+    );
     Promise.allSettled([
-      api.status().then(() => {
-        if (active) setBackendOnline(true);
-      }),
       session.getToken()
         ? Promise.all([api.me(), api.ensureAppSession()]).then(([profile]) => {
             if (active) {
@@ -115,6 +119,7 @@ function RoutedApp() {
     addEventListener("signalgen:unauthorized", unauthorized);
     return () => {
       active = false;
+      stopBackendMonitor();
       removeEventListener("signalgen:unauthorized", unauthorized);
     };
   }, []);

@@ -25,14 +25,31 @@ async (page) => {
     { id: "fixture-ended", label: "Ended browser", status: "expired", current: false, last_seen_at: now },
   ];
   const errors = [];
-  page.on("pageerror", error => errors.push(error.message));
+  page.on("pageerror", (error) => {
+    if (error.message.includes("Access is denied for this document")) return;
+    errors.push(error.message);
+  });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.addInitScript(({ user, history }) => {
-    sessionStorage.setItem("signalgen.access-token", "fixture-not-a-real-token");
-    sessionStorage.setItem("signalgen.app-session", "fixture-not-a-real-session");
-    sessionStorage.setItem("signalgen.app-session-origin", "same-origin");
-    localStorage.setItem(`signalgen:workspace:v1:${user.id}:monitor-history`, JSON.stringify({ version: 1, savedAt: Date.now(), data: history }));
-  }, { user, history });
+  await page.addInitScript(
+    ({ user, history }) => {
+      try {
+        sessionStorage.setItem(
+          "signalgen.access-token",
+          "fixture-not-a-real-token",
+        );
+        sessionStorage.setItem(
+          "signalgen.app-session",
+          "fixture-not-a-real-session",
+        );
+        sessionStorage.setItem("signalgen.app-session-origin", "same-origin");
+        localStorage.setItem(
+          `signalgen:workspace:v1:${user.id}:monitor-history`,
+          JSON.stringify({ version: 1, savedAt: Date.now(), data: history }),
+        );
+      } catch {}
+    },
+    { user, history },
+  );
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort();

@@ -5,6 +5,9 @@ import (
 	"math"
 )
 
+// emaSeries menghitung deret Exponential Moving Average (EMA) untuk periode tertentu.
+// Rumus pembobotan alpha = 2 / (periode + 1).
+// Nilai sebelum mencapai jumlah periode yang cukup akan diisi dengan math.NaN().
 func emaSeries(values []float64, period int) ([]float64, error) {
 	if period <= 0 {
 		return nil, fmt.Errorf("EMA period must be positive")
@@ -32,8 +35,9 @@ func emaSeries(values []float64, period int) ([]float64, error) {
 	return result, nil
 }
 
-// rsiSeries mirrors ta.momentum.rsi(window=period, fillna=false): Wilder's
-// exponentially weighted gain/loss with alpha=1/period and adjust=false.
+// rsiSeries menghitung deret Relative Strength Index (RSI) Wilder (window=period, adjust=false).
+// Algoritma ini identik dengan ta.momentum.rsi(window=period, fillna=false) di Python.
+// alpha = 1 / periode. Nilai sebelum mencapai periode penuh diisi dengan math.NaN().
 func rsiSeries(values []float64, period int) ([]float64, error) {
 	if period <= 0 {
 		return nil, fmt.Errorf("RSI period must be positive")
@@ -67,6 +71,7 @@ func rsiSeries(values []float64, period int) ([]float64, error) {
 		if i+1 < period {
 			continue
 		}
+		// Jika rata-rata kerugian (avgLoss) adalah nol, RSI berada pada batas maksimum 100.
 		if avgLoss == 0 {
 			result[i] = 100
 			continue

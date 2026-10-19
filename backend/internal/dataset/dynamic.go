@@ -85,6 +85,14 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 		}
 		return Manifest{}, err
 	}
+	market, currency, err := universe.InstrumentMarket(instruments)
+	if err != nil {
+		return Manifest{}, ErrInvalidRequest
+	}
+	exchanges := make([]string, len(instruments))
+	for index, item := range instruments {
+		exchanges[index] = item.Exchange
+	}
 	series, err := store.provider.Daily(ctx, instruments, dynamicOutputSize)
 	if err != nil {
 		return Manifest{}, err
@@ -96,8 +104,8 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	content, err := json.Marshal(map[string]any{
 		"schema_version": "ohlcv-multi-1",
 		"purpose":        "screen",
-		"market":         "IDX",
-		"currency":       "IDR",
+		"market":         market,
+		"currency":       currency,
 		"timeframe":      "1d",
 		"timezone":       "UTC",
 		"adjustment":     "none",
@@ -121,7 +129,7 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	manifest := Manifest{
 		DatasetID: id, Version: now.Format("20060102T150405Z"), ExpiresAt: expiresAt.Format(time.RFC3339),
 		SchemaVersion: "ohlcv-multi-1", Provider: source.Provider, Purpose: "screen",
-		Market: "IDX", Currency: "IDR", Symbols: symbols, Timeframe: "1d", Timezone: "UTC",
+		Market: market, Currency: currency, Symbols: symbols, Exchanges: exchanges, Timeframe: "1d", Timezone: "UTC",
 		RequestedRange: Range{From: from, To: to}, AvailableRange: Range{From: from, To: to},
 		WarmupCandles: 20, Adjustment: "none", CandleCount: candleCount, DecodedBytes: len(content),
 		Checksum: "sha256:" + hex.EncodeToString(hash[:]),
@@ -189,6 +197,7 @@ func (store *DynamicStore) hasCapacityLocked(owner string, bytes int) bool {
 
 func cloneManifest(manifest Manifest) Manifest {
 	manifest.Symbols = append([]string(nil), manifest.Symbols...)
+	manifest.Exchanges = append([]string(nil), manifest.Exchanges...)
 	manifest.Quality.Warnings = append([]string(nil), manifest.Quality.Warnings...)
 	return manifest
 }

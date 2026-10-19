@@ -97,12 +97,14 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	sessions, err := session.NewPostgresRepository(db, 1, 24*time.Hour)
+	runtimeDB := runtimeTestPool(t, ctx, databaseURL)
+	accounts = account.NewPostgresRepository(runtimeDB)
+	sessions, err := session.NewPostgresRepository(runtimeDB, 1, 24*time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	subscriptions := subscription.NewPostgresRepository(db)
-	universes := universe.NewPostgresRepository(db)
+	subscriptions := subscription.NewPostgresRepository(runtimeDB)
+	universes := universe.NewPostgresRepository(runtimeDB)
 	fixtureBytes, err := os.ReadFile("../../../core/testdata/default_scalping_v1.json")
 	if err != nil {
 		t.Fatal(err)
@@ -126,8 +128,8 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 	}
 	newServer := func(id string) *api.Server {
 		server, err := api.NewServer(fakeIdentity{principal: auth.Principal{ID: id, Email: id + "@test.invalid"}},
-			sessions, accounts, datasets, compute.NewPostgresRepository(db),
-			api.WithRuleStore(rules.NewPostgresRepository(db)),
+			sessions, accounts, datasets, compute.NewPostgresRepository(runtimeDB),
+			api.WithRuleStore(rules.NewPostgresRepository(runtimeDB)),
 			api.WithProfileStore(accounts),
 			api.WithTrafficObserver(platformhttp.NewTrafficObserver(nil)),
 			api.WithScreeningObserver(observability.NewScreenerObserver(nil)),
@@ -381,7 +383,7 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 	if err != nil || len(listed) != 1 {
 		t.Fatalf("owner session list = %d, err = %v", len(listed), err)
 	}
-	grantStore := compute.NewPostgresRepository(db)
+	grantStore := compute.NewPostgresRepository(runtimeDB)
 	grant, err := grantStore.Create(ctx, compute.CreateRequest{
 		UserID: userA, SessionID: listed[0].ID, Purpose: "screen",
 		DatasetID: "fixture", DatasetVersion: "v1", DatasetChecksum: "sha256:data",

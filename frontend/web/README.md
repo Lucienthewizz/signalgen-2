@@ -1,9 +1,24 @@
 # Signalgen Web
 
-React + TypeScript + Vite web application. It currently contains public/account
-work and will become the primary analysis surface under `../../docs/frontend/FRONTEND_MVP_PRD.md`.
-FastAPI is the current legacy backend; the revised target is the versioned Go API
-and Go/WASM worker defined in `../../docs/backend/MVP_API_CONTRACT.md`.
+US stocks: choose the US/Nasdaq/NYSE market in the universe editor, select 1–10
+stocks, then run that universe in the screener. The catalog now imports eligible
+Nasdaq/NYSE stocks from the full official directories: 5,600 at the 19 October
+2026 import, not a fixed 20-symbol list. ETFs, preferred/debt, warrants, rights,
+units and test issues are filtered; OTC/other US venues are not covered. The
+screening maximum stays **10**, regardless of catalog size. USD stays separate
+from IDX/IDR; no FX conversion. AS watchlist
+keys use `US:AAPL`. See [US scope and verification](../../docs/backend/US_STOCKS.md).
+
+Historical OHLCV/screener snapshot caching uses gzip + AES-256-GCM in IndexedDB,
+scoped to a verified user/installation/API and exact manifest version/checksum.
+Logout/user switch removes snapshot ciphertext and keys. Every run still checks
+online authorization. See [cache security and limitations](../../docs/frontend/HISTORICAL_CACHE_SECURITY.md).
+This protects browser cache at rest; it does not replace production HTTPS/WSS.
+
+React + TypeScript + Vite is the active multi-user web application. The current
+backend is Go/Gin with a Go/WASM analysis worker; Python/FastAPI is archived legacy.
+Scope: `../../docs/frontend/FRONTEND_MVP_PRD.md`. Current routes follow
+`../../backend/openapi.yaml`; `../../docs/backend/MVP_API_CONTRACT.md` also contains proposed targets.
 
 ```sh
 npm ci
@@ -126,6 +141,13 @@ are left untouched, and sample performance/review content is labelled as illustr
 dashboard content alignment, primary Refresh styling, and journal form/non-persistence
 using synthetic API/account fixtures only.
 
+The initial account in 6 October browser verification lacked this feature and
+was correctly denied. The user's replacement account already had access and
+completed login-to-screening for a three-symbol demo universe: three latest
+`No match` decisions, quality `complete`, one grant/ticket/socket. No permission
+or role was changed. New grants still require an authorized operator, expiry
+and audit reason; guards must not be bypassed. Signup/recovery lifecycle and
+automatic identity refresh are not claimed complete by this successful run.
 The dashboard's launch area shares a rounded, theme-aware charcoal-to-green
 gradient frame. Its content, navigation, account data, and actions are unchanged;
 the quick-access inset stacks with aligned gutters on narrower screens.

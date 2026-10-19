@@ -24,7 +24,11 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		printUsage(stderr)
 		return 2
 	}
-	if databaseURL := getenv("SUPABASE_DB_URL"); databaseURL != "" {
+	databaseURL := getenv("SUPABASE_ADMIN_DB_URL")
+	if databaseURL == "" {
+		databaseURL = getenv("SUPABASE_DB_URL")
+	}
+	if databaseURL != "" {
 		pool, err := platformdb.OpenPostgres(context.Background(), databaseURL)
 		if err != nil {
 			fmt.Fprintln(stderr, "open Postgres access storage:", err)

@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { TradingViewChart } from "@/components/tradingview-chart";
+import { snapshotChartSymbol } from "@/lib/stock-market";
 import { api } from "@/api/client";
 import type { StockInstrument, StockUniverse } from "@/types";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,8 @@ import {
 } from "@/components/ui/table";
 import {
   idxTicker,
+  monitorTicker,
+  watchTicker,
   monitorRuns,
   priceMovement,
   openCloseChange,
@@ -121,15 +124,18 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
     ? [
         ...new Set(
           universe.symbols
-            .map(idxTicker)
+            .map((symbol) => watchTicker(symbol) ?? idxTicker(symbol))
             .filter((ticker): ticker is string => Boolean(ticker)),
         ),
       ]
     : watchlist;
   const stockName = (ticker: string) =>
-    catalog.find((stock) => idxTicker(stock.symbol) === ticker)?.name ??
+    catalog.find(
+      (stock) =>
+        (watchTicker(stock.symbol) ?? idxTicker(stock.symbol)) === ticker,
+    )?.name ??
     names[ticker] ??
-    "IDX stock";
+    "Stock";
   useEffect(() => {
     let cancelled = false;
     setUniverses([]);
@@ -148,7 +154,11 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
         const first = groups.items.find((group) => group.symbols.length);
         if (first) {
           setUniverseId(first.id);
-          setSelected(idxTicker(first.symbols[0]) ?? "BBCA");
+          const firstTicker =
+            first.symbols
+              .map((symbol) => watchTicker(symbol) ?? idxTicker(symbol))
+              .find((ticker): ticker is string => Boolean(ticker)) ?? "BBCA";
+          setSelected(firstTicker);
         }
       })
       .catch(() => {
@@ -165,7 +175,9 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
     const id = value ?? "watchlist";
     const group = universes.find((item) => item.id === id);
     const stocks = group
-      ? group.symbols.map(idxTicker).filter(Boolean)
+      ? group.symbols
+          .map((symbol) => watchTicker(symbol) ?? idxTicker(symbol))
+          .filter((ticker): ticker is string => Boolean(ticker))
       : watchlist;
     setUniverseId(id);
     if (!stocks.includes(selected)) setSelected(stocks[0] ?? "BBCA");
@@ -179,7 +191,10 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
     >();
     for (const record of runs)
       for (const row of record.run.rows) {
-        const ticker = idxTicker(row.decision.symbol);
+        const ticker = monitorTicker(
+          row.decision.symbol,
+          record.run.manifest.market,
+        );
         if (ticker && !items.has(ticker)) items.set(ticker, { ...row, record });
       }
     return items;
@@ -211,7 +226,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
         const valid = [
           ...new Set(
             stored.filter(
-              (s): s is string => typeof s === "string" && idxTicker(s) === s,
+              (s): s is string => typeof s === "string" && watchTicker(s) === s,
             ),
           ),
         ].slice(0, 30);
@@ -240,7 +255,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   }
   function add(event: FormEvent) {
     event.preventDefault();
-    const ticker = idxTicker(query);
+    const ticker = watchTicker(query);
     if (!ticker) {
       setError("Enter a four-letter IDX ticker, such as BBCA.");
       return;
@@ -261,7 +276,11 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   }
   const entries = runs.flatMap((record) =>
     record.run.rows
-      .filter((row) => idxTicker(row.decision.symbol) === selected)
+      .filter(
+        (row) =>
+          monitorTicker(row.decision.symbol, record.run.manifest.market) ===
+          selected,
+      )
       .map((row) => ({ ...row, record })),
   );
   const selectedSnapshot = snapshots.get(selected);
@@ -274,6 +293,16 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
     selectedSnapshot?.latestClose,
   );
   const selectedIndex = activeStocks.indexOf(selected);
+  const selectedMarket = selected.startsWith("US:") ? "US" : "IDX";
+  const selectedSymbol = selected.replace(/^US:/, "");
+  const selectedCurrency = selectedMarket === "US" ? "USD" : "IDR";
+  const chartSymbol = snapshotChartSymbol(
+    selectedSymbol,
+    selectedSnapshot?.record.run.manifest ?? {
+      market: selectedMarket,
+      symbols: [selectedSymbol],
+    },
+  );
   function moveStock(offset: number) {
     const next = activeStocks[selectedIndex + offset];
     if (next) setSelected(next);
@@ -423,9 +452,9 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                   <i />
                 </span>
                 <div className="monitor-chart__title">
-                  <h3>{selected}</h3>
+                  <h3>{selectedSymbol}</h3>
                   <p>{stockName(selected)}</p>
-                  <Badge variant="outline">Daily · IDR</Badge>
+                  <Badge variant="outline">Daily · {selectedCurrency}</Badge>
                 </div>
                 <Button
                   variant="outline"
@@ -433,7 +462,11 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                   nativeButton={false}
                   render={
                     <a
-                      href={`https://www.tradingview.com/symbols/IDX-${selected}/`}
+                      href={
+                        selectedMarket === "US"
+                          ? `https://www.tradingview.com/symbols/${selectedSymbol}/`
+                          : `https://www.tradingview.com/symbols/IDX-${selectedSymbol}/`
+                      }
                       target="_blank"
                       rel="noreferrer"
                     />
@@ -443,7 +476,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                   <ExternalLink data-icon="inline-end" />
                 </Button>
               </header>
-              <TradingViewChart symbol={`IDX:${selected}`} label={selected} />
+              <TradingViewChart symbol={chartSymbol} label={selectedSymbol} />
               <footer>
                 Chart by TradingView. Availability and delays follow the data
                 provider.
@@ -451,7 +484,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             </section>
             <aside
               className="monitor-stock-detail"
-              aria-label={`Stock details ${selected}`}
+              aria-label={`Stock details ${selectedSymbol}`}
             >
               <div className="monitor-detail-navigation">
                 <h3>Stock details</h3>
@@ -482,20 +515,20 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
               <Card className="monitor-detail-card">
                 <CardHeader>
                   <CardTitle>
-                    <h4>{selected}</h4>
+                    <h4>{selectedSymbol}</h4>
                   </CardTitle>
                   <CardDescription>{stockName(selected)}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="monitor-detail-identity">
                     <StockMark ticker={selected} />
-                    <span>IDX · IDR</span>
+                    <span>{selectedMarket === "US" ? "Nasdaq/NYSE · USD" : "IDX · IDR"}</span>
                   </div>
                   <div className="monitor-detail-quote">
                     <span>Latest screening close</span>
                     <strong>
                       {number(selectedSnapshot?.latestClose ?? NaN)}{" "}
-                      <small>IDR</small>
+                      <small>{selectedCurrency}</small>
                     </strong>
                     {selectedChange !== null && (
                       <span

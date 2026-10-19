@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bell,
@@ -20,13 +20,13 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   getProfileAvatar,
   getSavedProfileAvatar,
-  getSavedProfileName,
   profileAvatarOptions,
   saveProfileAvatar,
   saveProfileName,
   type ProfileAvatarKey,
 } from "@/lib/profile-avatar";
-import type { User } from "@/types";
+import { api, ApiError } from "@/api/client";
+import type { EditableProfile, User } from "@/types";
 
 type AccountSection =
   "profile" | "password" | "notifications" | "privacy" | "devices";
@@ -52,12 +52,17 @@ export function AccountPage({
 }) {
   const fallbackName = user.full_name?.trim() || user.email.split("@")[0];
   const [activeSection, setActiveSection] = useState<AccountSection>("profile");
-  const [displayName, setDisplayName] = useState(() =>
-    getSavedProfileName(user.id, fallbackName),
-  );
+  const [displayName, setDisplayName] = useState(fallbackName);
   const [nameDraft, setNameDraft] = useState(displayName);
   const [editingProfile, setEditingProfile] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
+  const [profile, setProfile] = useState<EditableProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileReload, setProfileReload] = useState(0);
+  const owner = useRef(user.id);
+  owner.current = user.id;
   const [avatarKey, setAvatarKey] = useState<ProfileAvatarKey>(() =>
     getSavedProfileAvatar(user.id),
   );
@@ -65,25 +70,94 @@ export function AccountPage({
   const AvatarIcon = avatar.Icon;
 
   useEffect(() => {
+    let active = true;
     setAvatarKey(getSavedProfileAvatar(user.id));
-    const nextName = getSavedProfileName(user.id, fallbackName);
-    setDisplayName(nextName);
-    setNameDraft(nextName);
-  }, [fallbackName, user.id]);
+    setProfile(null);
+    setProfileLoading(true);
+    setProfileSaving(false);
+    setProfileError(null);
+    setNameSaved(false);
+    setEditingProfile(false);
+    setDisplayName(fallbackName);
+    setNameDraft(fallbackName);
+    // The server is authoritative. Local names are only a display cache for
+    // existing workspace menus, updated after a verified read/save succeeds.
+    api
+      .ensureAppSession()
+      .then(() => api.getProfile())
+      .then((loaded) => {
+        if (!active) return;
+        if (loaded.user_id !== user.id)
+          throw new ApiError(
+            "The profile does not match the signed-in account.",
+            0,
+          );
+        const nextName = loaded.display_name || fallbackName;
+        setProfile(loaded);
+        setDisplayName(nextName);
+        setNameDraft(nextName);
+        saveProfileName(user.id, nextName);
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setProfileError(
+            error instanceof ApiError
+              ? error.message
+              : "The profile could not be loaded.",
+          );
+      })
+      .finally(() => {
+        if (active) setProfileLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [fallbackName, profileReload, user.id]);
 
   function chooseAvatar(nextAvatar: ProfileAvatarKey) {
     saveProfileAvatar(user.id, nextAvatar);
     setAvatarKey(nextAvatar);
   }
 
-  function saveProfile(event: FormEvent<HTMLFormElement>) {
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!profile || profileSaving) return;
     const nextName = nameDraft.trim() || fallbackName;
-    saveProfileName(user.id, nextName);
-    setDisplayName(nextName);
-    setNameDraft(nextName);
-    setNameSaved(true);
-    setEditingProfile(false);
+    const expectedOwner = user.id;
+    setProfileSaving(true);
+    setProfileError(null);
+    setNameSaved(false);
+    try {
+      const saved = await api.updateProfile(profile.version, nextName);
+      if (owner.current !== expectedOwner) return;
+      if (saved.user_id !== expectedOwner)
+        throw new ApiError("The saved profile does not match this account.", 0);
+      const savedName = saved.display_name || fallbackName;
+      setProfile(saved);
+      saveProfileName(expectedOwner, savedName);
+      setDisplayName(savedName);
+      setNameDraft(savedName);
+      setNameSaved(true);
+      setEditingProfile(false);
+    } catch (error) {
+      if (owner.current !== expectedOwner) return;
+      if (error instanceof ApiError && error.status === 409) {
+        // Never replay a stale write. Read the latest version, then let the
+        // user review and submit again instead of overwriting another editor.
+        setProfile(null);
+        setProfileError(
+          "This profile changed elsewhere. Reload it before saving again.",
+        );
+      } else {
+        setProfileError(
+          error instanceof ApiError
+            ? error.message
+            : "The profile could not be saved.",
+        );
+      }
+    } finally {
+      if (owner.current === expectedOwner) setProfileSaving(false);
+    }
   }
 
   function cancelProfileEdit() {
@@ -152,13 +226,14 @@ export function AccountPage({
                 </Avatar>
                 <div>
                   <h2 id="profile-title">My Signalgen profile</h2>
-                  <p>Shown in this browser as {displayName}</p>
+                  <p>Your account display name: {displayName}</p>
                 </div>
                 <Button
                   className="profile-sheet__edit"
                   variant="ghost"
                   size="icon"
                   aria-label="Edit profile"
+                  disabled={profileLoading || profileSaving || !profile}
                   onClick={() => {
                     setNameSaved(false);
                     setEditingProfile(true);
@@ -175,7 +250,8 @@ export function AccountPage({
                     <Input
                       aria-label="Display name"
                       value={nameDraft}
-                      maxLength={48}
+                      maxLength={100}
+                      disabled={profileSaving}
                       autoFocus
                       onChange={(event) => setNameDraft(event.target.value)}
                     />
@@ -229,28 +305,52 @@ export function AccountPage({
                 </div>
                 <div className="profile-field">
                   <span>Visibility</span>
-                  <strong>This browser only</strong>
+                  <strong>Account name synced; profile mark local</strong>
                 </div>
                 {editingProfile && (
                   <div className="profile-form-actions">
                     <p>
-                      Changes to your name and mark are saved only on this
-                      device.
+                      Your name is saved to your account. The profile mark stays
+                      on this device.
                     </p>
                     <div>
                       <Button
                         type="button"
                         variant="ghost"
                         onClick={cancelProfileEdit}
+                        disabled={profileSaving}
                       >
                         Cancel
                       </Button>
-                      <Button type="submit">Save changes</Button>
+                      <Button
+                        type="submit"
+                        disabled={profileSaving || !profile}
+                      >
+                        {profileSaving ? "Saving…" : "Save changes"}
+                      </Button>
                     </div>
                   </div>
                 )}
                 {nameSaved && (
-                  <p className="profile-save-status">Profile saved locally.</p>
+                  <p className="profile-save-status" role="status">
+                    Profile saved to your account.
+                  </p>
+                )}
+                {profileLoading && (
+                  <p role="status">Loading account profile…</p>
+                )}
+                {profileError && (
+                  <div role="alert">
+                    <p>{profileError}</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={profileLoading || profileSaving}
+                      onClick={() => setProfileReload((value) => value + 1)}
+                    >
+                      Reload profile
+                    </Button>
+                  </div>
                 )}
               </form>
             </section>

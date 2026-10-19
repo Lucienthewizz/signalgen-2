@@ -30,6 +30,7 @@ import {
   compareMonitorRuns,
 } from "@/lib/market-monitor";
 import { downloadCsv } from "@/lib/csv";
+import { formatStockPrice, snapshotChartSymbol } from "@/lib/stock-market";
 import {
   filteredRows,
   readScreenerPreferences,
@@ -490,7 +491,7 @@ export function WorkspaceScreenerPanel({
                   onValueChange={(value) => setRuleId(value ?? "")}
                 >
                   <SelectTrigger id="screen-rule">
-                    <SelectValue />
+                    <SelectValue>{selectedRule?.name}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
@@ -522,7 +523,7 @@ export function WorkspaceScreenerPanel({
                   onValueChange={(value) => setUniverseId(value ?? "")}
                 >
                   <SelectTrigger id="screen-universe">
-                    <SelectValue />
+                    <SelectValue>{selectedUniverse?.name}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
@@ -536,6 +537,11 @@ export function WorkspaceScreenerPanel({
                 </Select>
                 <FieldDescription>
                   {selectedUniverse?.symbols.join(" · ")}
+                  {selectedUniverse &&
+                    ` · ${selectedUniverse.symbols[0]?.endsWith(".JK") ? "IDX / IDR" : "AS / USD"}`}
+                  {
+                    " · Ambang PRICE/EMA memakai mata uang universe, tanpa konversi kurs."
+                  }
                 </FieldDescription>
               </Field>
             </FieldGroup>
@@ -828,7 +834,9 @@ export function WorkspaceScreenerPanel({
                     ],
                     ...visibleRows.map((row) => [
                       row.decision.symbol,
-                      row.decision.matched ? "Matched" : "Not matched",
+                      row.decision.matched
+                        ? row.decision.signal_type || "BUY"
+                        : "Not matched",
                       row.latestOpen,
                       row.latestClose,
                       row.features.rsi14,
@@ -856,7 +864,7 @@ export function WorkspaceScreenerPanel({
                     <p>
                       Candle {candleDate(detailRow.decision.timestamp)} ·{" "}
                       {detailRow.decision.matched
-                        ? "Matched rule"
+                        ? `Signal ${detailRow.decision.signal_type || "BUY"} (Matched rule)`
                         : "Did not match rule"}
                     </p>
                   </div>
@@ -903,6 +911,7 @@ export function WorkspaceScreenerPanel({
                           const evidence = conditionEvidence(
                             condition,
                             detailRow.features,
+                            detailRow.prevFeatures,
                           );
                           return (
                             <li key={index}>
@@ -948,7 +957,10 @@ export function WorkspaceScreenerPanel({
                 </div>
                 <div className="stock-detail__chart">
                   <TradingViewChart
-                    symbol={`IDX:${detailRow.decision.symbol.replace(".JK", "")}`}
+                    symbol={snapshotChartSymbol(
+                      detailRow.decision.symbol,
+                      run.manifest,
+                    )}
                     label={detailRow.decision.symbol.replace(".JK", "")}
                   />
                 </div>
@@ -1054,33 +1066,56 @@ export function WorkspaceScreenerPanel({
                       <TableCell>
                         <Badge
                           variant={
-                            row.decision.matched ? "success" : "destructive"
+                            row.decision.matched
+                              ? row.decision.signal_type === "SELL"
+                                ? "destructive"
+                                : "success"
+                              : "outline"
                           }
                         >
                           {row.decision.matched ? (
-                            <CircleCheck
-                              data-icon="inline-start"
-                              aria-hidden="true"
-                            />
+                            row.decision.signal_type === "SELL" ? (
+                              <>
+                                <CircleAlert
+                                  data-icon="inline-start"
+                                  aria-hidden="true"
+                                />
+                                SELL
+                              </>
+                            ) : (
+                              <>
+                                <CircleCheck
+                                  data-icon="inline-start"
+                                  aria-hidden="true"
+                                />
+                                BUY
+                              </>
+                            )
                           ) : (
-                            <XCircle
-                              data-icon="inline-start"
-                              aria-hidden="true"
-                            />
+                            <>
+                              <XCircle
+                                data-icon="inline-start"
+                                aria-hidden="true"
+                              />
+                              Not matched
+                            </>
                           )}
-                          {row.decision.matched ? "Matched" : "Not matched"}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         {row.latestOpen != null &&
                         Number.isFinite(row.latestOpen)
-                          ? new Intl.NumberFormat("en-GB").format(
+                          ? formatStockPrice(
                               row.latestOpen,
+                              run.manifest.currency,
                             )
                           : "—"}
                       </TableCell>
                       <TableCell>
-                        {new Intl.NumberFormat("en-GB").format(row.latestClose)}
+                        {formatStockPrice(
+                          row.latestClose,
+                          run.manifest.currency,
+                        )}
                       </TableCell>
                       <TableCell>{row.features.rsi14.toFixed(2)}</TableCell>
                       <TableCell>{row.features.ema20.toFixed(2)}</TableCell>

@@ -118,8 +118,8 @@ export function validatedRuleDraft(value: unknown): RuleDraft | null {
     !d ||
     typeof d.name !== "string" ||
     d.name.length > 100 ||
-    d.logic !== "AND" ||
-    d.signal_type !== "BUY" ||
+    (d.logic !== "AND" && d.logic !== "OR") ||
+    (d.signal_type !== "BUY" && d.signal_type !== "SELL") ||
     !Number.isFinite(d.cooldown_sec) ||
     d.cooldown_sec < 0 ||
     !Array.isArray(d.conditions) ||
@@ -131,7 +131,7 @@ export function validatedRuleDraft(value: unknown): RuleDraft | null {
       (c) =>
         c &&
         ["PRICE", "EMA9", "EMA20", "RSI14"].includes(c.left) &&
-        ["<", "<=", ">", ">="].includes(c.op) &&
+        ["<", "<=", ">", ">=", "CROSS_UP", "CROSS_DOWN"].includes(c.op) &&
         (typeof c.right === "number"
           ? Number.isFinite(c.right)
           : typeof c.right === "string" && c.right.length <= 100),
@@ -149,8 +149,8 @@ export function validatedRuleDraft(value: unknown): RuleDraft | null {
   return {
     definition: {
       name: d.name,
-      logic: "AND",
-      signal_type: "BUY",
+      logic: d.logic,
+      signal_type: d.signal_type,
       cooldown_sec: d.cooldown_sec,
       conditions: d.conditions.map((c) => ({
         left: c.left,

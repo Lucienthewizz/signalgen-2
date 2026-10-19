@@ -43,7 +43,12 @@ function loadMonitor() {
         path.join(__dirname, "../src/lib/market-monitor.ts"),
         "utf8",
       ),
-      { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
+      {
+        compilerOptions: {
+          module: ts.ModuleKind.CommonJS,
+          target: ts.ScriptTarget.ES2022,
+        },
+      },
     ).outputText,
     {
       exports,
@@ -113,6 +118,31 @@ test("IDX codes normalize without accepting arbitrary widget symbols", () => {
     assert.equal(output.idxTicker(value), "BBCA");
   for (const value of ["", "BTCUSDT", "AAPL<script>", "1234", "IDX:"])
     assert.equal(output.idxTicker(value), null);
+});
+
+test("US history, exchange metadata and namespaced watchlists survive reload without becoming IDX", () => {
+  const run = fixture();
+  const row = run.rows[0];
+  row.decision.symbol = "AAPL";
+  run.manifest.market = "US";
+  run.manifest.currency = "USD";
+  run.manifest.symbols = ["AAPL"];
+  run.manifest.exchanges = ["XNAS"];
+  output.recordMonitorRun("us-owner", "US rule", run);
+  const restored = loadMonitor().monitorRuns("us-owner");
+  assert.equal(restored.length, 1);
+  assert.equal(restored[0].run.manifest.currency, "USD");
+  assert.equal(restored[0].run.manifest.exchanges[0], "XNAS");
+  assert.equal(output.monitorTicker("AAPL", "US"), "US:AAPL");
+  assert.equal(output.watchTicker("US:BRK.B"), "US:BRK-B");
+  assert.equal(output.watchTicker("NASDAQ:MSFT"), "US:MSFT");
+  assert.equal(output.watchTicker("US:<script>"), null);
+  assert.equal(output.watchTicker("US:BBCA.JK"), null);
+  const bad = fixture();
+  bad.manifest.market = "US";
+  bad.manifest.currency = "IDR";
+  output.recordMonitorRun("invalid-us", "Bad", bad);
+  assert.equal(loadMonitor().monitorRuns("invalid-us").length, 0);
 });
 test("monitor history is account scoped and bounded to ten completed runs", () => {
   for (let i = 0; i < 12; i++)
@@ -274,7 +304,15 @@ test("open-close percentages never use missing, zero or invalid opening prices",
   assert.equal(output.openCloseChange(100, 110), 10);
   assert.equal(output.openCloseChange(100, 90), -10);
   assert.equal(output.openCloseChange(100, 100), 0);
-  for (const [open, close] of [[0,100],[-1,100],[null,100],[100,NaN],[100,Infinity],[100,-5]]) assert.equal(output.openCloseChange(open, close), null);
+  for (const [open, close] of [
+    [0, 100],
+    [-1, 100],
+    [null, 100],
+    [100, NaN],
+    [100, Infinity],
+    [100, -5],
+  ])
+    assert.equal(output.openCloseChange(open, close), null);
 });
 test("snapshot age uses a conservative seven-calendar-day threshold and rejects future clocks", () => {
   const now = Date.parse("2026-10-14T12:00:00Z");

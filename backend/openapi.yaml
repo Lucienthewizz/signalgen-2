@@ -115,6 +115,19 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/openapi.yaml:
+    get:
+      tags: [Operations]
+      operationId: getOpenAPIContract
+      summary: Download the public contract embedded in this API build
+      security: []
+      responses:
+        "200":
+          description: The same reviewed OpenAPI document used by the executable.
+          content:
+            application/yaml:
+              schema:
+                type: string
   /api:
     get:
       tags: [Operations]
@@ -852,7 +865,7 @@ paths:
     get:
       tags: [Analysis]
       operationId: listStockCatalog
-      summary: List the three server-approved IDX instruments
+      summary: List active server-approved IDX and US instruments
       security:
         - supabaseBearer: []
           appSession: []
@@ -2170,7 +2183,7 @@ components:
           items: {type: string, enum: [screen]}
         markets:
           type: array
-          items: {type: string, enum: [IDX]}
+          items: {type: string, enum: [IDX, US]}
         timeframes:
           type: array
           items: {type: string, enum: [1d]}
@@ -2179,10 +2192,10 @@ components:
           items: {type: string, enum: [PRICE, EMA9, EMA20, RSI14]}
         operators:
           type: array
-          items: {type: string, enum: ["<", "<=", ">", ">="]}
+          items: {type: string, enum: ["<", "<=", ">", ">=", "CROSS_UP", "CROSS_DOWN"]}
         rule_logic:
           type: array
-          items: {type: string, enum: [AND]}
+          items: {type: string, enum: [AND, OR]}
         max_candles_per_run: {type: integer, enum: [100000]}
         max_symbols_per_run: {type: integer, enum: [1]}
         screening:
@@ -2204,7 +2217,7 @@ components:
       required: [left, op, right]
       properties:
         left: {type: string, enum: [PRICE, EMA9, EMA20, RSI14]}
-        op: {type: string, enum: ["<", "<=", ">", ">="]}
+        op: {type: string, enum: ["<", "<=", ">", ">=", "CROSS_UP", "CROSS_DOWN"]}
         right:
           oneOf:
             - {type: string}
@@ -2215,8 +2228,8 @@ components:
       required: [name, logic, signal_type, cooldown_sec, conditions]
       properties:
         name: {type: string, minLength: 1, maxLength: 100}
-        logic: {type: string, enum: [AND]}
-        signal_type: {type: string, enum: [BUY]}
+        logic: {type: string, enum: [AND, OR]}
+        signal_type: {type: string, enum: [BUY, SELL]}
         cooldown_sec: {type: integer, minimum: 0, maximum: 86400}
         conditions:
           type: array
@@ -2290,10 +2303,10 @@ components:
       type: object
       required: [symbol, name, exchange, currency]
       properties:
-        symbol: {type: string, pattern: '^[A-Z0-9]+[.]JK$'}
+        symbol: {type: string, pattern: '^([A-Z0-9]+[.]JK|[A-Z][A-Z0-9]{0,9}(-[A-Z])?)$'}
         name: {type: string}
-        exchange: {type: string, enum: [XIDX]}
-        currency: {type: string, enum: [IDR]}
+        exchange: {type: string, enum: [XIDX, XNAS, XNYS]}
+        currency: {type: string, enum: [IDR, USD]}
     StockUniverseWrite:
       type: object
       additionalProperties: false
@@ -2305,7 +2318,8 @@ components:
           minItems: 1
           maxItems: 10
           uniqueItems: true
-          items: {type: string, pattern: '^[A-Z0-9]+[.]JK$'}
+          description: One market per universe; IDX and US symbols cannot be mixed.
+          items: {type: string, pattern: '^([A-Z0-9]+[.]JK|[A-Z][A-Z0-9]{0,9}(-[A-Z])?)$'}
     StockUniverse:
       allOf:
         - $ref: "#/components/schemas/StockUniverseWrite"
@@ -2351,11 +2365,15 @@ components:
         schema_version: {type: string, enum: [ohlcv-multi-1]}
         provider: {type: string, enum: [yahoo_finance]}
         purpose: {type: string, enum: [screen]}
-        market: {type: string, enum: [IDX]}
-        currency: {type: string, enum: [IDR]}
+        market: {type: string, enum: [IDX, US]}
+        currency: {type: string, enum: [IDR, USD]}
         symbols:
           type: array
           items: {type: string}
+        exchanges:
+          type: array
+          description: Catalog exchange MICs, in the same order as symbols. Older fixture handles may omit this field.
+          items: {type: string, enum: [XIDX, XNAS, XNYS]}
         timeframe: {type: string, enum: [1d]}
         timezone: {type: string, enum: [UTC]}
         requested_range:
@@ -2385,8 +2403,8 @@ components:
       properties:
         schema_version: {type: string, enum: [ohlcv-multi-1]}
         purpose: {type: string, enum: [screen]}
-        market: {type: string, enum: [IDX]}
-        currency: {type: string, enum: [IDR]}
+        market: {type: string, enum: [IDX, US]}
+        currency: {type: string, enum: [IDR, USD]}
         timeframe: {type: string, enum: [1d]}
         timezone: {type: string, enum: [UTC]}
         adjustment: {type: string}
@@ -2400,7 +2418,7 @@ components:
       type: object
       required: [symbol, timezone, candles]
       properties:
-        symbol: {type: string, pattern: '^[A-Z0-9]+[.]JK$'}
+        symbol: {type: string, pattern: '^([A-Z0-9]+[.]JK|[A-Z][A-Z0-9]{0,9}(-[A-Z])?)$'}
         timezone: {type: string, enum: [UTC]}
         candles:
           type: array

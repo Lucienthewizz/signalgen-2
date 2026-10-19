@@ -49,7 +49,12 @@ docker compose up --build go-api
 ```
 
 API tersedia di `http://127.0.0.1:8080`; kontrak lengkap berada di
-`backend/openapi.yaml`.
+`backend/openapi.yaml` dan disajikan oleh `GET /api/openapi.yaml`.
+
+`SUPABASE_DB_URL` harus memakai role `signalgen_api` setelah migration dan
+provisioning password, bukan `postgres`. API menolak kredensial administrasi.
+Panduan pemisahan runtime/migration, readiness dan tes keamanan ada di
+[`SECURITY_HARDENING.md`](../docs/backend/SECURITY_HARDENING.md).
 
 ## Pemantauan backend
 
@@ -117,6 +122,7 @@ Target berjalan pada `http://127.0.0.1:8080`. Endpoint yang sudah tersedia:
 - `GET /health` — public health check;
 - `GET /ready` — readiness Postgres dan penyimpanan dataset untuk Docker;
 - `GET /api` — status yang dipakai frontend;
+- `GET /api/openapi.yaml` — kontrak publik dari build API yang sedang berjalan;
 - `POST /api/auth/register` — membuat akun Supabase melalui Go;
 - `POST /api/auth/login` — login Supabase melalui Go;
 - `POST /api/auth/refresh` — memperbarui pasangan access/refresh token;
@@ -172,7 +178,8 @@ lain mencabut sesi perangkat sebelumnya dan hanya boleh sekali per 24 jam.
 System rule tidak dapat diubah/dihapus dan definisi privatnya tidak dikirim oleh
 endpoint rule. Query rule pribadi selalu dibatasi
 oleh pemilik; ID milik akun lain menghasilkan respons not found agar kepemilikan
-tidak bocor. Endpoint bisnis lain tetap belum diimplementasikan.
+tidak bocor. Endpoint jurnal/portfolio dan backtest tetap belum diimplementasikan;
+status fitur lengkap ada di [backend progress](../docs/backend/BACKEND_PROGRESS.md).
 
 Go API memakai `pgxpool` untuk profile, entitlement, subscription, sesi, rule,
 audit, dan compute grant. Fitur efektif merupakan gabungan manual grant aktif
@@ -196,7 +203,7 @@ URL reset wajib dimasukkan juga ke daftar redirect yang diizinkan pada
 Supabase Dashboard: **Authentication → URL Configuration → Redirect URLs**.
 
 Konfigurasi ini tidak menerima wildcard. Request browser yang diizinkan dapat
-mengirim header `Authorization`, `Content-Type`, dan `X-App-Session`. Client
+mengirim header `Authorization`, `Content-Type`, dan `X-App-Session`.
 Client server-side yang tidak mengirim header `Origin` tidak terpengaruh.
 
 Semua body JSON dibatasi maksimal 64 KiB. Request yang melewati batas ditolak
@@ -254,8 +261,9 @@ Perubahan role mewajibkan alasan dan akan ditolak dengan
 `409 LAST_OPERATOR_REQUIRED` jika menurunkan role operator aktif terakhir.
 Status mutation juga melindungi operator terakhir dan mencabut sesi target
 secara atomik bersama audit. Akun suspended tidak bisa membuat sesi baru;
-reactivation tidak menghidupkan sesi lama. Migration audit/index baru perlu
-diterapkan melalui review deployment; belum diterapkan ke cloud pada tahap ini.
+reactivation tidak menghidupkan sesi lama. Migration audit/index sudah diterapkan
+ke cloud pada 6 Oktober; riwayat lokal/cloud kini sinkron delapan migration.
+Deployment schema bukan bukti seluruh UI/admin flow atau image sudah diterbitkan.
 Panduan lengkap dan Postman read-only: [admin backend](../docs/backend/ADMIN_BACKEND.md).
 
 Grant demo lokal tetap dijalankan dengan:

@@ -12,6 +12,8 @@ func TestValidState(t *testing.T) {
 		valid      bool
 	}{
 		{"watchlist", `["BBCA","TLKM"]`, true}, {"watchlist", `[]`, true},
+		{"watchlist", `["BBCA","US:AAPL","US:BRK-B"]`, true},
+		{"watchlist", `["US:<script>"]`, false}, {"watchlist", `["US:aapl"]`, false},
 		{"watchlist", `["<script>"]`, false}, {"watchlist", `["bbca"]`, false},
 		{"monitor-history", `[{"run":{"features":{"rsi14":54}}}]`, true},
 		{"rule-draft", `{"definition":{"name":"Contoh","conditions":[]}}`, true},

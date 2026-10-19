@@ -63,7 +63,7 @@ P0 selesai bukan berarti MVP selesai. Target satu minggu demo adalah estimasi aw
 | MVP-RULE-01 | P0 | Satu strategi baseline | Snapshot, fixture, engine version dan asumsi eksekusi dibekukan untuk parity |
 | MVP-RULE-02 | P1 | CRUD rule subset tanpa kode | Operand/operator didukung core; backend/WASM menolak yang unsupported |
 | MVP-DATA-01 | P0 | Fixture historis berversi | Sumber, market, currency, UTC, warmup, adjustment dan checksum tercatat |
-| MVP-DATA-02 | P1 | Provider historis melalui server | IDX dahulu; hak penggunaan/redistribusi diperiksa; timeout/rate limit/missing data ditangani |
+| MVP-DATA-02 | P1 | Provider historis melalui server | IDX dan katalog saham Nasdaq/NYSE dari direktori resmi (bukan daftar 20 pilihan); satu universe 1–10 saham satu pasar/mata uang; metadata katalog tidak memicu unduhan seluruh harga; hak penggunaan/redistribusi diperiksa; timeout/rate limit/missing data ditangani |
 | MVP-SCREEN-01 | P0 | Screening historis hybrid | Client menghitung fitur berat; server decision kernel kecil menilai batch kandidat; fixture menghasilkan match dengan alasan; bukan live signal |
 | MVP-SCREEN-02 | P0 | Eksperimen batas client/server | Model decision-kernel dan satu alternatif dibandingkan pada fixture yang sama untuk correctness, beban, network, failure, dan exposure logika sebelum split difinalkan |
 | MVP-WASM-01 | P0 | Go/WASM di worker | Indikator/fitur berat berjalan di client; worker run/status/result/error/cancel tersedia; keputusan kritis boleh memakai kernel server yang ringan |
@@ -108,8 +108,9 @@ subscription, rule, compute grant, dan audit. Effective entitlement berasal dari
 manual grant aktif atau subscription aktif yang memuat fitur tersebut. Semua
 tabel aplikasi mempunyai ownership yang jelas dan RLS; backend tetap memeriksa
 owner/role/entitlement di setiap operasi. Database URL hanya berada di backend.
-Cache client ciphertext terkompresi; pilihan storage browser diputuskan pada
-gate P1. P0 boleh in-memory.
+Cache client ciphertext terkompresi; pengguna memilih IndexedDB + AES-256-GCM
+pada 15 Oktober 2026, dengan key/snapshot dihapus saat logout. Keputusan, lifecycle,
+dan batas proteksi dijelaskan di [cache security](frontend/HISTORICAL_CACHE_SECURITY.md).
 
 WASM bukan enkripsi kode; ID instalasi browser bukan hardware ID; IP bukan identitas tetap. Hard-lock IP bukan default MVP. Hasil WASM unverified, tidak menentukan izin/payment; draft jurnal butuh konfirmasi.
 
@@ -145,7 +146,7 @@ MVP selesai: **seluruh P0/P1** lulus; slice API Go teruji; provider berizin, mig
 | Strategi, indikator, exit/sizing, fees dan baseline engine path | BE/core + pembimbing | M0 |
 | Provider/hak distribusi data | Product + BE | P1 data |
 | Supabase Postgres backup/recovery, least privilege dan RLS | BE/security | P1 storage |
-| Pilihan storage ciphertext browser | FE + BE + product/pembimbing | P1 cache |
+| Storage ciphertext browser: pengguna memilih IndexedDB + AES-GCM pada 15 Oktober 2026; [keputusan dan batas](frontend/HISTORICAL_CACHE_SECURITY.md) | FE + BE; validasi pembimbing terpisah | P1 cache |
 | Device/session/grant limits dan IP policy | Product + BE/security | P1 device |
 | Browser/perangkat target dan budget final | FE + BE | M0 |
 | Benefit/harga/provider pembayaran | Product | P2 komersial; tidak memblokir grant MVP |

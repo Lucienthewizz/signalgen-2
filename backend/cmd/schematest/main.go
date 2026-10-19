@@ -81,6 +81,7 @@ insert into auth.users (email, created_at) values
 	checks := []string{
 		filepath.Join(repoRoot, "supabase", "tests", "schema_boundaries.sql"),
 		filepath.Join(repoRoot, "supabase", "tests", "ownership.sql"),
+		filepath.Join(repoRoot, "supabase", "tests", "runtime_privileges.sql"),
 	}
 	for _, check := range checks {
 		if err := executeSQLFile(ctx, conn, check); err != nil {

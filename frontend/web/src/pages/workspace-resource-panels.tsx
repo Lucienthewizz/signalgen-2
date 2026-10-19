@@ -2,6 +2,8 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ResourceQuota } from "@/components/resource-quota";
 import { StockCatalogPicker } from "@/components/stock-catalog-picker";
 import { universeSelectionLimit } from "@/lib/stock-catalog";
+import { marketLabels, stockMarket, symbolMarket } from "@/lib/stock-market";
+import type { StockMarket } from "@/types";
 import {
   BadgeCheck,
   Boxes,
@@ -112,6 +114,11 @@ export function StockUniversesPanel({
   backendOnline,
 }: ConnectionProps) {
   const [catalog, setCatalog] = useState<StockInstrument[]>([]);
+  const [market, setMarket] = useState<StockMarket>("IDX");
+  const marketCatalog = useMemo(
+    () => catalog.filter((stock) => stockMarket(stock) === market),
+    [catalog, market],
+  );
   const [universes, setUniverses] = useState<StockUniverse[]>([]);
   const [editing, setEditing] = useState<StockUniverse | null>(null);
   const [name, setName] = useState("");
@@ -155,6 +162,7 @@ export function StockUniversesPanel({
   }
 
   function edit(universe: StockUniverse) {
+    setMarket(symbolMarket(universe.symbols[0] ?? "BBCA.JK"));
     setEditing(universe);
     setName(universe.name);
     setSymbols([...universe.symbols]);
@@ -164,6 +172,7 @@ export function StockUniversesPanel({
   }
 
   function toggleSymbol(symbol: StockInstrument["symbol"]) {
+    if (!marketCatalog.some((stock) => stock.symbol === symbol)) return;
     setSymbols((current) =>
       current.includes(symbol)
         ? current.filter((item) => item !== symbol)

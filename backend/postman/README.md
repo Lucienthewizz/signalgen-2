@@ -97,8 +97,9 @@ Setelah **Current account**, `user_id` tersimpan otomatis. Untuk database baru,
 bootstrap akun itu menjadi operator pertama satu kali saja:
 
 ```bash
-docker compose exec go-api \
-  signalgen-admin bootstrap-operator \
+docker build -f backend/Go.Dockerfile --target api-runtime -t signalgen-admin-tools .
+docker run --rm --env-file backend/.env.migrations \
+  --entrypoint signalgen-admin signalgen-admin-tools bootstrap-operator \
   --user USER_ID \
   --reason "initial Postman operator" \
   --actor "local:postman"
@@ -106,6 +107,9 @@ docker compose exec go-api \
 
 Bootstrap hanya untuk database yang belum pernah memiliki operator. Jika sudah
 ada operator, gunakan akun operator tersebut; jangan mencoba bootstrap lagi.
+Kredensial admin tersebut hanya dipakai container CLI sementara, bukan
+container HTTP. Role runtime `signalgen_api` memang tidak boleh melakukan
+bootstrap; lihat `docs/backend/SECURITY_HARDENING.md` untuk provisioning secret.
 
 Setelah akun pengujian mempunyai entitlement:
 

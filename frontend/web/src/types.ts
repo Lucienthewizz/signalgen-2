@@ -40,6 +40,15 @@ export type MessageResponse = {
   message: string;
 };
 
+// Display fields only. Role, entitlement, email and ownership are not editable.
+export type EditableProfile = {
+  user_id: string;
+  display_name: string;
+  bio: string;
+  version: number;
+  updated_at: string;
+};
+
 export type AppSessionResponse = {
   session: {
     id: string;
@@ -52,15 +61,21 @@ export type AppSessionResponse = {
   session_token: string;
 };
 
+export type StockMarket = "IDX" | "US";
+export type StockCurrency = "IDR" | "USD";
+export type StockExchange = "XIDX" | "XNAS" | "XNYS";
+
 export type DatasetManifest = {
   dataset_id: string;
   version: string;
+  expires_at?: string;
   schema_version: "ohlcv-multi-1";
   provider: "yahoo_finance";
   purpose: "screen";
-  market: "IDX";
-  currency: "IDR";
+  market: StockMarket;
+  currency: StockCurrency;
   symbols: string[];
+  exchanges?: StockExchange[];
   timeframe: "1d";
   timezone: "UTC";
   requested_range: { from: string; to: string };
@@ -85,8 +100,8 @@ export type Candle = {
 export type DatasetContent = {
   schema_version: "ohlcv-multi-1";
   purpose: "screen";
-  market: "IDX";
-  currency: "IDR";
+  market: StockMarket;
+  currency: StockCurrency;
   timeframe: "1d";
   timezone: "UTC";
   adjustment: string;
@@ -99,14 +114,14 @@ export type DatasetContent = {
 
 export type RuleCondition = {
   left: "PRICE" | "EMA9" | "EMA20" | "RSI14";
-  op: "<" | "<=" | ">" | ">=";
+  op: "<" | "<=" | ">" | ">=" | "CROSS_UP" | "CROSS_DOWN";
   right: string | number;
 };
 
 export type UserRuleDefinition = {
   name: string;
-  logic: "AND";
-  signal_type: "BUY";
+  logic: "AND" | "OR";
+  signal_type: "BUY" | "SELL";
   cooldown_sec: number;
   conditions: RuleCondition[];
 };
@@ -133,8 +148,8 @@ export type RuleListResponse = {
 export type StockInstrument = {
   symbol: string;
   name: string;
-  exchange: "XIDX";
-  currency: "IDR";
+  exchange: StockExchange;
+  currency: StockCurrency;
 };
 
 export type StockUniverse = {
@@ -240,6 +255,7 @@ export type ScreenerDecision = {
   symbol: string;
   timestamp: string;
   matched: boolean;
+  signal_type?: "BUY" | "SELL";
   reason_codes: string[];
 };
 

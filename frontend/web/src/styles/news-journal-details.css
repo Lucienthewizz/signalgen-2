@@ -2402,6 +2402,16 @@ html[data-theme="light"] .journal-toolbar select {
   color: #68736b;
   font-size: 8px;
 }
+.historical-cache-panel strong {
+  color: var(--text);
+  font-size: 14px;
+}
+.historical-cache-panel small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
 .muted-meta {
   color: #626c64 !important;
   font-size: 8px !important;

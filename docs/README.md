@@ -9,20 +9,25 @@ README yang bersifat petunjuk lokal tetap diletakkan bersama modulnya.
 - [Project context](PROJECT_CONTEXT.md)
 - [Product notes](PRODUCT.md)
 - [Design notes](DESIGN.md)
-- [Progress cheat sheet untuk bimbingan](PROF_ASIS_CHEATSHEET.md)
+- [Persiapan asis 7 Oktober 2026: demo, bukti dan batasan](ASIS_2026_10_07.md)
+- [Cheat sheet eksperimen awal (historis)](PROF_ASIS_CHEATSHEET.md)
 - [Voice memo context](VOICE_MEMO_CONTEXT.md)
 - [MVP rationale from voice memo](MVP_FROM_VOICE_MEMO.md)
 
 ## Backend
 
+- [Progress backend terkini](backend/BACKEND_PROGRESS.md)
+- [Arsip checkpoint backend](backend/BACKEND_PROGRESS_HISTORY.md)
 - [Backend architecture](backend/ARCHITECTURE.md)
 - [Backend MVP PRD](backend/BACKEND_MVP_PRD.md)
 - [API and worker contract](backend/MVP_API_CONTRACT.md)
 - [Hybrid screener design](backend/HYBRID_SCREENER_DESIGN.md)
 - [Split-model experiment](backend/SPLIT_MODEL_EXPERIMENT.md)
 - [Postgres migration](backend/POSTGRES_MIGRATION.md)
+- [Backend security hardening](backend/SECURITY_HARDENING.md)
 - [Email delivery and Mailtrap](backend/EMAIL_DELIVERY.md)
 - [Frontend handoff for hybrid screener](backend/HYBRID_SCREENER_FRONTEND_HANDOFF.md)
+- [Kontrak Model A dan status integrasi frontend](backend/MODEL_A_FRONTEND_HANDOFF.md)
 
 ## Frontend
 

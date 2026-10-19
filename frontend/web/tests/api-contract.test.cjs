@@ -15,7 +15,10 @@ function client(reply) {
     .readFileSync(path.join(__dirname, "../src/api/client.ts"), "utf8")
     .replace("import.meta.env.VITE_API_ORIGIN", '"https://api.example.test/"');
   const compiled = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS },
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
   }).outputText;
   const exports = {};
   vm.runInNewContext(compiled, {
@@ -364,6 +367,103 @@ test("hybrid screener calls use the implemented Go API contract", async () => {
   });
 });
 
+test("dataset manifest URL matches both runtime OpenAPI and registered Go route", async () => {
+  // Read the real backend contract instead of duplicating a permissive mock URL.
+  const openapi = fs.readFileSync(
+    path.join(__dirname, "../../../backend/openapi.yaml"),
+    "utf8",
+  );
+  const route = fs.readFileSync(
+    path.join(__dirname, "../../../backend/internal/dataset/routes.go"),
+    "utf8",
+  );
+  const template = openapi.match(
+    /^  (\/api\/v1\/datasets\/\{id\}\/manifest):$/m,
+  )?.[1];
+  assert.ok(template, "OpenAPI must publish the manifest route");
+  assert.ok(route.includes(`"${template.replace("{id}", ":id")}"`));
+  const datasetId = "snapshot/with space";
+  const pathname = template.replace("{id}", encodeURIComponent(datasetId));
+  const c = client((url) =>
+    new URL(url).pathname === pathname
+      ? response({ dataset_id: datasetId, version: "v1" })
+      : response({ error: { code: "RESOURCE_NOT_FOUND" } }, 404),
+  );
+  c.session.setToken("synthetic-access");
+  c.session.setAppSession("synthetic-app-session");
+  const manifest = await c.api.getDatasetManifest(datasetId);
+  assert.equal(manifest.dataset_id, datasetId);
+  assert.equal(c.calls.length, 1);
+  assert.equal(c.calls[0].url, `https://api.example.test${pathname}`);
+  assert.equal(
+    c.calls[0].init.headers.get("Authorization"),
+    "Bearer synthetic-access",
+  );
+  assert.equal(
+    c.calls[0].init.headers.get("X-App-Session"),
+    "synthetic-app-session",
+  );
+});
+
+test("missing dataset manifest fails without logging out or silently accepting content", async () => {
+  const c = client(() =>
+    response(
+      { error: { code: "RESOURCE_NOT_FOUND", message: "Dataset not found" } },
+      404,
+    ),
+  );
+  c.session.setToken("synthetic-access");
+  c.session.setAppSession("synthetic-app-session");
+  await assert.rejects(
+    c.api.getDatasetManifest("missing"),
+    (error) => error.status === 404 && error.code === "RESOURCE_NOT_FOUND",
+  );
+  assert.equal(c.calls.length, 1);
+  assert.equal(c.session.getToken(), "synthetic-access");
+  assert.equal(c.session.getAppSession(), "synthetic-app-session");
+});
+
+test("raw snapshot reads preserve exact bytes and private headers across read-only session renewal", async () => {
+  const text = '{ "series": [], "value": 1.00 }\n';
+  let first = true;
+  const c = client((url) => {
+    if (url.endsWith("/api/v1/sessions"))
+      return response({ session_token: "renewed" }, 201);
+    if (first) {
+      first = false;
+      return response({ error: { code: "SESSION_EXPIRED" } }, 403);
+    }
+    return new Response(text, {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  c.session.setToken("synthetic");
+  c.session.setAppSession("old-session");
+  assert.equal(await c.api.getDatasetContentText("snapshot/a"), text);
+  assert.ok(c.calls.at(-1).url.endsWith("/datasets/snapshot%2Fa/content"));
+  assert.equal(c.calls.at(-1).init.headers.get("X-App-Session"), "renewed");
+  assert.equal(
+    c.calls.at(-1).init.headers.get("Authorization"),
+    "Bearer synthetic",
+  );
+});
+
+test("identity lifecycle listeners fire on logout/new login but not a token refresh", () => {
+  const c = client(() => response({}));
+  let changes = 0;
+  const stop = c.session.onIdentityChange(() => changes++);
+  c.session.setAuth({ access_token: "synthetic" });
+  const revision = c.session.getIdentityRevision();
+  c.session.setAuth({ access_token: "rotated" }, true);
+  assert.equal(c.session.getIdentityRevision(), revision);
+  assert.equal(changes, 1);
+  c.session.clear();
+  assert.equal(changes, 2);
+  stop();
+  c.session.setToken("another-login");
+  assert.equal(changes, 2);
+});
+
 test("websocket URL upgrades HTTPS and only carries the one-use ticket", () => {
   const c = client(() => response({}));
   assert.equal(
@@ -529,4 +629,262 @@ test("admin readiness uses the public readiness endpoint", async () => {
   const c = client(() => response({ status: "ready" }));
   assert.equal((await c.api.readiness()).status, "ready");
   assert.equal(c.calls[0].url, "https://api.example.test/ready");
+});
+
+test("concurrent workspace bootstrap creates only one app session", async () => {
+  let finish;
+  const c = client(() => new Promise((resolve) => (finish = resolve)));
+  c.session.setToken("access-token");
+  const requests = Array.from({ length: 4 }, () => c.api.ensureAppSession());
+  assert.equal(c.calls.length, 1);
+  finish(response({ session_token: "sgs_shared" }, 201));
+  assert.deepEqual(await Promise.all(requests), Array(4).fill("sgs_shared"));
+  assert.equal(c.session.getAppSession(), "sgs_shared");
+});
+
+test("a late expired response does not clear a freshly renewed session", async () => {
+  let finishLateRead;
+  let reads = 0;
+  let creations = 0;
+  const expired = () => response({ error: { code: "SESSION_EXPIRED" } }, 403);
+  const c = client((url) => {
+    if (url.endsWith("/api/v1/sessions")) {
+      creations++;
+      return response({ session_token: "sgs_fresh" }, 201);
+    }
+    if (reads++ === 0) return expired();
+    if (reads === 2)
+      return new Promise((resolve) => (finishLateRead = resolve));
+    return response({ features: ["screener"] });
+  });
+  c.session.setToken("access-token");
+  c.session.setAppSession("sgs_old");
+  const first = c.api.account();
+  // Use a different read endpoint so request coalescing does not intentionally
+  // turn both calls into the same network request.
+  const late = c.api.listDevices();
+  await first;
+  finishLateRead(expired());
+  await late;
+  assert.equal(creations, 1);
+  assert.equal(c.session.getAppSession(), "sgs_fresh");
+});
+
+test("a revoked workspace requires login and never creates a replacement", async () => {
+  const c = client(() => response({ error: { code: "SESSION_REVOKED" } }, 403));
+  c.session.setToken("access-token");
+  c.session.setAppSession("sgs_revoked");
+  await assert.rejects(
+    c.api.account(),
+    (error) => error.code === "SESSION_REVOKED",
+  );
+  assert.equal(c.calls.length, 1);
+  assert.equal(c.session.getAppSession(), null);
+  assert.equal(c.session.getToken(), null);
+  assert.deepEqual(c.events, ["signalgen:unauthorized"]);
+});
+
+test("an expired mutation is not replayed or silently renewed", async () => {
+  const c = client(() => response({ error: { code: "SESSION_EXPIRED" } }, 403));
+  c.session.setToken("access-token");
+  c.session.setAppSession("sgs_expired");
+  await assert.rejects(
+    c.api.createStockUniverse("Fixture", ["BBCA.JK"]),
+    (error) => error.code === "SESSION_EXPIRED",
+  );
+  assert.equal(c.calls.length, 1);
+  assert.equal(c.calls[0].init.method, "POST");
+  assert.equal(c.session.getAppSession(), null);
+  assert.equal(c.session.getToken(), "access-token");
+});
+
+test("failed bootstrap releases the pending request for an explicit retry", async () => {
+  let attempts = 0;
+  const c = client(() =>
+    attempts++ === 0
+      ? response({ error: { code: "SERVICE_UNAVAILABLE" } }, 503)
+      : response({ session_token: "sgs_retry" }, 201),
+  );
+  c.session.setToken("access-token");
+  await assert.rejects(
+    c.api.ensureAppSession(),
+    (error) => error.status === 503,
+  );
+  assert.equal(c.session.getToken(), "access-token");
+  assert.equal(await c.api.ensureAppSession(), "sgs_retry");
+  assert.equal(c.calls.length, 2);
+});
+
+test("late bootstrap cannot restore a secret after logout", async () => {
+  let finish;
+  const c = client(() => new Promise((resolve) => (finish = resolve)));
+  c.session.setToken("access-token");
+  const pending = c.api.ensureAppSession();
+  c.session.clear();
+  finish(response({ session_token: "sgs_too_late" }, 201));
+  await assert.rejects(pending, (error) => error.status === 0);
+  assert.equal(c.session.getToken(), null);
+  assert.equal(c.session.getAppSession(), null);
+});
+
+test("account switching clears the old secret and isolates pending bootstrap", async () => {
+  let finishOld;
+  let attempts = 0;
+  const c = client(() =>
+    attempts++ === 0
+      ? new Promise((resolve) => (finishOld = resolve))
+      : response({ session_token: "sgs_new_account" }, 201),
+  );
+  c.session.setToken("old-account-token");
+  const old = c.api.ensureAppSession();
+  c.session.setAppSession("sgs_old_account");
+  c.session.setToken("new-account-token");
+  assert.equal(c.session.getAppSession(), null);
+  await c.api.ensureAppSession();
+  finishOld(response({ session_token: "sgs_old_late" }, 201));
+  await assert.rejects(old, (error) => error.status === 0);
+  assert.equal(c.session.getAppSession(), "sgs_new_account");
+  assert.equal(c.session.getToken(), "new-account-token");
+});
+
+test("a stale identity denial cannot log out a newer account", async () => {
+  let finish;
+  const c = client(() => new Promise((resolve) => (finish = resolve)));
+  c.session.setToken("old-account-token");
+  const read = c.api.me();
+  c.session.setToken("new-account-token");
+  c.session.setAppSession("sgs_new_account");
+  finish(response({ error: { code: "AUTH_INVALID" } }, 401));
+  await assert.rejects(read, (error) => error.status === 401);
+  assert.equal(c.session.getToken(), "new-account-token");
+  assert.equal(c.session.getAppSession(), "sgs_new_account");
+  assert.deepEqual(c.events, []);
+});
+
+test("invalid public recovery credentials do not clear a logged-in identity", async () => {
+  const c = client(() => response({ error: { code: "AUTH_INVALID" } }, 401));
+  c.session.setToken("access-token");
+  c.session.setAppSession("sgs_valid");
+  await assert.rejects(
+    c.api.resetPassword(
+      "invalid-access",
+      "invalid-refresh",
+      "fixture-only-password",
+    ),
+    (error) => error.status === 401,
+  );
+  assert.equal(c.session.getToken(), "access-token");
+  assert.equal(c.session.getAppSession(), "sgs_valid");
+  assert.deepEqual(c.events, []);
+});
+
+test("a late revocation response cannot clear a newer app-session secret", async () => {
+  let finish;
+  const c = client(() => new Promise((resolve) => (finish = resolve)));
+  c.session.setToken("access-token");
+  c.session.setAppSession("sgs_old");
+  const read = c.api.account();
+  c.session.setAppSession("sgs_new");
+  finish(response({ error: { code: "SESSION_REVOKED" } }, 403));
+  await assert.rejects(read, (error) => error.code === "SESSION_REVOKED");
+  assert.equal(c.session.getToken(), "access-token");
+  assert.equal(c.session.getAppSession(), "sgs_new");
+  assert.deepEqual(c.events, []);
+  assert.equal(c.calls.length, 1);
+});
+
+test("editable profile reads the owner-scoped server endpoint", async () => {
+  const profile = {
+    user_id: "test-user",
+    display_name: "Demo",
+    bio: "Existing bio",
+    version: 4,
+    updated_at: "2026-10-06T00:00:00Z",
+  };
+  const c = client(() => response(profile));
+  c.session.setToken("access-token");
+  c.session.setAppSession("sgs_valid");
+  assert.deepEqual(await c.api.getProfile(), profile);
+  assert.equal(
+    c.calls[0].url,
+    "https://api.example.test/api/v1/account/profile",
+  );
+  assert.equal(
+    c.calls[0].init.headers.get("Authorization"),
+    "Bearer access-token",
+  );
+  assert.equal(c.calls[0].init.headers.get("X-App-Session"), "sgs_valid");
+});
+
+test("profile save sends the expected version and only the display field", async () => {
+  const c = client(() =>
+    response({
+      user_id: "test-user",
+      display_name: "Updated",
+      bio: "Retained",
+      version: 5,
+    }),
+  );
+  c.session.setToken("access-token");
+  c.session.setAppSession("sgs_valid");
+  const saved = await c.api.updateProfile(4, "Updated");
+  assert.equal(saved.version, 5);
+  assert.equal(c.calls[0].init.method, "PATCH");
+  assert.equal(
+    c.calls[0].url,
+    "https://api.example.test/api/v1/account/profile",
+  );
+  assert.deepEqual(JSON.parse(c.calls[0].init.body), {
+    version: 4,
+    display_name: "Updated",
+  });
+});
+
+test("stale profile writes fail without retry or session cleanup", async () => {
+  const c = client(() =>
+    response({ error: { code: "PROFILE_CONFLICT" } }, 409),
+  );
+  c.session.setToken("access-token");
+  c.session.setAppSession("sgs_valid");
+  await assert.rejects(
+    c.api.updateProfile(3, "Draft"),
+    (error) => error.status === 409,
+  );
+  assert.equal(c.calls.length, 1);
+  assert.equal(c.session.getToken(), "access-token");
+  assert.equal(c.session.getAppSession(), "sgs_valid");
+});
+
+test("logout and a same-token login cannot inherit an older pending secret", async () => {
+  let finishOld;
+  let attempts = 0;
+  const c = client(() =>
+    attempts++ === 0
+      ? new Promise((resolve) => (finishOld = resolve))
+      : response({ session_token: "sgs_new_login" }, 201),
+  );
+  c.session.setToken("same-provider-token");
+  const old = c.api.ensureAppSession();
+  c.session.clear();
+  c.session.setToken("same-provider-token");
+  await c.api.ensureAppSession();
+  finishOld(response({ session_token: "sgs_old_login" }, 201));
+  await assert.rejects(old, (error) => error.status === 0);
+  assert.equal(c.session.getAppSession(), "sgs_new_login");
+  assert.equal(c.calls.length, 2);
+});
+
+test("same-token re-login is not cleared by an older unauthorized response", async () => {
+  let finish;
+  const c = client(() => new Promise((resolve) => (finish = resolve)));
+  c.session.setToken("same-provider-token");
+  const read = c.api.me();
+  c.session.clear();
+  c.session.setToken("same-provider-token");
+  c.session.setAppSession("sgs_new_login");
+  finish(response({ error: { code: "AUTH_INVALID" } }, 401));
+  await assert.rejects(read, (error) => error.status === 401);
+  assert.equal(c.session.getToken(), "same-provider-token");
+  assert.equal(c.session.getAppSession(), "sgs_new_login");
+  assert.deepEqual(c.events, []);
 });

@@ -61,6 +61,11 @@ func main() {
 		log.Fatal(err)
 	}
 	defer database.Close()
+	// Refuse migration credentials in the HTTP process, even when they connect
+	// successfully. RLS and private-schema privileges need a dedicated role.
+	if err := (platformdb.RuntimePrivileges{Pool: database}).Ready(context.Background()); err != nil {
+		log.Fatal(err)
+	}
 	// App sessions bind a Supabase user to an installation/device and enforce
 	// the active-device limit plus device-switch cooldown.
 	sessions, err := session.NewPostgresRepository(database, maxActiveSessions, time.Duration(deviceSwitchCooldownHours)*time.Hour)
@@ -124,7 +129,7 @@ func main() {
 		apihttp.WithWorkspaceStore(&workspace.PostgresStore{DB: database}),
 		apihttp.WithRateLimiter(mutationLimiter),
 		apihttp.WithCORSOrigins(allowedOrigins),
-		apihttp.WithReadinessChecks(platformdb.PostgresReadiness{Pool: database}, datasets),
+		apihttp.WithReadinessChecks(platformdb.PostgresReadiness{Pool: database}, platformdb.RuntimePrivileges{Pool: database}, datasets),
 	)
 	if err != nil {
 		log.Fatal(err)

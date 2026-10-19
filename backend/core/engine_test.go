@@ -45,11 +45,19 @@ func TestValidateRuleAcceptsOnlyAdvertisedSubset(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, mutate := range map[string]func(*RuleSnapshot){
-		"logic":      func(rule *RuleSnapshot) { rule.Logic = "OR" },
-		"signal":     func(rule *RuleSnapshot) { rule.SignalType = "SELL" },
-		"left":       func(rule *RuleSnapshot) { rule.Conditions[0].Left = "MACD" },
-		"operator":   func(rule *RuleSnapshot) { rule.Conditions[0].Op = "==" },
-		"right type": func(rule *RuleSnapshot) { rule.Conditions[0].Right = true },
+		"logic":           func(rule *RuleSnapshot) { rule.Logic = "XOR" },
+		"signal":          func(rule *RuleSnapshot) { rule.SignalType = "HOLD" },
+		"left":            func(rule *RuleSnapshot) { rule.Conditions[0].Left = "MACD" },
+		"operator":        func(rule *RuleSnapshot) { rule.Conditions[0].Op = "==" },
+		"right type":      func(rule *RuleSnapshot) { rule.Conditions[0].Right = true },
+		"self comparison": func(rule *RuleSnapshot) { rule.Conditions[0].Right = "EMA9" },
+		"rsi over 100":    func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "RSI14", Op: ">", Right: 105} },
+		"rsi negative":    func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "RSI14", Op: "<", Right: -5} },
+		"price non-pos":   func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "PRICE", Op: ">", Right: 0} },
+		"price negative":  func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "PRICE", Op: ">", Right: -10} },
+		"ema non-pos":     func(rule *RuleSnapshot) { rule.Conditions[0] = Condition{Left: "EMA9", Op: ">", Right: 0} },
+		"whitespace name": func(rule *RuleSnapshot) { rule.Name = "   " },
+		"empty name":      func(rule *RuleSnapshot) { rule.Name = "" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := valid
@@ -200,8 +208,8 @@ func TestCapabilitiesDescribeImplementedSubset(t *testing.T) {
 	if capabilities.MaxCandlesPerRun != 100000 {
 		t.Fatalf("max candles = %d, want 100000", capabilities.MaxCandlesPerRun)
 	}
-	if len(capabilities.Markets) != 1 || capabilities.Markets[0] != "IDX" {
-		t.Fatalf("markets = %v, want [IDX]", capabilities.Markets)
+	if len(capabilities.Markets) != 2 || capabilities.Markets[0] != "IDX" || capabilities.Markets[1] != "US" {
+		t.Fatalf("markets = %v, want [IDX US]", capabilities.Markets)
 	}
 	if len(capabilities.Timeframes) != 1 || capabilities.Timeframes[0] != "1d" {
 		t.Fatalf("timeframes = %v, want [1d]", capabilities.Timeframes)
@@ -238,3 +246,301 @@ func TestRunSignalsRejectsUnorderedCandles(t *testing.T) {
 		t.Fatal("expected chronological validation error")
 	}
 }
+
+func TestValidateRuleAcceptsORLogic(t *testing.T) {
+	rule := RuleSnapshot{
+		Name: "OR Strategy", Logic: "OR", SignalType: "BUY", CooldownSec: 60,
+		Conditions: []Condition{
+			{Left: "PRICE", Op: ">", Right: 100},
+			{Left: "RSI14", Op: "<", Right: 30},
+		},
+	}
+	if err := ValidateRule(rule); err != nil {
+		t.Fatalf("expected OR logic to be accepted, got error: %v", err)
+	}
+}
+
+func TestEvaluateDecisionSupportsORLogic(t *testing.T) {
+	rule := RuleSnapshot{
+		Name: "OR Strategy", Logic: "OR", SignalType: "BUY", CooldownSec: 0,
+		Conditions: []Condition{
+			{Left: "PRICE", Op: ">", Right: 150},
+			{Left: "RSI14", Op: "<", Right: 30},
+		},
+	}
+	candidates := []FeatureCandidate{
+		// Candidate 1: price > 150 (true), RSI < 30 (false) -> should match because OR
+		{Symbol: "BBCA.JK", Timestamp: "2026-01-01T00:00:00Z", Features: FeatureVector{Price: 160, EMA9: 100, EMA20: 100, RSI14: 50}},
+		// Candidate 2: price > 150 (false), RSI < 30 (true) -> should match because OR
+		{Symbol: "BBCA.JK", Timestamp: "2026-01-02T00:00:00Z", Features: FeatureVector{Price: 120, EMA9: 100, EMA20: 100, RSI14: 25}},
+		// Candidate 3: price > 150 (false), RSI < 30 (false) -> should NOT match
+		{Symbol: "BBCA.JK", Timestamp: "2026-01-03T00:00:00Z", Features: FeatureVector{Price: 120, EMA9: 100, EMA20: 100, RSI14: 55}},
+	}
+	decision, err := EvaluateDecision(DecisionRequest{Rule: rule, Candidates: candidates})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(decision.Signals) != 2 {
+		t.Fatalf("expected 2 signals, got %d", len(decision.Signals))
+	}
+	if len(decision.Evaluations) != 3 {
+		t.Fatalf("expected 3 evaluations, got %d", len(decision.Evaluations))
+	}
+	if !decision.Evaluations[0].Matched || decision.Evaluations[0].ReasonCodes[0] != "RULE_MATCHED" {
+		t.Fatalf("eval 0 want RULE_MATCHED, got %+v", decision.Evaluations[0])
+	}
+	if !decision.Evaluations[1].Matched || decision.Evaluations[1].ReasonCodes[0] != "RULE_MATCHED" {
+		t.Fatalf("eval 1 want RULE_MATCHED, got %+v", decision.Evaluations[1])
+	}
+	if decision.Evaluations[2].Matched || decision.Evaluations[2].ReasonCodes[0] != "CONDITIONS_NOT_MET" {
+		t.Fatalf("eval 2 want CONDITIONS_NOT_MET, got %+v", decision.Evaluations[2])
+	}
+}
+
+func TestEvaluateDecisionMarksCooldownActive(t *testing.T) {
+	rule := RuleSnapshot{
+		Name: "Price Rule", Logic: "AND", SignalType: "BUY", CooldownSec: 60,
+		Conditions: []Condition{
+			{Left: "PRICE", Op: ">", Right: 100},
+		},
+	}
+	candidates := []FeatureCandidate{
+		// Candidate 1: price 150 -> matches rule and fires signal (lastSignal = 00:00)
+		{Symbol: "BBCA.JK", Timestamp: "2026-01-01T00:00:00Z", Features: FeatureVector{Price: 150, EMA9: 100, EMA20: 100, RSI14: 50}},
+		// Candidate 2: price 160 at 00:30 (30s later) -> conditions met, but in 60s cooldown -> COOLDOWN_ACTIVE
+		{Symbol: "BBCA.JK", Timestamp: "2026-01-01T00:00:30Z", Features: FeatureVector{Price: 160, EMA9: 100, EMA20: 100, RSI14: 50}},
+		// Candidate 3: price 80 at 00:45 -> conditions not met -> CONDITIONS_NOT_MET
+		{Symbol: "BBCA.JK", Timestamp: "2026-01-01T00:00:45Z", Features: FeatureVector{Price: 80, EMA9: 100, EMA20: 100, RSI14: 50}},
+		// Candidate 4: price 170 at 01:10 (70s after Candidate 1) -> cooldown expired -> RULE_MATCHED
+		{Symbol: "BBCA.JK", Timestamp: "2026-01-01T00:01:10Z", Features: FeatureVector{Price: 170, EMA9: 100, EMA20: 100, RSI14: 50}},
+	}
+	decision, err := EvaluateDecision(DecisionRequest{Rule: rule, Candidates: candidates})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(decision.Signals) != 2 {
+		t.Fatalf("expected 2 signals, got %d", len(decision.Signals))
+	}
+	if len(decision.Evaluations) != 4 {
+		t.Fatalf("expected 4 evaluations, got %d", len(decision.Evaluations))
+	}
+	// Candidate 1
+	if !decision.Evaluations[0].Matched || decision.Evaluations[0].ReasonCodes[0] != "RULE_MATCHED" {
+		t.Fatalf("eval 0: want RULE_MATCHED, got %+v", decision.Evaluations[0])
+	}
+	// Candidate 2
+	if decision.Evaluations[1].Matched || decision.Evaluations[1].ReasonCodes[0] != "COOLDOWN_ACTIVE" {
+		t.Fatalf("eval 1: want COOLDOWN_ACTIVE, got %+v", decision.Evaluations[1])
+	}
+	// Candidate 3
+	if decision.Evaluations[2].Matched || decision.Evaluations[2].ReasonCodes[0] != "CONDITIONS_NOT_MET" {
+		t.Fatalf("eval 2: want CONDITIONS_NOT_MET, got %+v", decision.Evaluations[2])
+	}
+	// Candidate 4
+	if !decision.Evaluations[3].Matched || decision.Evaluations[3].ReasonCodes[0] != "RULE_MATCHED" {
+		t.Fatalf("eval 3: want RULE_MATCHED, got %+v", decision.Evaluations[3])
+	}
+}
+
+func TestValidateRuleAndEvaluateAcceptsWideNumericTypes(t *testing.T) {
+	candidates := []FeatureCandidate{
+		{Symbol: "BBCA.JK", Timestamp: "2026-01-01T00:00:00Z", Features: FeatureVector{Price: 150, EMA9: 100, EMA20: 100, RSI14: 65}},
+	}
+
+	testCases := []struct {
+		name  string
+		right interface{}
+	}{
+		{"float64", float64(50)},
+		{"float32", float32(50)},
+		{"int", int(50)},
+		{"int32", int32(50)},
+		{"int64", int64(50)},
+		{"uint", uint(50)},
+		{"uint32", uint32(50)},
+		{"uint64", uint64(50)},
+		{"json.Number", json.Number("50")},
+		{"numeric string", "50"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rule := RuleSnapshot{
+				Name: "Numeric Rule", Logic: "AND", SignalType: "BUY", CooldownSec: 0,
+				Conditions: []Condition{
+					{Left: "RSI14", Op: ">", Right: tc.right},
+				},
+			}
+			if err := ValidateRule(rule); err != nil {
+				t.Fatalf("ValidateRule rejected valid numeric type %s: %v", tc.name, err)
+			}
+			res, err := EvaluateDecision(DecisionRequest{Rule: rule, Candidates: candidates})
+			if err != nil {
+				t.Fatalf("EvaluateDecision failed with %s: %v", tc.name, err)
+			}
+			if len(res.Signals) != 1 {
+				t.Fatalf("expected 1 signal with %s, got %d", tc.name, len(res.Signals))
+			}
+		})
+	}
+}
+
+func TestValidateRuleBoundaries(t *testing.T) {
+	// RSI14 exactly at boundaries 0, 50, and 100 should be accepted
+	for _, boundary := range []float64{0, 50, 100} {
+		rule := RuleSnapshot{
+			Name: "RSI Boundary", Logic: "AND", SignalType: "BUY", CooldownSec: 0,
+			Conditions: []Condition{{Left: "RSI14", Op: ">=", Right: boundary}},
+		}
+		if err := ValidateRule(rule); err != nil {
+			t.Fatalf("expected RSI14 with right=%v to be valid, got: %v", boundary, err)
+		}
+	}
+	// PRICE and EMA exactly above 0 should be accepted
+	rulePrice := RuleSnapshot{
+		Name: "Price Valid", Logic: "AND", SignalType: "BUY", CooldownSec: 0,
+		Conditions: []Condition{{Left: "PRICE", Op: ">", Right: 0.01}},
+	}
+	if err := ValidateRule(rulePrice); err != nil {
+		t.Fatalf("expected PRICE with right=0.01 to be valid, got: %v", err)
+	}
+}
+
+func TestValidateRuleAcceptsSELLSignalType(t *testing.T) {
+	ruleSell := RuleSnapshot{
+		Name: "Overbought Exit Rule", Logic: "AND", SignalType: "SELL", CooldownSec: 60,
+		Conditions: []Condition{{Left: "RSI14", Op: ">", Right: 70}},
+	}
+	if err := ValidateRule(ruleSell); err != nil {
+		t.Fatalf("expected SELL rule to be valid, got error: %v", err)
+	}
+
+	candidates := []FeatureCandidate{
+		{Symbol: "BBCA.JK", Timestamp: "2026-01-01T00:00:00Z", Features: FeatureVector{Price: 150, EMA9: 100, EMA20: 100, RSI14: 75}},
+	}
+	res, err := EvaluateDecision(DecisionRequest{Rule: ruleSell, Candidates: candidates})
+	if err != nil {
+		t.Fatalf("EvaluateDecision failed for SELL rule: %v", err)
+	}
+	if len(res.Signals) != 1 {
+		t.Fatalf("expected 1 SELL signal, got %d", len(res.Signals))
+	}
+	if res.Signals[0].SignalType != "SELL" {
+		t.Fatalf("expected SignalType == 'SELL', got %q", res.Signals[0].SignalType)
+	}
+	if len(res.Evaluations) != 1 || res.Evaluations[0].SignalType != "SELL" {
+		t.Fatalf("expected evaluation SignalType == 'SELL', got %+v", res.Evaluations)
+	}
+}
+
+func TestValidateRuleAcceptsCrossOperators(t *testing.T) {
+	// Memastikan operator persilangan CROSS_UP dan CROSS_DOWN diterima oleh ValidateRule
+	rules := []RuleSnapshot{
+		{
+			Name: "Golden Cross Rule", Logic: "AND", SignalType: "BUY", CooldownSec: 60,
+			Conditions: []Condition{{Left: "EMA9", Op: "CROSS_UP", Right: "EMA20"}},
+		},
+		{
+			Name: "Death Cross Rule", Logic: "AND", SignalType: "SELL", CooldownSec: 60,
+			Conditions: []Condition{{Left: "EMA9", Op: "CROSS_DOWN", Right: "EMA20"}},
+		},
+		{
+			Name: "RSI Oversold Breakout", Logic: "AND", SignalType: "BUY", CooldownSec: 0,
+			Conditions: []Condition{{Left: "RSI14", Op: "CROSS_UP", Right: 30}},
+		},
+		{
+			Name: "RSI Overbought Breakdown", Logic: "AND", SignalType: "SELL", CooldownSec: 0,
+			Conditions: []Condition{{Left: "RSI14", Op: "CROSS_DOWN", Right: 70}},
+		},
+	}
+	for _, rule := range rules {
+		if err := ValidateRule(rule); err != nil {
+			t.Fatalf("expected rule %q to be valid, got: %v", rule.Name, err)
+		}
+	}
+}
+
+func TestEvaluateDecisionSupportsCrossUp(t *testing.T) {
+	// Rule: EMA9 CROSS_UP EMA20 (Golden Cross)
+	rule := RuleSnapshot{
+		Name: "Golden Cross", Logic: "AND", SignalType: "BUY", CooldownSec: 0,
+		Conditions: []Condition{{Left: "EMA9", Op: "CROSS_UP", Right: "EMA20"}},
+	}
+	candidates := []FeatureCandidate{
+		// Candle 0: EMA9 = 100, EMA20 = 105 (sebelum persilangan, lilin pertama tidak ada lilin riwayat sebelumnya -> false)
+		{Symbol: "BBRI.JK", Timestamp: "2026-01-01T00:00:00Z", Features: FeatureVector{Price: 100, EMA9: 100, EMA20: 105, RSI14: 50}},
+		// Candle 1: EMA9 = 103, EMA20 = 104 (masih di bawah EMA20 -> false)
+		{Symbol: "BBRI.JK", Timestamp: "2026-01-02T00:00:00Z", Features: FeatureVector{Price: 103, EMA9: 103, EMA20: 104, RSI14: 52}},
+		// Candle 2: EMA9 = 106, EMA20 = 103 (EMA9 melintas ke atas EMA20: kemarin 103 <= 104, sekarang 106 > 103 -> Golden Cross TRUE!)
+		{Symbol: "BBRI.JK", Timestamp: "2026-01-03T00:00:00Z", Features: FeatureVector{Price: 106, EMA9: 106, EMA20: 103, RSI14: 55}},
+		// Candle 3: EMA9 = 110, EMA20 = 104 (kemarin sudah di atas: kemarin 106 > 103, sehingga bukan persilangan baru -> false)
+		{Symbol: "BBRI.JK", Timestamp: "2026-01-04T00:00:00Z", Features: FeatureVector{Price: 110, EMA9: 110, EMA20: 104, RSI14: 58}},
+	}
+
+	res, err := EvaluateDecision(DecisionRequest{Rule: rule, Candidates: candidates})
+	if err != nil {
+		t.Fatalf("EvaluateDecision failed: %v", err)
+	}
+
+	if len(res.Signals) != 1 {
+		t.Fatalf("expected exactly 1 signal on Golden Cross, got %d", len(res.Signals))
+	}
+	if res.Signals[0].Timestamp != "2026-01-03T00:00:00Z" {
+		t.Fatalf("expected signal on 2026-01-03T00:00:00Z, got %s", res.Signals[0].Timestamp)
+	}
+	if res.Signals[0].SignalType != "BUY" {
+		t.Fatalf("expected BUY signal type, got %s", res.Signals[0].SignalType)
+	}
+
+	// Pastikan status matched pada setiap candle sesuai ekspektasi
+	if res.Evaluations[0].Matched != false || res.Evaluations[1].Matched != false {
+		t.Fatalf("expected candle 0 and 1 not matched")
+	}
+	if res.Evaluations[2].Matched != true {
+		t.Fatalf("expected candle 2 matched")
+	}
+	if res.Evaluations[3].Matched != false {
+		t.Fatalf("expected candle 3 not matched after crossover day")
+	}
+}
+
+func TestEvaluateDecisionSupportsCrossDown(t *testing.T) {
+	// Rule: RSI14 CROSS_DOWN 70 (Overbought Breakdown / Exit)
+	rule := RuleSnapshot{
+		Name: "RSI Overbought Breakdown", Logic: "AND", SignalType: "SELL", CooldownSec: 0,
+		Conditions: []Condition{{Left: "RSI14", Op: "CROSS_DOWN", Right: 70}},
+	}
+	candidates := []FeatureCandidate{
+		// Candle 0: RSI14 = 75 (candle awal -> false)
+		{Symbol: "TLKM.JK", Timestamp: "2026-01-01T00:00:00Z", Features: FeatureVector{Price: 100, EMA9: 100, EMA20: 100, RSI14: 75}},
+		// Candle 1: RSI14 = 72 (kemarin 75 >= 70, sekarang 72 >= 70 -> belum tembus ke bawah -> false)
+		{Symbol: "TLKM.JK", Timestamp: "2026-01-02T00:00:00Z", Features: FeatureVector{Price: 98, EMA9: 99, EMA20: 100, RSI14: 72}},
+		// Candle 2: RSI14 = 65 (kemarin 72 >= 70, sekarang 65 < 70 -> tembus ke bawah 70 -> Death Cross / Cross Down TRUE!)
+		{Symbol: "TLKM.JK", Timestamp: "2026-01-03T00:00:00Z", Features: FeatureVector{Price: 95, EMA9: 97, EMA20: 100, RSI14: 65}},
+		// Candle 3: RSI14 = 60 (kemarin 65 < 70, sekarang 60 < 70 -> bukan persilangan baru -> false)
+		{Symbol: "TLKM.JK", Timestamp: "2026-01-04T00:00:00Z", Features: FeatureVector{Price: 93, EMA9: 95, EMA20: 100, RSI14: 60}},
+	}
+
+	res, err := EvaluateDecision(DecisionRequest{Rule: rule, Candidates: candidates})
+	if err != nil {
+		t.Fatalf("EvaluateDecision failed: %v", err)
+	}
+
+	if len(res.Signals) != 1 {
+		t.Fatalf("expected exactly 1 signal on Cross Down, got %d", len(res.Signals))
+	}
+	if res.Signals[0].Timestamp != "2026-01-03T00:00:00Z" {
+		t.Fatalf("expected signal on 2026-01-03T00:00:00Z, got %s", res.Signals[0].Timestamp)
+	}
+	if res.Signals[0].SignalType != "SELL" {
+		t.Fatalf("expected SELL signal type, got %s", res.Signals[0].SignalType)
+	}
+	if res.Evaluations[2].Matched != true {
+		t.Fatalf("expected candle 2 matched")
+	}
+	if res.Evaluations[3].Matched != false {
+		t.Fatalf("expected candle 3 not matched after crossover day")
+	}
+}
+
+

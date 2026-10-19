@@ -49,6 +49,7 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	router.Handle(http.MethodPut, "/api/v1/workspace/:kind", workspaceHandler.Put)
 
 	router.Handle(http.MethodGet, "/api", systemHandler.APIStatus)
+	router.Handle(http.MethodGet, "/api/openapi.yaml", systemHandler.OpenAPI)
 	router.Handle(http.MethodGet, "/health", systemHandler.Health)
 	router.Handle(http.MethodGet, "/api/news", newsapi.NewHandler().ServeHTTP)
 	router.Handle(http.MethodGet, "/api/v1/subscription/usage", subscriptionsHandler.ResourceUsage)

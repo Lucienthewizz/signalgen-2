@@ -113,3 +113,17 @@ test("picker integrates search, persistent selection, loading and pagination", (
   assert.ok(picker.includes('aria-label="Stock categories"'));
   assert.ok(panel.includes('className="universe-workspace"'));
 });
+
+test("US catalog search covers thousands of entries while selection stays ten", () => {
+  const catalog = Array.from({ length: 7000 }, (_, i) => ({
+    symbol: `FIX${i}`,
+    name: `Synthetic US company ${i}`,
+    exchange: i % 2 ? "XNAS" : "XNYS",
+    currency: "USD",
+  }));
+  const result = catalogPage(catalog, "FIX6999", 0);
+  assert.equal(result.totalMatches, 1);
+  assert.equal(result.items[0].symbol, "FIX6999");
+  assert.equal(catalogPage(catalog, "", 0).items.length, catalogPageSize);
+  assert.equal(universeSelectionLimit, 10);
+});

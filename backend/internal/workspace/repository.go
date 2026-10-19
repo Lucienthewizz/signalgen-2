@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"regexp"
 	"time"
 )
 
@@ -92,13 +93,8 @@ func Valid(kind string, data json.RawMessage) bool {
 		}
 		for _, v := range values {
 			s, ok := v.(string)
-			if !ok || len(s) != 4 {
+			if !ok || !watchlistSymbol.MatchString(s) {
 				return false
-			}
-			for _, c := range s {
-				if c < 'A' || c > 'Z' {
-					return false
-				}
 			}
 		}
 	case "monitor-history":
@@ -110,6 +106,8 @@ func Valid(kind string, data json.RawMessage) bool {
 	}
 	return true
 }
+
+var watchlistSymbol = regexp.MustCompile(`^([A-Z]{4}|US:[A-Z][A-Z0-9]{0,9}(-[A-Z])?)$`)
 
 func (s *PostgresStore) List(ctx context.Context, owner string) ([]Item, error) {
 	rows, err := s.DB.Query(ctx, `select kind,data,version,updated_at from signalgen.workspace_state where user_id=$1::uuid order by kind`, owner)

@@ -58,13 +58,13 @@ function safeRuleSnapshot(value: unknown): RuleSnapshot | undefined {
 export function compareMonitorRuns(before: MonitorRun, after: MonitorRun) {
   const old = new Map(
     before.run.rows.map((row) => [
-      idxTicker(row.decision.symbol),
+      monitorTicker(row.decision.symbol, before.run.manifest.market),
       row.decision.matched,
     ]),
   );
   const next = new Map(
     after.run.rows.map((row) => [
-      idxTicker(row.decision.symbol),
+      monitorTicker(row.decision.symbol, after.run.manifest.market),
       row.decision.matched,
     ]),
   );
@@ -132,6 +132,7 @@ const fields = new Set([
   "market",
   "currency",
   "symbols",
+  "exchanges",
   "timeframe",
   "timezone",
   "requested_range",
@@ -169,7 +170,7 @@ function validRun(value: unknown): value is LiveScreenerRun {
   const decision = (d: LiveScreenerRun["latestDecision"]) =>
     d &&
     typeof d.symbol === "string" &&
-    idxTicker(d.symbol) !== null &&
+    monitorTicker(d.symbol, run.manifest?.market) !== null &&
     typeof d.timestamp === "string" &&
     Number.isFinite(Date.parse(d.timestamp)) &&
     typeof d.matched === "boolean" &&
@@ -192,8 +193,16 @@ function validRun(value: unknown): value is LiveScreenerRun {
     manifest.schema_version === "ohlcv-multi-1" &&
     manifest.provider === "yahoo_finance" &&
     manifest.purpose === "screen" &&
-    manifest.market === "IDX" &&
-    manifest.currency === "IDR" &&
+    ((manifest.market === "IDX" && manifest.currency === "IDR") ||
+      (manifest.market === "US" && manifest.currency === "USD")) &&
+    (manifest.exchanges === undefined ||
+      (Array.isArray(manifest.exchanges) &&
+        manifest.exchanges.length === manifest.symbols?.length &&
+        manifest.exchanges.every((exchange) =>
+          manifest.market === "IDX"
+            ? exchange === "XIDX"
+            : exchange === "XNAS" || exchange === "XNYS",
+        ))) &&
     manifest.timeframe === "1d" &&
     manifest.timezone === "UTC" &&
     [
@@ -216,11 +225,12 @@ function validRun(value: unknown): value is LiveScreenerRun {
   return (
     run.execution === "client_wasm+server_private_scoring" &&
     validManifest &&
-    run.manifest.market === "IDX" &&
     Array.isArray(run.manifest.symbols) &&
     run.manifest.symbols.length > 0 &&
     run.manifest.symbols.every(
-      (symbol) => typeof symbol === "string" && idxTicker(symbol) !== null,
+      (symbol) =>
+        typeof symbol === "string" &&
+        monitorTicker(symbol, manifest.market) !== null,
     ) &&
     decision(run.latestDecision) &&
     features(run.features) &&
@@ -356,6 +366,29 @@ export function idxTicker(value: string) {
     .replace(/^IDX:/, "")
     .replace(/\.JK$/, "");
   return /^[A-Z]{4}$/.test(ticker) ? ticker : null;
+}
+
+// Namespaced US watchlist keys prevent an American AAPL from becoming IDX:AAPL.
+// Existing unprefixed four-letter IDX watchlists remain compatible.
+export function usTicker(value: string) {
+  const ticker = value
+    .trim()
+    .toUpperCase()
+    .replace(/^(US|NASDAQ|NYSE):/, "")
+    .replace(/\.([A-Z])$/, "-$1");
+  return /^[A-Z][A-Z0-9]{0,9}(-[A-Z])?$/.test(ticker) ? ticker : null;
+}
+export function monitorTicker(value: string, market: "IDX" | "US" = "IDX") {
+  if (market === "US") {
+    const ticker = usTicker(value);
+    return ticker ? `US:${ticker}` : null;
+  }
+  return idxTicker(value);
+}
+export function watchTicker(value: string) {
+  return /^(US|NASDAQ|NYSE):/i.test(value.trim())
+    ? monitorTicker(value, "US")
+    : idxTicker(value);
 }
 
 export function priceMovement(open?: number | null, close?: number | null) {
