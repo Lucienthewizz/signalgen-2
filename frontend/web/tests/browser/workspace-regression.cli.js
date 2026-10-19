@@ -20,6 +20,7 @@ async (page) => {
   let universeWrite = null;
   let ruleWrite = null;
   let largeUniverse = false;
+  let savedCardFixture = false;
   let healthOffline = false;
   let sessionMutations = 0;
   const sessionFixtures = [
@@ -76,7 +77,7 @@ async (page) => {
     else if (p === "/api/v1/account/me") payload = { user, features: ["screener", "backtest"], session: { id: "fixture", expires_at: subscription.current_period_end }, device: { installation_id: "fixture", label: "Fixture browser", current: true }, capabilities_version: "fixture" };
     else if (p === "/api/v1/account/sessions") payload = { items: sessionFixtures };
     else if (p === "/api/v1/rules") payload = { items: [systemRule ? { ...rule, name: "Default Scalping", owner_type: "system", definition: undefined } : rule], next_cursor: null };
-    else if (p === "/api/v1/stock-universes") payload = { items: [largeUniverse ? { ...universe, symbols: ["BBCA.JK", "BBRI.JK", "AADI.JK", "AALI.JK", "ABBA.JK", "ABDA.JK", "ABMM.JK", "ACES.JK", "ACRO.JK", "ACST.JK"] } : universe] };
+    else if (p === "/api/v1/stock-universes") payload = { items: [largeUniverse ? { ...universe, symbols: ["BBCA.JK", "BBRI.JK", "AADI.JK", "AALI.JK", "ABBA.JK", "ABDA.JK", "ABMM.JK", "ACES.JK", "ACRO.JK", "ACST.JK"] } : universe, ...(savedCardFixture ? [{ ...universe, id: "fixture-second-universe", name: "Banking watchlist" }] : [])] };
     else if (p === "/api/v1/stocks") payload = { items: [...universe.symbols.map(symbol => ({ symbol, name: symbol, exchange: "XIDX", currency: "IDR" })), ...["AAPL", "JPM", "XOM", "PG", "PLD", "AGRO", "BBSI", "GOOD"].map(symbol => ({ symbol, name: symbol, exchange: "XNAS", currency: "USD" }))] };
     else if (p === "/api/v1/subscription") payload = { subscription };
     else if (p === "/api/v1/subscription/plans") payload = { items: plans };
@@ -581,6 +582,26 @@ async (page) => {
     if (!cards) throw Error(`Stock cards do not fill every row: ${width} ${theme}`);
     if (!await page.locator('.screener-criteria li').evaluateAll(items => items.length === 2 && items.every(el => parseFloat(getComputedStyle(el).borderRadius) >= 12 && parseFloat(getComputedStyle(el).borderTopWidth) >= 1))) throw Error('Rule preview is not presented as rounded cards');
   }
+  savedCardFixture = true;
+  await page.goto("http://127.0.0.1:5174/#app/universes");
+  await page.getByRole('button', { name: 'Edit Banking watchlist', exact:true }).waitFor();
+  for (const width of [1440, 900, 390]) for (const theme of ['dark', 'light']) {
+    await page.setViewportSize({ width, height: 1000 });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole('button', { name: /Switch to .* mode/ }).click();
+    const valid = await page.locator('.universe-library__rows').evaluate(el => [...el.children].every(card => {
+      const css = getComputedStyle(card), r = card.getBoundingClientRect();
+      return parseFloat(css.borderRadius) >= 12 && parseFloat(css.paddingLeft) >= 16 && [...card.querySelectorAll('[data-slot="badge"]')].every(badge => {
+        const b = badge.getBoundingClientRect(), style = getComputedStyle(badge);
+        return b.left >= r.left + 15 && b.right <= r.right - 15 && b.height >= 40 && parseFloat(style.borderRadius) >= 8 && getComputedStyle(badge, '::before').content === 'none';
+      });
+    }));
+    if (!valid) throw Error(`Saved universe cards or ticker cards invalid: ${width} ${theme}`);
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error('Saved card layout overflows');
+    await page.locator('.universe-library').screenshot({ path: `/private/tmp/signalgen-saved-universes-${width}-${theme}.png`, animations:'disabled' });
+  }
+  await page.getByRole('button', { name:'Edit Banking watchlist', exact:true }).click();
+  if (await page.getByLabel('Universe name', { exact:true }).inputValue() !== 'Banking watchlist') throw Error('Saved universe edit action broken');
+  await page.goto("http://127.0.0.1:5174/#app/analysis");
   unauthorized = true;
   await page.reload();
   await page.waitForURL('**/#login', { timeout: 10000 });

@@ -471,16 +471,26 @@
 }
 .universe-library__rows {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 16px;
 }
 .universe-library__rows article {
   display: grid;
-  grid-template-columns: minmax(180px, 0.7fr) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 24px;
-  padding-block: 20px;
+  grid-template-rows: auto 1fr auto;
+  min-width: 0;
+  align-items: start;
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(
+    145deg,
+    var(--accent-surface),
+    var(--surface) 85%
+  );
 }
-.universe-library__rows article + article {
-  border-top: 1px solid var(--line-soft);
+.universe-library__rows article[data-editing="true"] {
+  border-color: var(--green);
 }
 .universe-library__identity > div {
   display: grid;
@@ -489,7 +499,7 @@
   overflow-wrap: anywhere;
 }
 .universe-library__identity strong {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.5;
 }
 .universe-library__identity small {
@@ -506,17 +516,23 @@
 .universe-library__symbols {
   flex-wrap: wrap;
   min-width: 0;
+  align-content: start;
 }
 .universe-library__symbols [data-slot="badge"] {
-  border: 0;
-  background: none;
-  padding-inline: 0;
-  color: var(--muted);
+  flex: 1 0 76px;
+  min-height: 40px;
+  justify-content: center;
+  padding: 8px 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  background: var(--accent-surface);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
-.universe-library__symbols [data-slot="badge"] + [data-slot="badge"]::before {
-  content: "/";
-  margin-right: 8px;
-  color: var(--dim);
+.universe-library__actions {
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
 }
 .universe-library__actions button {
   min-height: 44px;
@@ -536,14 +552,6 @@
   .universe-selection__empty {
     min-height: 0;
     max-width: none;
-  }
-  .universe-library__rows article {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 12px;
-  }
-  .universe-library__symbols {
-    grid-column: 1 / -1;
-    grid-row: 2;
   }
 }
 @media (max-width: 480px) {
