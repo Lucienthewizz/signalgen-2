@@ -131,13 +131,13 @@ export function WorkspaceOverviewPanel({
         <ShieldCheck />
         <AlertTitle>
           {backendOnline
-            ? "Masuk untuk membuka workspace"
-            : "Backend belum terhubung"}
+            ? "Sign in to open your workspace"
+            : "Backend unavailable"}
         </AlertTitle>
         <AlertDescription>
           {backendOnline
-            ? "Rule, universe, dan riwayat terpisah untuk setiap akun."
-            : "Hubungkan backend untuk memuat akun dan menjalankan screening."}
+            ? "Rules, universes, and history are private to each account."
+            : "Connect the backend to load your account and run screening."}
         </AlertDescription>
         {backendOnline && (
           <Button nativeButton={false} render={<a href="#login" />}>
@@ -151,7 +151,7 @@ export function WorkspaceOverviewPanel({
       <div
         className="overview-board"
         role="status"
-        aria-label="Memuat dashboard"
+        aria-label="Loading dashboard"
         aria-busy="true"
       >
         <section
@@ -181,17 +181,16 @@ export function WorkspaceOverviewPanel({
       {error && (
         <Alert className="overview-notice">
           <RefreshCw />
-          <AlertTitle>Sebagian data belum dapat dimuat</AlertTitle>
+          <AlertTitle>Some data could not be loaded</AlertTitle>
           <AlertDescription>
-            Data yang sudah tersedia tetap ditampilkan. Coba muat ulang untuk
-            memperbarui dashboard.
+            Available data is still shown. Reload to update your dashboard.
           </AlertDescription>
           <Button
             variant="outline"
             onClick={() => setReload((v) => v + 1)}
             disabled={loading}
           >
-            Muat ulang
+            Reload
           </Button>
         </Alert>
       )}
@@ -204,16 +203,16 @@ export function WorkspaceOverviewPanel({
             <h3 id="overview-next-title">
               {ready
                 ? latest
-                  ? "Lanjutkan analisis Anda"
-                  : "Siap untuk screening pertama"
-                : "Lengkapi workspace Anda"}
+                  ? "Continue your analysis"
+                  : "Ready for your first screening"
+                : "Set up your workspace"}
             </h3>
             <p>
               {ready
                 ? latest
-                  ? "Lanjutkan dengan pilihan terakhir, atau ubah sebelum screening."
-                  : "Pilih rule dan stock universe, lalu periksa hasil beserta alasannya."
-                : "Akses screener, rule, dan stock universe diperlukan sebelum menjalankan analisis."}
+                  ? "Use your last selection or adjust it before screening."
+                  : "Choose a rule and stock universe, then review the results and evidence."
+                : "You need screener access, a rule, and a stock universe to run an analysis."}
             </p>
             <dl className="overview-selection">
               <div>
@@ -221,16 +220,16 @@ export function WorkspaceOverviewPanel({
                   <ListChecks aria-hidden="true" />
                   Rule
                 </dt>
-                <dd>{activeRule?.name ?? "Belum dipilih"}</dd>
+                <dd>{activeRule?.name ?? "Not selected"}</dd>
               </div>
               <div>
                 <dt>
                   <Boxes aria-hidden="true" />
                   Stock universe
                 </dt>
-                <dd>{activeUniverse?.name ?? "Belum dibuat"}</dd>
+                <dd>{activeUniverse?.name ?? "Not created"}</dd>
                 {activeUniverse && (
-                  <span>{activeUniverse.symbols.length} saham</span>
+                  <span>{activeUniverse.symbols.length} stocks</span>
                 )}
               </div>
             </dl>
@@ -241,35 +240,35 @@ export function WorkspaceOverviewPanel({
           >
             <SearchCheck data-icon="inline-start" />
             {ready
-              ? "Buka screener"
+              ? "Open screener"
               : nextStep === "subscription"
-                ? "Periksa akses"
+                ? "Check access"
                 : nextStep === "rules"
-                  ? "Buat rule"
-                  : "Buat universe"}
+                  ? "Create rule"
+                  : "Create universe"}
           </Button>
         </section>
-        <nav className="overview-shortcuts" aria-label="Akses cepat">
-          <h3>Pantau pasar</h3>
+        <nav className="overview-shortcuts" aria-label="Quick access">
+          <h3>Follow the market</h3>
           <button onClick={() => go("realtime")}>
             <Activity aria-hidden="true" />
             <span>
               <strong>Market monitor</strong>
-              <small>Chart dan harga saham pantauan</small>
+              <small>Charts and prices for your watchlist</small>
             </span>
             <ArrowUpRight aria-hidden="true" />
           </button>
           <button onClick={() => go("news")}>
             <Newspaper aria-hidden="true" />
             <span>
-              <strong>Berita & video</strong>
-              <small>Ikuti kabar emiten dan pasar</small>
+              <strong>News & videos</strong>
+              <small>Company updates and market news</small>
             </span>
             <ArrowUpRight aria-hidden="true" />
           </button>
         </nav>
       </div>
-      <section className="overview-counts" aria-label="Ringkasan workspace">
+      <section className="overview-counts" aria-label="Workspace overview">
         <button onClick={() => go("rules")}>
           <ListChecks aria-hidden="true" />
           <span>Rules</span>
@@ -282,15 +281,15 @@ export function WorkspaceOverviewPanel({
         </button>
         <button onClick={() => go("subscription")}>
           <BadgeCheck aria-hidden="true" />
-          <span>Paket</span>
+          <span>Plan</span>
           <strong>{subscription?.plan_name ?? "—"}</strong>
         </button>
         <button onClick={() => go("access")}>
           <ShieldCheck aria-hidden="true" />
-          <span>Akun</span>
+          <span>Account</span>
           <strong>
             {account?.user.status === "active"
-              ? "Aktif"
+              ? "Active"
               : (account?.user.status ?? "—")}
           </strong>
         </button>
@@ -302,12 +301,12 @@ export function WorkspaceOverviewPanel({
         <header>
           <h3 id="overview-activity-title">
             <Clock3 aria-hidden="true" />
-            Screening terbaru
+            Recent screening
           </h3>
           <span className="overview-activity__caption">
             {history.length
-              ? `${Math.min(history.length, 5)} aktivitas terakhir`
-              : "Riwayat workspace"}
+              ? `${Math.min(history.length, 5)} recent runs`
+              : "Workspace history"}
           </span>
         </header>
         {history.length ? (
@@ -324,7 +323,7 @@ export function WorkspaceOverviewPanel({
                   </p>
                 </div>
                 <time dateTime={item.recordedAt}>
-                  {new Date(item.recordedAt).toLocaleString("id-ID", {
+                  {new Date(item.recordedAt).toLocaleString("en-GB", {
                     day: "numeric",
                     month: "short",
                     hour: "2-digit",
@@ -333,10 +332,10 @@ export function WorkspaceOverviewPanel({
                 </time>
                 <Badge variant="secondary">
                   {item.run.rows.filter((row) => row.decision.matched).length} /{" "}
-                  {item.run.rows.length} cocok
+                  {item.run.rows.length} matched
                 </Badge>
                 <Button variant="outline" onClick={() => continueScreen(item)}>
-                  Gunakan pilihan
+                  Use selection
                   <ArrowUpRight data-icon="inline-end" />
                 </Button>
               </li>
@@ -345,10 +344,9 @@ export function WorkspaceOverviewPanel({
         ) : (
           <Empty className="overview-activity__empty">
             <EmptyHeader>
-              <EmptyTitle>Belum ada screening yang selesai.</EmptyTitle>
+              <EmptyTitle>No completed screening yet</EmptyTitle>
               <EmptyDescription>
-                Hasil pertama Anda akan tersimpan di sini setelah screening
-                berhasil.
+                Your first result will appear here after a successful run.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

@@ -141,56 +141,55 @@ const viewMeta: Record<
   { title: string; description: string; icon: typeof Gauge }
 > = {
   overview: {
-    title: "Ringkasan workspace",
-    description: "Lanjutkan analisis dan tinjau aktivitas screening Anda.",
+    title: "Workspace overview",
+    description: "Continue your analysis and review recent screening activity.",
     icon: Gauge,
   },
   analysis: {
-    title: "Screener saham",
+    title: "Stock screener",
     description:
-      "Pilih rule dan stock universe, lalu tinjau hasil dan alasannya.",
+      "Choose a rule and stock universe, then review the results and evidence.",
     icon: SearchCheck,
   },
   realtime: {
-    title: "Market Monitor",
+    title: "Market monitor",
     description:
-      "Pantau saham pilihan, chart harian, dan hasil rule dalam satu tampilan.",
+      "Follow your stocks, daily charts, and rule results in one view.",
     icon: Activity,
   },
   rules: {
-    title: "Kelola rule",
-    description: "Buat kondisi screening sendiri atau tinjau rule yang tersimpan.",
+    title: "Manage rules",
+    description: "Create screening conditions or review your saved rules.",
     icon: ListChecks,
   },
   news: {
-    title: "Berita",
-    description: "Video dan berita seputar pasar saham.",
+    title: "News",
+    description: "Videos and news from the stock market.",
     icon: Newspaper,
   },
   journal: {
-    title: "Jurnal transaksi",
-    description: "Catat rencana transaksi dan tinjau posisi Anda.",
+    title: "Trade journal",
+    description: "Record your trade plans and review positions.",
     icon: NotebookTabs,
   },
   access: {
-    title: "Akun & perangkat",
-    description: "Tinjau akses akun, sesi aktif, dan perangkat Anda.",
+    title: "Account & devices",
+    description: "Review your account access, active sessions, and devices.",
     icon: SlidersHorizontal,
   },
   universes: {
     title: "Stock universes",
-    description: "Kelompokkan saham IDX untuk screening berikutnya.",
+    description: "Group IDX stocks for your next screening.",
     icon: Boxes,
   },
   subscription: {
-    title: "Paket & akses",
-    description: "Tinjau paket aktif dan fitur yang dapat Anda gunakan.",
+    title: "Plan & access",
+    description: "Review your active plan and available features.",
     icon: BadgeCheck,
   },
   operator: {
-    title: "Administrasi",
-    description:
-      "Kelola akses akun, paket, dan izin operator.",
+    title: "Administration",
+    description: "Manage account access, plans, and operator permissions.",
     icon: ShieldCheck,
   },
 };
@@ -208,30 +207,30 @@ const navGroups: Array<{
     items: [{ view: "overview", label: "Dashboard", icon: Gauge }],
   },
   {
-    label: "Analisis",
+    label: "Analysis",
     items: [
       { view: "analysis", label: "Screener", icon: SearchCheck },
-      { view: "journal", label: "Jurnal transaksi", icon: NotebookTabs },
+      { view: "journal", label: "Trade journal", icon: NotebookTabs },
     ],
   },
   {
-    label: "Konfigurasi",
+    label: "Configuration",
     items: [
       { view: "rules", label: "Rules", icon: ListChecks },
       { view: "universes", label: "Stock universes", icon: Boxes },
-      { view: "access", label: "Akun & perangkat", icon: SlidersHorizontal },
-      { view: "subscription", label: "Paket & akses", icon: BadgeCheck },
+      { view: "access", label: "Account & devices", icon: SlidersHorizontal },
+      { view: "subscription", label: "Plan & access", icon: BadgeCheck },
     ],
   },
   {
-    label: "Pasar",
+    label: "Market",
     items: [
-      { view: "realtime", label: "Market Monitor", icon: Activity },
-      { view: "news", label: "Berita", icon: Newspaper },
+      { view: "realtime", label: "Market monitor", icon: Activity },
+      { view: "news", label: "News", icon: Newspaper },
     ],
   },
   {
-    label: "Administrasi",
+    label: "Administration",
     items: [
       {
         view: "operator",
@@ -338,7 +337,7 @@ const journalRecords: JournalRecord[] = [
 ];
 
 function formatRupiah(value: number) {
-  return `Rp ${Math.abs(value).toLocaleString("id-ID", { maximumFractionDigits: 0 })}`;
+  return `Rp ${Math.abs(value).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
 }
 
 function DemoNotice({ view }: { view: DemoView }) {
@@ -911,7 +910,7 @@ function AnalysisPanel({
                       </span>
                     </TableCell>
                     <TableCell>
-                      {new Intl.NumberFormat("id-ID").format(
+                      {new Intl.NumberFormat("en-GB").format(
                         liveRun.latestClose,
                       )}
                     </TableCell>
@@ -1447,7 +1446,9 @@ function JournalPanel({
       );
       return;
     }
-    setCaptureError("Penyimpanan jurnal server belum diaktifkan. Form ini tidak disimpan sebagai draft lokal.");
+    setCaptureError(
+      "Journal storage is not enabled. This form is not saved as a local draft.",
+    );
   }
 
   const chartPoints = chartCoordinates
@@ -1489,8 +1490,11 @@ function JournalPanel({
             </select>
           </label>
           <div className="journal-period">
-            <span>Periode</span>
-            <span className="journal-date"><CalendarRange />01–16 Sep 2026</span>
+            <span>Period</span>
+            <span className="journal-date">
+              <CalendarRange />
+              01–16 Sep 2026
+            </span>
           </div>
         </div>
         <div className="journal-toolbar__actions">
@@ -1498,7 +1502,7 @@ function JournalPanel({
             onClick={() => setCaptureOpen((open) => !open)}
             aria-expanded={captureOpen}
           >
-            <Plus data-icon="inline-start" /> Buka form jurnal
+            <Plus data-icon="inline-start" /> Open journal form
           </Button>
         </div>
       </section>
@@ -1507,13 +1511,13 @@ function JournalPanel({
         <section className="panel journal-capture">
           <div className="panel-heading">
             <div>
-              <h3>Catat transaksi</h3>
+              <h3>Record a trade</h3>
               <p>
-                Lengkapi transaksi Anda. Penyimpanan server belum tersedia;
-                isi form tidak disimpan dan akan hilang saat halaman ditutup.
+                Enter your trade details. Server storage is not available; form
+                entries are not saved and are lost when you close the page.
               </p>
             </div>
-            {draftSymbol && <Badge variant="outline">Dari screener</Badge>}
+            {draftSymbol && <Badge variant="outline">From screener</Badge>}
           </div>
           <form onSubmit={addTransaction} className="control-grid">
             {captureError && (
@@ -1586,9 +1590,18 @@ function JournalPanel({
               type="submit"
               disabled
             >
-              <Save data-icon="inline-start" /> Penyimpanan belum tersedia
+              <Save data-icon="inline-start" /> Saving unavailable
             </Button>
-            <Button variant="outline" type="button" onClick={() => { clearDraft(); setCaptureOpen(false); }}>Tutup form</Button>
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => {
+                clearDraft();
+                setCaptureOpen(false);
+              }}
+            >
+              Close form
+            </Button>
           </form>
         </section>
       )}
@@ -1596,7 +1609,7 @@ function JournalPanel({
       <section className="journal-performance" aria-label="Trading performance">
         <div className="journal-performance__summary">
           <div>
-            <span>Contoh performa transaksi — bukan data akun Anda</span>
+            <span>Sample performance — not your account data</span>
             <strong className={totalPnl >= 0 ? "positive" : "negative"}>
               {totalPnl >= 0 ? "+" : "-"}
               {formatRupiah(totalPnl)}
@@ -1702,8 +1715,8 @@ function JournalPanel({
                     <small>{record.size}</small>
                   </TableCell>
                   <TableCell>
-                    {record.entry.toLocaleString("id-ID")} /{" "}
-                    {record.exit.toLocaleString("id-ID")}
+                    {record.entry.toLocaleString("en-GB")} /{" "}
+                    {record.exit.toLocaleString("en-GB")}
                   </TableCell>
                   <TableCell>
                     <b className={record.pnl > 0 ? "positive" : "negative"}>
@@ -1733,7 +1746,11 @@ function JournalPanel({
       </section>
 
       {selectedRecord && (
-        <aside className="journal-detail" aria-live="polite" aria-labelledby="journal-review-title">
+        <aside
+          className="journal-detail"
+          aria-live="polite"
+          aria-labelledby="journal-review-title"
+        >
           <header className="journal-detail__title">
             <div>
               <h3 id="journal-review-title">
@@ -1742,7 +1759,7 @@ function JournalPanel({
               </h3>
               <p>{selectedRecord.journal}</p>
             </div>
-            <Badge variant="outline">Contoh review</Badge>
+            <Badge variant="outline">Sample review</Badge>
           </header>
           <p className="journal-detail__note">{selectedRecord.note}</p>
           <dl className="journal-detail__evidence">
@@ -1751,18 +1768,20 @@ function JournalPanel({
               <dd>{selectedRecord.rule}</dd>
             </div>
             <div>
-              <dt>Waktu masuk</dt>
+              <dt>Entry time</dt>
               <dd>{selectedRecord.entryAt}</dd>
             </div>
             <div>
-              <dt>Waktu keluar</dt>
+              <dt>Exit time</dt>
               <dd>{selectedRecord.exitAt}</dd>
             </div>
           </dl>
           <div className="journal-tags" aria-label="Trade tags">
             <Tag />
             {selectedRecord.tags.map((tag) => (
-              <Badge variant="outline" key={tag}>{tag}</Badge>
+              <Badge variant="outline" key={tag}>
+                {tag}
+              </Badge>
             ))}
           </div>
         </aside>
@@ -1781,11 +1800,73 @@ function AccessPanel({
   const [account, setAccount] = useState<AccountState | null>(null);
   const [devices, setDevices] = useState<AccountDevice[]>([]);
   const [sessions, setSessions] = useState<AccountSession[]>([]);
+  const [hiddenHistory, setHiddenHistory] = useState<{
+    owner: string;
+    ids: string[];
+  }>({ owner: "", ids: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deviceLabel, setDeviceLabel] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const owner = account?.user.id ?? "";
+    let ids: string[] = [];
+    if (owner) {
+      try {
+        const value: unknown = JSON.parse(
+          localStorage.getItem(
+            `signalgen:hidden-session-history:v1:${owner}`,
+          ) ?? "[]",
+        );
+        if (Array.isArray(value))
+          ids = [
+            ...new Set(
+              value.filter(
+                (id): id is string =>
+                  typeof id === "string" && id.length > 0 && id.length <= 128,
+              ),
+            ),
+          ].slice(0, 1000);
+      } catch {
+        /* Unavailable or malformed preferences do not hide server records. */
+      }
+    }
+    setHiddenHistory({ owner, ids });
+  }, [account?.user.id]);
+  const hiddenIds =
+    hiddenHistory.owner === account?.user.id ? hiddenHistory.ids : [];
+  const visibleSessions = sessions.filter(
+    (item) =>
+      item.current || item.status === "active" || !hiddenIds.includes(item.id),
+  );
+  const endedSessions = visibleSessions.filter(
+    (item) => !item.current && item.status !== "active",
+  );
+  const hiddenCount = sessions.length - visibleSessions.length;
+  function updateHistoryVisibility(ids: string[]) {
+    if (!account) return;
+    try {
+      const next = [...new Set(ids)].slice(-1000);
+      localStorage.setItem(
+        `signalgen:hidden-session-history:v1:${account.user.id}`,
+        JSON.stringify(next),
+      );
+      setHiddenHistory({ owner: account.user.id, ids: next });
+      setError(null);
+    } catch {
+      setError(
+        "Session history could not be hidden. Allow browser storage and try again.",
+      );
+    }
+  }
+  function hideSessionHistory(id?: string) {
+    const removable = endedSessions
+      .filter((item) => !id || item.id === id)
+      .map((item) => item.id);
+    updateHistoryVisibility([...hiddenIds, ...removable]);
+  }
 
   async function loadAccess() {
     if (!authenticated || !backendOnline) return;
@@ -1804,7 +1885,7 @@ function AccessPanel({
       setError(
         caught instanceof Error
           ? caught.message
-          : "Data akses belum dapat dimuat.",
+          : "Access data could not be loaded.",
       );
     } finally {
       setLoading(false);
@@ -1827,7 +1908,9 @@ function AccessPanel({
       await loadAccess();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Nama belum tersimpan.",
+        caught instanceof Error
+          ? caught.message
+          : "Device name could not be saved.",
       );
     } finally {
       setSavingId(null);
@@ -1837,7 +1920,7 @@ function AccessPanel({
   async function revokeDevice(device: AccountDevice) {
     if (
       !window.confirm(
-        `Cabut akses ${device.label}? Semua app-session perangkat ini akan tidak berlaku.`,
+        `Revoke access for ${device.label}? All application sessions on this device will become invalid.`,
       )
     )
       return;
@@ -1850,7 +1933,7 @@ function AccessPanel({
       setError(
         caught instanceof Error
           ? caught.message
-          : "Perangkat belum dapat dicabut.",
+          : "Device access could not be revoked.",
       );
     } finally {
       setSavingId(null);
@@ -1858,7 +1941,7 @@ function AccessPanel({
   }
 
   async function revokeSession(item: AccountSession) {
-    if (!window.confirm(`Akhiri sesi “${item.label}”?`)) return;
+    if (!window.confirm(`End session “${item.label}”?`)) return;
     setSavingId(item.id);
     setError(null);
     try {
@@ -1866,7 +1949,9 @@ function AccessPanel({
       await loadAccess();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Sesi belum dapat diakhiri.",
+        caught instanceof Error
+          ? caught.message
+          : "Session could not be ended.",
       );
     } finally {
       setSavingId(null);
@@ -1881,21 +1966,21 @@ function AccessPanel({
         <div className="panel-heading">
           <div>
             <span>ENTITLEMENT</span>
-            <h3>Akses riset</h3>
+            <h3>Analysis access</h3>
           </div>
           <Badge variant="outline">
-            {account ? account.user.role : authenticated ? "Memuat" : "Guest"}
+            {account ? account.user.role : authenticated ? "Loading" : "Guest"}
           </Badge>
         </div>
         <div className="entitlement-row">
           <span>Screening</span>
           {account?.features.includes("screener") ? (
             <strong>
-              <Check /> Diizinkan
+              <Check /> Allowed
             </strong>
           ) : (
             <em>
-              <X /> Belum aktif
+              <X /> Not active
             </em>
           )}
         </div>
@@ -1903,53 +1988,53 @@ function AccessPanel({
           <span>Backtest</span>
           {account?.features.includes("backtest") ? (
             <strong>
-              <Check /> Diizinkan
+              <Check /> Allowed
             </strong>
           ) : (
             <em>
-              <X /> Belum aktif
+              <X /> Not active
             </em>
           )}
         </div>
         <div className="entitlement-row">
           <span>Realtime feed</span>
           <em>
-            <X /> Di luar MVP
+            <X /> Outside MVP
           </em>
         </div>
         <div className="auth-contract">
           <KeyRound />
           <div>
-            <strong>{ready ? "Sesi terverifikasi" : "Backend API"}</strong>
+            <strong>{ready ? "Session verified" : "Backend API"}</strong>
             <span>
               {!backendOnline
-                ? "Go API belum terhubung."
+                ? "The Go API is unavailable."
                 : !authenticated
-                  ? "Masuk untuk membaca entitlement dan perangkat milik akun."
+                  ? "Sign in to view your account access and devices."
                   : account
                     ? `${account.user.email} · ${account.capabilities_version}`
-                    : "Memvalidasi akun dan app-session…"}
+                    : "Verifying account and application session…"}
             </span>
           </div>
         </div>
         {!authenticated && (
           <a className="access-login" href="#login">
-            Masuk ke akun
+            Sign in
           </a>
         )}
       </section>
       <section className="panel sessions-panel">
         <div className="panel-heading">
           <div>
-            <span>PERANGKAT</span>
-            <h3>Instalasi akun</h3>
+            <span>Devices</span>
+            <h3>Account devices</h3>
           </div>
           <span className="muted-meta">
-            {loading ? "memuat…" : `${devices.length} perangkat`}
+            {loading ? "loading…" : `${devices.length} devices`}
           </span>
         </div>
         {loading && !account && (
-          <div className="device-loading" aria-label="Memuat perangkat">
+          <div className="device-loading" aria-label="Loading devices">
             <Skeleton />
             <Skeleton />
           </div>
@@ -1957,15 +2042,17 @@ function AccessPanel({
         {!loading && authenticated && devices.length === 0 && !error && (
           <div className="device-empty">
             <Activity />
-            <strong>Belum ada perangkat</strong>
-            <span>App-session pertama akan muncul setelah login berhasil.</span>
+            <strong>No devices yet</strong>
+            <span>
+              Your first device appears after you sign in successfully.
+            </span>
           </div>
         )}
         {!authenticated && (
           <div className="device-empty">
             <KeyRound />
-            <strong>Autentikasi diperlukan</strong>
-            <span>Daftar ini hanya dibaca dari resource milik akun.</span>
+            <strong>Sign-in required</strong>
+            <span>This list only shows devices belonging to your account.</span>
           </div>
         )}
         {devices.map((device) => (
@@ -1983,26 +2070,24 @@ function AccessPanel({
                     value={deviceLabel}
                     onChange={(event) => setDeviceLabel(event.target.value)}
                     maxLength={100}
-                    aria-label={`Nama baru untuk ${device.label}`}
+                    aria-label={`New name for ${device.label}`}
                     autoFocus
                   />
                   <button type="submit" disabled={savingId === device.id}>
-                    Simpan
+                    Save
                   </button>
                   <button type="button" onClick={() => setEditingId(null)}>
-                    Batal
+                    Cancel
                   </button>
                 </form>
               ) : (
                 <>
                   <strong>
                     {device.label}
-                    {device.current && (
-                      <Badge variant="outline">Saat ini</Badge>
-                    )}
+                    {device.current && <Badge variant="outline">Current</Badge>}
                   </strong>
                   <span>
-                    {device.status} · terakhir aktif{" "}
+                    {device.status} · last active{" "}
                     {formatDeviceTime(device.last_seen_at)}
                   </span>
                 </>
@@ -2016,7 +2101,7 @@ function AccessPanel({
                     setEditingId(device.id);
                     setDeviceLabel(device.label);
                   }}
-                  aria-label={`Ubah nama ${device.label}`}
+                  aria-label={`Rename ${device.label}`}
                 >
                   <Pencil />
                 </button>
@@ -2026,7 +2111,7 @@ function AccessPanel({
                     disabled={savingId === device.id}
                     onClick={() => void revokeDevice(device)}
                   >
-                    Cabut
+                    Revoke
                   </button>
                 )}
               </div>
@@ -2037,40 +2122,66 @@ function AccessPanel({
           <div className="access-error" role="alert">
             <CircleAlert />
             <span>
-              <strong>Data akses belum siap</strong>
+              <strong>Access data unavailable</strong>
               {error}
             </span>
-            <button onClick={() => void loadAccess()}>Coba lagi</button>
+            <button onClick={() => void loadAccess()}>Try again</button>
           </div>
         )}
       </section>
       <section className="panel account-sessions-panel">
         <div className="panel-heading">
           <div>
-            <span>SESI WEB</span>
-            <h3>Login aktif</h3>
+            <span>Web sessions</span>
+            <h3>Session history</h3>
           </div>
-          <span className="muted-meta">{sessions.length} sesi</span>
+          <div className="session-history-actions">
+            <span className="muted-meta" role="status">
+              {visibleSessions.length} sessions
+            </span>
+            {hiddenCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => updateHistoryVisibility([])}
+              >
+                Restore history
+              </Button>
+            )}
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={loading || savingId !== null || !endedSessions.length}
+              onClick={() => hideSessionHistory()}
+            >
+              <Trash2 data-icon="inline-start" />
+              Delete history
+            </Button>
+          </div>
         </div>
-        {sessions.length === 0 ? (
+        <p className="session-history-note">
+          Delete hides ended sessions on this device only. Active sessions and
+          server records are kept.
+        </p>
+        {visibleSessions.length === 0 ? (
           <div className="device-empty">
             <KeyRound />
-            <strong>Belum ada sesi yang dapat ditampilkan</strong>
-            <span>Sesi aktif akan muncul setelah autentikasi berhasil.</span>
+            <strong>No sessions to show</strong>
+            <span>Active sessions appear after you sign in successfully.</span>
           </div>
         ) : (
           <div className="account-session-ledger">
-            {sessions.map((item) => (
+            {visibleSessions.map((item) => (
               <article key={item.id}>
                 <div>
                   <strong>{item.label}</strong>
                   <span>
-                    {item.status} · terakhir aktif{" "}
+                    {item.status} · last active{" "}
                     {formatDeviceTime(item.last_seen_at)}
                   </span>
                 </div>
                 {item.current ? (
-                  <Badge variant="outline">Sesi ini</Badge>
+                  <Badge variant="outline">This session</Badge>
                 ) : item.status === "active" ? (
                   <Button
                     variant="outline"
@@ -2078,10 +2189,21 @@ function AccessPanel({
                     disabled={savingId === item.id}
                     onClick={() => void revokeSession(item)}
                   >
-                    Akhiri sesi
+                    End session
                   </Button>
                 ) : (
-                  <Badge variant="secondary">{item.status}</Badge>
+                  <div className="session-history-row-actions">
+                    <Badge variant="secondary">{item.status}</Badge>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      aria-label={`Delete history for ${item.label}`}
+                      onClick={() => hideSessionHistory(item.id)}
+                    >
+                      <Trash2 data-icon="inline-start" />
+                      Delete
+                    </Button>
+                  </div>
                 )}
               </article>
             ))}
@@ -2095,8 +2217,8 @@ function AccessPanel({
 
 function formatDeviceTime(value: string): string {
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.valueOf())) return "waktu tidak tersedia";
-  return new Intl.DateTimeFormat("id-ID", {
+  if (Number.isNaN(parsed.valueOf())) return "time unavailable";
+  return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(parsed);
@@ -2248,86 +2370,124 @@ export function DemoWorkspace({
         <div className="workspace__content demo-content">
           <DemoNotice view={view} />
           <div className="workspace-page-intro">
-          <div className="page-heading">
-            <span className="page-heading__icon" aria-hidden="true">
-              <PageIcon />
-            </span>
-            <div>
-              <h2>{meta.title}</h2>
-              <p>{meta.description}</p>
+            <div className="page-heading">
+              <span className="page-heading__icon" aria-hidden="true">
+                <PageIcon />
+              </span>
+              <div>
+                <h2>{meta.title}</h2>
+                <p>{meta.description}</p>
+              </div>
             </div>
-          </div>
-          {authenticated && view !== "journal" && sync.state !== "saved" && (
-            <div className="workspace-sync" role="status" aria-live="polite">
-              <span>{sync.state === "loading" ? "Memuat data akun…" : sync.state === "saving" ? "Menyimpan perubahan…" : sync.state === "conflict" ? "Ada perubahan di perangkat lain. Pilih salinan yang ingin digunakan." : "Salinan lokal tersedia. Sinkronisasi belum selesai."}</span>
-              {sync.state === "local" && <Button variant="ghost" size="sm" onClick={sync.retry}>Coba sinkronkan</Button>}
-              {sync.state === "conflict" && <><Button variant="outline" size="sm" onClick={() => void sync.useAccount()}>Gunakan versi akun</Button><Button variant="outline" size="sm" onClick={() => void sync.useDevice()}>Simpan versi perangkat ini</Button></>}
-            </div>
-          )}
+            {authenticated && view !== "journal" && sync.state !== "saved" && (
+              <div className="workspace-sync" role="status" aria-live="polite">
+                <span>
+                  {sync.state === "loading"
+                    ? "Loading account data…"
+                    : sync.state === "saving"
+                      ? "Saving changes…"
+                      : sync.state === "conflict"
+                        ? "Changes were made on another device. Choose which copy to keep."
+                        : "A local copy is available. Sync is not complete."}
+                </span>
+                {sync.state === "local" && (
+                  <Button variant="ghost" size="sm" onClick={sync.retry}>
+                    Retry sync
+                  </Button>
+                )}
+                {sync.state === "conflict" && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void sync.useAccount()}
+                    >
+                      Use account copy
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void sync.useDevice()}
+                    >
+                      Keep this device's copy
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
           <div className="route-stage" key={`${view}:${sync.epoch}`}>
             <RouteBoundary>
               <Suspense fallback={<RouteLoading />}>
-                {!sync.ready ? <RouteLoading /> : <>
-                {view === "overview" && (
-                  <WorkspaceOverviewPanel
-                    authenticated={authenticated}
-                    userId={user?.id}
-                    backendOnline={backendOnline}
-                    go={go}
-                  />
+                {!sync.ready ? (
+                  <RouteLoading />
+                ) : (
+                  <>
+                    {view === "overview" && (
+                      <WorkspaceOverviewPanel
+                        authenticated={authenticated}
+                        userId={user?.id}
+                        backendOnline={backendOnline}
+                        go={go}
+                      />
+                    )}
+                    {view === "analysis" && (
+                      <WorkspaceScreenerPanel
+                        onDraft={draft}
+                        userId={user?.id}
+                        authenticated={authenticated}
+                        backendOnline={backendOnline}
+                      />
+                    )}
+                    {view === "realtime" && (
+                      <MarketMonitorPanel userId={user?.id} />
+                    )}
+                    {view === "news" && (
+                      <WorkspaceNewsPanel
+                        key={user?.id ?? "guest"}
+                        userId={user?.id}
+                      />
+                    )}
+                    {view === "rules" && (
+                      <ServerRulesPanel
+                        authenticated={authenticated}
+                        userId={user?.id}
+                        backendOnline={backendOnline}
+                        onRun={() => go("analysis")}
+                      />
+                    )}
+                    {view === "journal" && (
+                      <JournalPanel
+                        draftSymbol={draftSymbol}
+                        clearDraft={() => setDraftSymbol(null)}
+                      />
+                    )}
+                    {view === "access" && (
+                      <AccessPanel
+                        backendOnline={backendOnline}
+                        authenticated={authenticated}
+                      />
+                    )}
+                    {view === "universes" && (
+                      <StockUniversesPanel
+                        authenticated={authenticated}
+                        backendOnline={backendOnline}
+                      />
+                    )}
+                    {view === "subscription" && (
+                      <SubscriptionPanel
+                        authenticated={authenticated}
+                        backendOnline={backendOnline}
+                      />
+                    )}
+                    {view === "operator" && (
+                      <AdminPage
+                        authenticated={authenticated}
+                        backendOnline={backendOnline}
+                      />
+                    )}
+                  </>
                 )}
-                {view === "analysis" && (
-                  <WorkspaceScreenerPanel
-                    onDraft={draft}
-                    userId={user?.id}
-                    authenticated={authenticated}
-                    backendOnline={backendOnline}
-                  />
-                )}
-                {view === "realtime" && (
-                  <MarketMonitorPanel userId={user?.id} />
-                )}
-                {view === "news" && <WorkspaceNewsPanel key={user?.id ?? "guest"} userId={user?.id} />}
-                {view === "rules" && (
-                  <ServerRulesPanel
-                    authenticated={authenticated}
-                    userId={user?.id}
-                    backendOnline={backendOnline}
-                    onRun={() => go("analysis")}
-                  />
-                )}
-                {view === "journal" && (
-                  <JournalPanel
-                    draftSymbol={draftSymbol}
-                    clearDraft={() => setDraftSymbol(null)}
-                  />
-                )}
-                {view === "access" && (
-                  <AccessPanel
-                    backendOnline={backendOnline}
-                    authenticated={authenticated}
-                  />
-                )}
-                {view === "universes" && (
-                  <StockUniversesPanel
-                    authenticated={authenticated}
-                    backendOnline={backendOnline}
-                  />
-                )}
-                {view === "subscription" && (
-                  <SubscriptionPanel
-                    authenticated={authenticated}
-                    backendOnline={backendOnline}
-                  />
-                )}
-                {view === "operator" && (
-                  <AdminPage
-                    authenticated={authenticated}
-                    backendOnline={backendOnline}
-                  />
-                )}
-                </>}
               </Suspense>
             </RouteBoundary>
           </div>

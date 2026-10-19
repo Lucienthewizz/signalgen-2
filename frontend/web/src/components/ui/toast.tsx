@@ -17,7 +17,7 @@ export function useActionNotifications(
     if (error && error !== previous.current.error) {
       toast.add({
         type: "error",
-        title: "Tindakan belum berhasil",
+        title: "Action failed",
         description: error,
         priority: "high",
         timeout: 8000,
@@ -25,7 +25,7 @@ export function useActionNotifications(
     } else if (success && success !== previous.current.success) {
       toast.add({
         type: "success",
-        title: "Berhasil",
+        title: "Success",
         description: success,
         timeout: 5000,
       });
@@ -55,7 +55,7 @@ function ToastList() {
         </div>
         <Toast.Close
           className="notification-toast__close"
-          aria-label="Tutup notifikasi"
+          aria-label="Dismiss notification"
         >
           <X aria-hidden="true" />
         </Toast.Close>
@@ -71,7 +71,7 @@ export function Toaster({ children }: { children: ReactNode }) {
       <Toast.Portal>
         <Toast.Viewport
           className="notification-viewport"
-          aria-label="Notifikasi"
+          aria-label="Notifications"
         >
           <ToastList />
         </Toast.Viewport>

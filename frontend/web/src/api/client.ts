@@ -215,7 +215,7 @@ async function refreshAuth(): Promise<void> {
   if (tokenRefresh) return tokenRefresh;
   const refreshToken = session.getRefreshToken();
   if (!refreshToken)
-    throw new ApiError("Sesi berakhir. Silakan masuk kembali.", 401);
+    throw new ApiError("Your session ended. Sign in again.", 401);
   const identity = session.getToken();
   tokenRefresh = (async () => {
     const controller = new AbortController();
@@ -235,7 +235,7 @@ async function refreshAuth(): Promise<void> {
         identity !== session.getToken() ||
         refreshToken !== session.getRefreshToken()
       )
-        throw new ApiError("Akun berubah. Silakan masuk kembali.", 401);
+        throw new ApiError("Your account changed. Sign in again.", 401);
       if (!response.ok) {
         if (response.status === 401 || response.status === 400) unauthorized();
         throw new ApiError(
@@ -248,12 +248,12 @@ async function refreshAuth(): Promise<void> {
         !result.refresh_token ||
         !(result.expires_in > 0)
       )
-        throw new ApiError("Sesi belum dapat diperbarui. Coba lagi.", 503);
+        throw new ApiError("Your session could not be refreshed. Try again.", 503);
       session.setAuth(result, true);
     } catch (error) {
       if (error instanceof ApiError) throw error;
       throw new ApiError(
-        "Koneksi terputus. Sesi belum dapat diperbarui; coba lagi.",
+        "Connection lost. Your session could not be refreshed. Try again.",
         0,
       );
     } finally {
@@ -346,7 +346,7 @@ async function performRequest<T>(
     }
   } else payload = await response.json().catch(() => ({}));
   if (identity !== authGeneration)
-    throw new ApiError("Akun berubah. Permintaan sebelumnya dibatalkan.", 401);
+    throw new ApiError("Your account changed. The previous request was cancelled.", 401);
   if (!response.ok) {
     const envelope = errorEnvelope(payload);
     const sameIdentity =
@@ -389,7 +389,7 @@ async function performRequest<T>(
     let message = errorDetail(payload, response.status);
     const retryAfter = Number(response.headers.get("Retry-After"));
     if (envelope?.code === "DEVICE_SWITCH_COOLDOWN" && retryAfter > 0)
-      message = `Perangkat dapat diganti setelah ${new Date(Date.now() + retryAfter * 1000).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}. Gunakan browser sebelumnya atau tunggu hingga waktu tersebut.`;
+      message = `You can switch devices after ${new Date(Date.now() + retryAfter * 1000).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}. Use your previous browser or wait until then.`;
     throw new ApiError(
       message,
       response.status,
@@ -407,11 +407,11 @@ function errorDetail(payload: unknown, status: number): string {
       : undefined;
   const apiError = errorEnvelope(payload);
   if (apiError?.code === "DEVICE_SWITCH_COOLDOWN")
-    return "Perangkat hanya dapat dipindahkan satu kali per hari.";
+    return "You can switch devices once per day.";
   if (apiError?.code === "DEVICE_MISMATCH")
-    return "Jaringan perangkat berubah. Masuk kembali dari jaringan yang terdaftar.";
+    return "Your device network changed. Sign in again from the registered network.";
   if (apiError?.code === "ENTITLEMENT_REQUIRED")
-    return "Akun ini belum memiliki akses fitur screener.";
+    return "Your account does not have screener access.";
   if (apiError?.code === "SESSION_EXPIRED")
     return "Your workspace session expired. Try the action again to reconnect.";
   if (apiError?.code === "SESSION_REVOKED")

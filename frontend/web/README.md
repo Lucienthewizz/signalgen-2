@@ -62,8 +62,12 @@ configuration. Current screenshot values are illustrative, never live-market cla
 
 Tailwind v4 is wired through `@tailwindcss/vite`. Project-owned shadcn Base UI
 primitives live in `src/components/ui`, with the `@/` alias pointing to `src/`.
-The layout, Manrope typography, green/black tokens, flat ledger panels, focus
-states, and reduced-motion behavior match the desktop application.
+The landing page retains Manrope. Other routes use self-hosted Geist for body
+text/headings, Saira Condensed for navigation/table headings, and Geist Mono for
+market figures. The document-level `data-typography` route marker also covers
+portalled controls and toasts. Embedded third-party charts keep their own fonts.
+Typography roles live in `styles/workspace-typography.css`; colors, layout, focus
+states, and reduced-motion behavior remain independent of the font selection.
 
 ## Authorization contract
 
@@ -143,3 +147,74 @@ completed login-to-screening for a three-symbol demo universe: three latest
 or role was changed. New grants still require an authorized operator, expiry
 and audit reason; guards must not be bypassed. Signup/recovery lifecycle and
 automatic identity refresh are not claimed complete by this successful run.
+The dashboard's launch area shares a rounded, theme-aware charcoal-to-green
+gradient frame. Its content, navigation, account data, and actions are unchanged;
+the quick-access inset stacks with aligned gutters on narrower screens.
+
+`styles/workspace-materials.css` owns the landing-inspired page and card gradients
+for all workspace routes and account forms. Its explicit surface opt-ins preserve
+controls, selected rows, notification semantics, and embedded chart canvases.
+The gradients resolve existing theme tokens, have no animation or image requests,
+and become solid surfaces in forced-colors mode. Browser tests check every
+workspace route in both themes and two viewport sizes, including shared text
+contrast against the surface stops.
+
+Session history has display-only Delete/Restore controls. Only ended, non-current
+sessions can be hidden. The preference is scoped to the account in this browser's
+local storage; active/current sessions always remain visible even if their IDs
+appear in that preference. No server session or audit record is deleted/revoked
+by these controls. The separate End session action retains its existing behavior.
+
+## Stock universe catalog and English interface
+
+The stock universe editor opens with a compact group overview inspired by
+[StocksUniverse](https://stocksuniverse.io/stocks): group name, sample symbols,
+available catalog count, and selected count. Sort by group size or name, then click
+a group to filter the bounded stock table and search below. These counts overlap
+across curated groups; they are not market-cap or performance rankings.
+A right-side panel holds selected stocks (up to 10), the universe
+name, and the save action; it stacks below the table on narrow screens. Saved universes
+are compact rows below the editor, without an enclosing card. Category/query changes reset pagination,
+not the selected stocks. Company names and user-created resource names are preserved.
+Website controls, descriptions, notifications, and client errors use English; external
+news headlines retain their source text.
+
+Blue chip, Banks, Energy, Consumer, Property, and Technology are explicitly **curated
+browsing shortcuts**, not complete sector membership, live index constituents, or
+investment recommendations. Only symbols present in the backend catalog are shown.
+The category vocabulary follows [IDX product information](https://www.idx.co.id/en/products/stocks/).
+Refresh category lists deliberately when issuer classifications change; unknown groups
+display a dash instead of an inferred classification.
+
+The local stylesheet owns universe spacing and the single liquid-glass save action without changing
+other resource layouts. Reduced-motion and reduced-transparency preferences have static,
+opaque alternatives. The layout reference is [DesignMD Command Center](https://designmd.ai/frknaykc/command-center)
+for restrained operational hierarchy, not its palette or identity.
+
+`npm run test:catalog` exercises categories, search, keyboard selection, the 10-stock
+limit, pagination, loading/empty states, and both themes at 1440/900/390px using a
+synthetic catalog. Set `SIGNALGEN_TEST_BROWSER_EXECUTABLE` to an existing Chromium
+executable when the Playwright CLI's expected browser is not installed.
+
+## Universe-linked Market Monitor
+
+Market Monitor loads saved universes and issuer names from the existing API. The
+first nonempty universe opens by default; choosing another universe replaces both
+the selectable stock cards and table without modifying the saved universe. A card
+selects the TradingView symbol and highlights the corresponding table row. The
+Mac-style chart frame remains above the results table, beside a stock detail card
+on wide screens. The detail card uses actual screening snapshots for open/close,
+EMA 9/20, RSI 14, rule result, and data time. Sector icons represent curated groups,
+not issuer logos. Hide/show cards, stock selection, previous/next navigation, and
+analyze/compare focus controls share the same selection without writing a universe.
+Personal watchlist mode
+retains its separate add/remove workflow, including when universe loading fails.
+
+Table values remain screening snapshots, not live TradingView quotes. Missing
+snapshots display dashes and `Not evaluated`; no 7D/30D returns are fabricated.
+Open-to-close percentages have a separate Change column with explicit signs,
+two decimal places, green/red direction, and unsigned neutral rounded zero.
+Browser regression fixtures verify universe switching, card/chart/row selection,
+the retained chart frame, responsive layouts, and both themes. External chart
+requests are blocked in those isolated tests, so they do not verify the live
+TradingView provider.

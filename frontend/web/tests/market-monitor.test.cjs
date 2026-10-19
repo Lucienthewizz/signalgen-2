@@ -60,6 +60,15 @@ function loadMonitor() {
   return exports;
 }
 Object.assign(output, loadMonitor());
+test("percentage format uses explicit signs, fixed decimals, and unsigned rounded zero", () => {
+  assert.equal(output.formatSignedPercent(19.64), "+19.64%");
+  assert.equal(output.formatSignedPercent(-6.81), "-6.81%");
+  assert.equal(output.formatSignedPercent(3), "+3.00%");
+  assert.equal(output.formatSignedPercent(0), "0.00%");
+  assert.equal(output.formatSignedPercent(-0.001), "0.00%");
+  assert.equal(output.formatSignedPercent(null), "—");
+  assert.equal(output.formatSignedPercent(NaN), "—");
+});
 function fixture() {
   const decision = {
     symbol: "BBCA",

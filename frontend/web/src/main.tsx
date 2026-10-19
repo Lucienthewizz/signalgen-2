@@ -1,6 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "@fontsource-variable/manrope";
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
+import "@fontsource/saira-condensed/latin-500.css";
+import "@fontsource/saira-condensed/latin-700.css";
 import App from "./App";
 import { ThemeProvider } from "./components/theme-toggle";
 import { Toaster } from "./components/ui/toast";

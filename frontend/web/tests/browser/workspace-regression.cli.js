@@ -17,6 +17,13 @@ async (page) => {
   let unauthorized = false;
   let systemRule = false;
   let failUniverseDelete = false;
+  let universeWrite = null;
+  let sessionMutations = 0;
+  const sessionFixtures = [
+    { id: "fixture-current", label: "Current browser", status: "active", current: true, last_seen_at: now },
+    { id: "fixture-active", label: "Other active browser", status: "active", current: false, last_seen_at: now },
+    { id: "fixture-ended", label: "Ended browser", status: "expired", current: false, last_seen_at: now },
+  ];
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -30,6 +37,11 @@ async (page) => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort();
     const p = url.pathname;
+    if (p.startsWith("/api/v1/account/sessions/") && route.request().method() !== "GET") sessionMutations++;
+    if (p.startsWith("/api/v1/stock-universes") && ["POST", "PATCH"].includes(route.request().method())) {
+      universeWrite = { method: route.request().method(), body: route.request().postDataJSON() };
+      return route.fulfill({ json: { ...universe, ...universeWrite.body } });
+    }
     if (failUniverseDelete && p.startsWith("/api/v1/stock-universes/") && route.request().method() === "DELETE") return route.fulfill({ status: 500, json: { error: { code: "TEST_FAILURE", message: "Penghapusan fixture gagal." } } });
     if (p !== "/api" && !p.startsWith("/api/") && p !== "/ready") return route.continue();
     if (unauthorized && p === "/api/v1/account/me") return route.fulfill({ status: 401, json: { error: { code: "UNAUTHORIZED", message: "Fixture session expired" } } });
@@ -37,6 +49,7 @@ async (page) => {
     if (p === "/api" || p === "/ready") payload = { status: "ready", name: "Fixture API", version: "test" };
     else if (p === "/api/auth/me") payload = user;
     else if (p === "/api/v1/account/me") payload = { user, features: ["screener", "backtest"], session: { id: "fixture", expires_at: subscription.current_period_end }, device: { installation_id: "fixture", label: "Fixture browser", current: true }, capabilities_version: "fixture" };
+    else if (p === "/api/v1/account/sessions") payload = { items: sessionFixtures };
     else if (p === "/api/v1/rules") payload = { items: [systemRule ? { ...rule, name: "Default Scalping", owner_type: "system", definition: undefined } : rule], next_cursor: null };
     else if (p === "/api/v1/stock-universes") payload = { items: [universe] };
     else if (p === "/api/v1/stocks") payload = { items: universe.symbols.map(symbol => ({ symbol, name: symbol })) };
@@ -51,34 +64,82 @@ async (page) => {
   });
   await page.goto("http://127.0.0.1:5174/#app/analysis");
   await page.reload();
-  await page.getByRole("button", { name: "Ekspor CSV" }).waitFor({ timeout: 10000 });
+  await page.getByRole("button", { name: "Export CSV" }).waitFor({ timeout: 10000 });
   await page.getByRole("button", { name: "BBCA", exact: true }).click({ timeout: 5000 });
-  await page.getByRole("heading", { name: /Bukti kondisi/ }).waitFor({ timeout: 5000 });
-  if (!await page.getByText("rule versi 2", { exact: false }).count()) throw Error("Frozen evidence version missing");
-  await page.getByRole("button", { name: "Tutup detail" }).click({ timeout: 5000 });
-  await page.getByText("Riwayat screening (2)", { exact: true }).click({ timeout: 5000 });
-  await page.getByLabel("Perbandingan riwayat", { exact: true }).waitFor({ timeout: 5000 });
+  await page.getByRole("heading", { name: /Condition evidence/ }).waitFor({ timeout: 5000 });
+  if (!await page.getByText("rule version 2", { exact: false }).count()) throw Error("Frozen evidence version missing");
+  await page.getByRole("button", { name: "Close details" }).click({ timeout: 5000 });
+  await page.getByText("Screening history (2)", { exact: true }).click({ timeout: 5000 });
+  await page.getByLabel("Compare screening history", { exact: true }).waitFor({ timeout: 5000 });
   const comparison = await page.locator(".screener-comparison").innerText();
   if (!comparison.includes("BBCA") || !comparison.includes("BBRI")) throw Error("Run comparison missing");
   const download = page.waitForEvent("download", { timeout: 5000 });
-  await page.getByRole("button", { name: "Ekspor CSV" }).click({ timeout: 5000 });
+  await page.getByRole("button", { name: "Export CSV" }).click({ timeout: 5000 });
   if ((await download).suggestedFilename() !== "signalgen-screening.csv") throw Error("CSV download failed");
   const journalKey = `signalgen:journal-drafts:${user.id}`;
   await page.evaluate(key => localStorage.setItem(key, "preserve-existing-drafts"), journalKey);
-  await page.getByRole("button", { name: "Catat jurnal", exact: true }).first().click({ timeout: 5000 });
-  await page.getByRole("heading", { name: "Catat transaksi", exact: true }).waitFor({ timeout: 5000 });
+  await page.getByRole("button", { name: "Add to journal", exact: true }).first().click({ timeout: 5000 });
+  await page.getByRole("heading", { name: "Record a trade", exact: true }).waitFor({ timeout: 5000 });
   if (await page.locator(".journal-capture input").first().inputValue() !== "BBCA") throw Error("Screener did not prefill journal symbol");
-  if (!await page.getByRole("button", { name: "Penyimpanan belum tersedia", exact: true }).isDisabled()) throw Error("Unavailable journal storage must not submit");
+  if (!await page.getByRole("button", { name: "Saving unavailable", exact: true }).isDisabled()) throw Error("Unavailable journal storage must not submit");
   if (await page.locator(".journal-drafts").count()) throw Error("Local draft workflow still visible");
   await page.reload();
   if (await page.evaluate(key => localStorage.getItem(key), journalKey) !== "preserve-existing-drafts") throw Error("Old drafts were overwritten");
   if (await page.locator(".journal-capture").count()) throw Error("Journal form was persisted");
+  await page.route("**/api/v1/stock-universes", route => route.fulfill({ json: { items: [universe, { ...universe, id: "fixture-energy", name: "Energy selection", symbols: ["PTBA.JK"] }] } }));
   await page.goto("http://127.0.0.1:5174/#app/realtime");
-  await page.getByLabel("Urutkan tabel", { exact: true }).click({ timeout: 5000 });
-  await page.getByRole("option", { name: "Perubahan buka–tutup tertinggi", exact: true }).click({ timeout: 5000 });
+  await page.getByLabel("Stock universe", { exact: true }).waitFor();
+  await page.waitForFunction(() => document.querySelector("#monitor-universe")?.textContent.includes("Bank pilihan"));
+  if (await page.locator(".monitor-strip button").count() !== 2) throw Error("Monitor ignored saved universe");
+  await page.getByRole("button", { name: "Hide stock cards", exact: true }).click();
+  if (!await page.locator(".monitor-strip").isHidden()) throw Error("Hide cards did not hide the lineup");
+  await page.getByRole("button", { name: "Show stock cards", exact: true }).click();
+  if (!await page.getByRole("button", { name: "Previous stock", exact: true }).isDisabled()) throw Error("Previous stock boundary must be disabled");
+  await page.getByRole("button", { name: "Next stock", exact: true }).click();
+  if (await page.locator(".monitor-detail-card h4").innerText() !== "BBRI") throw Error("Next stock did not update detail card");
+  if (!await page.getByRole("button", { name: "Next stock", exact: true }).isDisabled()) throw Error("Next stock boundary must be disabled");
+  await page.getByRole("button", { name: "Previous stock", exact: true }).click();
+  await page.getByRole("button", { name: "Compare stocks", exact: true }).click();
+  if (!await page.locator(".monitor-ledger").evaluate(el => el === document.activeElement)) throw Error("Compare action did not focus the table");
+  await page.getByRole("button", { name: "Analyze stock", exact: true }).click();
+  if (!await page.locator(".monitor-board").evaluate(el => el === document.activeElement)) throw Error("Analyze action did not focus the board");
+  await page.locator(".monitor-strip button").filter({ hasText: "BBRI" }).click();
+  if (await page.locator(".monitor-chart h3").innerText() !== "BBRI") throw Error("Stock card did not switch chart");
+  if (!await page.locator('.monitor-ledger tr[data-state="selected"]').innerText().then(text => text.includes("BBRI"))) throw Error("Stock card did not select table row");
+  if (await page.locator(".monitor-window-dots i").count() !== 3 || !await page.locator(".monitor-chart .tradingview-chart").count()) throw Error("TradingView Mac layout missing");
+  await page.getByLabel("Stock universe", { exact: true }).click();
+  await page.getByRole("option", { name: "Energy selection", exact: true }).click();
+  if (await page.locator(".monitor-strip button").count() !== 1 || await page.locator(".monitor-chart h3").innerText() !== "PTBA") throw Error("Universe switch retained unrelated stocks");
+  if (!await page.getByText("Not evaluated", { exact: true }).count()) throw Error("Missing snapshot must remain unevaluated");
+  await page.getByLabel("Stock universe", { exact: true }).click();
+  await page.getByRole("option", { name: "Bank pilihan", exact: true }).click();
+  await page.getByLabel("Sort table", { exact: true }).click({ timeout: 5000 });
+  await page.getByRole("option", { name: "Highest open-to-close change", exact: true }).click({ timeout: 5000 });
   if (!((await page.locator(".monitor-ledger tbody tr").first().innerText()).includes("BBRI"))) throw Error("Monitor change sort failed");
   if (await page.locator(".monitor-chart h3").innerText() !== "BBCA") throw Error("Sort changed selected chart");
   if (!((await page.locator(".monitor-change").first().innerText()).includes("%"))) throw Error("Missing open-close percentage");
+  await page.getByRole("columnheader", { name: "Change", exact: true }).waitFor();
+  if (await page.locator(".monitor-ledger .monitor-change").first().innerText() !== "+6.32%") throw Error("Monitor percentages must show a sign and two decimals");
+  await page.unroute("**/api/v1/stock-universes");
+  await page.goto("http://127.0.0.1:5174/#app/access");
+  const ended = page.locator(".account-session-ledger article").filter({ hasText: "Ended browser" });
+  await ended.waitFor();
+  await page.getByRole("button", { name: "Delete history for Ended browser", exact: true }).click();
+  await ended.waitFor({ state: "hidden" });
+  await page.reload();
+  await page.getByRole("button", { name: "Restore history", exact: true }).waitFor();
+  if (await ended.count()) throw Error("Hidden history did not persist on this device");
+  for (const name of ["Current browser", "Other active browser"]) {
+    const active = page.locator(".account-session-ledger article").filter({ hasText: name });
+    if (!await active.isVisible() || await active.getByRole("button", { name: /^Delete/ }).count()) throw Error("Active session was hidden or made deletable");
+  }
+  if (!await page.getByRole("button", { name: "Delete history", exact: true }).isDisabled()) throw Error("Delete history should disable when no ended records remain");
+  await page.getByRole("button", { name: "Restore history", exact: true }).click();
+  await ended.waitFor();
+  await page.getByRole("button", { name: "Delete history", exact: true }).click();
+  await ended.waitFor({ state: "hidden" });
+  if (sessionMutations) throw Error("Display-only history deletion mutated backend sessions");
+  await page.getByRole("button", { name: "Restore history", exact: true }).click();
   const routes = ["overview", "analysis", "rules", "universes", "journal", "realtime", "news", "access", "subscription", "operator"];
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -87,11 +148,61 @@ async (page) => {
         await page.goto(`http://127.0.0.1:5174/#app/${view}`);
         await page.locator(".demo-workbench").waitFor({ timeout: 10000 });
         await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
+        await page.evaluate(() => Promise.all([
+          document.fonts.load('14px "Geist Variable"'),
+          document.fonts.load('500 14px "Saira Condensed"'),
+          document.fonts.load('13px "Geist Mono Variable"'),
+        ]));
+        const typography = await page.evaluate(() => ({
+          body: getComputedStyle(document.body).fontFamily,
+          nav: getComputedStyle(document.querySelector(".nav-group button")).fontFamily,
+          loaded: document.fonts.check('14px "Geist Variable"') && document.fonts.check('500 14px "Saira Condensed"'),
+        }));
+        if (!typography.body.includes("Geist Variable") || !typography.nav.includes("Saira Condensed") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
         const close = page.getByRole("button", { name: "Close menu" });
         const bounds = await close.boundingBox();
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
+        const surfaceSelector = {
+          overview: ".overview-launch", analysis: ".screener-console", rules: ".rule-composer",
+          universes: ".universe-editor", journal: ".journal-toolbar", realtime: ".monitor-chart",
+          news: ".news-feed", access: ".panel", subscription: ".subscription-current", operator: ".admin-console, .admin-account, .workspace-empty-state",
+        }[view];
+        await page.locator(surfaceSelector).first().waitFor({ timeout: 10000 });
+        if (!await page.locator(surfaceSelector).first().evaluate(el => getComputedStyle(el).backgroundImage.includes("gradient"))) throw Error(`Missing shared card gradient: ${view} ${width} ${theme}`);
+        const surfaceContrast = await page.locator(".workspace").evaluate(host => {
+          if (!getComputedStyle(host).backgroundImage.includes("gradient")) throw Error("Workspace background is not graded");
+          const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
+          const ctx = canvas.getContext("2d");
+          const probe = document.createElement("span"); probe.style.transition = "none"; host.append(probe);
+          const palette = [];
+          const rgb = value => {
+            probe.style.backgroundColor = value;
+            ctx.fillStyle = getComputedStyle(probe).backgroundColor;
+            ctx.fillRect(0, 0, 1, 1);
+            const color = [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3);
+            palette.push([value, getComputedStyle(probe).backgroundColor, color]);
+            return color;
+          };
+          const luminance = channels => channels.map(v => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }).reduce((a, v, i) => a + v * [.2126, .7152, .0722][i], 0);
+          const backgrounds = ["var(--canvas)", "var(--surface)", "color-mix(in srgb, var(--surface-3) 65%, var(--surface))", "color-mix(in srgb, var(--green-deep) 9%, var(--surface))"].map(value => luminance(rgb(value)));
+          const contrasts = ["var(--text)", "var(--muted)"].flatMap(value => { const l = luminance(rgb(value)); return backgrounds.map(bg => (Math.max(l, bg) + .05) / (Math.min(l, bg) + .05)); });
+          probe.remove();
+          return { min: Math.min(...contrasts), palette };
+        });
+        if (surfaceContrast.min < 4.5) throw Error(`Shared surface text contrast below AA: ${JSON.stringify(surfaceContrast)}`);
         await page.screenshot({ path: `/private/tmp/signalgen-${view}-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
-        if (view === "realtime") await page.locator(".monitor-ledger").screenshot({ path: `/private/tmp/signalgen-monitor-table-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+        if (view === "realtime") {
+          if (!await page.locator(".monitor-change").first().evaluate(el => getComputedStyle(el).fontFamily.includes("Geist Mono Variable") && document.fonts.check('13px "Geist Mono Variable"'))) throw Error("Market numbers must use loaded Geist Mono");
+          const geometry = await page.locator(".monitor-board-grid").evaluate(el => {
+            const chart = el.querySelector(".monitor-chart").getBoundingClientRect();
+            const detail = el.querySelector(".monitor-stock-detail").getBoundingClientRect();
+            return { sideBySide: detail.x >= chart.right, below: detail.top >= chart.bottom, topOffset: Math.abs(chart.top - detail.top) };
+          });
+          if (width === 1440 && (!geometry.sideBySide || geometry.topOffset > 1)) throw Error("Chart and stock card are not aligned side by side");
+          if (width === 390 && !geometry.below) throw Error("Stock card must stack below chart on mobile");
+          await page.locator(".monitor-ledger").screenshot({ path: `/private/tmp/signalgen-monitor-table-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+          await page.locator(".market-monitor").screenshot({ path: `/private/tmp/signalgen-monitor-lineup-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+        }
         if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Overflow: ${view} ${width}`);
         if (view === "analysis") {
           const offset = await page.evaluate(() => {
@@ -104,24 +215,27 @@ async (page) => {
           if (offset > 2) throw Error(`Misaligned screener explanation: ${offset}px`);
           if (await page.locator(".screener-results .screener-technical").count()) throw Error("Technical card still nested in results");
           const technical = page.locator(".screener-workspace > .screener-technical");
-          await technical.getByRole("heading", { name: "Informasi teknis data", exact: true }).waitFor({ timeout: 5000 });
+          await technical.getByRole("heading", { name: "Data information", exact: true }).waitFor({ timeout: 5000 });
           if (await technical.locator("summary").count()) throw Error("Technical card still collapsible");
           const layout = await technical.evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), text: parseFloat(getComputedStyle(el.querySelector(".dataset-provenance strong")).fontSize), left: el.getBoundingClientRect().left - document.querySelector(".screener-results").getBoundingClientRect().left }));
           if (layout.radius < 12 || layout.text > 14 || Math.abs(layout.left) > 1) throw Error(`Technical card layout incorrect: ${JSON.stringify(layout)}`);
           await technical.screenshot({ path: `/private/tmp/signalgen-technical-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           await page.getByRole("button", { name: "BBCA", exact: true }).click({ timeout: 5000 });
           const detail = page.locator(".stock-detail");
-          await detail.getByRole("heading", { name: /Bukti kondisi/ }).waitFor({ timeout: 5000 });
+          await detail.getByRole("heading", { name: /Condition evidence/ }).waitFor({ timeout: 5000 });
           if (await detail.locator(".stock-detail__values > div").count() !== 5) throw Error("Indicator cards missing");
-          if ((await detail.innerText()).includes("Perbandingan angka dihitung di browser")) throw Error("Server calculation explanation remains");
+          if (/Perbandingan angka dihitung di browser|Numeric comparisons are calculated in the browser/.test(await detail.innerText())) throw Error("Server calculation explanation remains");
           const card = await detail.locator(".stock-detail__evidence li").first().evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), padding: parseFloat(getComputedStyle(el).paddingLeft) }));
           if (card.radius < 12 || card.padding < 16) throw Error("Condition card styling missing");
           await detail.screenshot({ path: `/private/tmp/signalgen-stock-detail-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error("Stock detail overflows page");
-          await page.getByRole("button", { name: "Tutup detail", exact: true }).click({ timeout: 5000 });
+          await page.getByRole("button", { name: "Close details", exact: true }).click({ timeout: 5000 });
         }
         if (view === "overview") {
-          await page.getByRole("heading", { name: "Pantau pasar", exact: true }).waitFor({ timeout: 5000 });
+          await page.getByRole("heading", { name: "Follow the market", exact: true }).waitFor({ timeout: 5000 });
+          const box = await page.locator(".overview-launch").evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), background: getComputedStyle(el).backgroundImage }));
+          if (box.radius < 24 || !box.background.includes("linear-gradient")) throw Error("Dashboard rounded gradient box missing");
+          await page.locator(".overview-launch").screenshot({ path: `/private/tmp/signalgen-dashboard-gradient-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           const alignment = await page.evaluate(() => {
             const title = document.querySelector(".overview-next h3").getBoundingClientRect();
             const selection = document.querySelector(".overview-selection").getBoundingClientRect();
@@ -141,6 +255,39 @@ async (page) => {
           });
           if (offset > 1) throw Error(`Rule header/form gutters differ: ${offset}px`);
         }
+        if (view === "universes") {
+          await page.getByRole("heading", { name: "Your stock universes", exact: true }).waitFor({ timeout: 5000 });
+          await page.getByRole("table", { name: "Stock catalog", exact: true }).waitFor({ timeout: 5000 });
+          const categories = page.getByRole("group", { name: "Stock categories", exact: true });
+          for (const name of ["All stocks", "Blue chip", "Banks", "Energy", "Consumer", "Property", "Technology"]) {
+            await categories.getByRole("button", { name, exact: true }).waitFor({ timeout: 5000 });
+          }
+          const layout = await page.locator(".universe-workspace").evaluate(el => {
+            const editor = el.querySelector(".universe-editor"), library = el.querySelector(".universe-library");
+            const a = editor.getBoundingClientRect(), b = library.getBoundingClientRect();
+            const browse = editor.querySelector('.stock-catalog-picker__browse').getBoundingClientRect();
+            const selected = editor.querySelector('.universe-selection').getBoundingClientRect();
+            const catalog = editor.querySelector('.stock-catalog-picker__table').getBoundingClientRect();
+            const title = editor.querySelector('h3').getBoundingClientRect();
+            const savedTitle = library.querySelector('h3').getBoundingClientRect();
+            const row = library.querySelector('article').getBoundingClientRect();
+            const alignment = Math.max(Math.abs(title.left - browse.left), Math.abs(browse.left - catalog.left), Math.abs(savedTitle.left - row.left), Math.abs(savedTitle.left - title.left));
+            const chips = library.querySelector(".universe-library__symbols");
+            return { gap: b.top - a.bottom, left: Math.abs(a.left - b.left), right: Math.abs(a.right - b.right), alignment, sideBySide: selected.left >= browse.right, baseline: Math.abs(selected.top - browse.top), wrap: chips && getComputedStyle(chips).flexWrap };
+          });
+          if (layout.gap < 16 || layout.left > 1 || layout.right > 1) throw Error(`Universe cards are not stacked/aligned: ${JSON.stringify(layout)}`);
+          if (layout.alignment > 1) throw Error(`Universe content edges differ: ${JSON.stringify(layout)}`);
+          if (width >= 1440 && (!layout.sideBySide || layout.baseline > 1)) throw Error(`Universe selection panel baseline differs: ${JSON.stringify(layout)}`);
+          if (layout.wrap !== "wrap") throw Error("Saved universe stocks cannot wrap");
+          if (await page.locator('.universe-window-bar .news-window-dots i').count() !== 3) throw Error("Mac window controls missing");
+          if (await categories.locator('button svg').count() !== 7) throw Error("Category icons missing");
+          const selectionStyle = await page.locator('.universe-selection__card').evaluate(el=>({radius:parseFloat(getComputedStyle(el).borderTopLeftRadius),padding:parseFloat(getComputedStyle(el.querySelector('[data-slot="card-content"]')).paddingLeft)}));
+          if(selectionStyle.radius < 12 || selectionStyle.padding < 16) throw Error("Selected stocks card missing inset spacing");
+          if(!(await page.locator('.stock-catalog-picker__table').evaluate(el=>getComputedStyle(el).backgroundImage)).includes('linear-gradient')) throw Error("Stock table gradient missing");
+          if(await page.locator('.stock-catalog-picker__table [data-slot="table-container"]').evaluate(el=>el.scrollHeight > el.clientHeight + 1)) throw Error("Catalog rows are vertically clipped");
+          if(await page.locator('.universe-selection__empty').evaluate(el=>parseFloat(getComputedStyle(el).minHeight) > 0)) throw Error("Empty selection still reserves blank space");
+          if (await page.locator(".universe-library").getByText(/^v\d+$/).count()) throw Error("Universe version badge still visible");
+        }
         if (view === "journal") {
           if (await page.getByText("Static preview", { exact: true }).count()) throw Error("Journal preview label remains");
           const controlAlignment = await page.locator(".journal-toolbar").evaluate(el => {
@@ -151,7 +298,7 @@ async (page) => {
           await page.locator(".journal-toolbar").screenshot({ path: `/private/tmp/signalgen-journal-toolbar-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           const review = page.locator(".journal-detail");
           await review.screenshot({ path: `/private/tmp/signalgen-journal-review-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
-          if (await review.locator("dt").allTextContents().then(labels => labels.join(",")) !== "Rule,Waktu masuk,Waktu keluar") throw Error("Journal review metadata not separated");
+          if (await review.locator("dt").allTextContents().then(labels => labels.join(",")) !== "Rule,Entry time,Exit time") throw Error("Journal review metadata not separated");
           const offset = await review.evaluate(el => {
             const parts = [el.querySelector("header"), el.querySelector(".journal-detail__note"), el.querySelector("dl"), el.querySelector(".journal-tags")];
             const positions = parts.map(part => part.getBoundingClientRect().x);
@@ -169,7 +316,7 @@ async (page) => {
           if (offset > 2) throw Error(`Misaligned monitor explanation: ${offset}px`);
         }
         if (await page.getByText("This page could not be loaded", { exact: false }).count()) throw Error(`Route boundary: ${view}`);
-        if (await page.getByText("Tersimpan di akun", { exact: true }).count()) throw Error("Saved-account status still visible");
+        if (await page.getByText(/^(Tersimpan di akun|Saved to your account)$/).count()) throw Error("Saved-account status still visible");
       }
       await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
     }
@@ -183,6 +330,23 @@ async (page) => {
   await page.locator("main").waitFor({ timeout: 10000 });
   await page.screenshot({ path: "/private/tmp/signalgen-account.png", animations: "disabled", timeout: 10000 });
   await page.goto("http://127.0.0.1:5174/#app/universes");
+  await page.getByRole("button", { name: "Edit Bank pilihan", exact: true }).click({ timeout: 5000 });
+  if(await page.locator('.universe-selection__stocks li').count() !== 2) throw Error("Selected stock cards missing");
+  const stockCard = await page.locator('.universe-selection__stocks li').first().evaluate(el=>({radius:parseFloat(getComputedStyle(el).borderTopLeftRadius),padding:parseFloat(getComputedStyle(el).paddingLeft)}));
+  if(stockCard.radius < 8 || stockCard.padding < 12) throw Error("Selected stock item card spacing missing");
+  if (await page.getByLabel("Universe name", {exact:true}).inputValue() !== "Bank pilihan") throw Error("Universe edit did not preserve its name");
+  await page.getByLabel("Universe name", {exact:true}).fill("Bank pilihan edited");
+  await page.getByRole("button", { name: "Save changes", exact:true }).click({ timeout: 5000 });
+  await page.getByRole("button", { name: "Create universe", exact:true }).waitFor({ timeout: 5000 });
+  if (!universeWrite || universeWrite.method !== "PATCH" || universeWrite.body.version !== 1 || universeWrite.body.name !== "Bank pilihan edited" || universeWrite.body.symbols.join(",") !== "BBCA.JK,BBRI.JK") throw Error("Universe update payload changed");
+  await page.getByRole("button", { name: /Add BBCA/ }).click({ timeout: 5000 });
+  await page.getByLabel("Universe name", {exact:true}).fill("New fixture group");
+  await page.getByRole("button", { name: "Create universe", exact:true }).click({ timeout: 5000 });
+  await page.getByRole("button", { name: /Add BBCA/ }).waitFor({ timeout: 5000 });
+  if (!universeWrite || universeWrite.method !== "POST" || universeWrite.body.name !== "New fixture group" || universeWrite.body.symbols.join(",") !== "BBCA.JK") throw Error("Universe create payload changed");
+  // Start toast placement checks without lingering create/update notifications.
+  await page.reload();
+  await page.getByRole("button", { name: "Delete Bank pilihan", exact: true }).waitFor({ timeout: 5000 });
   await page.evaluate(() => { window.confirm = () => true; });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -190,16 +354,19 @@ async (page) => {
       for (const failure of [false, true]) {
         await page.mouse.move(1, 900);
         failUniverseDelete = failure;
-        await page.getByRole("button", { name: "Hapus Bank pilihan", exact: true }).click({ timeout: 5000 });
-        const toast = page.locator(`.notification-toast[data-type=${failure ? "error" : "success"}]`).last();
-        await toast.waitFor({ state: "visible", timeout: 5000 });
+        await page.getByRole("button", { name: "Delete Bank pilihan", exact: true }).click({ timeout: 5000 });
+        const latestToast = page.locator(`.notification-toast[data-type=${failure ? "error" : "success"}]`).last();
+        await latestToast.waitFor({ state: "visible", timeout: 5000 });
+        // Pin this toast: after dismissal .last() can resolve an older save toast.
+        const toastLabel = await latestToast.getAttribute("aria-labelledby");
+        const toast = page.locator(`.notification-toast[aria-labelledby="${toastLabel}"]`);
         await toast.hover({ timeout: 5000 });
         const bounds = await page.locator(".notification-viewport").boundingBox();
         if (!bounds || bounds.y > 24 || Math.abs(width - bounds.x - bounds.width - 16) > 2) throw Error("Notification not top-right");
         await toast.screenshot({ path: `/private/tmp/signalgen-toast-${width}-${theme}-${failure}.png`, animations: "disabled", timeout: 10000 });
         // Base UI announces the toast through its live region and hides the
         // visual copy from AT until the viewport is keyboard-focused.
-        const closeToast = toast.getByRole("button", { name: "Tutup notifikasi", exact: true, includeHidden: true });
+        const closeToast = toast.getByRole("button", { name: "Dismiss notification", exact: true, includeHidden: true });
         await closeToast.click({ timeout: 5000 });
         await toast.waitFor({ state: "detached", timeout: 5000 });
       }
@@ -209,7 +376,7 @@ async (page) => {
   failUniverseDelete = false;
   systemRule = true;
   await page.goto("http://127.0.0.1:5174/#app/analysis");
-  await page.getByText("Kondisi rule sistem diperiksa oleh server.", { exact: true }).waitFor({ timeout: 10000 });
+  await page.getByText("System rule conditions are checked automatically.", { exact: true }).waitFor({ timeout: 10000 });
   for (const width of [1440, 900, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     for (let theme = 0; theme < 2; theme++) {
@@ -222,17 +389,17 @@ async (page) => {
     }
   }
   await page.goto("http://127.0.0.1:5174/#app/subscription");
-  await page.getByRole("heading", { name: "Penggunaan kuota", exact: true }).waitFor({ timeout: 10000 });
-  const backtest = page.locator('.subscription-feature-grid [data-slot="card"]').filter({ hasText: "Akses backtest" });
-  if (!(await backtest.innerText()).includes("Belum tersedia")) throw Error("Backtest incorrectly presented as usable");
+  await page.getByRole("heading", { name: "Quota usage", exact: true }).waitFor({ timeout: 10000 });
+  const backtest = page.locator('.subscription-feature-grid [data-slot="card"]').filter({ hasText: "Backtest access" });
+  if (!(await backtest.innerText()).includes("Not available yet")) throw Error("Backtest incorrectly presented as usable");
   const manage = page.locator(".subscription-manage--account");
   await manage.locator("summary").click({ timeout: 5000 });
-  if (!await manage.getByRole("button", { name: "Batalkan sekarang", exact: true }).isVisible()) throw Error("Manage disclosure does not reveal controls");
+  if (!await manage.getByRole("button", { name: "Cancel now", exact: true }).isVisible()) throw Error("Manage disclosure does not reveal controls");
   await manage.locator("summary").click({ timeout: 5000 });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     for (let theme = 0; theme < 2; theme++) {
-      const question = page.getByRole("button", { name: "Apa yang terjadi jika paket berubah?", exact: true });
+      const question = page.getByRole("button", { name: "What happens when my plan changes?", exact: true });
       if (await question.getAttribute("aria-expanded") !== "false") throw Error("Package FAQ should start collapsed");
       await question.focus();
       const type = await question.evaluate(el => ({ tracking: parseFloat(getComputedStyle(el).letterSpacing) || 0, weight: Number(getComputedStyle(el).fontWeight), shadow: getComputedStyle(el).boxShadow, headerMargin: getComputedStyle(el.parentElement).marginBottom }));
@@ -242,7 +409,7 @@ async (page) => {
       await page.locator(".subscription-faq [data-slot=accordion-content]").waitFor({ state: "visible", timeout: 5000 });
       await page.locator(".subscription-faq").screenshot({ path: `/private/tmp/signalgen-package-faq-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
       await question.click({ timeout: 5000 });
-      if (await page.getByText(/Analyst dan Pro memakai fitur screening/).count()) throw Error("Removed package explanation remains");
+      if (await page.getByText(/Analyst dan Pro memakai fitur screening|Analyst and Pro use the same screening features/).count()) throw Error("Removed package explanation remains");
       await page.locator(".subscription-current").screenshot({ path: `/private/tmp/signalgen-access-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
       if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error("Subscription overflow");
       const inset = await page.locator(".subscription-current").evaluate(el => {
@@ -261,6 +428,10 @@ async (page) => {
     await page.goto(`http://127.0.0.1:5174/#${route}`);
     await page.locator("main").waitFor({ timeout: 10000 });
     await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
+    await page.waitForFunction(expected => document.documentElement.dataset.typography === expected, route === "home" ? "landing" : "workspace");
+    const family = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
+    if (!family.includes(route === "home" ? "Manrope Variable" : "Geist Variable")) throw Error(`Public route font mismatch: ${route} ${family}`);
+    if (await page.locator(".auth-layout").count() && !await page.locator(".auth-layout").evaluate(el => getComputedStyle(el).backgroundImage.includes("gradient"))) throw Error(`Auth surface gradient missing: ${route}`);
     await page.screenshot({ path: `/private/tmp/signalgen-public-${route}.png`, animations: "disabled", timeout: 10000 });
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Public page overflow: ${route}`);
   }

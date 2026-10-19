@@ -198,7 +198,7 @@ test("missing or reordered decisions never become another symbol's result", asyn
     const c = screener({ results });
     await assert.rejects(
       c.run("rule", "universe", new AbortController().signal, () => {}),
-      /tidak cocok/,
+      /The scoring response does not match this request|tidak cocok/,
     );
   }
 });
@@ -210,7 +210,7 @@ test("cancelling before a run or after dataset fetch does not start scoring", as
     if (before) controller.abort();
     await assert.rejects(
       c.run("rule", "universe", controller.signal, () => {}),
-      /dibatalkan/,
+      /Analysis cancelled|dibatalkan/,
     );
     assert.equal(c.calls.grants, 0);
     assert.equal(c.calls.sockets, 0);

@@ -41,7 +41,7 @@ export type LiveScreenerRun = {
 };
 
 function ensureNotCancelled(signal: AbortSignal) {
-  if (signal.aborted) throw new ApiError("Analisis dibatalkan.", 0);
+  if (signal.aborted) throw new ApiError("Analysis cancelled.", 0);
 }
 
 export async function runLiveScreener(
@@ -88,7 +88,10 @@ async function runAuthorizedScreener(
   const dataset = await loadScreenerDataset(manifest, signal);
   ensureNotCancelled(signal);
   if (!dataset.series.length || dataset.series.length > universeSelectionLimit)
-    throw new ApiError("Dataset harus berisi 1–10 saham untuk dianalisis.", 0);
+    throw new ApiError(
+      "The dataset must contain 1–10 stocks for analysis.",
+      0,
+    );
 
   onStage("loading_engine");
   const featureStart = performance.now();
@@ -108,11 +111,11 @@ async function runAuthorizedScreener(
     batches = packCandidateBatches(featureRuns, ticket.max_candidates);
   } catch (error) {
     throw new ApiError(
-      error instanceof Error ? error.message : "Batch screening tidak valid.",
+      error instanceof Error ? error.message : "Invalid screening batch.",
       0,
     );
   }
-  if (!batches.length) throw new ApiError("Tidak ada kandidat screening.", 0);
+  if (!batches.length) throw new ApiError("No screening candidates found.", 0);
   const results: ScreenerResult[] = [];
   for (const [index, featureResult] of batches.entries()) {
     ensureNotCancelled(signal);
@@ -123,7 +126,7 @@ async function runAuthorizedScreener(
       featureResult.candidates.length > ticket.max_candidates
     )
       throw new ApiError(
-        "Hasil WASM tidak cocok dengan batas private scoring.",
+        "WASM results do not match the scoring limits.",
         0,
       );
     results.push(
@@ -153,7 +156,7 @@ async function runAuthorizedScreener(
       latest && decisions.get(`${latest.symbol}\u0000${latest.timestamp}`);
     if (!latest || !decision || latest.symbol !== series.symbol)
       throw new ApiError(
-        `Hasil screening untuk ${series.symbol} tidak lengkap.`,
+        `Screening results for ${series.symbol} are incomplete.`,
         0,
       );
     return {

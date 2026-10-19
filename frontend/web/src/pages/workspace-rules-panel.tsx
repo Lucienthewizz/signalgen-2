@@ -66,10 +66,10 @@ const blankCondition = (): RuleCondition => ({
 
 function readableError(error: unknown) {
   if (error instanceof ApiError && error.code === "VERSION_CONFLICT")
-    return "Rule berubah di sesi lain. Muat ulang lalu coba kembali.";
+    return "This rule changed in another session. Reload and try again.";
   return error instanceof Error
     ? error.message
-    : "Perubahan rule belum dapat disimpan.";
+    : "Rule changes could not be saved.";
 }
 
 function rightValue(value: string): string | number {
@@ -80,7 +80,7 @@ function rightValue(value: string): string | number {
 }
 
 function summary(definition?: UserRuleDefinition) {
-  if (!definition?.conditions.length) return "Belum ada kondisi";
+  if (!definition?.conditions.length) return "No conditions yet";
   return definition.conditions
     .map((item) => `${item.left} ${item.op} ${item.right}`)
     .join(" · ");
@@ -142,7 +142,7 @@ export function ServerRulesPanel({
       );
       if (!rule || rule.version !== pendingDraft.editingVersion) {
         setError(
-          "Rule asal berubah atau tidak tersedia. Muat ulang daftar, atau mulai rule kosong untuk membuang draft.",
+          "The original rule changed or is unavailable. Reload the list or start a blank rule to discard this draft.",
         );
         return;
       }
@@ -150,7 +150,7 @@ export function ServerRulesPanel({
     } else setEditing(null);
     setDefinition(pendingDraft.definition);
     setPendingDraft(null);
-    setNotice("Draft dipulihkan. Periksa kondisi sebelum menyimpan.");
+    setNotice("Draft restored. Check the conditions before saving.");
   }
 
   async function load() {
@@ -189,7 +189,7 @@ export function ServerRulesPanel({
     setEditing(null);
     setDefinition(blankDefinition());
     setError(null);
-    setNotice("Form baru dikosongkan. Tambahkan kondisi pertama saat siap.");
+    setNotice("Blank rule ready. Add your first condition.");
   }
 
   function edit(rule: RuleResource) {
@@ -219,11 +219,11 @@ export function ServerRulesPanel({
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!definition.name.trim()) {
-      setError("Beri nama agar rule mudah dikenali.");
+      setError("Enter a name to identify your rule.");
       return;
     }
     if (!definition.conditions.length) {
-      setError("Tambahkan setidaknya satu kondisi screening.");
+      setError("Add at least one screening condition.");
       return;
     }
     setSaving(true);
@@ -235,11 +235,11 @@ export function ServerRulesPanel({
       if (editing) {
         await api.updateRule(editing.id, editing.version, payload);
         if (activeUser.current !== owner) return;
-        setNotice("Rule berhasil diperbarui.");
+        setNotice("Rule updated.");
       } else {
         await api.createRule(payload);
         if (activeUser.current !== owner) return;
-        setNotice("Rule baru tersimpan dan siap dipakai di screener.");
+        setNotice("Rule saved and ready to use in the screener.");
       }
       setEditing(null);
       setDefinition(blankDefinition());
@@ -255,7 +255,7 @@ export function ServerRulesPanel({
   }
 
   async function remove(rule: RuleResource) {
-    if (!window.confirm(`Hapus rule “${rule.name}”?`)) return;
+    if (!window.confirm(`Delete rule “${rule.name}”?`)) return;
     setError(null);
     setNotice(null);
     const owner = userId;
@@ -264,7 +264,7 @@ export function ServerRulesPanel({
       if (activeUser.current !== owner) return;
       if (editing?.id === rule.id) startNew();
       await load();
-      setNotice("Rule dihapus.");
+      setNotice("Rule deleted.");
     } catch (caught) {
       if (activeUser.current !== owner) return;
       setError(readableError(caught));
@@ -278,11 +278,11 @@ export function ServerRulesPanel({
           <EmptyMedia variant="icon">
             <ShieldCheck />
           </EmptyMedia>
-          <EmptyTitle>Workspace rule belum terhubung</EmptyTitle>
+          <EmptyTitle>Rules workspace unavailable</EmptyTitle>
           <EmptyDescription>
             {!backendOnline
-              ? "Jalankan Go API untuk membaca dan menyimpan rule."
-              : "Masuk agar rule pribadi tersimpan ke akun Anda."}
+              ? "Start the Go API to load and save rules."
+              : "Sign in to save private rules to your account."}
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -301,7 +301,7 @@ export function ServerRulesPanel({
               <h3 id="rule-composer-title">
                 {editing ? `Edit ${editing.name}` : "Create a screening rule"}
               </h3>
-              <p>Bangun checklist sederhana; semua kondisi harus terpenuhi.</p>
+              <p>Build a checklist. Every condition must be met.</p>
             </div>
           </div>
           <Button variant="outline" onClick={startNew} disabled={saving}>
@@ -312,12 +312,9 @@ export function ServerRulesPanel({
         {pendingDraft && (
           <Alert>
             <Save />
-            <AlertTitle>Draft rule tersedia</AlertTitle>
+            <AlertTitle>Rule draft available</AlertTitle>
             <AlertDescription>
-              <p>
-                Draft Anda tersedia. Pulihkan untuk melanjutkan, atau mulai rule
-                kosong.
-              </p>
+              <p>Restore your draft to continue, or start a blank rule.</p>
               <Button
                 variant="outline"
                 onClick={restoreDraft}
@@ -334,10 +331,12 @@ export function ServerRulesPanel({
         {draftStorageFailed && (
           <Alert>
             <CircleAlert />
-            <AlertTitle>Draft hanya tersedia selama halaman terbuka</AlertTitle>
+            <AlertTitle>
+              Draft is available only while this page is open
+            </AlertTitle>
             <AlertDescription>
-              Browser tidak dapat menyimpan draft. Simpan rule sebelum memuat
-              ulang atau meninggalkan halaman.
+              Your browser cannot store this draft. Save your rule before
+              reloading or leaving this page.
             </AlertDescription>
           </Alert>
         )}
@@ -366,11 +365,11 @@ export function ServerRulesPanel({
                       name: event.target.value,
                     }))
                   }
-                  placeholder="Contoh: Momentum bank harian"
+                  placeholder="Example: Daily bank momentum"
                   maxLength={100}
                 />
                 <FieldDescription>
-                  Nama ini muncul di pilihan screener.
+                  This name appears in the screener.
                 </FieldDescription>
               </Field>
               <Field>
@@ -393,7 +392,7 @@ export function ServerRulesPanel({
                   }
                 />
                 <FieldDescription>
-                  Mencegah sinyal berulang terlalu dekat.
+                  Sets the minimum interval between repeated signals.
                 </FieldDescription>
               </Field>
             </div>
@@ -403,8 +402,8 @@ export function ServerRulesPanel({
                 <div>
                   <h4>Screening conditions</h4>
                   <p>
-                    Pilih indikator, pembanding, lalu nilai atau indikator
-                    acuan.
+                    Choose an indicator, comparison, and reference value or
+                    indicator.
                   </p>
                 </div>
                 <Badge variant="outline">AND logic</Badge>
@@ -423,7 +422,7 @@ export function ServerRulesPanel({
                   <Plus />
                   <span>
                     <strong>Add the first condition</strong>
-                    <small>Rule baru dimulai tanpa template lama.</small>
+                    <small>Start from a blank rule.</small>
                   </span>
                 </button>
               ) : (
@@ -445,7 +444,7 @@ export function ServerRulesPanel({
                         }
                       >
                         <SelectTrigger
-                          aria-label={`Indikator kondisi ${index + 1}`}
+                          aria-label={`Condition indicator ${index + 1}`}
                         >
                           <SelectValue />
                         </SelectTrigger>
@@ -470,7 +469,7 @@ export function ServerRulesPanel({
                         }
                       >
                         <SelectTrigger
-                          aria-label={`Operator kondisi ${index + 1}`}
+                          aria-label={`Condition operator ${index + 1}`}
                         >
                           <SelectValue />
                         </SelectTrigger>
@@ -485,20 +484,20 @@ export function ServerRulesPanel({
                         </SelectContent>
                       </Select>
                       <Input
-                        aria-label={`Nilai kondisi ${index + 1}`}
+                        aria-label={`Condition value ${index + 1}`}
                         value={String(condition.right)}
                         onChange={(event) =>
                           setCondition(index, {
                             right: rightValue(event.target.value),
                           })
                         }
-                        placeholder="EMA20 atau 55"
+                        placeholder="EMA20 or 55"
                       />
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        aria-label={`Hapus kondisi ${index + 1}`}
+                        aria-label={`Remove condition ${index + 1}`}
                         onClick={() =>
                           setDefinition((current) => ({
                             ...current,
@@ -532,12 +531,12 @@ export function ServerRulesPanel({
             {error && (
               <Alert variant="destructive">
                 <CircleAlert />
-                <AlertTitle>Rule belum tersimpan</AlertTitle>
+                <AlertTitle>Rule not saved</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
             <footer className="rule-composer__footer">
-              <span>{definition.conditions.length} kondisi · Daily IDX</span>
+              <span>{definition.conditions.length} conditions · Daily IDX</span>
               <Button type="submit" size="lg" disabled={saving}>
                 {saving ? (
                   <LoaderCircle
@@ -559,9 +558,9 @@ export function ServerRulesPanel({
       <section className="rule-library" aria-labelledby="rule-library-title">
         <header className="resource-library__header">
           <div>
-            <h3 id="rule-library-title">Rule tersimpan</h3>
+            <h3 id="rule-library-title">Saved rules</h3>
             <ResourceQuota kind="custom_rules" revision={rules.length} />
-            <p>Pilih rule pribadi untuk diedit, atau jalankan dari screener.</p>
+            <p>Edit a private rule or run it from the screener.</p>
           </div>
           <div>
             <Button onClick={() => void load()} disabled={loading}>
@@ -588,10 +587,9 @@ export function ServerRulesPanel({
               <EmptyMedia variant="icon">
                 <ListChecks />
               </EmptyMedia>
-              <EmptyTitle>Belum ada rule tersimpan</EmptyTitle>
+              <EmptyTitle>No saved rules yet</EmptyTitle>
               <EmptyDescription>
-                Buat rule kosong di atas, lalu tambahkan kondisi yang Anda
-                pahami.
+                Create a blank rule above and add your conditions.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -622,7 +620,7 @@ export function ServerRulesPanel({
                           size="icon"
                           onClick={() => void remove(rule)}
                           disabled={saving}
-                          aria-label={`Hapus ${rule.name}`}
+                          aria-label={`Delete ${rule.name}`}
                         >
                           <Trash2 />
                         </Button>

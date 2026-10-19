@@ -7,7 +7,7 @@ export function packCandidateBatches(
   maxBytes = 240000,
 ): ScreenerFeatureResult[] {
   if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > 1000)
-    throw Error("Batas kandidat private scoring tidak valid.");
+    throw Error("Invalid scoring candidate limit.");
   const batches: ScreenerFeatureResult[] = [];
   let batch: ScreenerFeatureResult | null = null;
   const size = (candidates: ScreenerFeatureResult["candidates"]) =>
@@ -20,10 +20,10 @@ export function packCandidateBatches(
       !Array.isArray(group.candidates) ||
       !group.candidates.length
     )
-      throw Error("WASM tidak menghasilkan kandidat yang valid.");
+      throw Error("WASM did not produce valid candidates.");
     if (group.candidates.length > maximum || size(group.candidates) > maxBytes)
       throw Error(
-        "Satu seri saham melewati batas private scoring. Data tidak dipotong agar keputusan cooldown tetap benar.",
+        "One stock series exceeds the scoring limit. Its history cannot be split without affecting cooldown decisions.",
       );
     if (
       batch &&

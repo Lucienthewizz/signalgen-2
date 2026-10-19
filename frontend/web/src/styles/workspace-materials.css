@@ -1,0 +1,93 @@
+/* Landing-inspired surface roles, shared across workspace routes.
+   Keep controls, selection, semantic feedback and embedded charts independent. */
+.demo-workbench,
+.auth-layout {
+  --workspace-page-gradient:
+    radial-gradient(
+      ellipse 100% 680px at 50% 160px,
+      color-mix(in srgb, var(--green-deep) 12%, transparent),
+      transparent 78%
+    ),
+    linear-gradient(
+      180deg,
+      var(--canvas),
+      color-mix(in srgb, var(--green-deep) 5%, var(--canvas)) 55%,
+      var(--canvas)
+    );
+  --workspace-card-gradient:
+    radial-gradient(
+      ellipse 110% 100% at 50% 100%,
+      color-mix(in srgb, var(--green-deep) 9%, transparent),
+      transparent 76%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-3) 65%, var(--surface)),
+      var(--surface) 48%,
+      var(--surface)
+    );
+}
+
+.demo-workbench .workspace,
+.auth-layout {
+  background-color: var(--canvas);
+  background-image: var(--workspace-page-gradient);
+}
+
+/* This role owns panel backgrounds after legacy/light-theme rules. Explicit
+   opt-ins avoid painting table rows, buttons, alerts, or chart canvases. */
+.demo-workbench
+  .workspace
+  .workspace__content
+  :is(
+    .panel,
+    [data-slot="card"],
+    .overview-launch,
+    .overview-counts,
+    .overview-activity,
+    .screener-console,
+    .screener-results,
+    .screener-technical,
+    .screener-history,
+    .rule-composer,
+    .rule-library,
+    .universe-editor,
+    .monitor-chart,
+    .monitor-ledger,
+    .monitor-history,
+    .news-video,
+    .news-feed,
+    .journal-toolbar,
+    .journal-performance,
+    .journal-ledger,
+    .journal-detail,
+    .journal-capture,
+    .subscription-current,
+    .subscription-usage,
+    .plan-ledger,
+    .operator-target,
+    .operator-tab-panel,
+    .admin-account,
+    .admin-console,
+    .admin-review,
+    .workspace-empty-state
+  ) {
+  background-color: var(--surface);
+  background-image: var(--workspace-card-gradient);
+}
+
+.auth-layout .auth-panel {
+  background: transparent;
+}
+.auth-layout .auth-card {
+  background-color: var(--surface);
+  background-image: var(--workspace-card-gradient);
+}
+
+@media (forced-colors: active) {
+  .demo-workbench,
+  .auth-layout {
+    --workspace-page-gradient: none;
+    --workspace-card-gradient: none;
+  }
+}

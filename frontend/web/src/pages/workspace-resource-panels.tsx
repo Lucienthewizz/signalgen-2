@@ -94,7 +94,7 @@ type ConnectionProps = {
 
 function readableError(error: unknown, fallback: string) {
   if (error instanceof ApiError && error.code === "VERSION_CONFLICT")
-    return "Data berubah di sesi lain. Muat ulang lalu coba kembali.";
+    return "This data changed in another session. Reload and try again.";
   return error instanceof Error ? error.message : fallback;
 }
 
@@ -102,7 +102,7 @@ function formatDate(value?: string) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) return "—";
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -140,8 +140,10 @@ export function StockUniversesPanel({
       ]);
       setCatalog(stocks.items);
       setUniverses(groups.items);
-    } catch (caught) {
-      setError(readableError(caught, "Stock universe belum dapat dimuat."));
+    } catch {
+      setError(
+        "Stock universes could not be loaded. Check your connection and try Refresh.",
+      );
     } finally {
       setLoading(false);
     }
@@ -166,6 +168,7 @@ export function StockUniversesPanel({
     setSymbols([...universe.symbols]);
     setError(null);
     setNotice(null);
+    document.getElementById("universe-name")?.focus();
   }
 
   function toggleSymbol(symbol: StockInstrument["symbol"]) {
@@ -182,7 +185,7 @@ export function StockUniversesPanel({
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!name.trim() || symbols.length === 0) {
-      setError("Isi nama dan pilih setidaknya satu saham.");
+      setError("Enter a name and select at least one stock.");
       return;
     }
     setSaving(true);
@@ -196,33 +199,37 @@ export function StockUniversesPanel({
           name.trim(),
           symbols,
         );
-        setNotice("Perubahan universe tersimpan.");
+        setNotice("Stock universe updated.");
       } else {
         await api.createStockUniverse(name.trim(), symbols);
-        setNotice("Stock universe dibuat dan siap dipakai di screener.");
+        setNotice("Stock universe created and ready for screening.");
       }
       setEditing(null);
       setName("");
       setSymbols([]);
       await load();
     } catch (caught) {
-      setError(readableError(caught, "Stock universe belum tersimpan."));
+      setError(
+        caught instanceof ApiError && caught.code === "VERSION_CONFLICT"
+          ? "This universe changed in another session. Refresh and try again."
+          : "Stock universe could not be saved. Please try again.",
+      );
     } finally {
       setSaving(false);
     }
   }
 
   async function remove(universe: StockUniverse) {
-    if (!window.confirm(`Hapus “${universe.name}”?`)) return;
+    if (!window.confirm(`Delete “${universe.name}”?`)) return;
     setError(null);
     setNotice(null);
     try {
       await api.deleteStockUniverse(universe.id, universe.version);
       if (editing?.id === universe.id) resetEditor();
       await load();
-      setNotice("Stock universe dihapus.");
-    } catch (caught) {
-      setError(readableError(caught, "Stock universe belum dapat dihapus."));
+      setNotice("Stock universe deleted.");
+    } catch {
+      setError("Stock universe could not be deleted. Refresh and try again.");
     }
   }
 
@@ -233,17 +240,17 @@ export function StockUniversesPanel({
           <EmptyMedia variant="icon">
             <KeyRound />
           </EmptyMedia>
-          <EmptyTitle>Hubungkan akun untuk mengatur universe</EmptyTitle>
+          <EmptyTitle>Connect your account to manage universes</EmptyTitle>
           <EmptyDescription>
             {!backendOnline
-              ? "Go API belum terhubung. Jalankan backend lalu muat ulang halaman."
-              : "Masuk agar universe tersimpan sebagai resource milik akun Anda."}
+              ? "The service is unavailable. Check your connection and reload."
+              : "Sign in to create and manage your stock universes."}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
           {backendOnline && (
             <Button nativeButton={false} render={<a href="#login" />}>
-              Masuk
+              Sign in
             </Button>
           )}
         </EmptyContent>
@@ -252,153 +259,132 @@ export function StockUniversesPanel({
   }
 
   return (
-    <div className="resource-layout">
+    <div className="universe-workspace">
       <section
-        className="resource-editor"
+        className="universe-editor"
         aria-labelledby="universe-editor-title"
       >
-        <header className="resource-editor__header">
-          <div className="resource-title-lockup">
-            <span aria-hidden="true">
-              <Boxes />
-            </span>
+        <div className="universe-window-bar">
+          <span className="news-window-dots" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span>Stock universe</span>
+          <span>IDX</span>
+        </div>
+        <div className="universe-window-body">
+          <header className="universe-section-heading">
             <div>
               <h3 id="universe-editor-title">
-                {editing ? "Edit stock universe" : "Buat stock universe"}
+                {editing ? "Edit stock universe" : "Build a stock universe"}
               </h3>
               <p>
-                Pilih 1–10 saham Indonesia atau Amerika Serikat. Satu universe
-                memakai satu pasar dan mata uang.
+                Select up to {universeSelectionLimit} IDX stocks for your next
+                screening.
               </p>
-              <ResourceQuota
-                kind="stock_universes"
-                revision={universes.length}
-              />
             </div>
-          </div>
-          {editing && (
-            <Button variant="ghost" onClick={resetEditor}>
-              <X data-icon="inline-start" /> Batal edit
-            </Button>
-          )}
-        </header>
-        <form onSubmit={save} className="resource-form">
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="universe-market">Pasar saham</FieldLabel>
-              <Select
-                value={market}
-                disabled={saving || loading}
-                items={Object.entries(marketLabels).map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-                onValueChange={(value) => {
-                  if ((value !== "IDX" && value !== "US") || value === market)
-                    return;
-                  setMarket(value);
-                  setSymbols([]);
-                  setNotice(
-                    "Pasar diganti. Pilih kembali saham untuk universe ini.",
-                  );
-                }}
-              >
-                <SelectTrigger id="universe-market">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="IDX">{marketLabels.IDX}</SelectItem>
-                    <SelectItem value="US">{marketLabels.US}</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <FieldDescription>
-                {market === "US"
-                  ? "Katalog saham Nasdaq/NYSE dari direktori resmi; ETF, waran dan instrumen non-saham tidak disertakan."
-                  : "Katalog saham Indonesia dari daftar IDX."}{" "}
-                Maksimal 10 saham per screening. Tidak ada konversi kurs.
-              </FieldDescription>
-            </Field>
-            <Field data-invalid={Boolean(error && !name.trim())}>
-              <FieldLabel htmlFor="universe-name">Nama universe</FieldLabel>
-              <Input
-                id="universe-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Contoh: Bank pilihan"
-                maxLength={100}
-                aria-invalid={Boolean(error && !name.trim())}
-              />
-              <FieldDescription>
-                Gunakan nama yang mudah dikenali saat memilih universe di
-                screener.
-              </FieldDescription>
-            </Field>
-            <FieldSet>
-              <FieldLegend>Anggota universe</FieldLegend>
-              <FieldDescription>
-                Cari saham dari katalog{" "}
-                {market === "IDX" ? "IDX" : "Amerika Serikat"}. Maksimal{" "}
-                {universeSelectionLimit} saham per universe; ketersediaan OHLCV
-                diperiksa ketika screening dijalankan.
-              </FieldDescription>
-              <StockCatalogPicker
-                key={market}
-                catalog={marketCatalog}
-                selected={symbols}
-                loading={loading}
-                disabled={saving}
-                onToggle={toggleSymbol}
-              />
-            </FieldSet>
-            {error && <FieldError>{error}</FieldError>}
-          </FieldGroup>
-          <div className="resource-form__actions">
-            <span>
-              {symbols.length}/{universeSelectionLimit} saham dipilih
-            </span>
-            <Button type="submit" size="lg" disabled={saving}>
-              {saving ? (
-                <LoaderCircle
-                  data-icon="inline-start"
-                  className="is-spinning"
-                />
-              ) : editing ? (
-                <Pencil data-icon="inline-start" />
-              ) : (
-                <Plus data-icon="inline-start" />
-              )}
-              {editing ? "Simpan perubahan" : "Create universe"}
-            </Button>
-          </div>
-        </form>
+            <ResourceQuota kind="stock_universes" revision={universes.length} />
+          </header>
+          <form onSubmit={save} className="universe-form">
+            <StockCatalogPicker
+              key={editing?.id ?? "new"}
+              catalog={catalog}
+              selected={symbols}
+              loading={loading}
+              disabled={saving}
+              onToggle={toggleSymbol}
+            >
+              <div className="universe-form__save">
+                <FieldGroup>
+                  <Field
+                    data-invalid={Boolean(error && !name.trim())}
+                    data-disabled={saving}
+                  >
+                    <FieldLabel htmlFor="universe-name">
+                      Universe name
+                    </FieldLabel>
+                    <Input
+                      id="universe-name"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      placeholder="e.g. Banking watchlist"
+                      maxLength={100}
+                      disabled={saving}
+                      aria-invalid={Boolean(error && !name.trim())}
+                    />
+                  </Field>
+                </FieldGroup>
+                <div className="universe-form__actions">
+                  {editing && (
+                    <Button
+                      variant="outline"
+                      disabled={saving}
+                      onClick={resetEditor}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                  <Button
+                    type="submit"
+                    disabled={
+                      loading || saving || !name.trim() || symbols.length === 0
+                    }
+                  >
+                    {saving ? (
+                      <LoaderCircle
+                        data-icon="inline-start"
+                        className="is-spinning"
+                      />
+                    ) : editing ? (
+                      <Pencil data-icon="inline-start" />
+                    ) : (
+                      <Plus data-icon="inline-start" />
+                    )}
+                    {saving
+                      ? "Saving…"
+                      : editing
+                        ? "Save changes"
+                        : "Create universe"}
+                  </Button>
+                </div>
+              </div>
+              {error && <FieldError>{error}</FieldError>}
+            </StockCatalogPicker>
+          </form>
+        </div>
       </section>
 
       <section
-        className="resource-library"
+        className="universe-library"
         aria-labelledby="universe-library-title"
       >
-        <header className="resource-library__header">
+        <header className="universe-section-heading">
           <div>
             <h3 id="universe-library-title">Your stock universes</h3>
-            <p>Universe ini tersedia sebagai input pada market screener.</p>
+            <p>
+              {universes.length} saved{" "}
+              {universes.length === 1 ? "universe" : "universes"}
+            </p>
           </div>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => void load()}
-            disabled={loading}
+            disabled={loading || saving}
           >
             <RefreshCw
               data-icon="inline-start"
               className={loading ? "is-spinning" : ""}
             />
-            Muat ulang
+            Refresh
           </Button>
         </header>
         {loading && universes.length === 0 ? (
-          <div className="resource-loading" aria-label="Memuat stock universe">
+          <div
+            className="resource-loading"
+            aria-label="Loading stock universes"
+          >
             <Skeleton />
             <Skeleton />
             <Skeleton />
@@ -409,52 +395,52 @@ export function StockUniversesPanel({
               <EmptyMedia variant="icon">
                 <Layers3 />
               </EmptyMedia>
-              <EmptyTitle>Belum ada stock universe</EmptyTitle>
+              <EmptyTitle>No stock universes yet</EmptyTitle>
               <EmptyDescription>
-                Pilih saham di sebelah kiri untuk membuat universe pertama.
+                Select stocks above and give your first universe a name.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
-          <div className="resource-rows">
+          <div className="universe-library__rows">
             {universes.map((universe) => (
               <article
                 key={universe.id}
-                className={editing?.id === universe.id ? "is-active" : ""}
+                data-editing={editing?.id === universe.id || undefined}
               >
-                <div className="resource-row__identity">
-                  <span aria-hidden="true">
-                    <Database />
-                  </span>
+                <div className="universe-library__identity">
                   <div>
                     <strong>{universe.name}</strong>
                     <small>
-                      Diperbarui {formatDate(universe.updated_at)} · v
-                      {universe.version}
+                      {universe.symbols.length} stocks · Updated{" "}
+                      {formatDate(universe.updated_at)}
                     </small>
                   </div>
                 </div>
-                <div className="resource-row__symbols">
+                <div className="universe-library__symbols">
                   {universe.symbols.map((symbol) => (
                     <Badge key={symbol} variant="outline">
                       {symbol.replace(".JK", "")}
                     </Badge>
                   ))}
                 </div>
-                <div className="resource-row__actions">
+                <div className="universe-library__actions">
                   <Button
                     variant="ghost"
-                    size="icon"
+                    size="sm"
                     onClick={() => edit(universe)}
+                    disabled={saving || loading}
                     aria-label={`Edit ${universe.name}`}
                   >
-                    <Pencil />
+                    <Pencil data-icon="inline-start" />
+                    Edit
                   </Button>
                   <Button
                     variant="destructive"
                     size="icon"
                     onClick={() => void remove(universe)}
-                    aria-label={`Hapus ${universe.name}`}
+                    disabled={saving || loading}
+                    aria-label={`Delete ${universe.name}`}
                   >
                     <Trash2 />
                   </Button>
@@ -497,7 +483,7 @@ export function SubscriptionPanel({
         .catch((caught) => {
           if (current())
             setError(
-              readableError(caught, "Pilihan paket belum dapat dimuat."),
+              readableError(caught, "Plan options could not be loaded."),
             );
         });
       if (authenticated && backendOnline) {
@@ -511,7 +497,7 @@ export function SubscriptionPanel({
               setAccountError(
                 readableError(
                   caught,
-                  "Status paket belum dapat dimuat. Coba lagi untuk memeriksa akses Anda.",
+                  "Plan status could not be loaded. Try again to check your access.",
                 ),
               );
           });
@@ -519,13 +505,13 @@ export function SubscriptionPanel({
         setSubscription(null);
         if (authenticated)
           setAccountError(
-            "Server belum terhubung. Status paket Anda belum dapat diperiksa.",
+            "The server is unavailable. Your plan status could not be checked.",
           );
       }
       await plansRequest;
     } catch (caught) {
       if (current())
-        setError(readableError(caught, "Paket belum dapat dimuat."));
+        setError(readableError(caught, "Plans could not be loaded."));
     } finally {
       if (current()) setLoading(false);
     }
@@ -543,8 +529,8 @@ export function SubscriptionPanel({
   async function cancel(atPeriodEnd: boolean) {
     if (!subscription) return;
     const question = atPeriodEnd
-      ? "Jadwalkan pembatalan pada akhir periode?"
-      : "Batalkan subscription sekarang? Akses dapat berhenti segera.";
+      ? "Schedule cancellation at the end of this period?"
+      : "Cancel your subscription now? Access may end immediately.";
     if (!window.confirm(question)) return;
     setSaving(true);
     setError(null);
@@ -558,22 +544,22 @@ export function SubscriptionPanel({
       setSubscription(response.subscription);
       toast.add({
         type: "success",
-        title: "Paket diperbarui",
+        title: "Plan updated",
         description: atPeriodEnd
-          ? "Pembatalan dijadwalkan pada akhir periode."
-          : "Subscription dibatalkan.",
+          ? "Cancellation scheduled for the end of this period."
+          : "Subscription cancelled.",
         timeout: 5000,
       });
       dispatchEvent(new Event("signalgen:subscription"));
     } catch (caught) {
       const message = readableError(
         caught,
-        "Subscription belum dapat dibatalkan.",
+        "Subscription could not be cancelled.",
       );
       setError(message);
       toast.add({
         type: "error",
-        title: "Pembatalan belum berhasil",
+        title: "Cancellation failed",
         description: message,
         priority: "high",
         timeout: 8000,
@@ -587,7 +573,7 @@ export function SubscriptionPanel({
     <div className="subscription-workspace subscription-workspace--simple">
       <section className="subscription-current">
         <header className="resource-editor__header">
-          <h3>Paket Anda</h3>
+          <h3>Your plan</h3>
         </header>
         {loading ? (
           <div className="resource-loading">
@@ -597,11 +583,11 @@ export function SubscriptionPanel({
         ) : accountError ? (
           <Alert variant="destructive">
             <CircleAlert />
-            <AlertTitle>Status paket belum tersedia</AlertTitle>
+            <AlertTitle>Plan status unavailable</AlertTitle>
             <AlertDescription>{accountError}</AlertDescription>
             <Button variant="outline" onClick={() => void load()}>
               <RefreshCw data-icon="inline-start" />
-              Coba lagi
+              Try again
             </Button>
           </Alert>
         ) : subscription ? (
@@ -612,38 +598,38 @@ export function SubscriptionPanel({
                 <h4>{subscription.plan_name}</h4>
                 <Badge variant={access?.usable ? "secondary" : "outline"}>
                   {access?.usable
-                    ? "Aktif"
+                    ? "Active"
                     : access?.label === "Expired"
-                      ? "Berakhir"
+                      ? "Expired"
                       : access?.label === "Canceled"
-                        ? "Dibatalkan"
+                        ? "Cancelled"
                         : access?.label}
                 </Badge>
               </div>
               <p className="subscription-expiry">
-                {access?.usable ? "Aktif sampai" : "Akhir periode"}
+                {access?.usable ? "Active until" : "Period ends"}
                 <strong>{formatDate(subscription.current_period_end)}</strong>
                 {subscription.cancel_at_period_end && (
-                  <small>Berhenti di akhir periode</small>
+                  <small>Ends after this period</small>
                 )}
               </p>
             </div>
             <div
               className="subscription-feature-grid"
-              aria-label="Akses dari paket Anda"
+              aria-label="Your plan access"
             >
               {[
                 {
                   code: "screener",
                   name: "Market screener",
-                  description: "Cari saham yang sesuai dengan rule Anda.",
+                  description: "Find stocks that match your rule.",
                   icon: SearchCheck,
                 },
                 {
                   code: "backtest",
-                  name: "Akses backtest",
+                  name: "Backtest access",
                   description:
-                    "Izin termasuk dalam paket. Halaman backtest belum tersedia.",
+                    "Included in your plan. The backtest page is not available yet.",
                   icon: History,
                 },
               ].map(({ code, name, description, icon: Icon }) => {
@@ -667,9 +653,9 @@ export function SubscriptionPanel({
                         <Badge variant={included ? "secondary" : "outline"}>
                           {included
                             ? code === "backtest"
-                              ? "Belum tersedia"
-                              : "Aktif"
-                            : "Tidak termasuk"}
+                              ? "Not available yet"
+                              : "Active"
+                            : "Not included"}
                         </Badge>
                       </CardAction>
                     </CardHeader>
@@ -684,7 +670,7 @@ export function SubscriptionPanel({
               className="subscription-usage"
               aria-labelledby="subscription-usage-title"
             >
-              <h4 id="subscription-usage-title">Penggunaan kuota</h4>
+              <h4 id="subscription-usage-title">Quota usage</h4>
               <ResourceQuota
                 revision={
                   subscription.updated_at
@@ -696,20 +682,22 @@ export function SubscriptionPanel({
             <details className="subscription-manage subscription-manage--account">
               <summary>
                 <span>
-                  <strong>Kelola paket</strong>
-                  <small>Lihat periode aktif dan opsi pembatalan</small>
+                  <strong>Manage plan</strong>
+                  <small>
+                    View your active period and cancellation options
+                  </small>
                 </span>
                 <ChevronDown aria-hidden="true" />
               </summary>
               <p>
-                Mulai {formatDate(subscription.current_period_start)} ·{" "}
+                Started {formatDate(subscription.current_period_start)} ·{" "}
                 {subscription.source === "manual"
-                  ? "Diaktifkan oleh operator. Tidak ada pembayaran otomatis."
-                  : "Pembayaran dikelola oleh penyedia layanan."}
+                  ? "Activated by an operator. No automatic payments."
+                  : "Payments are managed by the provider."}
               </p>
               <p>
-                Akses di atas berasal dari paket Anda. Izin tambahan dari
-                operator tetap berlaku sesuai pengaturannya.
+                The access above comes from your plan. Additional operator
+                grants remain subject to their own settings.
               </p>
               {!subscription.cancel_at_period_end &&
                 access?.usable &&
@@ -720,15 +708,15 @@ export function SubscriptionPanel({
                       disabled={saving}
                       onClick={() => void cancel(true)}
                     >
-                      <CalendarClock data-icon="inline-start" /> Batalkan di
-                      akhir periode
+                      <CalendarClock data-icon="inline-start" /> Cancel at
+                      period end
                     </Button>
                     <Button
                       variant="destructive"
                       disabled={saving}
                       onClick={() => void cancel(false)}
                     >
-                      <X data-icon="inline-start" /> Batalkan sekarang
+                      <X data-icon="inline-start" /> Cancel now
                     </Button>
                   </div>
                 )}
@@ -741,14 +729,12 @@ export function SubscriptionPanel({
                 <KeyRound />
               </EmptyMedia>
               <EmptyTitle>
-                {authenticated
-                  ? "Belum ada paket aktif"
-                  : "Masuk untuk melihat paket akun"}
+                {authenticated ? "No active plan" : "Sign in to view your plan"}
               </EmptyTitle>
               <EmptyDescription>
                 {authenticated
-                  ? "Bandingkan kapasitas di bawah. Aktivasi paket dilakukan melalui operator."
-                  : "Bandingkan paket di bawah, atau masuk untuk memeriksa akses Anda."}
+                  ? "Compare capacity below. Plans are activated by an operator."
+                  : "Compare plans below or sign in to check your access."}
               </EmptyDescription>
             </EmptyHeader>
             {!authenticated && (
@@ -758,7 +744,7 @@ export function SubscriptionPanel({
                     window.location.hash = "login";
                   }}
                 >
-                  <KeyRound data-icon="inline-start" /> Masuk
+                  <KeyRound data-icon="inline-start" /> Sign in
                 </Button>
               </EmptyContent>
             )}
@@ -769,8 +755,8 @@ export function SubscriptionPanel({
       <section className="plan-ledger" aria-labelledby="plan-heading">
         <header>
           <div>
-            <h3 id="plan-heading">Pilihan paket</h3>
-            <p>Pilih kapasitas yang sesuai dengan kebutuhan analisis Anda.</p>
+            <h3 id="plan-heading">Available plans</h3>
+            <p>Choose the capacity that fits your analysis.</p>
           </div>
         </header>
         <div className="plan-columns">
@@ -806,15 +792,15 @@ export function SubscriptionPanel({
                   </CardTitle>
                   <CardDescription>
                     {plan.code === "free"
-                      ? "Coba demo Signalgen."
+                      ? "Explore the Signalgen demo."
                       : plan.code === "pro"
-                        ? "Lebih banyak ruang untuk strategi dan kelompok saham."
-                        : "Untuk analisis pribadi yang terstruktur."}
+                        ? "More room for strategies and stock groups."
+                        : "For structured personal analysis."}
                   </CardDescription>
                   <CardAction>
                     {access?.usable &&
                       subscription?.plan_code === plan.code && (
-                        <Badge>Paket Anda</Badge>
+                        <Badge>Your plan</Badge>
                       )}
                   </CardAction>
                 </CardHeader>
@@ -822,11 +808,11 @@ export function SubscriptionPanel({
                   {plan.limits && (
                     <dl className="plan-capacity">
                       <div>
-                        <dt>Rule pribadi</dt>
+                        <dt>Private rules</dt>
                         <dd>
                           <strong>
                             {plan.limits.custom_rules}
-                            <span className="sr-only"> rule pribadi</span>
+                            <span className="sr-only"> private rules</span>
                           </strong>
                         </dd>
                       </div>
@@ -853,7 +839,7 @@ export function SubscriptionPanel({
                       Market screener
                       {!plan.features.includes("screener") && (
                         <span className="plan-feature-status">
-                          Tidak termasuk
+                          Not included
                         </span>
                       )}
                     </li>
@@ -867,10 +853,10 @@ export function SubscriptionPanel({
                       ) : (
                         <X aria-hidden="true" />
                       )}{" "}
-                      Akses backtest
+                      Backtest access
                       {!plan.features.includes("backtest") && (
                         <span className="plan-feature-status">
-                          Tidak termasuk
+                          Not included
                         </span>
                       )}
                     </li>
@@ -879,8 +865,8 @@ export function SubscriptionPanel({
                 <CardFooter>
                   <span>
                     {plan.code === "free"
-                      ? "Akses demo"
-                      : "Aktivasi melalui operator"}
+                      ? "Demo access"
+                      : "Activation by operator"}
                   </span>
                 </CardFooter>
               </Card>
@@ -889,13 +875,12 @@ export function SubscriptionPanel({
         <Accordion className="subscription-faq">
           <AccordionItem value="plan-change">
             <AccordionTrigger>
-              Apa yang terjadi jika paket berubah?
+              What happens when my plan changes?
             </AccordionTrigger>
             <AccordionContent>
               <p>
-                Data yang tersimpan tidak dihapus. Jika penggunaan melebihi
-                kuota paket baru, kurangi jumlah rule atau universe sebelum
-                membuat yang baru.
+                Saved data is not deleted. If your usage exceeds your new plan's
+                quota, reduce your rules or universes before creating new ones.
               </p>
             </AccordionContent>
           </AccordionItem>
@@ -903,7 +888,7 @@ export function SubscriptionPanel({
         {error && (
           <Alert variant="destructive">
             <CircleAlert />
-            <AlertTitle>Pilihan paket belum tersedia</AlertTitle>
+            <AlertTitle>Plans unavailable</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
             <Button
               variant="outline"
@@ -911,7 +896,7 @@ export function SubscriptionPanel({
               disabled={loading}
               onClick={() => void load()}
             >
-              <RefreshCw data-icon="inline-start" /> Coba lagi
+              <RefreshCw data-icon="inline-start" /> Try again
             </Button>
           </Alert>
         )}
@@ -943,7 +928,7 @@ export function OperatorPanel({
 
   async function execute(action: () => Promise<unknown>, success: string) {
     if (!targetUserId.trim() || !reason.trim()) {
-      setError("Isi user ID dan alasan audit terlebih dahulu.");
+      setError("Enter a User ID and an audit reason first.");
       return;
     }
     setBusy(true);
@@ -955,7 +940,7 @@ export function OperatorPanel({
       const response = await api.listFeatureGrants(targetUserId.trim());
       setGrants(response.items);
     } catch (caught) {
-      setError(readableError(caught, "Perubahan operator belum tersimpan."));
+      setError(readableError(caught, "Operator changes could not be saved."));
     } finally {
       setBusy(false);
     }
@@ -963,7 +948,7 @@ export function OperatorPanel({
 
   async function inspectGrants() {
     if (!targetUserId.trim()) {
-      setError("Masukkan user ID yang ingin diperiksa.");
+      setError("Enter the User ID to inspect.");
       return;
     }
     setBusy(true);
@@ -971,9 +956,9 @@ export function OperatorPanel({
     try {
       const response = await api.listFeatureGrants(targetUserId.trim());
       setGrants(response.items);
-      setMessage(`Menampilkan ${response.items.length} grant.`);
+      setMessage(`Showing ${response.items.length} grants.`);
     } catch (caught) {
-      setError(readableError(caught, "Grant belum dapat dibaca."));
+      setError(readableError(caught, "Grants could not be loaded."));
     } finally {
       setBusy(false);
     }
@@ -986,9 +971,9 @@ export function OperatorPanel({
           <EmptyMedia variant="icon">
             <ShieldCheck />
           </EmptyMedia>
-          <EmptyTitle>Operator session diperlukan</EmptyTitle>
+          <EmptyTitle>Operator session required</EmptyTitle>
           <EmptyDescription>
-            Masuk menggunakan akun operator pada Go API untuk mengelola akses.
+            Sign in with an operator account to manage access.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -1004,9 +989,7 @@ export function OperatorPanel({
           </span>
           <div>
             <h3>Target account</h3>
-            <p>
-              Backend belum memiliki pencarian email; gunakan user ID Supabase.
-            </p>
+            <p>Email search is not available. Use the Supabase User ID.</p>
           </div>
         </div>
         <FieldGroup>
@@ -1016,16 +999,16 @@ export function OperatorPanel({
               id="operator-user-id"
               value={targetUserId}
               onChange={(event) => setTargetUserId(event.target.value)}
-              placeholder="UUID akun"
+              placeholder="Account UUID"
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="operator-reason">Alasan audit</FieldLabel>
+            <FieldLabel htmlFor="operator-reason">Audit reason</FieldLabel>
             <Textarea
               id="operator-reason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              placeholder="Mengapa akses ini diubah?"
+              placeholder="Why is this access changing?"
               rows={2}
             />
           </Field>
@@ -1081,7 +1064,7 @@ export function OperatorPanel({
                       isoDate,
                       reason.trim(),
                     ),
-                  `${feature} access diberikan.`,
+                  `${feature} access granted.`,
                 )
               }
             >
@@ -1098,7 +1081,7 @@ export function OperatorPanel({
                       feature,
                       reason.trim(),
                     ),
-                  `${feature} access dicabut.`,
+                  `${feature} access revoked.`,
                 )
               }
             >
@@ -1123,7 +1106,7 @@ export function OperatorPanel({
                   <Badge variant="outline">
                     {grant.active ? "Active" : "Inactive"}
                   </Badge>
-                  <span>hingga {formatDate(grant.valid_until)}</span>
+                  <span>until {formatDate(grant.valid_until)}</span>
                 </div>
               </article>
             ))}
@@ -1173,7 +1156,7 @@ export function OperatorPanel({
                       isoDate,
                       reason.trim(),
                     ),
-                  `${planCode} subscription diaktifkan.`,
+                  `${planCode} subscription activated.`,
                 )
               }
             >
@@ -1212,7 +1195,7 @@ export function OperatorPanel({
                       role,
                       reason.trim(),
                     ),
-                  `Role diubah menjadi ${role}.`,
+                  `Role changed to ${role}.`,
                 )
               }
             >
@@ -1225,7 +1208,7 @@ export function OperatorPanel({
         <Alert variant={error ? "destructive" : "default"}>
           {error ? <CircleAlert /> : <BadgeCheck />}
           <AlertTitle>
-            {error ? "Perubahan belum tersimpan" : "Operator action complete"}
+            {error ? "Changes not saved" : "Operator action complete"}
           </AlertTitle>
           <AlertDescription>{error ?? message}</AlertDescription>
         </Alert>

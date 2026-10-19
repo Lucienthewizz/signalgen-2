@@ -59,7 +59,7 @@ test("news normalizes metadata, rejects unsafe links and removes duplicates", ()
   assert.equal(items[0].indexedAt, "2026-10-07T12:00:00Z");
   assert.throws(
     () => n.parseMarketNews({ error: "provider failure" }),
-    /Format/,
+    /news response is invalid/,
   );
 });
 test("news caches successful responses and sends no account credentials", async () => {
@@ -82,11 +82,11 @@ test("news rate-limit cooldown prevents immediate repeated provider requests", a
   });
   await assert.rejects(
     n.fetchMarketNews(new AbortController().signal),
-    /satu menit/,
+    /in a minute/,
   );
   await assert.rejects(
     n.fetchMarketNews(new AbortController().signal),
-    /satu menit/,
+    /in a minute/,
   );
   assert.equal(count, 1);
 });
@@ -98,11 +98,11 @@ test("network failures are readable and do not repeatedly call the provider", as
   });
   await assert.rejects(
     n.fetchMarketNews(new AbortController().signal),
-    /Koneksi ke sumber/,
+    /Could not connect to the news service/,
   );
   await assert.rejects(
     n.fetchMarketNews(new AbortController().signal),
-    /satu menit/,
+    /in a minute/,
   );
   assert.equal(count, 1);
 });
@@ -123,7 +123,7 @@ test("a forced refresh preserves cached real headlines on network failure", asyn
   await n.fetchMarketNews(new AbortController().signal);
   const stale = await n.fetchMarketNews(new AbortController().signal, true);
   assert.equal(stale.items[0].title, "IHSG");
-  assert.match(stale.warning, /Daftar terakhir/);
+  assert.match(stale.warning, /Showing the previous articles/);
   await n.fetchMarketNews(new AbortController().signal, true);
   assert.equal(count, 2);
 });
@@ -161,7 +161,7 @@ test("cache expires after one day and server stale metadata is explicit", async 
     Clock,
   );
   const result = await n.fetchMarketNews(new AbortController().signal);
-  assert.match(result.warning, /Daftar terakhir/);
+  assert.match(result.warning, /Showing the previous articles/);
   assert.equal(n.getCachedMarketNews().items.length, 1);
   now += 86_400_001;
   assert.equal(n.getCachedMarketNews(), null);

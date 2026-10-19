@@ -1,0 +1,45 @@
+/* StocksUniverse's UI font roles, scoped away from the landing page.
+   Fonts are self-hosted; embedded third-party charts keep their own typography. */
+html[data-typography="workspace"] {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --font-navigation: "Saira Condensed", var(--font-sans);
+  font-family: var(--font-sans);
+}
+
+html[data-typography="workspace"] :is(button, input, select, textarea) {
+  font-family: inherit;
+}
+
+html[data-typography="workspace"]
+  :is(
+    .nav-group > span,
+    .nav-group a,
+    .nav-group button,
+    .account-sidebar__item,
+    [data-slot="table-head"]
+  ) {
+  font-family: var(--font-navigation);
+  font-weight: 500;
+}
+
+html[data-typography="workspace"] [data-slot="table-head"] {
+  font-weight: 700;
+}
+
+html[data-typography="workspace"]
+  :is(
+    .monitor-price,
+    .monitor-change,
+    [data-label="RSI 14"],
+    [data-label="EMA 20"],
+    .stock-detail__values dd,
+    .identity-table dd,
+    .overview-signal-list em,
+    .journal-performance__summary strong,
+    code,
+    pre
+  ) {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

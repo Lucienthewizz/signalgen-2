@@ -31,7 +31,7 @@ import {
   type MarketArticle,
 } from "@/lib/market-news";
 
-const newsDateFormat = new Intl.DateTimeFormat("id-ID", {
+const newsDateFormat = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
   timeStyle: "short",
 });
@@ -91,10 +91,10 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
         if (active)
           setError(
             controller.signal.aborted
-              ? "Sumber berita terlalu lama merespons. Coba lagi nanti."
+              ? "The news source took too long to respond. Try again later."
               : caught instanceof Error
                 ? caught.message
-                : "Berita belum dapat dimuat.",
+                : "News could not be loaded.",
           );
       })
       .finally(() => {
@@ -146,7 +146,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
               target="_blank"
               rel="noreferrer"
             >
-              Tonton pilihan ini di YouTube
+              Watch on YouTube
               <ExternalLink aria-hidden="true" />
             </a>
           </div>
@@ -161,7 +161,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
           <WindowDots />
           <h3 id="market-news-title">
             <Newspaper aria-hidden="true" />
-            Berita saham
+            Stock market news
           </h3>
           <Button
             variant="outline"
@@ -169,35 +169,35 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
             onClick={() => setRevision((r) => r + 1)}
           >
             <RefreshCw data-icon="inline-start" />
-            {loading ? "Memuat" : error ? "Coba lagi" : "Perbarui"}
+            {loading ? "Loading" : error ? "Try again" : "Refresh"}
           </Button>
         </header>
         <div className="news-filters">
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="news-search">Cari berita</FieldLabel>
+              <FieldLabel htmlFor="news-search">Search news</FieldLabel>
               <Input
                 id="news-search"
                 type="search"
-                placeholder="Cari judul atau nama perusahaan"
+                placeholder="Search headlines or company names"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="news-stock">Saham watchlist</FieldLabel>
+              <FieldLabel htmlFor="news-stock">Watchlist stock</FieldLabel>
               <Select
                 value={ticker}
                 onValueChange={(value) => setTicker(value ?? "all")}
               >
                 <SelectTrigger id="news-stock">
                   <SelectValue>
-                    {ticker === "all" ? "Semua saham" : ticker}
+                    {ticker === "all" ? "All stocks" : ticker}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="all">Semua saham</SelectItem>
+                    <SelectItem value="all">All stocks</SelectItem>
                     {watchlist.map((symbol) => (
                       <SelectItem key={symbol} value={symbol}>
                         {symbol}
@@ -209,23 +209,19 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
             </Field>
           </FieldGroup>
           <p role="status">
-            {visibleArticles.length} berita
-            {ticker !== "all" ? ` terkait ${ticker}` : ""}. Filter mencocokkan
-            judul berita.
+            {visibleArticles.length} articles
+            {ticker !== "all" ? ` about ${ticker}` : ""}. Filters match article
+            headlines.
           </p>
         </div>
         {error && (
           <Alert variant="destructive">
-            <AlertTitle>Berita belum dapat diperbarui</AlertTitle>
+            <AlertTitle>News could not be refreshed</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
         {loading && !articles.length ? (
-          <div
-            className="news-loading"
-            role="status"
-            aria-label="Memuat berita"
-          >
+          <div className="news-loading" role="status" aria-label="Loading news">
             {[0, 1, 2].map((key) => (
               <Skeleton key={key} className="h-20" />
             ))}
@@ -255,13 +251,13 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
               <EmptyHeader>
                 <EmptyTitle>
                   {articles.length
-                    ? "Tidak ada judul yang cocok"
-                    : "Belum ada berita ditemukan"}
+                    ? "No matching headlines"
+                    : "No news found yet"}
                 </EmptyTitle>
                 <EmptyDescription>
                   {articles.length
-                    ? "Coba kata kunci lain atau tampilkan semua saham."
-                    : "Sumber belum mengembalikan berita saham. Coba perbarui lagi nanti."}
+                    ? "Try another keyword or show all stocks."
+                    : "The source has not returned any stock news. Try refreshing later."}
                 </EmptyDescription>
               </EmptyHeader>
               {(query || ticker !== "all") && (
@@ -273,7 +269,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                       setTicker("all");
                     }}
                   >
-                    Reset filter
+                    Reset filters
                   </Button>
                 </EmptyContent>
               )}

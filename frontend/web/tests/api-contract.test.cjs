@@ -169,7 +169,7 @@ test("read coalescing is scoped to authorization identity", async () => {
   c.session.setToken("account-a");
   const a = c.api.listRules();
   c.session.setToken("account-b");
-  await Promise.all([assert.rejects(a, /Akun berubah/), c.api.listRules()]);
+  await Promise.all([assert.rejects(a, /Your account changed/), c.api.listRules()]);
   assert.equal(c.calls.length, 2);
 });
 
@@ -499,7 +499,7 @@ test("Go error envelopes produce a readable entitlement message", async () => {
   await assert.rejects(
     c.api.prepareDataset("default-scalping-v1", "universe-bank"),
     (error) =>
-      error.status === 403 && error.message.includes("akses fitur screener"),
+      error.status === 403 && error.message.includes("screener access"),
   );
 });
 

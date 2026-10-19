@@ -44,7 +44,7 @@ self.onmessage = async (event: MessageEvent) => {
         ? [{ symbol: message.symbol, candles: message.candles }]
         : message.series;
     if (!Array.isArray(series) || !series.length)
-      throw new Error("Dataset batch kosong");
+      throw new Error("The dataset batch is empty");
     const results = series.map((item) => {
       const encoded = scope.signalgenComputeFeatures?.(
         JSON.stringify({
@@ -82,21 +82,21 @@ async function loadEngine(): Promise<void> {
   const manifestResponse = await fetch(
     new URL("signalgen_core.manifest.json", base),
   );
-  if (!manifestResponse.ok) throw new Error("WASM manifest tidak ditemukan");
+  if (!manifestResponse.ok) throw new Error("WASM manifest not found");
   const manifest = (await manifestResponse.json()) as WasmManifest;
   if (
     manifest.engine_version !== "core-0.3.0" ||
     manifest.worker_protocol !== "worker-2" ||
     manifest.feature_schema_version !== "screener-features-1"
   )
-    throw new Error("Versi worker WASM tidak didukung");
+    throw new Error("Unsupported WASM worker version");
 
   const [runtimeResponse, wasmResponse] = await Promise.all([
     fetch(new URL(manifest.runtime_file, base)),
     fetch(new URL(manifest.wasm_file, base)),
   ]);
   if (!runtimeResponse.ok || !wasmResponse.ok)
-    throw new Error("Artifact Go/WASM tidak lengkap");
+    throw new Error("Go/WASM artifacts are incomplete");
   const runtimeBytes = await runtimeResponse.arrayBuffer();
   const wasmBytes = await wasmResponse.arrayBuffer();
   await Promise.all([
@@ -112,7 +112,7 @@ async function loadEngine(): Promise<void> {
   } finally {
     URL.revokeObjectURL(runtimeURL);
   }
-  if (!scope.Go) throw new Error("Go runtime gagal dimuat");
+  if (!scope.Go) throw new Error("The Go runtime could not be loaded");
   const go = new scope.Go();
   const instantiated = await WebAssembly.instantiate(
     wasmBytes,
@@ -120,7 +120,7 @@ async function loadEngine(): Promise<void> {
   );
   void go.run(instantiated.instance);
   if (!scope.signalgenComputeFeatures)
-    throw new Error("WASM feature function gagal diinisialisasi");
+    throw new Error("The WASM feature function could not be initialized");
 }
 
 async function verifyHash(
@@ -131,7 +131,7 @@ async function verifyHash(
   const actual = `sha256:${Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, "0"),
   ).join("")}`;
-  if (actual !== expected) throw new Error("Hash artifact Go/WASM tidak cocok");
+  if (actual !== expected) throw new Error("Go/WASM artifact hash mismatch");
 }
 
 export {};

@@ -57,9 +57,9 @@ test("larger batches split only between stocks, preserving per-stock cooldown hi
   assert.equal(packed.length, 2);
   assert.equal(packed[0].candidates.length, 600);
   assert.equal(packed[1].candidates.length, 600);
-  assert.throws(() => pack([group("BBCA.JK", 1001)], 1000), /tidak dipotong/);
-  assert.throws(() => pack([group("BBCA.JK", 5)], 0), /tidak valid/);
-  assert.throws(() => pack([group("BBCA.JK", 5)], 1000, 10), /tidak dipotong/);
+  assert.throws(() => pack([group("BBCA.JK", 1001)], 1000), /cannot be split/);
+  assert.throws(() => pack([group("BBCA.JK", 5)], 0), /Invalid/);
+  assert.throws(() => pack([group("BBCA.JK", 5)], 1000, 10), /cannot be split/);
 });
 
 function harness(stockCount = 3) {
@@ -266,7 +266,7 @@ test("a pre-cancelled run never begins access checks, compute, or scoring", asyn
   const h = harness(10);
   const controller = new AbortController();
   controller.abort();
-  await assert.rejects(h.run.runLiveScreener("r", "u", controller.signal, () => {}), /dibatalkan/);
+  await assert.rejects(h.run.runLiveScreener("r", "u", controller.signal, () => {}), /cancelled/);
   assert.equal(h.counts.workers, 0);
   assert.equal(h.counts.grants, 0);
   assert.equal(h.counts.sockets, 0);
@@ -292,7 +292,7 @@ test("cancellation terminates compute, rejects promptly and permits a fresh work
   const controller = new AbortController();
   const pending = h.engine.extractDatasetFeatures(h.series, controller.signal);
   controller.abort();
-  await assert.rejects(pending, /dibatalkan/);
+  await assert.rejects(pending, /cancelled/);
   assert.equal(h.counts.terminated, 1);
   h.hold(false);
   await h.engine.extractDatasetFeatures(h.series, new AbortController().signal);
@@ -314,10 +314,10 @@ test("worker timeout cleans up, concurrent jobs are rejected and pre-aborted job
   );
   await assert.rejects(
     h.engine.extractDatasetFeatures(h.series, new AbortController().signal),
-    /masih berjalan/,
+    /computation is running/,
   );
   h.expire();
-  await assert.rejects(pending, /45 detik/);
+  await assert.rejects(pending, /45-second/);
   assert.equal(h.counts.terminated, 1);
 });
 test("clean early socket close and mismatched decisions fail instead of showing incomplete results", async () => {
@@ -326,7 +326,7 @@ test("clean early socket close and mismatched decisions fail instead of showing 
     h.socketMode(mode);
     await assert.rejects(
       h.run.runLiveScreener("r", "u", new AbortController().signal, () => {}),
-      /sebelum hasil|tidak cocok|tidak valid/,
+      /before all results|does not match|is invalid/,
     );
     h.engine.disposeScreenerEngine();
   }
