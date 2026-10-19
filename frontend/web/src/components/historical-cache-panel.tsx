@@ -11,12 +11,12 @@ export function HistoricalCachePanel({
 }: {
   authenticated: boolean;
 }) {
-  const [message, setMessage] = useState("Memeriksa penyimpanan…");
+  const [message, setMessage] = useState("Checking storage…");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let active = true;
     if (!authenticated) {
-      setMessage("Masuk untuk melihat cache historis.");
+      setMessage("Sign in to inspect historical data storage.");
       return;
     }
     void api
@@ -33,11 +33,12 @@ export function HistoricalCachePanel({
         setMessage(
           stats.available
             ? `${stats.entries} snapshot · ${(stats.bytes / 1024).toFixed(1)} KB ciphertext · AES-256-GCM`
-            : "Cache tidak tersedia · data hanya di memori untuk run ini",
+            : "Persistent cache unavailable · data stays in memory for this run",
         );
       })
       .catch(() => {
-        if (active) setMessage("Status cache belum dapat diperiksa.");
+        if (active)
+          setMessage("Cache status could not be checked. Reload to retry.");
       });
     return () => {
       active = false;
@@ -48,9 +49,9 @@ export function HistoricalCachePanel({
     setBusy(true);
     try {
       await clearHistoricalCache();
-      setMessage("Kosong · snapshot dan kunci lokal sudah dihapus");
+      setMessage("Empty · local snapshots and encryption keys removed");
     } catch {
-      setMessage("Belum dapat menghapus cache. Tutup tab lain lalu coba lagi.");
+      setMessage("Could not clear the cache. Close other tabs and try again.");
     } finally {
       setBusy(false);
     }
@@ -60,7 +61,7 @@ export function HistoricalCachePanel({
       <div>
         <Database />
         <span>
-          <strong>Cache historis terenkripsi</strong>
+          <strong>Encrypted historical cache</strong>
           <small role="status">{message}</small>
         </span>
       </div>
@@ -70,7 +71,7 @@ export function HistoricalCachePanel({
         onClick={() => void clear()}
       >
         <Trash2 />
-        {busy ? "Menghapus…" : "Hapus cache"}
+        {busy ? "Clearing…" : "Clear cache"}
       </Button>
     </section>
   );

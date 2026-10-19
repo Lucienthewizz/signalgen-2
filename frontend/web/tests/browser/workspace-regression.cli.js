@@ -18,6 +18,7 @@ async (page) => {
   let systemRule = false;
   let failUniverseDelete = false;
   let universeWrite = null;
+  let ruleWrite = null;
   let sessionMutations = 0;
   const sessionFixtures = [
     { id: "fixture-current", label: "Current browser", status: "active", current: true, last_seen_at: now },
@@ -54,6 +55,10 @@ async (page) => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort();
     const p = url.pathname;
+    if (p === "/api/v1/rules" && route.request().method() === "POST") {
+      ruleWrite = route.request().postDataJSON();
+      return route.fulfill({ json: { ...rule, name: ruleWrite.definition.name, definition: ruleWrite.definition } });
+    }
     if (p.startsWith("/api/v1/account/sessions/") && route.request().method() !== "GET") sessionMutations++;
     if (p.startsWith("/api/v1/stock-universes") && ["POST", "PATCH"].includes(route.request().method())) {
       universeWrite = { method: route.request().method(), body: route.request().postDataJSON() };
@@ -69,7 +74,7 @@ async (page) => {
     else if (p === "/api/v1/account/sessions") payload = { items: sessionFixtures };
     else if (p === "/api/v1/rules") payload = { items: [systemRule ? { ...rule, name: "Default Scalping", owner_type: "system", definition: undefined } : rule], next_cursor: null };
     else if (p === "/api/v1/stock-universes") payload = { items: [universe] };
-    else if (p === "/api/v1/stocks") payload = { items: universe.symbols.map(symbol => ({ symbol, name: symbol })) };
+    else if (p === "/api/v1/stocks") payload = { items: [...universe.symbols.map(symbol => ({ symbol, name: symbol, exchange: "XIDX", currency: "IDR" })), { symbol: "AAPL", name: "Apple Inc.", exchange: "XNAS", currency: "USD" }] };
     else if (p === "/api/v1/subscription") payload = { subscription };
     else if (p === "/api/v1/subscription/plans") payload = { items: plans };
     else if (p === "/api/v1/subscription/usage") payload = { limits: plans[2].limits, used: { custom_rules: 1, stock_universes: 1 } };
@@ -466,6 +471,51 @@ async (page) => {
     if (await page.locator(".auth-layout").count() && !await page.locator(".auth-layout").evaluate(el => getComputedStyle(el).backgroundImage.includes("gradient"))) throw Error(`Auth surface gradient missing: ${route}`);
     await page.screenshot({ path: `/private/tmp/signalgen-public-${route}.png`, animations: "disabled", timeout: 10000 });
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Public page overflow: ${route}`);
+  }
+  unauthorized = false;
+  systemRule = false;
+  await page.reload();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("http://127.0.0.1:5174/#app/rules");
+  await page.getByRole("button", { name: "New blank rule", exact: true }).click();
+  await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
+  if (await page.getByLabel("Rule name", { exact: true }).inputValue() !== "Bullish EMA cross") throw Error("Preset did not populate rule name");
+  if (!await page.getByLabel("Rule summary", { exact: true }).innerText().then(text => text.includes("crosses above"))) throw Error("Preset summary missing crossover semantics");
+  await page.getByLabel("Condition value 1", { exact: true }).fill("EMA9");
+  await page.getByRole("button", { name: "Save rule", exact: true }).click();
+  if (!await page.getByText("Choose a different reference; an indicator cannot compare with itself.", { exact: true }).count()) throw Error("Self-comparison validation missing");
+  await page.getByLabel("Condition value 1", { exact: true }).fill("EMA20");
+  if (ruleWrite) throw Error("Invalid criteria were sent to the API");
+  for (const close of await page.getByRole("button", { name: "Dismiss notification", exact: true, includeHidden: true }).all()) await close.click({ force: true });
+  for (const width of [1440, 390]) for (const theme of ["dark", "light"]) {
+    await page.setViewportSize({ width, height: 1000 });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: `/private/tmp/signalgen-preset-workflow-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Preset workflow overflow ${width} ${theme}`);
+  }
+  await page.getByRole("button", { name: "Save rule", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('#rule-name')?.value === '');
+  if (!ruleWrite || ruleWrite.definition.conditions[0].op !== "CROSS_UP" || ruleWrite.definition.signal_type !== "BUY") throw Error("Preset save payload lost crossover or signal action");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("http://127.0.0.1:5174/#app/universes");
+  const catalog = page.getByRole("table", { name: "Stock catalog", exact: true });
+  await catalog.waitFor();
+  await page.getByRole("button", { name: "United States · USD", exact: true }).click();
+  if (!(await catalog.innerText()).includes("AAPL") || (await catalog.innerText()).includes("BBCA")) throw Error("US catalog is not market isolated");
+  await page.getByRole("button", { name: "Indonesia · IDR", exact: true }).click();
+  if (!(await catalog.innerText()).includes("BBCA") || (await catalog.innerText()).includes("AAPL")) throw Error("IDX catalog is not market isolated");
+  await page.goto("http://127.0.0.1:5174/#app/analysis");
+  await page.getByRole("button", { name: "Export CSV", exact: true }).waitFor({ timeout: 10000 });
+  await page.getByRole("group", { name: "Signal status", exact: true }).waitFor();
+  await page.getByRole("group", { name: "Signal status", exact: true }).getByRole("button", { name: /^SELL/ }).click();
+  if (!await page.getByText("No stocks match these filters.", { exact: false }).count()) throw Error("SELL filter did not exclude BUY and rejected rows");
+  await page.getByRole("button", { name: "Reset filters", exact: true }).click();
+  for (const width of [1440, 390]) for (const theme of ["dark", "light"]) {
+    await page.setViewportSize({ width, height: 1000 });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: `/private/tmp/signalgen-screening-workflow-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
   }
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));

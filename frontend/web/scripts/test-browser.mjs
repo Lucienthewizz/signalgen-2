@@ -52,7 +52,7 @@ if (usedCli) {
     return output;
   }
   try {
-    cli(["open", "http://127.0.0.1:5174/#app/analysis", "--config", config]);
+    cli(["open", "about:blank", "--config", config]);
     cli(["run-code", "--filename", testFilename]);
     const result = cli([
       "eval",

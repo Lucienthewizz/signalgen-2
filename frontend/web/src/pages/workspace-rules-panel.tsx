@@ -25,7 +25,21 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  indicatorLabels,
+  operatorLabels,
+  rulePresets,
+  ruleSummary,
+  validateRule,
+} from "@/lib/rule-workflow";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -80,11 +94,7 @@ function rightValue(value: string): string | number {
 }
 
 function summary(definition?: UserRuleDefinition) {
-  if (!definition?.conditions.length) return "No conditions yet";
-  const conds = definition.conditions
-    .map((item) => `${item.left} ${item.op} ${item.right}`)
-    .join(definition.logic === "OR" ? " OR " : " · ");
-  return `${definition.signal_type || "BUY"} (${definition.logic || "AND"}): ${conds}`;
+  return ruleSummary(definition);
 }
 
 export function ServerRulesPanel({
@@ -101,6 +111,9 @@ export function ServerRulesPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [presetId, setPresetId] = useState<string[]>([]);
+  const [submitted, setSubmitted] = useState(false);
+  const validation = validateRule(definition);
   useActionNotifications(notice, error);
   const [draftOwner, setDraftOwner] = useState<string | undefined>();
   const [pendingDraft, setPendingDraft] = useState<RuleDraft | null>(null);
@@ -185,6 +198,8 @@ export function ServerRulesPanel({
   );
 
   function startNew() {
+    setPresetId([]);
+    setSubmitted(false);
     if (userId) saveRuleDraft(userId, null);
     setPendingDraft(null);
     setEditing(null);
@@ -195,6 +210,8 @@ export function ServerRulesPanel({
 
   function edit(rule: RuleResource) {
     if (!rule.definition) return;
+    setPresetId([]);
+    setSubmitted(false);
     setEditing(rule);
     setPendingDraft(null);
     setDefinition({
@@ -209,6 +226,7 @@ export function ServerRulesPanel({
   }
 
   function setCondition(index: number, patch: Partial<RuleCondition>) {
+    setError(null);
     setDefinition((current) => ({
       ...current,
       conditions: current.conditions.map((condition, conditionIndex) =>
@@ -219,12 +237,9 @@ export function ServerRulesPanel({
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (!definition.name.trim()) {
-      setError("Enter a name to identify your rule.");
-      return;
-    }
-    if (!definition.conditions.length) {
-      setError("Add at least one screening condition.");
+    setSubmitted(true);
+    if (!validation.valid) {
+      setError("Check the highlighted rule fields before saving.");
       return;
     }
     setSaving(true);
@@ -244,6 +259,8 @@ export function ServerRulesPanel({
       }
       setEditing(null);
       setDefinition(blankDefinition());
+      setPresetId([]);
+      setSubmitted(false);
       if (userId) saveRuleDraft(userId, null);
       setPendingDraft(null);
       await load();
@@ -302,7 +319,10 @@ export function ServerRulesPanel({
               <h3 id="rule-composer-title">
                 {editing ? `Edit ${editing.name}` : "Create a screening rule"}
               </h3>
-              <p>Build a checklist. Every condition must be met.</p>
+              <p>
+                Start with a preset, then adjust the criteria to fit your
+                analysis.
+              </p>
             </div>
           </div>
           <Button variant="outline" onClick={startNew} disabled={saving}>
@@ -354,8 +374,61 @@ export function ServerRulesPanel({
               gap: "inherit",
             }}
           >
-            <div className="rule-basics">
-              <Field>
+            <section
+              className="rule-presets"
+              aria-labelledby="rule-presets-title"
+            >
+              <div>
+                <h4 id="rule-presets-title">Start with a preset</h4>
+                <p>Editable starting points, not investment recommendations.</p>
+              </div>
+              <ToggleGroup
+                aria-label="Rule presets"
+                className="rule-presets__choices"
+                value={presetId}
+                variant="outline"
+                onValueChange={(values) => {
+                  const preset = rulePresets.find(
+                    (item) => item.id === values[0],
+                  );
+                  if (!preset) return;
+                  if (
+                    (editing || definition.conditions.length > 0) &&
+                    !window.confirm(
+                      "Replace the current criteria with this preset? Your saved rule will not change until you save.",
+                    )
+                  )
+                    return;
+                  setEditing(null);
+                  setPresetId([preset.id]);
+                  setSubmitted(false);
+                  setError(null);
+                  setNotice(null);
+                  setDefinition({
+                    ...preset.definition,
+                    conditions: preset.definition.conditions.map(
+                      (condition) => ({ ...condition }),
+                    ),
+                  });
+                }}
+              >
+                {rulePresets.map((preset) => (
+                  <ToggleGroupItem key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              {presetId[0] && (
+                <p className="rule-presets__description">
+                  {
+                    rulePresets.find((preset) => preset.id === presetId[0])
+                      ?.description
+                  }
+                </p>
+              )}
+            </section>
+            <FieldGroup className="rule-basics">
+              <Field data-invalid={submitted && !!validation.name}>
                 <FieldLabel htmlFor="rule-name">Rule name</FieldLabel>
                 <Input
                   id="rule-name"
@@ -368,13 +441,24 @@ export function ServerRulesPanel({
                   }
                   placeholder="Example: Daily bank momentum"
                   maxLength={100}
+                  aria-invalid={submitted && !!validation.name}
+                  aria-describedby={
+                    submitted && validation.name ? "rule-name-error" : undefined
+                  }
                 />
                 <FieldDescription>
                   This name appears in the screener.
                 </FieldDescription>
+                {submitted && validation.name && (
+                  <FieldError id="rule-name-error">
+                    {validation.name}
+                  </FieldError>
+                )}
               </Field>
               <Field>
-                <FieldLabel htmlFor="rule-signal-type">Signal action</FieldLabel>
+                <FieldLabel htmlFor="rule-signal-type">
+                  Signal action
+                </FieldLabel>
                 <Select
                   value={definition.signal_type}
                   onValueChange={(value) =>
@@ -414,7 +498,9 @@ export function ServerRulesPanel({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value="AND">AND (All conditions met)</SelectItem>
+                      <SelectItem value="AND">
+                        AND (All conditions met)
+                      </SelectItem>
                       <SelectItem value="OR">OR (Any condition met)</SelectItem>
                     </SelectGroup>
                   </SelectContent>
@@ -423,7 +509,7 @@ export function ServerRulesPanel({
                   Combine conditions using AND or OR.
                 </FieldDescription>
               </Field>
-              <Field>
+              <Field data-invalid={submitted && !!validation.cooldown}>
                 <FieldLabel htmlFor="rule-cooldown">
                   Cooldown (seconds)
                 </FieldLabel>
@@ -431,22 +517,32 @@ export function ServerRulesPanel({
                   id="rule-cooldown"
                   type="number"
                   min={0}
+                  max={86400}
+                  step={1}
+                  aria-invalid={submitted && !!validation.cooldown}
+                  aria-describedby={
+                    submitted && validation.cooldown
+                      ? "rule-cooldown-error"
+                      : undefined
+                  }
                   value={definition.cooldown_sec}
                   onChange={(event) =>
                     setDefinition((current) => ({
                       ...current,
-                      cooldown_sec: Math.max(
-                        0,
-                        Number(event.target.value) || 0,
-                      ),
+                      cooldown_sec: Number(event.target.value),
                     }))
                   }
                 />
                 <FieldDescription>
                   Sets the minimum interval between repeated signals.
                 </FieldDescription>
+                {submitted && validation.cooldown && (
+                  <FieldError id="rule-cooldown-error">
+                    {validation.cooldown}
+                  </FieldError>
+                )}
               </Field>
-            </div>
+            </FieldGroup>
 
             <div className="rule-condition-section">
               <div className="rule-condition-section__heading">
@@ -481,101 +577,117 @@ export function ServerRulesPanel({
               ) : (
                 <div className="rule-condition-list">
                   {definition.conditions.map((condition, index) => (
-                    <div
-                      className="rule-condition-row"
-                      key={`${index}-${condition.left}`}
+                    <Field
+                      className="rule-condition-entry"
+                      key={index}
+                      data-invalid={!!validation.conditions[index]}
                     >
-                      <span className="rule-condition-row__index">
-                        {index + 1}
-                      </span>
-                      <Select
-                        value={condition.left}
-                        onValueChange={(value) =>
-                          setCondition(index, {
-                            left: value as RuleCondition["left"],
-                          })
-                        }
-                      >
-                        <SelectTrigger
-                          aria-label={`Condition indicator ${index + 1}`}
+                      <div className="rule-condition-row">
+                        <span className="rule-condition-row__index">
+                          {index + 1}
+                        </span>
+                        <Select
+                          value={condition.left}
+                          items={Object.entries(indicatorLabels).map(
+                            ([value, label]) => ({ value, label }),
+                          )}
+                          onValueChange={(value) =>
+                            setCondition(index, {
+                              left: value as RuleCondition["left"],
+                            })
+                          }
                         >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {(["PRICE", "EMA9", "EMA20", "RSI14"] as const).map(
-                              (value) => (
+                          <SelectTrigger
+                            aria-label={`Condition indicator ${index + 1}`}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {(
+                                ["PRICE", "EMA9", "EMA20", "RSI14"] as const
+                              ).map((value) => (
                                 <SelectItem key={value} value={value}>
-                                  {value}
+                                  {indicatorLabels[value]}
                                 </SelectItem>
-                              ),
-                            )}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <Select
-                        value={condition.op}
-                        onValueChange={(value) =>
-                          setCondition(index, {
-                            op: value as RuleCondition["op"],
-                          })
-                        }
-                      >
-                        <SelectTrigger
-                          aria-label={`Condition operator ${index + 1}`}
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={condition.op}
+                          items={Object.entries(operatorLabels).map(
+                            ([value, label]) => ({ value, label }),
+                          )}
+                          onValueChange={(value) =>
+                            setCondition(index, {
+                              op: value as RuleCondition["op"],
+                            })
+                          }
                         >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {(
-                              [
-                                ">",
-                                ">=",
-                                "<",
-                                "<=",
-                                "CROSS_UP",
-                                "CROSS_DOWN",
-                              ] as const
-                            ).map((value) => (
-                              <SelectItem key={value} value={value}>
-                                {value === "CROSS_UP"
-                                  ? "CROSS_UP (Golden Cross)"
-                                  : value === "CROSS_DOWN"
-                                    ? "CROSS_DOWN (Death Cross)"
-                                    : value}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        aria-label={`Condition value ${index + 1}`}
-                        value={String(condition.right)}
-                        onChange={(event) =>
-                          setCondition(index, {
-                            right: rightValue(event.target.value),
-                          })
-                        }
-                        placeholder="EMA20 or 55"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Remove condition ${index + 1}`}
-                        onClick={() =>
-                          setDefinition((current) => ({
-                            ...current,
-                            conditions: current.conditions.filter(
-                              (_, conditionIndex) => conditionIndex !== index,
-                            ),
-                          }))
-                        }
-                      >
-                        <Trash2 />
-                      </Button>
-                    </div>
+                          <SelectTrigger
+                            aria-label={`Condition operator ${index + 1}`}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {(
+                                [
+                                  ">",
+                                  ">=",
+                                  "<",
+                                  "<=",
+                                  "CROSS_UP",
+                                  "CROSS_DOWN",
+                                ] as const
+                              ).map((value) => (
+                                <SelectItem key={value} value={value}>
+                                  {operatorLabels[value]}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          aria-label={`Condition value ${index + 1}`}
+                          value={String(condition.right)}
+                          onChange={(event) =>
+                            setCondition(index, {
+                              right: rightValue(event.target.value),
+                            })
+                          }
+                          placeholder="EMA20 or 55"
+                          aria-invalid={!!validation.conditions[index]}
+                          aria-describedby={
+                            validation.conditions[index]
+                              ? `condition-error-${index}`
+                              : undefined
+                          }
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Remove condition ${index + 1}`}
+                          onClick={() =>
+                            setDefinition((current) => ({
+                              ...current,
+                              conditions: current.conditions.filter(
+                                (_, conditionIndex) => conditionIndex !== index,
+                              ),
+                            }))
+                          }
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
+                      {validation.conditions[index] && (
+                        <FieldError id={`condition-error-${index}`}>
+                          {validation.conditions[index]}
+                        </FieldError>
+                      )}
+                    </Field>
                   ))}
                 </div>
               )}
@@ -592,7 +704,21 @@ export function ServerRulesPanel({
               >
                 <Plus data-icon="inline-start" /> Add condition
               </Button>
+              {submitted && validation.count && (
+                <FieldError>{validation.count}</FieldError>
+              )}
             </div>
+
+            {definition.conditions.length > 0 && (
+              <section className="rule-explanation" aria-label="Rule summary">
+                <h4>In plain English</h4>
+                <p>{ruleSummary(definition)}</p>
+                <small>
+                  Crossovers compare two consecutive daily candles. Cooldown can
+                  suppress a repeated signal even when criteria match.
+                </small>
+              </section>
+            )}
 
             {error && (
               <Alert variant="destructive">
@@ -602,7 +728,10 @@ export function ServerRulesPanel({
               </Alert>
             )}
             <footer className="rule-composer__footer">
-              <span>{definition.conditions.length} conditions · Daily IDX</span>
+              <span>
+                {definition.conditions.length} / 20 conditions · Daily · IDX or
+                US
+              </span>
               <Button type="submit" size="lg" disabled={saving}>
                 {saving ? (
                   <LoaderCircle

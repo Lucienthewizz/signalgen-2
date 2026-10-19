@@ -75,6 +75,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -266,8 +267,8 @@ export function StockUniversesPanel({
         aria-labelledby="universe-editor-title"
       >
         <StockCatalogPicker
-          key={editing?.id ?? "new"}
-          catalog={catalog}
+          key={`${editing?.id ?? "new"}:${market}`}
+          catalog={marketCatalog}
           selected={symbols}
           loading={loading}
           disabled={saving}
@@ -281,7 +282,9 @@ export function StockUniversesPanel({
                   <i />
                 </span>
                 <span>Stock universe</span>
-                <span>IDX</span>
+                <span>
+                  {market} · {market === "IDX" ? "IDR" : "USD"}
+                </span>
               </div>
               <header className="universe-section-heading">
                 <div>
@@ -289,8 +292,8 @@ export function StockUniversesPanel({
                     {editing ? "Edit stock universe" : "Build a stock universe"}
                   </h3>
                   <p>
-                    Select up to {universeSelectionLimit} IDX stocks for your
-                    next screening.
+                    Select up to {universeSelectionLimit} {market} stocks for
+                    your next screening.
                   </p>
                 </div>
                 <ResourceQuota
@@ -298,6 +301,40 @@ export function StockUniversesPanel({
                   revision={universes.length}
                 />
               </header>
+              <Field className="universe-market-field">
+                <FieldLabel id="universe-market-label">Stock market</FieldLabel>
+                <ToggleGroup
+                  aria-labelledby="universe-market-label"
+                  value={[market]}
+                  disabled={saving}
+                  variant="outline"
+                  onValueChange={(values) => {
+                    const next = values[0] as StockMarket | undefined;
+                    if (!next || next === market) return;
+                    if (
+                      symbols.length &&
+                      !window.confirm(
+                        "Switch market and clear the selected stocks?",
+                      )
+                    )
+                      return;
+                    setMarket(next);
+                    setSymbols([]);
+                    setEditing(null);
+                    setError(null);
+                    setNotice(null);
+                  }}
+                >
+                  <ToggleGroupItem value="IDX">Indonesia · IDR</ToggleGroupItem>
+                  <ToggleGroupItem value="US">
+                    United States · USD
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                <FieldDescription>
+                  {marketLabels[market]}. Each universe uses one market and
+                  currency.
+                </FieldDescription>
+              </Field>
             </>
           }
         >

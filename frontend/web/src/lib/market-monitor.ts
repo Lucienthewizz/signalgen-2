@@ -106,6 +106,8 @@ const fields = new Set([
   "result",
   "latestDecision",
   "features",
+  "prevFeatures",
+  "signal_type",
   "manifest",
   "latestClose",
   "latestOpen",
@@ -174,6 +176,9 @@ function validRun(value: unknown): value is LiveScreenerRun {
     typeof d.timestamp === "string" &&
     Number.isFinite(Date.parse(d.timestamp)) &&
     typeof d.matched === "boolean" &&
+    (d.signal_type === undefined ||
+      d.signal_type === "BUY" ||
+      d.signal_type === "SELL") &&
     Array.isArray(d.reason_codes) &&
     d.reason_codes.every((code) => typeof code === "string");
   const features = (f: LiveScreenerRun["features"]) =>
@@ -254,6 +259,7 @@ function validRun(value: unknown): value is LiveScreenerRun {
         row &&
         decision(row.decision) &&
         features(row.features) &&
+        (row.prevFeatures == null || features(row.prevFeatures)) &&
         typeof row.latestClose === "number" &&
         Number.isFinite(row.latestClose) &&
         (row.latestOpen === null ||

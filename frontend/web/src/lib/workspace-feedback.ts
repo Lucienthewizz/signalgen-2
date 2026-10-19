@@ -59,6 +59,24 @@ export function conditionEvidence(
     RSI14: features.rsi14,
   };
   const left = values[condition.left];
+  const previousValues: Record<string, number> | null = prevFeatures
+    ? {
+        PRICE: prevFeatures.price,
+        EMA9: prevFeatures.ema9,
+        EMA20: prevFeatures.ema20,
+        RSI14: prevFeatures.rsi14,
+      }
+    : null;
+  const previousLeft = previousValues?.[condition.left];
+  const previousRight =
+    typeof condition.right === "number"
+      ? condition.right
+      : previousValues?.[condition.right];
+  const crossover =
+    condition.op === "CROSS_UP" || condition.op === "CROSS_DOWN";
+  const available =
+    !crossover ||
+    (Number.isFinite(previousLeft) && Number.isFinite(previousRight));
   const right =
     typeof condition.right === "number"
       ? condition.right
@@ -122,6 +140,10 @@ export function conditionEvidence(
     left,
     right,
     passed,
+    available,
+    crossover,
+    previousLeft,
+    previousRight,
   };
 }
 export function subscriptionState(

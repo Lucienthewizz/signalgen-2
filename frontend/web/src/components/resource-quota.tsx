@@ -43,13 +43,26 @@ export function ResourceQuota({
         <span>Checking usage…</span>
       ) : (
         keys.map((key) => (
-          <span key={key}>
+          <span
+            key={key}
+            data-capacity={
+              usage.used[key] >= usage.limits[key]
+                ? "full"
+                : usage.used[key] >= usage.limits[key] * 0.8
+                  ? "near"
+                  : "available"
+            }
+          >
             <strong>
               {usage.used[key]} / {usage.limits[key]}
             </strong>{" "}
             {key === "custom_rules" ? "personal rules" : "stock universes"}
             <small>
-              {Math.max(0, usage.limits[key] - usage.used[key])} slots remaining
+              {usage.limits[key] === 0
+                ? "Not included in this plan"
+                : usage.used[key] >= usage.limits[key]
+                  ? "Limit reached · edit or remove an existing item"
+                  : `${Math.max(0, usage.limits[key] - usage.used[key])} slots remaining${usage.used[key] >= usage.limits[key] * 0.8 ? " · nearing your limit" : ""}`}
             </small>
           </span>
         ))

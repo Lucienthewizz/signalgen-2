@@ -7,7 +7,7 @@ import type {
 
 export const marketLabels: Record<StockMarket, string> = {
   IDX: "Indonesia · IDX · IDR",
-  US: "Amerika Serikat · Nasdaq/NYSE · USD",
+  US: "United States · Nasdaq/NYSE · USD",
 };
 export function stockMarket(stock: StockInstrument): StockMarket {
   if (stock.exchange === "XIDX" || stock.symbol?.endsWith(".JK")) return "IDX";
