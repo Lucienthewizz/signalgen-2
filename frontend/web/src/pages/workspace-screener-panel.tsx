@@ -66,10 +66,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  conditionSummary,
-  ruleSummary as explainRule,
-} from "@/lib/rule-workflow";
+import { conditionSummary } from "@/lib/rule-workflow";
 import { screeningStatus, screeningStatusLabels } from "@/lib/screening-status";
 import {
   Table,
@@ -545,13 +542,23 @@ export function WorkspaceScreenerPanel({
                     </SelectGroup>
                   </SelectContent>
                 </Select>
+                {selectedUniverse && (
+                  <ul
+                    className="screener-universe-stocks"
+                    aria-label="Selected universe stocks"
+                  >
+                    {selectedUniverse.symbols.map((symbol) => (
+                      <li key={symbol}>
+                        <Badge variant="outline">
+                          {symbol.replace(/\.JK$/, "")}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <FieldDescription>
-                  {selectedUniverse?.symbols.join(" · ")}
                   {selectedUniverse &&
-                    ` · ${selectedUniverse.symbols[0]?.endsWith(".JK") ? "IDX / IDR" : "US / USD"}`}
-                  {
-                    " · Price and EMA thresholds use this universe's currency; no currency conversion."
-                  }
+                    `${selectedUniverse.symbols[0]?.endsWith(".JK") ? "IDX / IDR" : "US / USD"} · Price and EMA thresholds use this currency.`}
                 </FieldDescription>
               </Field>
             </FieldGroup>
@@ -569,7 +576,12 @@ export function WorkspaceScreenerPanel({
                 )}
                 {conditions.length > 0 && (
                   <div className="screener-criteria">
-                    <p>{explainRule(selectedRule?.definition)}</p>
+                    <p>
+                      {selectedRule?.definition?.signal_type} · Match{" "}
+                      {selectedRule?.definition?.logic === "OR" ? "any" : "all"}{" "}
+                      {conditions.length}{" "}
+                      {conditions.length === 1 ? "condition" : "conditions"}
+                    </p>
                     <ol>
                       {selectedRule?.definition?.conditions.map(
                         (condition, index) => (

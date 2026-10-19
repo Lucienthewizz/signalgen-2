@@ -135,13 +135,90 @@ const categorySymbols: Record<
   technology: ["GOTO", "BUKA", "DCII", "EDGE", "MCAS", "DIVA", "MLPT", "WIRG"],
 };
 
+// Curated US browsing shortcuts, not exhaustive sector coverage or index membership.
+// Company activities/sector references: https://www.ssga.com/us/en/individual/etfs
+// Collision checks: https://www.gladstonecommercial.com/investors/company-information
+// and https://adecoagro.com/en/food-agriculture/ . Never reuse IDX ticker membership.
+const usCategorySymbols: typeof categorySymbols = {
+  "blue-chip": [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "JPM",
+    "PG",
+    "KO",
+    "JNJ",
+    "WMT",
+    "XOM",
+    "CVX",
+  ],
+  banks: ["JPM", "BAC", "WFC", "C", "USB", "PNC", "TFC", "COF", "FITB", "HBAN"],
+  energy: [
+    "XOM",
+    "CVX",
+    "COP",
+    "EOG",
+    "SLB",
+    "OXY",
+    "MPC",
+    "PSX",
+    "VLO",
+    "KMI",
+  ],
+  consumer: [
+    "PG",
+    "KO",
+    "PEP",
+    "WMT",
+    "COST",
+    "MDLZ",
+    "CL",
+    "KMB",
+    "GIS",
+    "KHC",
+    "AGRO",
+  ],
+  property: [
+    "PLD",
+    "AMT",
+    "EQIX",
+    "O",
+    "SPG",
+    "PSA",
+    "CCI",
+    "WELL",
+    "VTR",
+    "GOOD",
+  ],
+  technology: [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "AVGO",
+    "AMD",
+    "ADBE",
+    "CRM",
+    "ORCL",
+    "CSCO",
+    "INTC",
+    "QCOM",
+    "TXN",
+    "AMAT",
+    "MU",
+  ],
+};
+
 export function stockInCategory(
   stock: StockInstrument,
   category: StockCategory,
 ) {
+  const symbols =
+    stock.exchange === "XIDX" || stock.symbol.endsWith(".JK")
+      ? categorySymbols
+      : usCategorySymbols;
   return (
     category === "all" ||
-    categorySymbols[category].includes(stock.symbol.replace(/\.JK$/, ""))
+    symbols[category].includes(stock.symbol.replace(/\.JK$/, ""))
   );
 }
 

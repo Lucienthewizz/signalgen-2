@@ -179,7 +179,7 @@ const viewMeta: Record<
   },
   universes: {
     title: "Stock universes",
-    description: "Group IDX stocks for your next screening.",
+    description: "Group stocks by market for your next screening.",
     icon: Boxes,
   },
   subscription: {

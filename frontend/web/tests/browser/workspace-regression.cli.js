@@ -19,6 +19,7 @@ async (page) => {
   let failUniverseDelete = false;
   let universeWrite = null;
   let ruleWrite = null;
+  let largeUniverse = false;
   let sessionMutations = 0;
   const sessionFixtures = [
     { id: "fixture-current", label: "Current browser", status: "active", current: true, last_seen_at: now },
@@ -73,8 +74,8 @@ async (page) => {
     else if (p === "/api/v1/account/me") payload = { user, features: ["screener", "backtest"], session: { id: "fixture", expires_at: subscription.current_period_end }, device: { installation_id: "fixture", label: "Fixture browser", current: true }, capabilities_version: "fixture" };
     else if (p === "/api/v1/account/sessions") payload = { items: sessionFixtures };
     else if (p === "/api/v1/rules") payload = { items: [systemRule ? { ...rule, name: "Default Scalping", owner_type: "system", definition: undefined } : rule], next_cursor: null };
-    else if (p === "/api/v1/stock-universes") payload = { items: [universe] };
-    else if (p === "/api/v1/stocks") payload = { items: [...universe.symbols.map(symbol => ({ symbol, name: symbol, exchange: "XIDX", currency: "IDR" })), { symbol: "AAPL", name: "Apple Inc.", exchange: "XNAS", currency: "USD" }] };
+    else if (p === "/api/v1/stock-universes") payload = { items: [largeUniverse ? { ...universe, symbols: ["BBCA.JK", "BBRI.JK", "AADI.JK", "AALI.JK", "ABBA.JK", "ABDA.JK", "ABMM.JK", "ACES.JK", "ACRO.JK", "ACST.JK"] } : universe] };
+    else if (p === "/api/v1/stocks") payload = { items: [...universe.symbols.map(symbol => ({ symbol, name: symbol, exchange: "XIDX", currency: "IDR" })), ...["AAPL", "JPM", "XOM", "PG", "PLD", "AGRO", "BBSI", "GOOD"].map(symbol => ({ symbol, name: symbol, exchange: "XNAS", currency: "USD" }))] };
     else if (p === "/api/v1/subscription") payload = { subscription };
     else if (p === "/api/v1/subscription/plans") payload = { items: plans };
     else if (p === "/api/v1/subscription/usage") payload = { limits: plans[2].limits, used: { custom_rules: 1, stock_universes: 1 } };
@@ -479,6 +480,8 @@ async (page) => {
   await page.goto("http://127.0.0.1:5174/#app/rules");
   await page.getByRole("button", { name: "New blank rule", exact: true }).click();
   await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
+  await page.getByRole("button", { name: "Add condition", exact: true }).click();
+  await page.getByRole("button", { name: "Add condition", exact: true }).click();
   if (await page.getByLabel("Rule name", { exact: true }).inputValue() !== "Bullish EMA cross") throw Error("Preset did not populate rule name");
   if (!await page.getByLabel("Rule summary", { exact: true }).innerText().then(text => text.includes("crosses above"))) throw Error("Preset summary missing crossover semantics");
   await page.getByLabel("Condition value 1", { exact: true }).fill("EMA9");
@@ -486,12 +489,25 @@ async (page) => {
   if (!await page.getByText("Choose a different reference; an indicator cannot compare with itself.", { exact: true }).count()) throw Error("Self-comparison validation missing");
   await page.getByLabel("Condition value 1", { exact: true }).fill("EMA20");
   if (ruleWrite) throw Error("Invalid criteria were sent to the API");
-  for (const close of await page.getByRole("button", { name: "Dismiss notification", exact: true, includeHidden: true }).all()) await close.click({ force: true });
+  const notifications = await page.getByRole("button", { name: "Dismiss notification", exact: true, includeHidden: true }).elementHandles();
+  await Promise.all(notifications.map(close => close.click({ force: true, timeout: 1000 }).catch(() => {})));
   for (const width of [1440, 390]) for (const theme of ["dark", "light"]) {
     await page.setViewportSize({ width, height: 1000 });
     if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: `/private/tmp/signalgen-preset-workflow-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
+    const presetContrast = await page.locator('.rule-presets__choices [aria-pressed="true"]').evaluate(el => {
+      const luminance = color => color.match(/[\d.]+/g).slice(0, 3).map(value => { const c = Number(value) / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+      const a = luminance(getComputedStyle(el).backgroundColor), b = luminance(getComputedStyle(el.querySelector('strong')).color);
+      return (Math.max(a,b)+0.05)/(Math.min(a,b)+0.05);
+    });
+    if (presetContrast < 4.5) throw Error(`Selected preset contrast too low: ${presetContrast}`);
+    if (width > 760) {
+      if (!(await page.locator('.rule-condition-columns').innerText()).startsWith('No')) throw Error('Condition numbering header is not No');
+      if (!await page.locator('.rule-condition-columns').evaluate(el => getComputedStyle(el).textAlign === 'center')) throw Error('Condition headings are not centered');
+      const geometry = await page.locator('.rule-condition-row').evaluateAll(rows => rows.map(row => [...row.querySelectorAll('[data-slot="select-trigger"], [data-slot="input"]')].map(control => { const r = control.getBoundingClientRect(); return { left:r.left, top:r.top, height:r.height }; })));
+      for (const row of geometry) if (row.some((cell, index) => Math.abs(cell.height - 48) > 1 || Math.abs(cell.top - row[0].top) > 1 || Math.abs(cell.left - geometry[0][index].left) > 1)) throw Error(`Condition columns are not aligned: ${JSON.stringify(geometry)}`);
+    }
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Preset workflow overflow ${width} ${theme}`);
   }
   await page.getByRole("button", { name: "Save rule", exact: true }).click();
@@ -503,10 +519,25 @@ async (page) => {
   await catalog.waitFor();
   await page.getByRole("button", { name: "United States · USD", exact: true }).click();
   if (!(await catalog.innerText()).includes("AAPL") || (await catalog.innerText()).includes("BBCA")) throw Error("US catalog is not market isolated");
+  const usGroups = page.getByRole("group", { name: "Stock categories", exact: true });
+  for (const [category, symbol] of [["Banks", "JPM"], ["Energy", "XOM"], ["Consumer", "PG"], ["Property", "PLD"], ["Technology", "AAPL"]]) {
+    await usGroups.getByRole("button", { name: category, exact: true }).click();
+    if (!(await catalog.innerText()).includes(symbol)) throw Error(`US ${category} category has no ${symbol}`);
+    if (category === "Banks" && /AGRO|BBSI/.test(await catalog.innerText())) throw Error('IDX ticker collisions leaked into US banks');
+  }
+  await usGroups.getByRole("button", { name: "All stocks", exact: true }).click();
+  for (const width of [1440, 390]) for (const theme of ["dark", "light"]) {
+    await page.setViewportSize({ width, height: 1000 });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: `/private/tmp/signalgen-us-categories-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
+  }
   await page.getByRole("button", { name: "Indonesia · IDR", exact: true }).click();
   if (!(await catalog.innerText()).includes("BBCA") || (await catalog.innerText()).includes("AAPL")) throw Error("IDX catalog is not market isolated");
+  largeUniverse = true;
   await page.goto("http://127.0.0.1:5174/#app/analysis");
   await page.getByRole("button", { name: "Export CSV", exact: true }).waitFor({ timeout: 10000 });
+  if (await page.getByRole('list', { name: 'Selected universe stocks', exact: true }).getByRole('listitem').count() !== 10) throw Error('Selected universe stocks are not rendered as ten compact stock cards');
   await page.getByRole("group", { name: "Signal status", exact: true }).waitFor();
   await page.getByRole("group", { name: "Signal status", exact: true }).getByRole("button", { name: /^SELL/ }).click();
   if (!await page.getByText("No stocks match these filters.", { exact: false }).count()) throw Error("SELL filter did not exclude BUY and rejected rows");

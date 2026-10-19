@@ -411,8 +411,9 @@ export function StockCatalogPicker({
                 About categories
               </summary>
               <p>
-                Categories are curated shortcuts, not complete sector lists.
-                Blue chip is not an official index.
+                Categories are curated shortcuts, not complete sector lists. IDX
+                and US use separate lists. Stocks without a mapped group remain
+                available in All stocks. Blue chip is not an official index.
               </p>
             </details>
           </div>

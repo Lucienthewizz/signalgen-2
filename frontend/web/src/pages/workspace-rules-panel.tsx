@@ -413,8 +413,20 @@ export function ServerRulesPanel({
                 }}
               >
                 {rulePresets.map((preset) => (
-                  <ToggleGroupItem key={preset.id} value={preset.id}>
-                    {preset.name}
+                  <ToggleGroupItem
+                    key={preset.id}
+                    value={preset.id}
+                    aria-label={preset.name}
+                    aria-describedby={`preset-meta-${preset.id}`}
+                  >
+                    <strong>{preset.name}</strong>
+                    <small id={`preset-meta-${preset.id}`}>
+                      {preset.definition.signal_type} ·{" "}
+                      {preset.definition.conditions.length}{" "}
+                      {preset.definition.conditions.length === 1
+                        ? "condition"
+                        : "conditions"}
+                    </small>
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
@@ -576,95 +588,133 @@ export function ServerRulesPanel({
                 </button>
               ) : (
                 <div className="rule-condition-list">
+                  <div className="rule-condition-columns" aria-hidden="true">
+                    <span>No</span>
+                    <span>Indicator</span>
+                    <span>Comparison</span>
+                    <span>Reference</span>
+                    <span />
+                  </div>
                   {definition.conditions.map((condition, index) => (
-                    <Field
+                    <div
                       className="rule-condition-entry"
                       key={index}
                       data-invalid={!!validation.conditions[index]}
                     >
-                      <div className="rule-condition-row">
+                      <FieldGroup
+                        className="rule-condition-row"
+                        role="group"
+                        aria-label={`Condition ${index + 1}`}
+                      >
                         <span className="rule-condition-row__index">
                           {index + 1}
                         </span>
-                        <Select
-                          value={condition.left}
-                          items={Object.entries(indicatorLabels).map(
-                            ([value, label]) => ({ value, label }),
-                          )}
-                          onValueChange={(value) =>
-                            setCondition(index, {
-                              left: value as RuleCondition["left"],
-                            })
-                          }
-                        >
-                          <SelectTrigger
-                            aria-label={`Condition indicator ${index + 1}`}
+                        <Field>
+                          <FieldLabel
+                            className="rule-condition-field-label"
+                            htmlFor={`condition-indicator-${index}`}
                           >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {(
-                                ["PRICE", "EMA9", "EMA20", "RSI14"] as const
-                              ).map((value) => (
-                                <SelectItem key={value} value={value}>
-                                  {indicatorLabels[value]}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                        <Select
-                          value={condition.op}
-                          items={Object.entries(operatorLabels).map(
-                            ([value, label]) => ({ value, label }),
-                          )}
-                          onValueChange={(value) =>
-                            setCondition(index, {
-                              op: value as RuleCondition["op"],
-                            })
-                          }
-                        >
-                          <SelectTrigger
-                            aria-label={`Condition operator ${index + 1}`}
+                            Indicator
+                          </FieldLabel>
+                          <Select
+                            value={condition.left}
+                            items={Object.entries(indicatorLabels).map(
+                              ([value, label]) => ({ value, label }),
+                            )}
+                            onValueChange={(value) =>
+                              setCondition(index, {
+                                left: value as RuleCondition["left"],
+                              })
+                            }
                           >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {(
-                                [
-                                  ">",
-                                  ">=",
-                                  "<",
-                                  "<=",
-                                  "CROSS_UP",
-                                  "CROSS_DOWN",
-                                ] as const
-                              ).map((value) => (
-                                <SelectItem key={value} value={value}>
-                                  {operatorLabels[value]}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          aria-label={`Condition value ${index + 1}`}
-                          value={String(condition.right)}
-                          onChange={(event) =>
-                            setCondition(index, {
-                              right: rightValue(event.target.value),
-                            })
-                          }
-                          placeholder="EMA20 or 55"
-                          aria-invalid={!!validation.conditions[index]}
-                          aria-describedby={
-                            validation.conditions[index]
-                              ? `condition-error-${index}`
-                              : undefined
-                          }
-                        />
+                            <SelectTrigger
+                              id={`condition-indicator-${index}`}
+                              aria-label={`Condition indicator ${index + 1}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                {(
+                                  ["PRICE", "EMA9", "EMA20", "RSI14"] as const
+                                ).map((value) => (
+                                  <SelectItem key={value} value={value}>
+                                    {indicatorLabels[value]}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                        <Field>
+                          <FieldLabel
+                            className="rule-condition-field-label"
+                            htmlFor={`condition-operator-${index}`}
+                          >
+                            Comparison
+                          </FieldLabel>
+                          <Select
+                            value={condition.op}
+                            items={Object.entries(operatorLabels).map(
+                              ([value, label]) => ({ value, label }),
+                            )}
+                            onValueChange={(value) =>
+                              setCondition(index, {
+                                op: value as RuleCondition["op"],
+                              })
+                            }
+                          >
+                            <SelectTrigger
+                              id={`condition-operator-${index}`}
+                              aria-label={`Condition operator ${index + 1}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                {(
+                                  [
+                                    ">",
+                                    ">=",
+                                    "<",
+                                    "<=",
+                                    "CROSS_UP",
+                                    "CROSS_DOWN",
+                                  ] as const
+                                ).map((value) => (
+                                  <SelectItem key={value} value={value}>
+                                    {operatorLabels[value]}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                        <Field data-invalid={!!validation.conditions[index]}>
+                          <FieldLabel
+                            className="rule-condition-field-label"
+                            htmlFor={`condition-reference-${index}`}
+                          >
+                            Reference
+                          </FieldLabel>
+                          <Input
+                            id={`condition-reference-${index}`}
+                            aria-label={`Condition value ${index + 1}`}
+                            value={String(condition.right)}
+                            onChange={(event) =>
+                              setCondition(index, {
+                                right: rightValue(event.target.value),
+                              })
+                            }
+                            placeholder="EMA20 or 55"
+                            aria-invalid={!!validation.conditions[index]}
+                            aria-describedby={
+                              validation.conditions[index]
+                                ? `condition-error-${index}`
+                                : undefined
+                            }
+                          />
+                        </Field>
                         <Button
                           type="button"
                           variant="ghost"
@@ -681,29 +731,32 @@ export function ServerRulesPanel({
                         >
                           <Trash2 />
                         </Button>
-                      </div>
+                      </FieldGroup>
                       {validation.conditions[index] && (
                         <FieldError id={`condition-error-${index}`}>
                           {validation.conditions[index]}
                         </FieldError>
                       )}
-                    </Field>
+                    </div>
                   ))}
                 </div>
               )}
-              <Button
-                type="button"
-                variant="outline"
-                disabled={definition.conditions.length >= 20}
-                onClick={() =>
-                  setDefinition((current) => ({
-                    ...current,
-                    conditions: [...current.conditions, blankCondition()],
-                  }))
-                }
-              >
-                <Plus data-icon="inline-start" /> Add condition
-              </Button>
+              {definition.conditions.length > 0 && (
+                <Button
+                  className="rule-add-condition"
+                  type="button"
+                  variant="outline"
+                  disabled={definition.conditions.length >= 20}
+                  onClick={() =>
+                    setDefinition((current) => ({
+                      ...current,
+                      conditions: [...current.conditions, blankCondition()],
+                    }))
+                  }
+                >
+                  <Plus data-icon="inline-start" /> Add condition
+                </Button>
+              )}
               {submitted && validation.count && (
                 <FieldError>{validation.count}</FieldError>
               )}

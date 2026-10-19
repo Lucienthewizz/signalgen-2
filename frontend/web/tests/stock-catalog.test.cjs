@@ -46,6 +46,20 @@ const stocks = [
   },
 ];
 
+test("US categories use market-specific ticker membership, not IDX collisions", () => {
+  const us = (symbol) => ({ symbol, name: symbol, exchange: "XNAS", currency: "USD" });
+  for (const [symbol, category] of [["AAPL", "technology"], ["JPM", "banks"], ["XOM", "energy"], ["PG", "consumer"], ["PLD", "property"], ["MSFT", "blue-chip"]]) assert.equal(stockInCategory(us(symbol), category), true, symbol);
+  assert.equal(stockInCategory(us("AGRO"), "banks"), false);
+  assert.equal(stockInCategory(us("BBSI"), "banks"), false);
+  assert.equal(stockInCategory(us("GOOD"), "consumer"), false);
+  assert.equal(stockGroupLabel(us("GOOD")), "Property");
+  assert.equal(stockGroupLabel(us("AGRO")), "Consumer");
+  assert.equal(stockGroupLabel({ ...us("AGRO.JK"), exchange: "XIDX", currency: "IDR" }), "Banks");
+  assert.equal(stockGroupLabel({ ...us("GOOD.JK"), exchange: "XIDX", currency: "IDR" }), "Consumer");
+  assert.equal(stockGroupLabel(us("UNKNOWN")), "—");
+  assert.equal(catalogPage([us("AAPL"), us("JPM")], "", 0, "banks").items[0].symbol, "JPM");
+});
+
 test("catalog searches any IDX code/name, not a three-stock hardcoded union", () => {
   assert.equal(catalogPage(stocks, "  asii ", 0).items[0].symbol, "ASII.JK");
   assert.equal(catalogPage(stocks, "bank asia", 0).items[0].symbol, "BBCA.JK");
