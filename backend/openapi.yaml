@@ -2229,7 +2229,7 @@ components:
       properties:
         name: {type: string, minLength: 1, maxLength: 100}
         logic: {type: string, enum: [AND, OR]}
-        signal_type: {type: string, enum: [BUY]}
+        signal_type: {type: string, enum: [BUY, SELL]}
         cooldown_sec: {type: integer, minimum: 0, maximum: 86400}
         conditions:
           type: array

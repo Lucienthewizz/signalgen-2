@@ -161,6 +161,7 @@ func (server *Handler) ScreenerWebSocket(writer http.ResponseWriter, request *ht
 				Symbol:      candidate.Symbol,
 				Timestamp:   candidate.Timestamp,
 				Matched:     eval.Matched,
+				SignalType:  eval.SignalType,
 				ReasonCodes: eval.ReasonCodes,
 			})
 		} else {

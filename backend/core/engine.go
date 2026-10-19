@@ -44,6 +44,7 @@ func GetCapabilities() Capabilities {
 		Indicators:           []string{"PRICE", "EMA9", "EMA20", "RSI14"},
 		Operators:            []string{"<", "<=", ">", ">="},
 		RuleLogic:            []string{"AND", "OR"},
+		SignalTypes:          []string{"BUY", "SELL"},
 		MaxCandlesPerRun:     MaxCandlesPerRun,
 		MaxSymbolsPerRun:     1,
 	}
@@ -198,6 +199,7 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 			Symbol:      candidate.Symbol,
 			Timestamp:   candidate.Timestamp,
 			Matched:     true,
+			SignalType:  request.Rule.SignalType,
 			ReasonCodes: []string{"RULE_MATCHED"},
 		})
 		lastSignal = parsed
@@ -308,8 +310,8 @@ func ValidateRule(rule RuleSnapshot) error {
 	if rule.Logic != "AND" && rule.Logic != "OR" {
 		return fmt.Errorf("unsupported rule logic %q; supported: AND, OR", rule.Logic)
 	}
-	if rule.SignalType != "BUY" {
-		return fmt.Errorf("unsupported signal_type %q", rule.SignalType)
+	if rule.SignalType != "BUY" && rule.SignalType != "SELL" {
+		return fmt.Errorf("unsupported signal_type %q; supported: BUY, SELL", rule.SignalType)
 	}
 	if rule.CooldownSec < 0 || rule.CooldownSec > 86400 {
 		return fmt.Errorf("cooldown_sec must be between 0 and 86400")

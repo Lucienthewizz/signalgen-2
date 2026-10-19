@@ -27,6 +27,7 @@ type Decision struct {
 	Symbol      string   `json:"symbol"`
 	Timestamp   string   `json:"timestamp"`
 	Matched     bool     `json:"matched"`
+	SignalType  string   `json:"signal_type,omitempty"`
 	ReasonCodes []string `json:"reason_codes"`
 }
 

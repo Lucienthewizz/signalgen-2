@@ -46,7 +46,7 @@ func TestValidateRuleAcceptsOnlyAdvertisedSubset(t *testing.T) {
 	}
 	for name, mutate := range map[string]func(*RuleSnapshot){
 		"logic":           func(rule *RuleSnapshot) { rule.Logic = "XOR" },
-		"signal":          func(rule *RuleSnapshot) { rule.SignalType = "SELL" },
+		"signal":          func(rule *RuleSnapshot) { rule.SignalType = "HOLD" },
 		"left":            func(rule *RuleSnapshot) { rule.Conditions[0].Left = "MACD" },
 		"operator":        func(rule *RuleSnapshot) { rule.Conditions[0].Op = "==" },
 		"right type":      func(rule *RuleSnapshot) { rule.Conditions[0].Right = true },
@@ -405,4 +405,32 @@ func TestValidateRuleBoundaries(t *testing.T) {
 		t.Fatalf("expected PRICE with right=0.01 to be valid, got: %v", err)
 	}
 }
+
+func TestValidateRuleAcceptsSELLSignalType(t *testing.T) {
+	ruleSell := RuleSnapshot{
+		Name: "Overbought Exit Rule", Logic: "AND", SignalType: "SELL", CooldownSec: 60,
+		Conditions: []Condition{{Left: "RSI14", Op: ">", Right: 70}},
+	}
+	if err := ValidateRule(ruleSell); err != nil {
+		t.Fatalf("expected SELL rule to be valid, got error: %v", err)
+	}
+
+	candidates := []FeatureCandidate{
+		{Symbol: "BBCA.JK", Timestamp: "2026-01-01T00:00:00Z", Features: FeatureVector{Price: 150, EMA9: 100, EMA20: 100, RSI14: 75}},
+	}
+	res, err := EvaluateDecision(DecisionRequest{Rule: ruleSell, Candidates: candidates})
+	if err != nil {
+		t.Fatalf("EvaluateDecision failed for SELL rule: %v", err)
+	}
+	if len(res.Signals) != 1 {
+		t.Fatalf("expected 1 SELL signal, got %d", len(res.Signals))
+	}
+	if res.Signals[0].SignalType != "SELL" {
+		t.Fatalf("expected SignalType == 'SELL', got %q", res.Signals[0].SignalType)
+	}
+	if len(res.Evaluations) != 1 || res.Evaluations[0].SignalType != "SELL" {
+		t.Fatalf("expected evaluation SignalType == 'SELL', got %+v", res.Evaluations)
+	}
+}
+
 

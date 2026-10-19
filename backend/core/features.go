@@ -30,6 +30,7 @@ type Capabilities struct {
 	Indicators           []string `json:"indicators"`
 	Operators            []string `json:"operators"`
 	RuleLogic            []string `json:"rule_logic"`
+	SignalTypes          []string `json:"signal_types,omitempty"`
 	MaxCandlesPerRun     int      `json:"max_candles_per_run"`
 	MaxSymbolsPerRun     int      `json:"max_symbols_per_run"`
 }
