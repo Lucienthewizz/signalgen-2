@@ -33,7 +33,7 @@ func GetCapabilities() Capabilities {
 		PrivateProtocol:      PrivateProtocol,
 		WorkerProtocol:       WorkerProtocol,
 		Purposes:             []string{"screen"},
-		Markets:              []string{"IDX"},
+		Markets:              []string{"IDX", "US"},
 		Timeframes:           []string{"1d"},
 		Indicators:           []string{"PRICE", "EMA9", "EMA20", "RSI14"},
 		Operators:            []string{"<", "<=", ">", ">="},

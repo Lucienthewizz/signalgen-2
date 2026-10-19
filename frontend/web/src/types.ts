@@ -61,6 +61,10 @@ export type AppSessionResponse = {
   session_token: string;
 };
 
+export type StockMarket = "IDX" | "US";
+export type StockCurrency = "IDR" | "USD";
+export type StockExchange = "XIDX" | "XNAS" | "XNYS";
+
 export type DatasetManifest = {
   dataset_id: string;
   version: string;
@@ -68,9 +72,10 @@ export type DatasetManifest = {
   schema_version: "ohlcv-multi-1";
   provider: "yahoo_finance";
   purpose: "screen";
-  market: "IDX";
-  currency: "IDR";
+  market: StockMarket;
+  currency: StockCurrency;
   symbols: string[];
+  exchanges?: StockExchange[];
   timeframe: "1d";
   timezone: "UTC";
   requested_range: { from: string; to: string };
@@ -95,8 +100,8 @@ export type Candle = {
 export type DatasetContent = {
   schema_version: "ohlcv-multi-1";
   purpose: "screen";
-  market: "IDX";
-  currency: "IDR";
+  market: StockMarket;
+  currency: StockCurrency;
   timeframe: "1d";
   timezone: "UTC";
   adjustment: string;
@@ -143,8 +148,8 @@ export type RuleListResponse = {
 export type StockInstrument = {
   symbol: string;
   name: string;
-  exchange: "XIDX";
-  currency: "IDR";
+  exchange: StockExchange;
+  currency: StockCurrency;
 };
 
 export type StockUniverse = {

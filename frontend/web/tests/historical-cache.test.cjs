@@ -285,6 +285,55 @@ test("corrupt network bytes fail closed before any ciphertext is persisted", asy
   assert.equal(f.store.records.size, 0);
 });
 
+test("USD snapshots round trip encrypted, while invalid market/currency pairs fail closed", async () => {
+  const f = await fixture();
+  const data = {
+    ...f.data,
+    market: "US",
+    currency: "USD",
+    series: [{ ...f.data.series[0], symbol: "AAPL" }],
+  };
+  const text = JSON.stringify(data);
+  const bytes = new TextEncoder().encode(text);
+  const manifest = {
+    ...f.manifest,
+    market: "US",
+    currency: "USD",
+    symbols: ["AAPL"],
+    exchanges: ["XNAS"],
+    decoded_bytes: bytes.length,
+    checksum: `sha256:${await codec.sha256(bytes)}`,
+  };
+  assert.equal(
+    (
+      await f.cache.load(
+        f.scope,
+        manifest,
+        async () => text,
+        new AbortController().signal,
+      )
+    ).market,
+    "US",
+  );
+  assert.equal(
+    (
+      await f.cache.load(
+        f.scope,
+        manifest,
+        async () => {
+          throw Error("cache missed");
+        },
+        new AbortController().signal,
+      )
+    ).currency,
+    "USD",
+  );
+  await assert.rejects(
+    codec.decodeDataset(bytes, { ...manifest, currency: "IDR" }),
+    /Schema/,
+  );
+});
+
 test("oversized plaintext and compressed expansion are bounded before use", async () => {
   const f = await fixture();
   const oversized = new Uint8Array(codec.MAX_DATASET_BYTES + 1);

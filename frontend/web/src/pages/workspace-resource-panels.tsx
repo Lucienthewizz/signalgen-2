@@ -2,6 +2,8 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ResourceQuota } from "@/components/resource-quota";
 import { StockCatalogPicker } from "@/components/stock-catalog-picker";
 import { universeSelectionLimit } from "@/lib/stock-catalog";
+import { marketLabels, stockMarket, symbolMarket } from "@/lib/stock-market";
+import type { StockMarket } from "@/types";
 import {
   BadgeCheck,
   Boxes,
@@ -112,6 +114,11 @@ export function StockUniversesPanel({
   backendOnline,
 }: ConnectionProps) {
   const [catalog, setCatalog] = useState<StockInstrument[]>([]);
+  const [market, setMarket] = useState<StockMarket>("IDX");
+  const marketCatalog = useMemo(
+    () => catalog.filter((stock) => stockMarket(stock) === market),
+    [catalog, market],
+  );
   const [universes, setUniverses] = useState<StockUniverse[]>([]);
   const [editing, setEditing] = useState<StockUniverse | null>(null);
   const [name, setName] = useState("");
@@ -153,6 +160,7 @@ export function StockUniversesPanel({
   }
 
   function edit(universe: StockUniverse) {
+    setMarket(symbolMarket(universe.symbols[0] ?? "BBCA.JK"));
     setEditing(universe);
     setName(universe.name);
     setSymbols([...universe.symbols]);
@@ -161,6 +169,7 @@ export function StockUniversesPanel({
   }
 
   function toggleSymbol(symbol: StockInstrument["symbol"]) {
+    if (!marketCatalog.some((stock) => stock.symbol === symbol)) return;
     setSymbols((current) =>
       current.includes(symbol)
         ? current.filter((item) => item !== symbol)
@@ -258,7 +267,8 @@ export function StockUniversesPanel({
                 {editing ? "Edit stock universe" : "Buat stock universe"}
               </h3>
               <p>
-                Pilih 1–10 saham IDX untuk satu proses screening. Pilihan 3 saham tetap bisa digunakan.
+                Pilih 1–10 saham Indonesia atau Amerika Serikat. Satu universe
+                memakai satu pasar dan mata uang.
               </p>
               <ResourceQuota
                 kind="stock_universes"
@@ -274,6 +284,40 @@ export function StockUniversesPanel({
         </header>
         <form onSubmit={save} className="resource-form">
           <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="universe-market">Pasar saham</FieldLabel>
+              <Select
+                value={market}
+                disabled={saving || loading}
+                items={Object.entries(marketLabels).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                onValueChange={(value) => {
+                  if ((value !== "IDX" && value !== "US") || value === market)
+                    return;
+                  setMarket(value);
+                  setSymbols([]);
+                  setNotice(
+                    "Pasar diganti. Pilih kembali saham untuk universe ini.",
+                  );
+                }}
+              >
+                <SelectTrigger id="universe-market">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="IDX">{marketLabels.IDX}</SelectItem>
+                    <SelectItem value="US">{marketLabels.US}</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <FieldDescription>
+                AS: katalog awal 20 saham, bukan seluruh saham AS. Tidak ada
+                konversi kurs.
+              </FieldDescription>
+            </Field>
             <Field data-invalid={Boolean(error && !name.trim())}>
               <FieldLabel htmlFor="universe-name">Nama universe</FieldLabel>
               <Input
@@ -292,11 +336,14 @@ export function StockUniversesPanel({
             <FieldSet>
               <FieldLegend>Anggota universe</FieldLegend>
               <FieldDescription>
-                Cari saham dari katalog IDX. Maksimal {universeSelectionLimit} saham per universe;
-                ketersediaan OHLCV diperiksa ketika screening dijalankan.
+                Cari saham dari katalog{" "}
+                {market === "IDX" ? "IDX" : "Amerika Serikat"}. Maksimal{" "}
+                {universeSelectionLimit} saham per universe; ketersediaan OHLCV
+                diperiksa ketika screening dijalankan.
               </FieldDescription>
               <StockCatalogPicker
-                catalog={catalog}
+                key={market}
+                catalog={marketCatalog}
                 selected={symbols}
                 loading={loading}
                 disabled={saving}
@@ -306,7 +353,9 @@ export function StockUniversesPanel({
             {error && <FieldError>{error}</FieldError>}
           </FieldGroup>
           <div className="resource-form__actions">
-            <span>{symbols.length}/{universeSelectionLimit} saham dipilih</span>
+            <span>
+              {symbols.length}/{universeSelectionLimit} saham dipilih
+            </span>
             <Button type="submit" size="lg" disabled={saving}>
               {saving ? (
                 <LoaderCircle

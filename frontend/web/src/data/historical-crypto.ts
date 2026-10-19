@@ -179,6 +179,10 @@ export async function decodeDataset(
     );
   const data: DatasetContent = JSON.parse(decoder.decode(bytes));
   if (
+    !(
+      (manifest.market === "IDX" && manifest.currency === "IDR") ||
+      (manifest.market === "US" && manifest.currency === "USD")
+    ) ||
     data.schema_version !== manifest.schema_version ||
     data.purpose !== manifest.purpose ||
     data.market !== manifest.market ||

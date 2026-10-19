@@ -1,4 +1,4 @@
-// Package universe owns the small IDX stock catalog and user-defined bundles.
+// Package universe owns the IDX/US stock catalog and user-defined single-market bundles.
 package universe
 
 import (

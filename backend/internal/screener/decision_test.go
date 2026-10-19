@@ -31,6 +31,22 @@ func TestEvaluateBatchKeepsCooldownPerSymbol(t *testing.T) {
 	}
 }
 
+func TestUSEvaluationKeepsCatalogScopeIncludingShareClasses(t *testing.T) {
+	scope := DatasetScope{Symbols: []string{"AAPL", "MSFT", "BRK-B"}, From: "2026-01-01", To: "2026-01-01"}
+	candidates := []core.FeatureCandidate{}
+	for _, symbol := range scope.Symbols {
+		candidates = append(candidates, screeningCandidate(symbol, "2026-01-01T14:30:00Z"))
+	}
+	result, err := EvaluateBatch(screeningRule(), candidates, scope)
+	if err != nil || len(result.Signals) != 3 {
+		t.Fatalf("US decisions: %+v %v", result, err)
+	}
+	candidates[0].Symbol = "BBCA.JK"
+	if _, err := EvaluateBatch(screeningRule(), candidates, scope); err == nil {
+		t.Fatal("IDX candidate accepted in US scope")
+	}
+}
+
 func TestEvaluateBatchRejectsInvalidScopeAndChronology(t *testing.T) {
 	scope := DatasetScope{Symbols: []string{"BBCA.JK"}, From: "2026-01-01", To: "2026-01-02"}
 	for _, candidates := range [][]core.FeatureCandidate{

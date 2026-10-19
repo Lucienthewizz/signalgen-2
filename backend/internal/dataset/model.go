@@ -35,6 +35,7 @@ type Manifest struct {
 	Market         string   `json:"market"`
 	Currency       string   `json:"currency"`
 	Symbols        []string `json:"symbols"`
+	Exchanges      []string `json:"exchanges,omitempty"`
 	Timeframe      string   `json:"timeframe"`
 	Timezone       string   `json:"timezone"`
 	RequestedRange Range    `json:"requested_range"`

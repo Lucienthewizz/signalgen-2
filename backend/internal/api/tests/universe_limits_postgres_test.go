@@ -68,6 +68,20 @@ values($1,'yahoo_finance',$1,'Test fixture','XIDX','IDR')`, symbols[i]); err != 
 	}
 	defer runtime.Close()
 	store := universe.NewPostgresRepository(runtime)
+	// US symbols use the same owner/session/plan boundary and never replace IDX.
+	us, err := store.Create(ctx, owner, "US stocks", []string{"AAPL", "MSFT", "BRK-B"})
+	if err != nil || len(us.Symbols) != 3 {
+		t.Fatalf("US create: %+v %v", us, err)
+	}
+	if _, err := store.Get(ctx, other, us.ID); !errors.Is(err, universe.ErrNotFound) {
+		t.Fatalf("US ownership: %v", err)
+	}
+	if _, err := store.Update(ctx, owner, us.ID, "Mixed", []string{"AAPL", "BBCA.JK"}, us.Version); !errors.Is(err, universe.ErrInvalid) {
+		t.Fatalf("mixed universe accepted: %v", err)
+	}
+	if err := store.Delete(ctx, owner, us.ID, us.Version); err != nil {
+		t.Fatal(err)
+	}
 	three, err := store.Create(ctx, owner, "Three", symbols[:3])
 	if err != nil || len(three.Symbols) != 3 {
 		t.Fatalf("create three: %+v %v", three, err)

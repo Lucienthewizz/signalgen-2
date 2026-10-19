@@ -30,6 +30,7 @@ import {
   compareMonitorRuns,
 } from "@/lib/market-monitor";
 import { downloadCsv } from "@/lib/csv";
+import { formatStockPrice, snapshotChartSymbol } from "@/lib/stock-market";
 import {
   filteredRows,
   readScreenerPreferences,
@@ -536,6 +537,11 @@ export function WorkspaceScreenerPanel({
                 </Select>
                 <FieldDescription>
                   {selectedUniverse?.symbols.join(" · ")}
+                  {selectedUniverse &&
+                    ` · ${selectedUniverse.symbols[0]?.endsWith(".JK") ? "IDX / IDR" : "AS / USD"}`}
+                  {
+                    " · Ambang PRICE/EMA memakai mata uang universe, tanpa konversi kurs."
+                  }
                 </FieldDescription>
               </Field>
             </FieldGroup>
@@ -804,7 +810,7 @@ export function WorkspaceScreenerPanel({
                     ? "Screening baru sedang berjalan. Hasil terakhir tetap ditampilkan."
                     : historicalRun
                       ? `Hasil tersimpan ${new Date(historicalRun.recordedAt).toLocaleString("id-ID")}. Bukan harga live.`
-                      : "Harga buka dan tutup harian · IDR · bukan harga live."}
+                      : `Harga buka dan tutup harian · ${run.manifest.currency} · bukan harga live.`}
                 </p>
                 <p>
                   Snapshot harian · candle terakhir{" "}
@@ -819,8 +825,8 @@ export function WorkspaceScreenerPanel({
                     [
                       "Saham",
                       "Keputusan",
-                      "Buka IDR",
-                      "Tutup IDR",
+                      `Buka ${run.manifest.currency}`,
+                      `Tutup ${run.manifest.currency}`,
                       "RSI14",
                       "EMA20",
                       "Waktu candle",
@@ -871,10 +877,22 @@ export function WorkspaceScreenerPanel({
                 </header>
                 <dl className="stock-detail__values">
                   {[
-                    ["Harga buka", detailRow.latestOpen],
-                    ["Harga tutup", detailRow.latestClose],
-                    ["EMA 9", detailRow.features.ema9],
-                    ["EMA 20", detailRow.features.ema20],
+                    [
+                      `Harga buka (${run.manifest.currency})`,
+                      detailRow.latestOpen,
+                    ],
+                    [
+                      `Harga tutup (${run.manifest.currency})`,
+                      detailRow.latestClose,
+                    ],
+                    [
+                      `EMA 9 (${run.manifest.currency})`,
+                      detailRow.features.ema9,
+                    ],
+                    [
+                      `EMA 20 (${run.manifest.currency})`,
+                      detailRow.features.ema20,
+                    ],
                     ["RSI 14", detailRow.features.rsi14],
                   ].map(([label, value]) => (
                     <div key={label}>
@@ -949,7 +967,10 @@ export function WorkspaceScreenerPanel({
                 </div>
                 <div className="stock-detail__chart">
                   <TradingViewChart
-                    symbol={`IDX:${detailRow.decision.symbol.replace(".JK", "")}`}
+                    symbol={snapshotChartSymbol(
+                      detailRow.decision.symbol,
+                      run.manifest,
+                    )}
                     label={detailRow.decision.symbol.replace(".JK", "")}
                   />
                 </div>
@@ -1035,8 +1056,8 @@ export function WorkspaceScreenerPanel({
                   <TableRow>
                     <TableHead>Saham</TableHead>
                     <TableHead>Keputusan</TableHead>
-                    <TableHead>Harga buka (IDR)</TableHead>
-                    <TableHead>Harga tutup (IDR)</TableHead>
+                    <TableHead>Harga buka ({run.manifest.currency})</TableHead>
+                    <TableHead>Harga tutup ({run.manifest.currency})</TableHead>
                     <TableHead>RSI14</TableHead>
                     <TableHead>EMA20</TableHead>
                     <TableHead>Alasan</TableHead>
@@ -1079,13 +1100,17 @@ export function WorkspaceScreenerPanel({
                       <TableCell>
                         {row.latestOpen != null &&
                         Number.isFinite(row.latestOpen)
-                          ? new Intl.NumberFormat("id-ID").format(
+                          ? formatStockPrice(
                               row.latestOpen,
+                              run.manifest.currency,
                             )
                           : "—"}
                       </TableCell>
                       <TableCell>
-                        {new Intl.NumberFormat("id-ID").format(row.latestClose)}
+                        {formatStockPrice(
+                          row.latestClose,
+                          run.manifest.currency,
+                        )}
                       </TableCell>
                       <TableCell>{row.features.rsi14.toFixed(2)}</TableCell>
                       <TableCell>{row.features.ema20.toFixed(2)}</TableCell>

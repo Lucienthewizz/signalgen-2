@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { TradingViewChart } from "@/components/tradingview-chart";
+import { snapshotChartSymbol } from "@/lib/stock-market";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  idxTicker,
+  monitorTicker,
+  watchTicker,
   monitorRuns,
   priceMovement,
   openCloseChange,
@@ -80,7 +82,10 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
     >();
     for (const record of runs)
       for (const row of record.run.rows) {
-        const ticker = idxTicker(row.decision.symbol);
+        const ticker = monitorTicker(
+          row.decision.symbol,
+          record.run.manifest.market,
+        );
         if (ticker && !items.has(ticker)) items.set(ticker, { ...row, record });
       }
     return items;
@@ -112,7 +117,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
         const valid = [
           ...new Set(
             stored.filter(
-              (s): s is string => typeof s === "string" && idxTicker(s) === s,
+              (s): s is string => typeof s === "string" && watchTicker(s) === s,
             ),
           ),
         ].slice(0, 30);
@@ -141,9 +146,11 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   }
   function add(event: FormEvent) {
     event.preventDefault();
-    const ticker = idxTicker(query);
+    const ticker = watchTicker(query);
     if (!ticker) {
-      setError("Masukkan kode IDX 4 huruf, misalnya BBCA.");
+      setError(
+        "Masukkan kode IDX seperti BBCA atau saham AS dengan awalan US:, misalnya US:AAPL.",
+      );
       return;
     }
     if (watchlist.length >= 30 && !watchlist.includes(ticker)) {
@@ -162,14 +169,29 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   }
   const entries = runs.flatMap((record) =>
     record.run.rows
-      .filter((row) => idxTicker(row.decision.symbol) === selected)
+      .filter(
+        (row) =>
+          monitorTicker(row.decision.symbol, record.run.manifest.market) ===
+          selected,
+      )
       .map((row) => ({ ...row, record })),
+  );
+  const selectedMarket = selected.startsWith("US:") ? "US" : "IDX";
+  const selectedSymbol = selected.replace(/^US:/, "");
+  const selectedCurrency = selectedMarket === "US" ? "USD" : "IDR";
+  const selectedSnapshot = snapshots.get(selected);
+  const chart = snapshotChartSymbol(
+    selectedSymbol,
+    selectedSnapshot?.record.run.manifest ?? {
+      market: selectedMarket,
+      symbols: [selectedSymbol],
+    },
   );
   return (
     <div className="market-monitor">
       <nav className="monitor-strip" aria-label="Pilihan saham">
         <span>
-          <Activity aria-hidden="true" /> IDX
+          <Activity aria-hidden="true" /> IDX / AS
         </span>
         {watchlist.map((ticker) => (
           <button
@@ -179,7 +201,12 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             onClick={() => setSelected(ticker)}
           >
             {ticker}
-            <small>{names[ticker] ?? "Saham IDX"}</small>
+            <small>
+              {names[ticker] ??
+                (ticker.startsWith("US:")
+                  ? "Saham AS · USD"
+                  : "Saham IDX · IDR")}
+            </small>
           </button>
         ))}
       </nav>
@@ -192,8 +219,11 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           </span>
           <div className="monitor-chart__title">
             <h3>{selected}</h3>
-            <p>{names[selected] ?? "Saham IDX"}</p>
-            <Badge variant="outline">Harian · IDR</Badge>
+            <p>
+              {names[selected] ??
+                (selectedMarket === "US" ? "Saham AS" : "Saham IDX")}
+            </p>
+            <Badge variant="outline">Harian · {selectedCurrency}</Badge>
           </div>
           <Button
             variant="outline"
@@ -201,7 +231,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             nativeButton={false}
             render={
               <a
-                href={`https://www.tradingview.com/symbols/IDX-${selected}/`}
+                href={`https://www.tradingview.com/symbols/${chart.replace(":", "-")}/`}
                 target="_blank"
                 rel="noreferrer"
               />
@@ -211,7 +241,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             <ExternalLink data-icon="inline-end" />
           </Button>
         </header>
-        <TradingViewChart symbol={`IDX:${selected}`} label={selected} />
+        <TradingViewChart symbol={chart} label={selected} />
         <footer>
           Chart dari TradingView. Ketersediaan dan delay mengikuti penyedia
           data.
@@ -234,7 +264,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
               <div className="monitor-add">
                 <Input
                   id="monitor-symbol"
-                  placeholder="Kode IDX, misalnya BBCA"
+                  placeholder="BBCA atau US:AAPL"
                   value={query}
                   onChange={(e) => {
                     setQuery(e.target.value);
@@ -301,10 +331,10 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             <TableRow>
               <TableHead>Saham</TableHead>
               <TableHead className="monitor-price-heading--open">
-                Buka <span className="monitor-unit">IDR</span>
+                Buka <span className="monitor-unit">IDR / USD</span>
               </TableHead>
               <TableHead className="monitor-price-heading--close">
-                Tutup <span className="monitor-unit">IDR</span>
+                Tutup <span className="monitor-unit">IDR / USD</span>
               </TableHead>
               <TableHead>RSI 14</TableHead>
               <TableHead>EMA 20</TableHead>
@@ -349,12 +379,22 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                     </Button>
                     <span
                       className="monitor-company"
-                      title={names[ticker] ?? "Saham IDX"}
+                      title={
+                        names[ticker] ??
+                        (ticker.startsWith("US:")
+                          ? "Saham AS · USD"
+                          : "Saham IDX · IDR")
+                      }
                     >
-                      {names[ticker] ?? "Saham IDX"}
+                      {names[ticker] ??
+                        (ticker.startsWith("US:")
+                          ? "Saham AS · USD"
+                          : "Saham IDX · IDR")}
                     </span>
                   </TableCell>
-                  <TableCell data-label="Buka · IDR">
+                  <TableCell
+                    data-label={`Buka · ${ticker.startsWith("US:") ? "USD" : "IDR"}`}
+                  >
                     <span
                       className="monitor-price"
                       data-price={hasOpen ? "open" : "missing"}
@@ -362,7 +402,9 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                       {hasOpen ? number(snapshot.latestOpen!) : "—"}
                     </span>
                   </TableCell>
-                  <TableCell data-label="Tutup · IDR">
+                  <TableCell
+                    data-label={`Tutup · ${ticker.startsWith("US:") ? "USD" : "IDR"}`}
+                  >
                     <span
                       className="monitor-price"
                       data-price={hasClose ? movement : "missing"}

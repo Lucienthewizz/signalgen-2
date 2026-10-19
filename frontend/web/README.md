@@ -1,5 +1,10 @@
 # Signalgen Web
 
+US stocks: choose the US/Nasdaq/NYSE market in the universe editor, select 1–10
+stocks, then run that universe in the screener. Initial US catalog: 20 symbols,
+not all US listings. USD stays separate from IDX/IDR; no FX conversion. AS watchlist
+keys use `US:AAPL`. See [US scope and verification](../../docs/backend/US_STOCKS.md).
+
 Historical OHLCV/screener snapshot caching uses gzip + AES-256-GCM in IndexedDB,
 scoped to a verified user/installation/API and exact manifest version/checksum.
 Logout/user switch removes snapshot ciphertext and keys. Every run still checks

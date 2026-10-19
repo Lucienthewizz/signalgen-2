@@ -41,7 +41,7 @@ export function StockCatalogPicker({
       <Input
         id="catalog-search"
         type="search"
-        placeholder="Contoh: ASII atau Astra"
+        placeholder="Contoh: ASII, AAPL atau nama perusahaan"
         value={query}
         maxLength={80}
         disabled={loading || disabled}

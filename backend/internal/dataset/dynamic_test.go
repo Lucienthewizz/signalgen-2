@@ -28,7 +28,7 @@ func (fake fakeUniverseRepository) Instruments(_ context.Context, owner, id stri
 	if owner != fake.owner || id != "univ-a" {
 		return nil, universe.ErrNotFound
 	}
-	return []universe.Instrument{{Symbol: "BBCA.JK", ProviderSymbol: "BBCA.JK"}}, nil
+	return []universe.Instrument{{Symbol: "BBCA.JK", ProviderSymbol: "BBCA.JK", Exchange: "XIDX", Currency: "IDR"}}, nil
 }
 func (fake fakeUniverseRepository) Create(context.Context, string, string, []string) (universe.Universe, error) {
 	return universe.Universe{}, nil

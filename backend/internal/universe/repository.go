@@ -178,6 +178,32 @@ func (store *PostgresRepository) Delete(ctx context.Context, owner, id string, v
 }
 
 func replaceMembers(ctx context.Context, tx pgx.Tx, id string, symbols []string) error {
+	// Read all active metadata once before writing any membership rows.
+	rows, err := tx.Query(ctx, `select symbol,provider_symbol,name,exchange,currency
+from signalgen.stock_catalog where active and symbol=any($1::text[])`, symbols)
+	if err != nil {
+		return err
+	}
+	items := make([]Instrument, 0, len(symbols))
+	for rows.Next() {
+		var item Instrument
+		if err := rows.Scan(&item.Symbol, &item.ProviderSymbol, &item.Name, &item.Exchange, &item.Currency); err != nil {
+			rows.Close()
+			return err
+		}
+		items = append(items, item)
+	}
+	readErr := rows.Err()
+	rows.Close()
+	if readErr != nil {
+		return readErr
+	}
+	if len(items) != len(symbols) {
+		return fmt.Errorf("%w: unsupported symbol", ErrInvalid)
+	}
+	if _, _, err := InstrumentMarket(items); err != nil {
+		return err
+	}
 	for position, symbol := range symbols {
 		command, err := tx.Exec(ctx, `insert into signalgen.stock_universe_members(universe_id,symbol,position)
 select $1,symbol,$3 from signalgen.stock_catalog where symbol=$2 and active`, id, strings.TrimSpace(symbol), position)
@@ -196,11 +222,14 @@ func validSymbols(symbols []string) bool {
 		return false
 	}
 	seen := map[string]bool{}
+	market := ""
 	for _, symbol := range symbols {
 		symbol = strings.TrimSpace(symbol)
-		if symbol == "" || seen[symbol] {
+		next := SymbolMarket(symbol)
+		if next == "" || seen[symbol] || market != "" && market != next {
 			return false
 		}
+		market = next
 		seen[symbol] = true
 	}
 	return true

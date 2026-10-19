@@ -111,6 +111,10 @@ WASM dapat dianalisis; secret provider/signing/server tidak di client. Encryptio
 
 Normalisasi historis mencakup market/currency/UTC/adjustment/warmup. Provider server-side; hak redistribusi/cache diperiksa. Signal bukan order atau jaminan profit.
 
+Perluasan 19 Oktober 2026 atas permintaan pengguna: katalog awal 20 saham AS
+Nasdaq/NYSE, market `US` dan currency `USD`, selain katalog IDX/IDR. Satu universe
+tetap 1–10 saham satu pasar; bukan semua bursa sekaligus. [Kontrak dan batas](backend/US_STOCKS.md).
+
 ## 6. Runtime dan realtime
 
 Frontend static assets/CDN; SSR/Next.js tidak diperlukan. Go API aktif pada port 8080. Python/Socket.IO pada port lama hanya arsip untuk pembanding.
