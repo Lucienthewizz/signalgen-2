@@ -251,100 +251,102 @@ export function StockUniversesPanel({
 
   return (
     <div className="universe-workspace">
-      <section
-        className="universe-editor"
+      <form
+        onSubmit={save}
+        className="universe-editor universe-form"
         aria-labelledby="universe-editor-title"
       >
-        <div className="universe-window-bar">
-          <span className="news-window-dots" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
-          <span>Stock universe</span>
-          <span>IDX</span>
-        </div>
-        <div className="universe-window-body">
-          <header className="universe-section-heading">
-            <div>
-              <h3 id="universe-editor-title">
-                {editing ? "Edit stock universe" : "Build a stock universe"}
-              </h3>
-              <p>
-                Select up to {universeSelectionLimit} IDX stocks for your next
-                screening.
-              </p>
-            </div>
-            <ResourceQuota kind="stock_universes" revision={universes.length} />
-          </header>
-          <form onSubmit={save} className="universe-form">
-            <StockCatalogPicker
-              key={editing?.id ?? "new"}
-              catalog={catalog}
-              selected={symbols}
-              loading={loading}
-              disabled={saving}
-              onToggle={toggleSymbol}
-            >
-              <div className="universe-form__save">
-                <FieldGroup>
-                  <Field
-                    data-invalid={Boolean(error && !name.trim())}
-                    data-disabled={saving}
-                  >
-                    <FieldLabel htmlFor="universe-name">
-                      Universe name
-                    </FieldLabel>
-                    <Input
-                      id="universe-name"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      placeholder="e.g. Banking watchlist"
-                      maxLength={100}
-                      disabled={saving}
-                      aria-invalid={Boolean(error && !name.trim())}
-                    />
-                  </Field>
-                </FieldGroup>
-                <div className="universe-form__actions">
-                  {editing && (
-                    <Button
-                      variant="outline"
-                      disabled={saving}
-                      onClick={resetEditor}
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                  <Button
-                    type="submit"
-                    disabled={
-                      loading || saving || !name.trim() || symbols.length === 0
-                    }
-                  >
-                    {saving ? (
-                      <LoaderCircle
-                        data-icon="inline-start"
-                        className="is-spinning"
-                      />
-                    ) : editing ? (
-                      <Pencil data-icon="inline-start" />
-                    ) : (
-                      <Plus data-icon="inline-start" />
-                    )}
-                    {saving
-                      ? "Saving…"
-                      : editing
-                        ? "Save changes"
-                        : "Create universe"}
-                  </Button>
-                </div>
+        <StockCatalogPicker
+          key={editing?.id ?? "new"}
+          catalog={catalog}
+          selected={symbols}
+          loading={loading}
+          disabled={saving}
+          onToggle={toggleSymbol}
+          header={
+            <>
+              <div className="universe-window-bar">
+                <span className="news-window-dots" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span>Stock universe</span>
+                <span>IDX</span>
               </div>
-              {error && <FieldError>{error}</FieldError>}
-            </StockCatalogPicker>
-          </form>
-        </div>
-      </section>
+              <header className="universe-section-heading">
+                <div>
+                  <h3 id="universe-editor-title">
+                    {editing ? "Edit stock universe" : "Build a stock universe"}
+                  </h3>
+                  <p>
+                    Select up to {universeSelectionLimit} IDX stocks for your
+                    next screening.
+                  </p>
+                </div>
+                <ResourceQuota
+                  kind="stock_universes"
+                  revision={universes.length}
+                />
+              </header>
+            </>
+          }
+        >
+          <div className="universe-form__save">
+            <FieldGroup>
+              <Field
+                data-invalid={Boolean(error && !name.trim())}
+                data-disabled={saving}
+              >
+                <FieldLabel htmlFor="universe-name">Universe name</FieldLabel>
+                <Input
+                  id="universe-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="e.g. Banking watchlist"
+                  maxLength={100}
+                  disabled={saving}
+                  aria-invalid={Boolean(error && !name.trim())}
+                />
+              </Field>
+            </FieldGroup>
+            <div className="universe-form__actions">
+              {editing && (
+                <Button
+                  variant="outline"
+                  disabled={saving}
+                  onClick={resetEditor}
+                >
+                  Cancel
+                </Button>
+              )}
+              <Button
+                type="submit"
+                disabled={
+                  loading || saving || !name.trim() || symbols.length === 0
+                }
+              >
+                {saving ? (
+                  <LoaderCircle
+                    data-icon="inline-start"
+                    className="is-spinning"
+                  />
+                ) : editing ? (
+                  <Pencil data-icon="inline-start" />
+                ) : (
+                  <Plus data-icon="inline-start" />
+                )}
+                {saving
+                  ? "Saving…"
+                  : editing
+                    ? "Save changes"
+                    : "Create universe"}
+              </Button>
+            </div>
+          </div>
+          {error && <FieldError>{error}</FieldError>}
+        </StockCatalogPicker>
+      </form>
 
       <section
         className="universe-library"

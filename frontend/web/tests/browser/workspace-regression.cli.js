@@ -166,7 +166,7 @@ async (page) => {
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
         const surfaceSelector = {
           overview: ".overview-launch", analysis: ".screener-console", rules: ".rule-composer",
-          universes: ".universe-editor", journal: ".journal-toolbar", realtime: ".monitor-chart",
+          universes: ".stock-catalog-picker__catalog", journal: ".journal-toolbar", realtime: ".monitor-chart",
           news: ".news-feed", access: ".panel", subscription: ".subscription-current", operator: ".admin-console, .admin-account, .workspace-empty-state",
         }[view];
         await page.locator(surfaceSelector).first().waitFor({ timeout: 10000 });
@@ -270,16 +270,18 @@ async (page) => {
             const browse = editor.querySelector('.stock-catalog-picker__browse').getBoundingClientRect();
             const selected = editor.querySelector('.universe-selection').getBoundingClientRect();
             const catalog = editor.querySelector('.stock-catalog-picker__table').getBoundingClientRect();
+            const catalogCard = editor.querySelector('.stock-catalog-picker__catalog').getBoundingClientRect();
             const title = editor.querySelector('h3').getBoundingClientRect();
             const savedTitle = library.querySelector('h3').getBoundingClientRect();
             const row = library.querySelector('article').getBoundingClientRect();
             const alignment = Math.max(Math.abs(title.left - browse.left), Math.abs(browse.left - catalog.left), Math.abs(savedTitle.left - row.left), Math.abs(savedTitle.left - title.left));
             const chips = library.querySelector(".universe-library__symbols");
-            return { gap: b.top - a.bottom, left: Math.abs(a.left - b.left), right: Math.abs(a.right - b.right), alignment, sideBySide: selected.left >= browse.right, baseline: Math.abs(selected.top - browse.top), wrap: chips && getComputedStyle(chips).flexWrap };
+            return { gap: b.top - a.bottom, left: Math.abs(a.left - b.left), right: Math.abs(a.right - b.right), alignment, selectionGap: selected.top - catalogCard.bottom, cardEdges: Math.max(Math.abs(selected.left - catalogCard.left), Math.abs(selected.right - catalogCard.right)), tableInset: catalogCard.width - catalog.width, wrap: chips && getComputedStyle(chips).flexWrap };
           });
           if (layout.gap < 16 || layout.left > 1 || layout.right > 1) throw Error(`Universe cards are not stacked/aligned: ${JSON.stringify(layout)}`);
           if (layout.alignment > 1) throw Error(`Universe content edges differ: ${JSON.stringify(layout)}`);
-          if (width >= 1440 && (!layout.sideBySide || layout.baseline > 1)) throw Error(`Universe selection panel baseline differs: ${JSON.stringify(layout)}`);
+          if (layout.selectionGap < 16 || layout.cardEdges > 1 || layout.tableInset > 50) throw Error(`Universe catalog must be full-width above selection: ${JSON.stringify(layout)}`);
+          await page.locator('.universe-selection').screenshot({ path: `/private/tmp/signalgen-selected-stacked-${width}-${theme}.png`, animations: "disabled" });
           if (layout.wrap !== "wrap") throw Error("Saved universe stocks cannot wrap");
           if (await page.locator('.universe-window-bar .news-window-dots i').count() !== 3) throw Error("Mac window controls missing");
           if (await categories.locator('button svg').count() !== 7) throw Error("Category icons missing");
