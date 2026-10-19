@@ -1,7 +1,7 @@
-/* StocksUniverse's UI font roles, scoped away from the landing page.
+/* Saira-led workspace typography, scoped away from the landing page.
    Fonts are self-hosted; embedded third-party charts keep their own typography. */
 html[data-typography="workspace"] {
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Saira Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
   --font-navigation: "Saira Condensed", var(--font-sans);
   font-family: var(--font-sans);
@@ -13,6 +13,14 @@ html[data-typography="workspace"] :is(button, input, select, textarea) {
 
 html[data-typography="workspace"]
   :is(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    button,
+    summary,
     .nav-group > span,
     .nav-group a,
     .nav-group button,
@@ -20,7 +28,16 @@ html[data-typography="workspace"]
     [data-slot="table-head"]
   ) {
   font-family: var(--font-navigation);
+}
+
+html[data-typography="workspace"]
+  :is(.nav-group a, .nav-group button, .account-sidebar__item) {
   font-weight: 500;
+}
+
+html[data-typography="workspace"] :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 html[data-typography="workspace"] [data-slot="table-head"] {

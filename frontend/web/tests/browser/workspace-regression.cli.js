@@ -1,4 +1,6 @@
+// prettier-ignore
 async (page) => {
+  const origin = new URL(page.url()).origin;
   // All API responses and account state are synthetic. Never call a real account.
   const user = { id: "11111111-1111-4111-8111-111111111111", full_name: "Akun pengujian", email: "fixture@example.test", role: "operator", status: "active" };
   const now = new Date().toISOString();
@@ -18,6 +20,7 @@ async (page) => {
   let systemRule = false;
   let failUniverseDelete = false;
   let universeWrite = null;
+  let ruleWrite = null;
   let sessionMutations = 0;
   const sessionFixtures = [
     { id: "fixture-current", label: "Current browser", status: "active", current: true, last_seen_at: now },
@@ -54,6 +57,10 @@ async (page) => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort();
     const p = url.pathname;
+    if (p === "/api/v1/rules" && route.request().method() === "POST") {
+      ruleWrite = route.request().postDataJSON();
+      return route.fulfill({ json: { ...rule, name: ruleWrite.definition.name, definition: ruleWrite.definition } });
+    }
     if (p.startsWith("/api/v1/account/sessions/") && route.request().method() !== "GET") sessionMutations++;
     if (p.startsWith("/api/v1/stock-universes") && ["POST", "PATCH"].includes(route.request().method())) {
       universeWrite = { method: route.request().method(), body: route.request().postDataJSON() };
@@ -69,7 +76,7 @@ async (page) => {
     else if (p === "/api/v1/account/sessions") payload = { items: sessionFixtures };
     else if (p === "/api/v1/rules") payload = { items: [systemRule ? { ...rule, name: "Default Scalping", owner_type: "system", definition: undefined } : rule], next_cursor: null };
     else if (p === "/api/v1/stock-universes") payload = { items: [universe] };
-    else if (p === "/api/v1/stocks") payload = { items: universe.symbols.map(symbol => ({ symbol, name: symbol })) };
+    else if (p === "/api/v1/stocks") payload = { items: [...universe.symbols.map(symbol => ({ symbol, name: symbol, exchange: "XIDX", currency: "IDR" })), { symbol: "AAPL", name: "Apple Inc.", exchange: "XNAS", currency: "USD" }] };
     else if (p === "/api/v1/subscription") payload = { subscription };
     else if (p === "/api/v1/subscription/plans") payload = { items: plans };
     else if (p === "/api/v1/subscription/usage") payload = { limits: plans[2].limits, used: { custom_rules: 1, stock_universes: 1 } };
@@ -79,7 +86,7 @@ async (page) => {
     else payload = { items: [] };
     return route.fulfill({ json: payload });
   });
-  await page.goto("http://127.0.0.1:5174/#app/analysis");
+  await page.goto(`${origin}/#app/analysis`);
   await page.reload();
   await page.getByRole("button", { name: "Export CSV" }).waitFor({ timeout: 10000 });
   await page.getByRole("button", { name: "BBCA", exact: true }).click({ timeout: 5000 });
@@ -104,7 +111,7 @@ async (page) => {
   if (await page.evaluate(key => localStorage.getItem(key), journalKey) !== "preserve-existing-drafts") throw Error("Old drafts were overwritten");
   if (await page.locator(".journal-capture").count()) throw Error("Journal form was persisted");
   await page.route("**/api/v1/stock-universes", route => route.fulfill({ json: { items: [universe, { ...universe, id: "fixture-energy", name: "Energy selection", symbols: ["PTBA.JK"] }] } }));
-  await page.goto("http://127.0.0.1:5174/#app/realtime");
+  await page.goto(`${origin}/#app/realtime`);
   await page.getByLabel("Stock universe", { exact: true }).waitFor();
   await page.waitForFunction(() => document.querySelector("#monitor-universe")?.textContent.includes("Bank pilihan"));
   if (await page.locator(".monitor-strip button").count() !== 2) throw Error("Monitor ignored saved universe");
@@ -138,7 +145,7 @@ async (page) => {
   await page.getByRole("columnheader", { name: "Change", exact: true }).waitFor();
   if (await page.locator(".monitor-ledger .monitor-change").first().innerText() !== "+6.32%") throw Error("Monitor percentages must show a sign and two decimals");
   await page.unroute("**/api/v1/stock-universes");
-  await page.goto("http://127.0.0.1:5174/#app/access");
+  await page.goto(`${origin}/#app/access`);
   const ended = page.locator(".account-session-ledger article").filter({ hasText: "Ended browser" });
   await ended.waitFor();
   await page.getByRole("button", { name: "Delete history for Ended browser", exact: true }).click();
@@ -162,26 +169,28 @@ async (page) => {
     await page.setViewportSize({ width, height: 1000 });
     for (let theme = 0; theme < 2; theme++) {
       for (const view of routes) {
-        await page.goto(`http://127.0.0.1:5174/#app/${view}`);
+        await page.goto(`${origin}/#app/${view}`);
         await page.locator(".demo-workbench").waitFor({ timeout: 10000 });
         await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
         await page.evaluate(() => Promise.all([
-          document.fonts.load('14px "Geist Variable"'),
+          document.fonts.load('14px "Saira Variable"'),
+          document.fonts.load('600 28px "Saira Condensed"'),
           document.fonts.load('500 14px "Saira Condensed"'),
           document.fonts.load('13px "Geist Mono Variable"'),
         ]));
         const typography = await page.evaluate(() => ({
           body: getComputedStyle(document.body).fontFamily,
           nav: getComputedStyle(document.querySelector(".nav-group button")).fontFamily,
-          loaded: document.fonts.check('14px "Geist Variable"') && document.fonts.check('500 14px "Saira Condensed"'),
+          heading: getComputedStyle(document.querySelector(".workspace h1, .workspace h2")).fontFamily,
+          loaded: document.fonts.check('14px "Saira Variable"') && document.fonts.check('500 14px "Saira Condensed"') && document.fonts.check('600 28px "Saira Condensed"'),
         }));
-        if (!typography.body.includes("Geist Variable") || !typography.nav.includes("Saira Condensed") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
+        if (!typography.body.includes("Saira Variable") || !typography.nav.includes("Saira Condensed") || !typography.heading.includes("Saira Condensed") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
         const close = page.getByRole("button", { name: "Close menu" });
         const bounds = await close.boundingBox();
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
         const surfaceSelector = {
           overview: ".overview-launch", analysis: ".screener-console", rules: ".rule-composer",
-          universes: ".universe-editor", journal: ".journal-toolbar", realtime: ".monitor-chart",
+          universes: ".stock-catalog-picker__catalog", journal: ".journal-toolbar", realtime: ".monitor-chart",
           news: ".news-feed", access: ".panel", subscription: ".subscription-current", operator: ".admin-console, .admin-account, .workspace-empty-state",
         }[view];
         await page.locator(surfaceSelector).first().waitFor({ timeout: 10000 });
@@ -213,9 +222,10 @@ async (page) => {
           const geometry = await page.locator(".monitor-board-grid").evaluate(el => {
             const chart = el.querySelector(".monitor-chart").getBoundingClientRect();
             const detail = el.querySelector(".monitor-stock-detail").getBoundingClientRect();
-            return { sideBySide: detail.x >= chart.right, below: detail.top >= chart.bottom, topOffset: Math.abs(chart.top - detail.top) };
+            const card = el.querySelector(".monitor-detail-card").getBoundingClientRect();
+            return { sideBySide: detail.x >= chart.right, below: detail.top >= chart.bottom, topOffset: Math.abs(chart.top - card.top), bottomOffset: Math.abs(chart.bottom - card.bottom) };
           });
-          if (width === 1440 && (!geometry.sideBySide || geometry.topOffset > 1)) throw Error("Chart and stock card are not aligned side by side");
+          if (width === 1440 && (!geometry.sideBySide || geometry.topOffset > 1 || geometry.bottomOffset > 1)) throw Error(`Chart and detail card edges must align: ${JSON.stringify(geometry)}`);
           if (width === 390 && !geometry.below) throw Error("Stock card must stack below chart on mobile");
           await page.locator(".monitor-ledger").screenshot({ path: `/private/tmp/signalgen-monitor-table-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           await page.locator(".market-monitor").screenshot({ path: `/private/tmp/signalgen-monitor-lineup-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
@@ -285,16 +295,18 @@ async (page) => {
             const browse = editor.querySelector('.stock-catalog-picker__browse').getBoundingClientRect();
             const selected = editor.querySelector('.universe-selection').getBoundingClientRect();
             const catalog = editor.querySelector('.stock-catalog-picker__table').getBoundingClientRect();
+            const catalogCard = editor.querySelector('.stock-catalog-picker__catalog').getBoundingClientRect();
             const title = editor.querySelector('h3').getBoundingClientRect();
             const savedTitle = library.querySelector('h3').getBoundingClientRect();
             const row = library.querySelector('article').getBoundingClientRect();
             const alignment = Math.max(Math.abs(title.left - browse.left), Math.abs(browse.left - catalog.left), Math.abs(savedTitle.left - row.left), Math.abs(savedTitle.left - title.left));
             const chips = library.querySelector(".universe-library__symbols");
-            return { gap: b.top - a.bottom, left: Math.abs(a.left - b.left), right: Math.abs(a.right - b.right), alignment, sideBySide: selected.left >= browse.right, baseline: Math.abs(selected.top - browse.top), wrap: chips && getComputedStyle(chips).flexWrap };
+            return { gap: b.top - a.bottom, left: Math.abs(a.left - b.left), right: Math.abs(a.right - b.right), alignment, selectionGap: selected.top - catalogCard.bottom, cardEdges: Math.max(Math.abs(selected.left - catalogCard.left), Math.abs(selected.right - catalogCard.right)), tableInset: catalogCard.width - catalog.width, wrap: chips && getComputedStyle(chips).flexWrap };
           });
           if (layout.gap < 16 || layout.left > 1 || layout.right > 1) throw Error(`Universe cards are not stacked/aligned: ${JSON.stringify(layout)}`);
           if (layout.alignment > 1) throw Error(`Universe content edges differ: ${JSON.stringify(layout)}`);
-          if (width >= 1440 && (!layout.sideBySide || layout.baseline > 1)) throw Error(`Universe selection panel baseline differs: ${JSON.stringify(layout)}`);
+          if (layout.selectionGap < 16 || layout.cardEdges > 1 || layout.tableInset > 50) throw Error(`Universe catalog must be full-width above selection: ${JSON.stringify(layout)}`);
+          await page.locator('.universe-selection').screenshot({ path: `/private/tmp/signalgen-selected-stacked-${width}-${theme}.png`, animations: "disabled" });
           if (layout.wrap !== "wrap") throw Error("Saved universe stocks cannot wrap");
           if (await page.locator('.universe-window-bar .news-window-dots i').count() !== 3) throw Error("Mac window controls missing");
           if (await categories.locator('button svg').count() !== 7) throw Error("Category icons missing");
@@ -343,10 +355,10 @@ async (page) => {
     if (!stillOpen || stillOpen.x < 0) throw Error(`Navigation collapsed sidebar at ${width}`);
     await page.getByRole("button", { name: "Close menu", exact: true }).click({ timeout: 5000 });
   }
-  await page.goto("http://127.0.0.1:5174/#account");
+  await page.goto(`${origin}/#account`);
   await page.locator("main").waitFor({ timeout: 10000 });
   await page.screenshot({ path: "/private/tmp/signalgen-account.png", animations: "disabled", timeout: 10000 });
-  await page.goto("http://127.0.0.1:5174/#app/universes");
+  await page.goto(`${origin}/#app/universes`);
   await page.getByRole("button", { name: "Edit Bank pilihan", exact: true }).click({ timeout: 5000 });
   if(await page.locator('.universe-selection__stocks li').count() !== 2) throw Error("Selected stock cards missing");
   const stockCard = await page.locator('.universe-selection__stocks li').first().evaluate(el=>({radius:parseFloat(getComputedStyle(el).borderTopLeftRadius),padding:parseFloat(getComputedStyle(el).paddingLeft)}));
@@ -392,7 +404,7 @@ async (page) => {
   }
   failUniverseDelete = false;
   systemRule = true;
-  await page.goto("http://127.0.0.1:5174/#app/analysis");
+  await page.goto(`${origin}/#app/analysis`);
   await page.getByText("System rule conditions are checked automatically.", { exact: true }).waitFor({ timeout: 10000 });
   for (const width of [1440, 900, 390]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -405,7 +417,7 @@ async (page) => {
       await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
     }
   }
-  await page.goto("http://127.0.0.1:5174/#app/subscription");
+  await page.goto(`${origin}/#app/subscription`);
   await page.getByRole("heading", { name: "Quota usage", exact: true }).waitFor({ timeout: 10000 });
   const backtest = page.locator('.subscription-feature-grid [data-slot="card"]').filter({ hasText: "Backtest access" });
   if (!(await backtest.innerText()).includes("Not available yet")) throw Error("Backtest incorrectly presented as usable");
@@ -434,23 +446,78 @@ async (page) => {
         return { left: inner.left - outer.left, right: outer.right - inner.right, radius: parseFloat(getComputedStyle(el).borderTopLeftRadius) };
       });
       if (inset.left < 16 || inset.right < 16 || inset.radius < 12) throw Error("Subscription cards lack rounded inset container");
+      const planAlignment = await page.locator('.plan-ledger').evaluate(el => {
+        const outer = el.getBoundingClientRect();
+        const header = el.querySelector(':scope > header').getBoundingClientRect();
+        const title = el.querySelector('#plan-heading').getBoundingClientRect();
+        const columns = el.querySelector('.plan-columns').getBoundingClientRect();
+        const faq = el.querySelector('.subscription-faq').getBoundingClientRect();
+        return { inset: columns.left - outer.left, edges: Math.max(Math.abs(header.left - columns.left), Math.abs(title.left - columns.left), Math.abs(columns.left - faq.left), Math.abs(columns.right - faq.right)) };
+      });
+      if (planAlignment.inset < 16 || planAlignment.edges > 1) throw Error(`Plan heading, cards and FAQ gutters differ: ${JSON.stringify(planAlignment)}`);
+      await page.locator('.plan-ledger').screenshot({ path: `/private/tmp/signalgen-plan-alignment-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
       await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
     }
   }
   unauthorized = true;
-  await page.goto("http://127.0.0.1:5174/#app/analysis");
+  await page.goto(`${origin}/#app/analysis`);
   await page.waitForURL("**/#login", { timeout: 10000 });
   if (await page.evaluate(() => sessionStorage.getItem("signalgen.access-token"))) throw Error("401 retained auth");
   for (const route of ["home", "creators", "login", "register", "forgot-password", "reset-password"]) {
-    await page.goto(`http://127.0.0.1:5174/#${route}`);
+    await page.goto(`${origin}/#${route}`);
     await page.locator("main").waitFor({ timeout: 10000 });
     await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
     await page.waitForFunction(expected => document.documentElement.dataset.typography === expected, route === "home" ? "landing" : "workspace");
     const family = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
-    if (!family.includes(route === "home" ? "Manrope Variable" : "Geist Variable")) throw Error(`Public route font mismatch: ${route} ${family}`);
+    if (!family.includes(route === "home" ? "Manrope Variable" : "Saira Variable")) throw Error(`Public route font mismatch: ${route} ${family}`);
     if (await page.locator(".auth-layout").count() && !await page.locator(".auth-layout").evaluate(el => getComputedStyle(el).backgroundImage.includes("gradient"))) throw Error(`Auth surface gradient missing: ${route}`);
     await page.screenshot({ path: `/private/tmp/signalgen-public-${route}.png`, animations: "disabled", timeout: 10000 });
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Public page overflow: ${route}`);
+  }
+  unauthorized = false;
+  systemRule = false;
+  await page.reload();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${origin}/#app/rules`);
+  await page.getByRole("button", { name: "New blank rule", exact: true }).click();
+  await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
+  if (await page.getByLabel("Rule name", { exact: true }).inputValue() !== "Bullish EMA cross") throw Error("Preset did not populate rule name");
+  if (!await page.getByLabel("Rule summary", { exact: true }).innerText().then(text => text.includes("crosses above"))) throw Error("Preset summary missing crossover semantics");
+  await page.getByLabel("Condition value 1", { exact: true }).fill("EMA9");
+  await page.getByRole("button", { name: "Save rule", exact: true }).click();
+  if (!await page.getByText("Choose a different reference; an indicator cannot compare with itself.", { exact: true }).count()) throw Error("Self-comparison validation missing");
+  await page.getByLabel("Condition value 1", { exact: true }).fill("EMA20");
+  if (ruleWrite) throw Error("Invalid criteria were sent to the API");
+  for (const close of await page.getByRole("button", { name: "Dismiss notification", exact: true, includeHidden: true }).all()) await close.click({ force: true });
+  for (const width of [1440, 390]) for (const theme of ["dark", "light"]) {
+    await page.setViewportSize({ width, height: 1000 });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: `/private/tmp/signalgen-preset-workflow-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Preset workflow overflow ${width} ${theme}`);
+  }
+  await page.getByRole("button", { name: "Save rule", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('#rule-name')?.value === '');
+  if (!ruleWrite || ruleWrite.definition.conditions[0].op !== "CROSS_UP" || ruleWrite.definition.signal_type !== "BUY") throw Error("Preset save payload lost crossover or signal action");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${origin}/#app/universes`);
+  const catalog = page.getByRole("table", { name: "Stock catalog", exact: true });
+  await catalog.waitFor();
+  await page.getByRole("button", { name: "United States · USD", exact: true }).click();
+  if (!(await catalog.innerText()).includes("AAPL") || (await catalog.innerText()).includes("BBCA")) throw Error("US catalog is not market isolated");
+  await page.getByRole("button", { name: "Indonesia · IDR", exact: true }).click();
+  if (!(await catalog.innerText()).includes("BBCA") || (await catalog.innerText()).includes("AAPL")) throw Error("IDX catalog is not market isolated");
+  await page.goto(`${origin}/#app/analysis`);
+  await page.getByRole("button", { name: "Export CSV", exact: true }).waitFor({ timeout: 10000 });
+  await page.getByRole("group", { name: "Signal status", exact: true }).waitFor();
+  await page.getByRole("group", { name: "Signal status", exact: true }).getByRole("button", { name: /^SELL/ }).click();
+  if (!await page.getByText("No stocks match these filters.", { exact: false }).count()) throw Error("SELL filter did not exclude BUY and rejected rows");
+  await page.getByRole("button", { name: "Reset filters", exact: true }).click();
+  for (const width of [1440, 390]) for (const theme of ["dark", "light"]) {
+    await page.setViewportSize({ width, height: 1000 });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: `/private/tmp/signalgen-screening-workflow-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
   }
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));

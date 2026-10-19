@@ -133,6 +133,11 @@ export function conditionEvidence(
     right,
     passed,
     ...(previous ? { previous } : {}),
+    // New workflow fields share the same validated two-candle evidence.
+    available: true,
+    crossover: Boolean(previous),
+    previousLeft: previous?.left,
+    previousRight: previous?.right,
   };
 }
 

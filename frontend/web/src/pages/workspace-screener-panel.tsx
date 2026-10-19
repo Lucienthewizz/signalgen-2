@@ -71,6 +71,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  conditionSummary,
+  ruleSummary as explainRule,
+} from "@/lib/rule-workflow";
+import { screeningStatus, screeningStatusLabels } from "@/lib/screening-status";
 import {
   Table,
   TableBody,
@@ -144,6 +150,10 @@ export function WorkspaceScreenerPanel({
     typeof screeningFailure
   > | null>(null);
   const [resultFilter, setResultFilter] = useState("all");
+  const [signalFilter, setSignalFilter] =
+    useState<keyof typeof screeningStatusLabels>("all");
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyMarket, setHistoryMarket] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<ScreenerPreferences["sort"]>("symbol");
   const [preferencesReady, setPreferencesReady] = useState(false);
@@ -544,7 +554,7 @@ export function WorkspaceScreenerPanel({
                   {selectedUniverse &&
                     ` · ${selectedUniverse.symbols[0]?.endsWith(".JK") ? "IDX / IDR" : "US / USD"}`}
                   {
-                    " · Ambang PRICE/EMA memakai mata uang universe, tanpa konversi kurs."
+                    " · Price and EMA thresholds use this universe's currency; no currency conversion."
                   }
                 </FieldDescription>
               </Field>
@@ -562,12 +572,26 @@ export function WorkspaceScreenerPanel({
                   <p>System rule conditions are checked automatically.</p>
                 )}
                 {conditions.length > 0 && (
-                  <div>
-                    {conditions.map((condition) => (
-                      <Badge key={condition} variant="outline">
-                        {condition}
-                      </Badge>
-                    ))}
+                  <div className="screener-criteria">
+                    <p>{explainRule(selectedRule?.definition)}</p>
+                    <ol>
+                      {selectedRule?.definition?.conditions.map(
+                        (condition, index) => (
+                          <li key={index}>
+                            <span>{index + 1}</span>
+                            {conditionSummary(condition)}
+                          </li>
+                        ),
+                      )}
+                    </ol>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      nativeButton={false}
+                      render={<a href="#app/rules" />}
+                    >
+                      Edit criteria or choose a preset
+                    </Button>
                   </div>
                 )}
               </div>
@@ -655,33 +679,73 @@ export function WorkspaceScreenerPanel({
       {history.length > 0 && (
         <details className="screener-history">
           <summary>Screening history ({history.length})</summary>
+          <FieldGroup className="screener-history-filters">
+            <Field>
+              <FieldLabel htmlFor="history-search">
+                Find a past screen
+              </FieldLabel>
+              <Input
+                id="history-search"
+                value={historySearch}
+                onChange={(event) => setHistorySearch(event.target.value)}
+                placeholder="Rule, universe or date"
+                maxLength={100}
+              />
+            </Field>
+            <Field>
+              <FieldLabel id="history-market-label">Market</FieldLabel>
+              <ToggleGroup
+                aria-labelledby="history-market-label"
+                value={[historyMarket]}
+                onValueChange={(values) => setHistoryMarket(values[0] || "all")}
+                variant="outline"
+              >
+                <ToggleGroupItem value="all">All markets</ToggleGroupItem>
+                <ToggleGroupItem value="IDX">IDX</ToggleGroupItem>
+                <ToggleGroupItem value="US">US</ToggleGroupItem>
+              </ToggleGroup>
+            </Field>
+          </FieldGroup>
           <ul>
-            {history.map((item) => (
-              <li key={`${item.run.result.request_id}-${item.recordedAt}`}>
-                <div>
-                  <strong>{item.rule}</strong>
-                  <time dateTime={item.recordedAt}>
-                    {new Date(item.recordedAt).toLocaleString("en-GB")}
-                  </time>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={state === "loading"}
-                  onClick={() => {
-                    setRun(item.run);
-                    setRunContext(null);
-                    setHistoricalRun(item);
-                    setDetailSymbol(null);
-                    setState("completed");
-                    setFailure(null);
-                    setError(null);
-                  }}
-                >
-                  Review result
-                </Button>
-              </li>
-            ))}
+            {history
+              .filter(
+                (item) =>
+                  (historyMarket === "all" ||
+                    item.run.manifest.market === historyMarket) &&
+                  `${item.rule} ${item.context?.universeName ?? ""} ${item.recordedAt} ${new Date(item.recordedAt).toLocaleString("en-GB")}`
+                    .toLowerCase()
+                    .includes(historySearch.toLowerCase().trim()),
+              )
+              .map((item) => (
+                <li key={`${item.run.result.request_id}-${item.recordedAt}`}>
+                  <div>
+                    <strong>{item.rule}</strong>
+                    <span>
+                      {item.context?.universeName || "Saved universe"} ·{" "}
+                      {item.run.manifest.market} · {item.run.manifest.currency}
+                    </span>
+                    <time dateTime={item.recordedAt}>
+                      {new Date(item.recordedAt).toLocaleString("en-GB")}
+                    </time>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={state === "loading"}
+                    onClick={() => {
+                      setRun(item.run);
+                      setRunContext(null);
+                      setHistoricalRun(item);
+                      setDetailSymbol(null);
+                      setState("completed");
+                      setFailure(null);
+                      setError(null);
+                    }}
+                  >
+                    Review result
+                  </Button>
+                </li>
+              ))}
           </ul>
           {history.length > 1 && (
             <section
@@ -828,25 +892,39 @@ export function WorkspaceScreenerPanel({
                     [
                       "Stock",
                       "Decision",
+                      "Market",
+                      "Currency",
                       `Open ${run.manifest.currency}`,
                       `Close ${run.manifest.currency}`,
                       "RSI14",
+                      "EMA9",
                       "EMA20",
                       "Candle time",
                       "Rule",
                       "Rule version",
+                      "Reason codes",
                     ],
-                    ...visibleRows.map((row) => [
-                      row.decision.symbol,
-                      decisionLabel(row.decision),
-                      row.latestOpen,
-                      row.latestClose,
-                      row.features.rsi14,
-                      row.features.ema20,
-                      row.decision.timestamp,
-                      historicalRun?.rule ?? runContext?.rule.name,
-                      evidenceRule?.version,
-                    ]),
+                    ...visibleRows
+                      .filter(
+                        (row) =>
+                          signalFilter === "all" ||
+                          screeningStatus(row.decision) === signalFilter,
+                      )
+                      .map((row) => [
+                        row.decision.symbol,
+                        screeningStatusLabels[screeningStatus(row.decision)],
+                        run.manifest.market,
+                        run.manifest.currency,
+                        row.latestOpen,
+                        row.latestClose,
+                        row.features.rsi14,
+                        row.features.ema9,
+                        row.features.ema20,
+                        row.decision.timestamp,
+                        historicalRun?.rule ?? runContext?.rule.name,
+                        evidenceRule?.version,
+                        row.decision.reason_codes.join("; "),
+                      ]),
                   ])
                 }
               >
@@ -938,12 +1016,18 @@ export function WorkspaceScreenerPanel({
                                 <>
                                   <Badge
                                     variant={
-                                      evidence.passed
-                                        ? "success"
-                                        : "destructive"
+                                      !evidence.available
+                                        ? "outline"
+                                        : evidence.passed
+                                          ? "success"
+                                          : "destructive"
                                     }
                                   >
-                                    {evidence.passed ? "Met" : "Not met"}
+                                    {!evidence.available
+                                      ? "Unavailable"
+                                      : evidence.passed
+                                        ? "Met"
+                                        : "Not met"}
                                   </Badge>
                                   <span className="stock-detail__condition">
                                     <strong>{evidence.label}</strong>
@@ -1068,8 +1152,45 @@ export function WorkspaceScreenerPanel({
                 </Select>
               </Field>
             </FieldGroup>
+            <ToggleGroup
+              className="screener-signal-filters"
+              aria-label="Signal status"
+              variant="outline"
+              value={[signalFilter]}
+              onValueChange={(values) =>
+                setSignalFilter(
+                  (values[0] || "all") as keyof typeof screeningStatusLabels,
+                )
+              }
+            >
+              {(
+                Object.keys(
+                  screeningStatusLabels,
+                ) as (keyof typeof screeningStatusLabels)[]
+              ).map((status) => (
+                <ToggleGroupItem key={status} value={status}>
+                  {screeningStatusLabels[status]}{" "}
+                  <span>
+                    {
+                      run.rows.filter(
+                        (row) =>
+                          status === "all" ||
+                          screeningStatus(row.decision) === status,
+                      ).length
+                    }
+                  </span>
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
             <p className="screener-result-count" role="status">
-              {visibleRows.length} of {run.rows.length} stocks shown
+              {
+                visibleRows.filter(
+                  (row) =>
+                    signalFilter === "all" ||
+                    screeningStatus(row.decision) === signalFilter,
+                ).length
+              }{" "}
+              of {run.rows.length} stocks shown
             </p>
             <div className="screener-result-ledger">
               <Table>
@@ -1086,101 +1207,113 @@ export function WorkspaceScreenerPanel({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visibleRows.map((row) => (
-                    <TableRow key={row.decision.symbol}>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-expanded={detailSymbol === row.decision.symbol}
-                          onClick={() => setDetailSymbol(row.decision.symbol)}
-                        >
-                          {row.decision.symbol.replace(".JK", "")}
-                        </Button>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            row.decision.matched
-                              ? row.decision.signal_type === "SELL"
-                                ? "destructive"
-                                : "success"
-                              : "outline"
-                          }
-                        >
-                          {row.decision.matched ? (
-                            row.decision.signal_type === "SELL" ? (
-                              <>
-                                <CircleAlert
-                                  data-icon="inline-start"
-                                  aria-hidden="true"
-                                />
-                                SELL
-                              </>
+                  {visibleRows
+                    .filter(
+                      (row) =>
+                        signalFilter === "all" ||
+                        screeningStatus(row.decision) === signalFilter,
+                    )
+                    .map((row) => (
+                      <TableRow key={row.decision.symbol}>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-expanded={detailSymbol === row.decision.symbol}
+                            onClick={() => setDetailSymbol(row.decision.symbol)}
+                          >
+                            {row.decision.symbol.replace(".JK", "")}
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              row.decision.matched
+                                ? row.decision.signal_type === "SELL"
+                                  ? "destructive"
+                                  : "success"
+                                : "outline"
+                            }
+                          >
+                            {row.decision.matched ? (
+                              row.decision.signal_type === "SELL" ? (
+                                <>
+                                  <CircleAlert
+                                    data-icon="inline-start"
+                                    aria-hidden="true"
+                                  />
+                                  SELL
+                                </>
+                              ) : (
+                                <>
+                                  <CircleCheck
+                                    data-icon="inline-start"
+                                    aria-hidden="true"
+                                  />
+                                  {decisionLabel(row.decision)}
+                                </>
+                              )
                             ) : (
                               <>
-                                <CircleCheck
+                                <XCircle
                                   data-icon="inline-start"
                                   aria-hidden="true"
                                 />
-                                {decisionLabel(row.decision)}
+                                {screeningStatus(row.decision) === "cooldown"
+                                  ? "Cooldown"
+                                  : "Not matched"}
                               </>
-                            )
-                          ) : (
-                            <>
-                              <XCircle
-                                data-icon="inline-start"
-                                aria-hidden="true"
-                              />
-                              {decisionLabel(row.decision)}
-                            </>
+                            )}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {row.latestOpen != null &&
+                          Number.isFinite(row.latestOpen)
+                            ? formatStockPrice(
+                                row.latestOpen,
+                                run.manifest.currency,
+                              )
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {formatStockPrice(
+                            row.latestClose,
+                            run.manifest.currency,
                           )}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {row.latestOpen != null &&
-                        Number.isFinite(row.latestOpen)
-                          ? formatStockPrice(
-                              row.latestOpen,
-                              run.manifest.currency,
-                            )
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {formatStockPrice(
-                          row.latestClose,
-                          run.manifest.currency,
-                        )}
-                      </TableCell>
-                      <TableCell>{row.features.rsi14.toFixed(2)}</TableCell>
-                      <TableCell>{row.features.ema20.toFixed(2)}</TableCell>
-                      <TableCell>
-                        {decisionReasons(
-                          row.decision.reason_codes,
-                          evidenceRule?.definition?.logic,
-                        )}
-                        <Button
-                          variant="link"
-                          size="sm"
-                          onClick={() => setDetailSymbol(row.decision.symbol)}
-                        >
-                          View details
-                        </Button>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            onDraft(row.decision.symbol.replace(".JK", ""))
-                          }
-                        >
-                          Add to journal
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {!visibleRows.length && (
+                        </TableCell>
+                        <TableCell>{row.features.rsi14.toFixed(2)}</TableCell>
+                        <TableCell>{row.features.ema20.toFixed(2)}</TableCell>
+                        <TableCell>
+                          {decisionReasons(
+                            row.decision.reason_codes,
+                            evidenceRule?.definition?.logic,
+                          )}
+                          <Button
+                            variant="link"
+                            size="sm"
+                            onClick={() => setDetailSymbol(row.decision.symbol)}
+                          >
+                            View details
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              onDraft(row.decision.symbol.replace(".JK", ""))
+                            }
+                          >
+                            Add to journal
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  {!visibleRows.filter(
+                    (row) =>
+                      signalFilter === "all" ||
+                      screeningStatus(row.decision) === signalFilter,
+                  ).length && (
                     <TableRow>
                       <TableCell colSpan={8}>
                         No stocks match these filters.{" "}
@@ -1189,6 +1322,7 @@ export function WorkspaceScreenerPanel({
                           onClick={() => {
                             setSearch("");
                             setResultFilter("all");
+                            setSignalFilter("all");
                           }}
                         >
                           Reset filters

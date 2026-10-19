@@ -258,3 +258,15 @@ test("expired, canceled and overdue subscriptions never claim usable subscriptio
     true,
   );
 });
+test("missing crossover history is unavailable, not evidence of a failed condition", () => {
+  const current = { price: 100, ema9: 102, ema20: 100, rsi14: 55 };
+  const condition = { left: "EMA9", op: "CROSS_UP", right: "EMA20" };
+  assert.equal(output.conditionEvidence(condition, current), null);
+  const evidence = output.conditionEvidence(condition, current, {
+    ...current,
+    ema9: 99,
+  });
+  assert.equal(evidence.available, true);
+  assert.equal(evidence.previousLeft, 99);
+  assert.equal(evidence.passed, true);
+});

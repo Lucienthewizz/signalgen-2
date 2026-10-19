@@ -75,6 +75,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -260,100 +261,138 @@ export function StockUniversesPanel({
 
   return (
     <div className="universe-workspace">
-      <section
-        className="universe-editor"
+      <form
+        onSubmit={save}
+        className="universe-editor universe-form"
         aria-labelledby="universe-editor-title"
       >
-        <div className="universe-window-bar">
-          <span className="news-window-dots" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
-          <span>Stock universe</span>
-          <span>IDX</span>
-        </div>
-        <div className="universe-window-body">
-          <header className="universe-section-heading">
-            <div>
-              <h3 id="universe-editor-title">
-                {editing ? "Edit stock universe" : "Build a stock universe"}
-              </h3>
-              <p>
-                Select up to {universeSelectionLimit} IDX stocks for your next
-                screening.
-              </p>
-            </div>
-            <ResourceQuota kind="stock_universes" revision={universes.length} />
-          </header>
-          <form onSubmit={save} className="universe-form">
-            <StockCatalogPicker
-              key={editing?.id ?? "new"}
-              catalog={catalog}
-              selected={symbols}
-              loading={loading}
-              disabled={saving}
-              onToggle={toggleSymbol}
-            >
-              <div className="universe-form__save">
-                <FieldGroup>
-                  <Field
-                    data-invalid={Boolean(error && !name.trim())}
-                    data-disabled={saving}
-                  >
-                    <FieldLabel htmlFor="universe-name">
-                      Universe name
-                    </FieldLabel>
-                    <Input
-                      id="universe-name"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      placeholder="e.g. Banking watchlist"
-                      maxLength={100}
-                      disabled={saving}
-                      aria-invalid={Boolean(error && !name.trim())}
-                    />
-                  </Field>
-                </FieldGroup>
-                <div className="universe-form__actions">
-                  {editing && (
-                    <Button
-                      variant="outline"
-                      disabled={saving}
-                      onClick={resetEditor}
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                  <Button
-                    type="submit"
-                    disabled={
-                      loading || saving || !name.trim() || symbols.length === 0
-                    }
-                  >
-                    {saving ? (
-                      <LoaderCircle
-                        data-icon="inline-start"
-                        className="is-spinning"
-                      />
-                    ) : editing ? (
-                      <Pencil data-icon="inline-start" />
-                    ) : (
-                      <Plus data-icon="inline-start" />
-                    )}
-                    {saving
-                      ? "Saving…"
-                      : editing
-                        ? "Save changes"
-                        : "Create universe"}
-                  </Button>
-                </div>
+        <StockCatalogPicker
+          key={`${editing?.id ?? "new"}:${market}`}
+          catalog={marketCatalog}
+          selected={symbols}
+          loading={loading}
+          disabled={saving}
+          onToggle={toggleSymbol}
+          header={
+            <>
+              <div className="universe-window-bar">
+                <span className="news-window-dots" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span>Stock universe</span>
+                <span>
+                  {market} · {market === "IDX" ? "IDR" : "USD"}
+                </span>
               </div>
-              {error && <FieldError>{error}</FieldError>}
-            </StockCatalogPicker>
-          </form>
-        </div>
-      </section>
+              <header className="universe-section-heading">
+                <div>
+                  <h3 id="universe-editor-title">
+                    {editing ? "Edit stock universe" : "Build a stock universe"}
+                  </h3>
+                  <p>
+                    Select up to {universeSelectionLimit} {market} stocks for
+                    your next screening.
+                  </p>
+                </div>
+                <ResourceQuota
+                  kind="stock_universes"
+                  revision={universes.length}
+                />
+              </header>
+              <Field className="universe-market-field">
+                <FieldLabel id="universe-market-label">Stock market</FieldLabel>
+                <ToggleGroup
+                  aria-labelledby="universe-market-label"
+                  value={[market]}
+                  disabled={saving}
+                  variant="outline"
+                  onValueChange={(values) => {
+                    const next = values[0] as StockMarket | undefined;
+                    if (!next || next === market) return;
+                    if (
+                      symbols.length &&
+                      !window.confirm(
+                        "Switch market and clear the selected stocks?",
+                      )
+                    )
+                      return;
+                    setMarket(next);
+                    setSymbols([]);
+                    setEditing(null);
+                    setError(null);
+                    setNotice(null);
+                  }}
+                >
+                  <ToggleGroupItem value="IDX">Indonesia · IDR</ToggleGroupItem>
+                  <ToggleGroupItem value="US">
+                    United States · USD
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                <FieldDescription>
+                  {marketLabels[market]}. Each universe uses one market and
+                  currency.
+                </FieldDescription>
+              </Field>
+            </>
+          }
+        >
+          <div className="universe-form__save">
+            <FieldGroup>
+              <Field
+                data-invalid={Boolean(error && !name.trim())}
+                data-disabled={saving}
+              >
+                <FieldLabel htmlFor="universe-name">Universe name</FieldLabel>
+                <Input
+                  id="universe-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="e.g. Banking watchlist"
+                  maxLength={100}
+                  disabled={saving}
+                  aria-invalid={Boolean(error && !name.trim())}
+                />
+              </Field>
+            </FieldGroup>
+            <div className="universe-form__actions">
+              {editing && (
+                <Button
+                  variant="outline"
+                  disabled={saving}
+                  onClick={resetEditor}
+                >
+                  Cancel
+                </Button>
+              )}
+              <Button
+                type="submit"
+                disabled={
+                  loading || saving || !name.trim() || symbols.length === 0
+                }
+              >
+                {saving ? (
+                  <LoaderCircle
+                    data-icon="inline-start"
+                    className="is-spinning"
+                  />
+                ) : editing ? (
+                  <Pencil data-icon="inline-start" />
+                ) : (
+                  <Plus data-icon="inline-start" />
+                )}
+                {saving
+                  ? "Saving…"
+                  : editing
+                    ? "Save changes"
+                    : "Create universe"}
+              </Button>
+            </div>
+          </div>
+          {error && <FieldError>{error}</FieldError>}
+        </StockCatalogPicker>
+      </form>
 
       <section
         className="universe-library"

@@ -1,4 +1,4 @@
-/* Catalog and selection share one baseline, without nested card chrome. */
+/* Two full-width surfaces: browse first, then review and save the selection. */
 .universe-workspace {
   display: grid;
   gap: 40px;
@@ -8,7 +8,8 @@
 .universe-library {
   min-width: 0;
 }
-.universe-editor {
+.stock-catalog-picker__catalog {
+  min-width: 0;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -30,8 +31,14 @@
   justify-self: end;
   font-variant-numeric: tabular-nums;
 }
-.universe-window-body {
+.stock-catalog-picker__catalog-body {
+  display: grid;
+  gap: 24px;
   padding: 24px;
+}
+.stock-catalog-picker__catalog > .universe-section-heading {
+  margin: 0;
+  padding: 24px 24px 0;
 }
 .universe-library {
   padding-inline: 24px;
@@ -70,9 +77,8 @@
   gap: 24px;
 }
 .stock-catalog-picker:has(> .universe-selection) {
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 32px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
 }
 .stock-catalog-picker__browse {
   display: grid;
@@ -349,7 +355,7 @@
   min-width: 0;
 }
 .universe-selection__card {
-  --card-spacing: 20px;
+  --card-spacing: 24px;
   gap: 20px;
   border-radius: 16px;
   background: var(--surface);
@@ -382,13 +388,14 @@
   color: var(--muted);
   font-size: 13px;
   line-height: 1.7;
-  max-width: 30ch;
+  max-width: 65ch;
 }
 .universe-selection__stocks {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 8px;
 }
 .universe-selection__stocks li {
@@ -421,6 +428,9 @@
 }
 .universe-form__save {
   display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: 16px;
 }
 .universe-form__actions {
@@ -497,18 +507,13 @@
   min-height: 44px;
 }
 @media (max-width: 1100px) {
-  .stock-catalog-picker:has(> .universe-selection) {
-    grid-template-columns: minmax(0, 1fr) 260px;
-    gap: 24px;
-  }
   .stock-catalog-picker__group {
     display: none;
   }
 }
 @media (max-width: 860px) {
-  .stock-catalog-picker:has(> .universe-selection) {
+  .universe-form__save {
     grid-template-columns: minmax(0, 1fr);
-    gap: 24px;
   }
   .universe-selection__empty {
     min-height: 0;
@@ -524,12 +529,18 @@
   }
 }
 @media (max-width: 480px) {
-  .universe-window-body,
+  .stock-catalog-picker__catalog-body,
   .universe-library {
     padding-inline: 16px;
   }
   .universe-window-bar {
     padding-inline: 16px;
+  }
+  .stock-catalog-picker__catalog > .universe-section-heading {
+    padding-inline: 16px;
+  }
+  .universe-selection__card {
+    --card-spacing: 16px;
   }
   .universe-section-heading {
     flex-direction: column;

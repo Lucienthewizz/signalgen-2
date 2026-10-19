@@ -106,6 +106,8 @@ const fields = new Set([
   "result",
   "latestDecision",
   "features",
+  "prevFeatures",
+  "signal_type",
   "manifest",
   "latestClose",
   "latestOpen",

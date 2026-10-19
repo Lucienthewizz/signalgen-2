@@ -486,34 +486,34 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
               className="monitor-stock-detail"
               aria-label={`Stock details ${selectedSymbol}`}
             >
-              <div className="monitor-detail-navigation">
-                <h3>Stock details</h3>
-                <div>
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    aria-label="Previous stock"
-                    disabled={selectedIndex <= 0}
-                    onClick={() => moveStock(-1)}
-                  >
-                    <ChevronLeft />
-                  </Button>
-                  <span aria-live="polite">
-                    {selectedIndex + 1} / {activeStocks.length}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    aria-label="Next stock"
-                    disabled={selectedIndex >= activeStocks.length - 1}
-                    onClick={() => moveStock(1)}
-                  >
-                    <ChevronRight />
-                  </Button>
-                </div>
-              </div>
               <Card className="monitor-detail-card">
                 <CardHeader>
+                  <div className="monitor-detail-navigation">
+                    <h3>Stock details</h3>
+                    <div>
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label="Previous stock"
+                        disabled={selectedIndex <= 0}
+                        onClick={() => moveStock(-1)}
+                      >
+                        <ChevronLeft />
+                      </Button>
+                      <span aria-live="polite">
+                        {selectedIndex + 1} / {activeStocks.length}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label="Next stock"
+                        disabled={selectedIndex >= activeStocks.length - 1}
+                        onClick={() => moveStock(1)}
+                      >
+                        <ChevronRight />
+                      </Button>
+                    </div>
+                  </div>
                   <CardTitle>
                     <h4>{selectedSymbol}</h4>
                   </CardTitle>
@@ -522,7 +522,11 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                 <CardContent>
                   <div className="monitor-detail-identity">
                     <StockMark ticker={selected} />
-                    <span>{selectedMarket === "US" ? "Nasdaq/NYSE · USD" : "IDX · IDR"}</span>
+                    <span>
+                      {selectedMarket === "US"
+                        ? "Nasdaq/NYSE · USD"
+                        : "IDX · IDR"}
+                    </span>
                   </div>
                   <div className="monitor-detail-quote">
                     <span>Latest screening close</span>
@@ -589,16 +593,16 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                 </CardContent>
                 <CardFooter>
                   <p>Screening snapshot, not a live quote.</p>
+                  <Button
+                    variant="outline"
+                    nativeButton={false}
+                    render={<a href="#app/analysis" />}
+                  >
+                    Open screener
+                    <ExternalLink data-icon="inline-end" />
+                  </Button>
                 </CardFooter>
               </Card>
-              <Button
-                variant="outline"
-                nativeButton={false}
-                render={<a href="#app/analysis" />}
-              >
-                Open screener
-                <ExternalLink data-icon="inline-end" />
-              </Button>
             </aside>
           </div>
         </div>

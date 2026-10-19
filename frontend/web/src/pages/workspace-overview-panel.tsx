@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { api } from "@/api/client";
 import { monitorRuns, type MonitorRun } from "@/lib/market-monitor";
+import { screeningStatus, screeningStatusLabels } from "@/lib/screening-status";
 import {
   readScreenerPreferences,
   saveScreenerPreferences,
@@ -233,6 +234,31 @@ export function WorkspaceOverviewPanel({
                 )}
               </div>
             </dl>
+            {latest && (
+              <div
+                className="overview-last-screen"
+                aria-label="Latest screening summary"
+              >
+                <p>
+                  Last screen · {latest.run.manifest.market} ·{" "}
+                  {new Date(latest.recordedAt).toLocaleString("en-GB")}
+                </p>
+                <ul>
+                  {(["buy", "sell", "cooldown"] as const).map((status) => (
+                    <li key={status}>
+                      <strong>
+                        {
+                          latest.run.rows.filter(
+                            (row) => screeningStatus(row.decision) === status,
+                          ).length
+                        }
+                      </strong>{" "}
+                      {screeningStatusLabels[status]}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           <Button
             size="lg"

@@ -119,6 +119,15 @@ test("IDX codes normalize without accepting arbitrary widget symbols", () => {
   for (const value of ["", "BTCUSDT", "AAPL<script>", "1234", "IDX:"])
     assert.equal(output.idxTicker(value), null);
 });
+test("SELL signals and previous-candle evidence survive history persistence", () => {
+  const run = fixture();
+  run.rows[0].decision.signal_type = "SELL";
+  run.rows[0].prevFeatures = { price: 90, ema9: 100, ema20: 95, rsi14: 60 };
+  output.recordMonitorRun("crossover-owner", "Bearish cross", run);
+  const restored = loadMonitor().monitorRuns("crossover-owner")[0].run.rows[0];
+  assert.equal(restored.decision.signal_type, "SELL");
+  assert.equal(restored.prevFeatures.ema9, 100);
+});
 
 test("US history, exchange metadata and namespaced watchlists survive reload without becoming IDX", () => {
   const run = fixture();
