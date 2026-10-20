@@ -479,10 +479,6 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                 </Button>
               </header>
               <TradingViewChart symbol={chartSymbol} label={selectedSymbol} />
-              <footer>
-                TradingView chart · independent provider feed. Prices and delays
-                may differ from the saved screening snapshot.
-              </footer>
             </section>
             <aside
               className="monitor-stock-detail"
