@@ -179,6 +179,55 @@ test("history restores after refresh and persists only whitelisted result fields
     false,
   );
 });
+test("BUY and SELL plus previous-candle evidence survive history storage and module reload", () => {
+  for (const signal of ["BUY", "SELL"]) {
+    const run = fixture();
+    run.latestDecision.signal_type = signal;
+    run.rows[0].prevFeatures = {
+      price: 102,
+      ema9: 101,
+      ema20: 100,
+      rsi14: 71,
+      token: "secret-previous-features",
+    };
+    run.rows[0].decision.token = "secret-decision";
+    const owner = `direction-${signal}`;
+    output.recordMonitorRun(owner, "Crossover", run);
+    const restored = loadMonitor().monitorRuns(owner)[0].run;
+    assert.equal(restored.latestDecision.signal_type, signal);
+    assert.equal(restored.result.results[0].signal_type, signal);
+    assert.equal(restored.rows[0].decision.signal_type, signal);
+    assert.equal(restored.rows[0].prevFeatures.rsi14, 71);
+    assert.equal("token" in restored.rows[0].prevFeatures, false);
+    assert.equal("token" in restored.rows[0].decision, false);
+  }
+});
+test("legacy history without direction or prior features remains readable without inventing either", () => {
+  output.recordMonitorRun("legacy-direction", "Legacy rule", fixture());
+  const restored = loadMonitor().monitorRuns("legacy-direction")[0].run;
+  assert.equal(restored.rows[0].decision.signal_type, undefined);
+  assert.equal(restored.rows[0].prevFeatures, undefined);
+});
+test("history rejects invalid signal directions and malformed previous feature vectors", () => {
+  for (const invalid of ["HOLD", null, 123]) {
+    const run = fixture();
+    run.rows[0].decision.signal_type = invalid;
+    output.recordMonitorRun("invalid-direction", "Invalid", run);
+    assert.equal(loadMonitor().monitorRuns("invalid-direction").length, 0);
+  }
+  for (const invalid of [
+    { price: 100 },
+    { price: 100, ema9: 99, ema20: 98, rsi14: "71" },
+  ]) {
+    const run = fixture();
+    run.rows[0].prevFeatures = invalid;
+    output.recordMonitorRun("invalid-previous-features", "Invalid", run);
+    assert.equal(
+      loadMonitor().monitorRuns("invalid-previous-features").length,
+      0,
+    );
+  }
+});
 test("invalid and expired persisted history never reaches monitor rows", () => {
   storageModule.writeWorkspaceData("invalid-account", "monitor-history", [
     {

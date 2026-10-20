@@ -31,14 +31,15 @@ type Options struct {
 }
 
 type Entry struct {
-	Code            string   `json:"code"`
-	Status          string   `json:"status"`
-	Candles         int      `json:"candles"`
-	FirstTimestamp  string   `json:"first_timestamp,omitempty"`
-	LastTimestamp   string   `json:"last_timestamp,omitempty"`
-	SkippedNullRows int      `json:"skipped_null_rows,omitempty"`
-	Warnings        []string `json:"warnings,omitempty"`
-	Error           string   `json:"error,omitempty"`
+	Code             string   `json:"code"`
+	Status           string   `json:"status"`
+	Candles          int      `json:"candles"`
+	FirstTimestamp   string   `json:"first_timestamp,omitempty"`
+	LastTimestamp    string   `json:"last_timestamp,omitempty"`
+	SkippedNullRows  int      `json:"skipped_null_rows,omitempty"`
+	ExcludedOpenRows int      `json:"excluded_open_rows,omitempty"`
+	Warnings         []string `json:"warnings,omitempty"`
+	Error            string   `json:"error,omitempty"`
 }
 
 // Report is persisted after each ticker. Pending and failed rows stay visible;
@@ -174,10 +175,12 @@ func Run(ctx context.Context, catalog Catalog, provider HistoryProvider, options
 			entry.Status, entry.Candles = "success", len(history.Series.Candles)
 			entry.FirstTimestamp, entry.LastTimestamp = history.Series.Candles[0].Timestamp, history.Series.Candles[len(history.Series.Candles)-1].Timestamp
 			entry.SkippedNullRows = history.SkippedNullRows
+			entry.ExcludedOpenRows = history.ExcludedOpenRows
 			entry.Warnings = []string{"provider coverage not reconciled with exchange calendar/suspensions", "raw prices; split/dividend adjustment policy not validated"}
 			if history.SkippedNullRows > 0 {
 				entry.Warnings = append(entry.Warnings, "null OHLCV rows omitted; gaps remain")
 			}
+			entry.Warnings = append(entry.Warnings, history.Series.QualityWarnings...)
 			if item.ListingDate > options.From.Format("2006-01-02") {
 				entry.Warnings = append(entry.Warnings, "listing began after requested start")
 			}
@@ -239,6 +242,9 @@ func readSnapshot(directory string, item Instrument, from, to time.Time) (Snapsh
 	}
 	if snapshot.Code != item.Code || snapshot.RequestedFrom != from.Format(time.RFC3339) || snapshot.RequestedToExclusive != to.Format(time.RFC3339) {
 		return Snapshot{}, fmt.Errorf("snapshot binding mismatch")
+	}
+	if snapshot.History.SkippedNullRows < 0 || snapshot.History.ExcludedOpenRows < 0 {
+		return Snapshot{}, fmt.Errorf("invalid snapshot omission counts")
 	}
 	if _, err := time.Parse(time.RFC3339, snapshot.FetchedAt); err != nil {
 		return Snapshot{}, fmt.Errorf("invalid snapshot fetch timestamp")

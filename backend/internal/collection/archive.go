@@ -77,7 +77,7 @@ func NewArchiveProvider(directory string) (*ArchiveProvider, error) {
 		case "success":
 			first, firstErr := time.Parse(time.RFC3339, entry.FirstTimestamp)
 			last, lastErr := time.Parse(time.RFC3339, entry.LastTimestamp)
-			if entry.Candles < 1 || entry.Candles > 2500 || entry.SkippedNullRows < 0 || firstErr != nil || lastErr != nil ||
+			if entry.Candles < 1 || entry.Candles > 2500 || entry.SkippedNullRows < 0 || entry.ExcludedOpenRows < 0 || firstErr != nil || lastErr != nil ||
 				first.Before(from) || !last.Before(to) || last.Before(first) || entry.Error != "" {
 				return nil, fmt.Errorf("IDX archive success metadata is invalid")
 			}
@@ -133,9 +133,13 @@ func (provider *ArchiveProvider) Daily(ctx context.Context, instruments []univer
 		series := snapshot.History.Series
 		if len(series.Candles) != entry.Candles || series.Candles[0].Timestamp != entry.FirstTimestamp ||
 			series.Candles[len(series.Candles)-1].Timestamp != entry.LastTimestamp ||
-			snapshot.History.SkippedNullRows != entry.SkippedNullRows {
+			snapshot.History.SkippedNullRows != entry.SkippedNullRows ||
+			snapshot.History.ExcludedOpenRows != entry.ExcludedOpenRows {
 			return nil, marketdata.ErrInvalidData
 		}
+		// Preserve archived omissions/finality warnings when the same data is
+		// later served through the cache and an owner-scoped API manifest.
+		series.QualityWarnings = append([]string(nil), entry.Warnings...)
 		if len(series.Candles) > outputSize {
 			series.Candles = series.Candles[len(series.Candles)-outputSize:]
 		}

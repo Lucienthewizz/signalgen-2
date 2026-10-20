@@ -53,7 +53,7 @@ func TestArchiveDatasetResearchFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if manifest.CandleCount != 100 || len(manifest.Quality.Warnings) != 3 || !strings.Contains(manifest.Quality.Warnings[1], "NOT real-time") {
+	if manifest.CandleCount != 100 || len(manifest.Quality.Warnings) < 3 || !strings.Contains(manifest.Quality.Warnings[1], "NOT real-time") {
 		t.Fatalf("manifest=%+v", manifest)
 	}
 	if _, _, err := store.Content(context.Background(), "user-b", manifest.DatasetID); !errors.Is(err, ErrNotFound) {

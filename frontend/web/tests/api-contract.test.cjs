@@ -6,7 +6,7 @@ const vm = require("node:vm");
 const { webcrypto } = require("node:crypto");
 const ts = require("typescript");
 
-function client(reply) {
+function client(reply, timers = {}) {
   const calls = [],
     events = [],
     tokens = new Map(),
@@ -40,7 +40,7 @@ function client(reply) {
       setItem: (key, value) => installations.set(key, value),
     },
     window: {
-      setTimeout,
+      setTimeout: timers.setTimeout || setTimeout,
       dispatchEvent: (event) => events.push(event.type),
       location: { origin: "https://web.example.test" },
     },
@@ -53,6 +53,115 @@ function client(reply) {
 }
 const response = (payload, status = 200) =>
   new Response(JSON.stringify(payload), { status });
+
+test("transient resource reads recover once and concurrent readers share recovery", async () => {
+  let attempts = 0;
+  const c = client(() =>
+    ++attempts === 1
+      ? response({ error: { code: "SERVICE_UNAVAILABLE" } }, 503)
+      : response({ items: [] }),
+  );
+  c.session.setToken("test-identity");
+  c.session.setAppSession("test-session");
+  await Promise.all([c.api.listRules(), c.api.listRules()]);
+  assert.equal(c.calls.length, 2);
+  assert.equal(c.session.getToken(), "test-identity");
+  assert.equal(c.session.getAppSession(), "test-session");
+  assert.deepEqual(c.events, []);
+});
+
+test("persistent outages stop after two reads and retain request correlation", async () => {
+  const c = client(() =>
+    response(
+      { error: { code: "SERVICE_UNAVAILABLE", request_id: "req-test" } },
+      503,
+    ),
+  );
+  await assert.rejects(
+    c.api.listRules(),
+    (error) => error.status === 503 && error.requestId === "req-test",
+  );
+  assert.equal(c.calls.length, 2);
+});
+
+test("network failures get a distinct error without clearing login", async () => {
+  const c = client(() => {
+    throw new TypeError("offline");
+  });
+  c.session.setToken("test-identity");
+  await assert.rejects(
+    c.api.listRules(),
+    (error) => error.code === "NETWORK_ERROR",
+  );
+  assert.equal(c.calls.length, 2);
+  assert.equal(c.session.getToken(), "test-identity");
+});
+
+test("timeouts cover a stalled body, not only the response headers", async () => {
+  const c = client(
+    (_url, init) => ({
+      ok: true,
+      status: 200,
+      json: () =>
+        new Promise((_resolve, reject) =>
+          init.signal.addEventListener(
+            "abort",
+            () => reject(Error("aborted")),
+            { once: true },
+          ),
+        ),
+    }),
+    { setTimeout: (fn, ms) => setTimeout(fn, ms === 15000 ? 5 : 0) },
+  );
+  await assert.rejects(
+    c.api.listRules(),
+    (error) =>
+      error.code === "REQUEST_TIMEOUT" && /too long/.test(error.message),
+  );
+  assert.equal(c.calls.length, 2);
+});
+
+test("mutations, login and app-session creation are never replayed after outages", async () => {
+  const c = client(() =>
+    response({ error: { code: "SERVICE_UNAVAILABLE" } }, 503),
+  );
+  for (const action of [
+    () => c.api.login("fixture@example.test", "synthetic-password"),
+    () => c.api.createAppSession(),
+    () => c.api.createStockUniverse("Synthetic", ["BBCA.JK"]),
+    () => c.api.revokeCurrentAppSession(),
+  ]) {
+    const before = c.calls.length;
+    await assert.rejects(action());
+    assert.equal(c.calls.length - before, 1);
+  }
+});
+
+test("permission, conflict and rate-limit responses are not transient read failures", async () => {
+  for (const status of [401, 403, 409, 429]) {
+    const c = client(() => response({ error: { code: "DENIED" } }, status));
+    await assert.rejects(c.api.listRules());
+    assert.equal(c.calls.length, 1);
+  }
+});
+
+test("logout during recovery backoff prevents another authenticated read", async () => {
+  let c;
+  c = client(() => response({}, 503), {
+    setTimeout: (fn, ms) =>
+      setTimeout(
+        () => {
+          if (ms === 300) c.session.clear();
+          fn();
+        },
+        ms === 300 ? 0 : ms,
+      ),
+  });
+  c.session.setToken("test-identity");
+  await assert.rejects(c.api.listRules());
+  assert.equal(c.calls.length, 1);
+  assert.equal(c.session.getToken(), null);
+});
 
 test("proactive token refresh is coalesced and does not change installation sessions", async () => {
   const c = client((url) =>
@@ -169,7 +278,10 @@ test("read coalescing is scoped to authorization identity", async () => {
   c.session.setToken("account-a");
   const a = c.api.listRules();
   c.session.setToken("account-b");
-  await Promise.all([assert.rejects(a, /Your account changed/), c.api.listRules()]);
+  await Promise.all([
+    assert.rejects(a, /Your account changed/),
+    c.api.listRules(),
+  ]);
   assert.equal(c.calls.length, 2);
 });
 

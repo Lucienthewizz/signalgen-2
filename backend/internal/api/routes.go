@@ -111,5 +111,5 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	if config.trafficObserver != nil {
 		handler = config.trafficObserver.Observe(handler)
 	}
-	return platformhttp.RequestContext(handler)
+	return platformhttp.RequestContext(platformhttp.ReadDeadline(handler))
 }

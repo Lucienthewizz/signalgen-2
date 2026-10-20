@@ -58,6 +58,11 @@ Panduan pemisahan runtime/migration, readiness dan tes keamanan ada di
 
 ## Pemantauan backend
 
+Panduan [kualitas candle harian](../docs/backend/DAILY_DATA_QUALITY.md) menjelaskan
+candle buka/tutup, data null yang dilewati, dan arti warnings snapshot. Setelah
+pembaruan keamanan 20 Oktober, rebuild image agar memakai Go 1.27.2 dan library
+jaringan yang sudah diperbaiki; container lama tidak terpatch otomatis.
+
 Runtime Go mencatat request dalam JSON dengan request ID, pola route, status,
 durasi, dan ukuran respons HTTP. Token/header/body/query atau data pribadi tidak
 dicatat oleh observer. Ringkasan counter dan memori Go muncul setiap menit.

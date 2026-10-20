@@ -121,6 +121,9 @@ const fields = new Set([
   "symbol",
   "timestamp",
   "matched",
+  // Arah keputusan dan candle sebelumnya harus ikut tersimpan, bukan hanya angka terbaru.
+  "signal_type",
+  "prevFeatures",
   "reason_codes",
   "price",
   "ema9",

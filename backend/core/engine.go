@@ -164,6 +164,8 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 			"EMA20": candidate.Features.EMA20,
 			"RSI14": candidate.Features.RSI14,
 		}
+		// Lolos kondisi belum menentukan arah transaksi: BUY/SELL berasal dari rule.
+		// Cooldown masih dapat menahan sinyal meskipun kondisi matematika terpenuhi.
 		matched, err := evaluateRule(request.Rule, values, prevValues)
 		if err != nil {
 			return DecisionResult{}, err
@@ -243,6 +245,14 @@ func validateFeatureRequest(request FeatureRequest) error {
 			return fmt.Errorf("candles must be strictly chronological")
 		}
 		previous = parsed
+		for _, price := range []float64{candle.Open, candle.High, candle.Low, candle.Close} {
+			if math.IsNaN(price) || math.IsInf(price, 0) {
+				return fmt.Errorf("candle %d contains a non-finite price", i)
+			}
+		}
+		if candle.Volume < 0 {
+			return fmt.Errorf("candle %d contains a negative volume", i)
+		}
 		if candle.Open <= 0 || candle.High <= 0 || candle.Low <= 0 || candle.Close <= 0 {
 			return fmt.Errorf("candle %d contains a non-positive price", i)
 		}

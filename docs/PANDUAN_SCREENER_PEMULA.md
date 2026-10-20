@@ -1,23 +1,32 @@
 # Panduan Lengkap & Cara Kerja Screener SignalGen 2.0 (Untuk Pemula)
 
-> **Catatan Penting (Disclaimer):** SignalGen 2.0 adalah alat bantu analisis historis berbasis aturan (*rule-based historical screener*), **bukan** aplikasi jual-beli otomatis (*broker/auto-trading*), bukan sinyal harga *real-time* detik ini, dan bukan jaminan keuntungan finansial. Status **Matched** berarti seluruh syarat yang kamu atur terpenuhi pada data penutupan harian (*daily candle*) terakhir.
+> **Catatan Penting:** SignalGen 2.0 adalah screener berbasis aturan historis, **bukan** broker, auto-trading, prediksi harga yang pasti, atau jaminan profit. Sinyal **BUY/SELL** berarti rule lolos sesuai logika **AND/OR** dan cooldown pada candle yang dievaluasi. Arah sinyal dipilih pembuat rule, bukan ditebak dari indikator. **Match tidak sama dengan BUY.**
+
+Untuk menjelaskan kode saat asis, baca [alur backend, contoh JSON, match/BUY/SELL dan bug riwayat](backend/SCREENER_DECISIONS.md).
 
 ---
 
 ## 1. Apa Itu Stock Screener di SignalGen 2.0?
 
-Bayangkan kamu ingin mencari saham yang sedang bagus dari ratusan saham di Bursa Efek Indonesia (**IDX**, seperti `BBCA`, `BBRI`, `TLKM`) atau Bursa Amerika Serikat (**Nasdaq/NYSE**, seperti `AAPL`, `MSFT`, `NVDA`). Memeriksa grafik saham satu per satu tentu memakan waktu berjam-jam.
+Bayangkan kamu ingin mencari saham potensial dari ratusan saham di Bursa Efek Indonesia (**IDX**, seperti `BBCA`, `BBRI`, `TLKM`) atau Bursa Amerika Serikat (**Nasdaq/NYSE**, seperti `AAPL`, `MSFT`, `NVDA`). Memeriksa grafik satu per satu memakan waktu berjam-jam.
 
-**Stock Screener** bekerja seperti **"Saringan Otomatis"**:
-1. Kamu menentukan **Syarat Saringan (*Screening Rule*)** — misalnya: *"Cari saham yang tren harganya sedang naik dan belum terlalu mahal."*
-2. Kamu memilih **Kelompok Saham (*Stock Universe*)** — misalnya 1 sampai 10 saham pilihanmu dalam satu pasar/mata uang yang sama.
-3. **Screener** memeriksa seluruh saham tersebut sekaligus dalam hitungan milidetik dan memberikan laporan lengkap: saham mana yang **Lolos Saringan (*Matched*)**, mana yang **Belum Lolos (*Not Matched*)**, lengkap dengan **Bukti Angka (*Condition Evidence*)** untuk setiap syarat!
+**Stock Screener** bekerja seperti **"Saringan Pintar Otomatis"**:
+1. Kamu menentukan **Aksi & Syarat Saringan (*Screening Rule*)**:
+   - Ingin mencari sinyal beli (**BUY / Entry**) atau sinyal jual (**SELL / Exit**)?
+   - Aturan harus memenuhi *semua* syarat (**Logika AND**) atau *salah satu* syarat saja (**Logika OR**)?
+   - Apakah harga sedang memotong garis indikator ke atas (**`CROSS_UP` / Golden Cross**)?
+2. Kamu memilih **Kelompok Saham (*Stock Universe*)** — berisi 1 sampai 10 saham pilihanmu dalam pasar dan mata uang yang sama.
+3. **Screener** memeriksa saham tersebut; total waktu bergantung pada provider, jaringan, perangkat dan server. Hasilnya:
+   - 🟢 **`BUY`**: Lolos rule yang diberi arah BUY.
+   - 🔴 **`SELL`**: Lolos rule yang diberi arah SELL; bukan bukti pengguna memiliki saham atau memperoleh profit.
+   - ⚪ **`Not matched`**: Saham belum memenuhi kriteria hari ini.
+   - Dilengkapi **Bukti Angka (*Condition Evidence*)** transparan untuk setiap syarat!
 
 ---
 
 ## 2. Visualisasi Alur Kerja Screener (Arsitektur Hybrid Model A)
 
-Mengapa SignalGen 2.0 terasa cepat sekaligus aman? Karena SignalGen menggunakan arsitektur **Hybrid (Model A)** yang membagi tugas antara perangkatmu (*Browser*) dan *Server*:
+SignalGen 2.0 menggunakan **Hybrid (Model A)** untuk membagi pekerjaan indikator dan evaluasi rule. Efisiensi serta kapasitas tetap perlu diukur; pilihan arsitektur sendiri bukan bukti performa atau keamanan mutlak.
 
 ```text
 +-----------------------------------------------------------------------------------+
@@ -25,184 +34,247 @@ Mengapa SignalGen 2.0 terasa cepat sekaligus aman? Karena SignalGen menggunakan 
 +-----------------------------------------------------------------------------------+
 
   [1. PERSIAPAN & AKSES]
-   Pengguna memilih Rule & Stock Universe (1-10 saham)
+   Pengguna memilih Rule (BUY/SELL, AND/OR) & Stock Universe (1-10 saham)
           │
           ▼
-   Server Go memeriksa Sesi Login, Hak Akses (Entitlement), & Menyiapkan Dataset Harian
+   Server Go memeriksa Sesi Login, Entitlement, & Menyiapkan Dataset Harian
           │
           ▼
   [2. KOMPUTASI INDIKATOR DI BROWSER — Go/WASM Web Worker]
-   Data OHLCV harian diproses langsung di laptop/browser kamu (atau diambil dari Cache
-   lokal terenkripsi AES-256-GCM di IndexedDB).
-   Mesin Go/WASM menghitung angka indikator berat untuk setiap saham:
-   • PRICE (Harga Penutupan)
-   • EMA 9 (Rata-rata Bergerak Cepat - 9 Hari)
-   • EMA 20 (Rata-rata Bergerak Lambat - 20 Hari)
-   • RSI 14 (Kekuatan Momentum - 14 Hari)
+   Data OHLCV harian diproses langsung di browser laptop/HP kamu (atau diambil dari
+   Cache terenkripsi AES-256-GCM di IndexedDB).
+   Mesin Go/WASM menghitung indikator teknikal secara lokal:
+   • PRICE (Harga Penutupan Terakhir)
+   • EMA 9 (Rata-rata Eksponensial Cepat - 9 Hari)
+   • EMA 20 (Rata-rata Eksponensial Lambat - 20 Hari)
+   • RSI 14 (Momentum Kekuatan Relatif - 14 Hari)
           │
-          │  (Mengemas ringkasan angka / Feature Vector ke dalam 1 Batch)
+          │  (Mengemas ringkasan fitur / Feature Vector ke dalam 1 Batch ringkas)
           ▼
   [3. EVALUASI PRIVAT DI SERVER — Satu Grant, Satu Ticket, Satu WebSocket]
    Browser meminta 1 Compute Grant & 1 Socket Ticket sekali pakai (One-Time Ticket)
           │
           ▼
-   Membuka koneksi cepat WebSocket (/api/v1/screener/ws) & mengirim Batch Feature Vector
+   Membuka koneksi kilat WebSocket (/api/v1/screener/ws) & mengirim Batch Feature Vector
           │
           ▼
-   Decision Kernel di Server Go memeriksa seluruh syarat Rule (Logika AND & Cooldown)
-   secara privat tanpa membocorkan rumus sistem ke publik
+   Decision Kernel di Server Go mengevaluasi seluruh syarat Rule secara privat:
+   • Mengecek logika perbandingan (<, <=, >, >=)
+   • Mengecek persilangan candle hari ini vs kemarin (CROSS_UP / CROSS_DOWN)
+   • Mengecek logika kombinasi (AND / OR)
+   • Memeriksa masa jeda proteksi (Cooldown)
+   (Akses dibatasi per pengguna; rule milik sendiri dapat dibaca pemilik di browser.
+    Definisi rule sistem privat tidak dikirim; ini bukan jaminan anti-reverse-engineering.)
           │
           ▼
-  [4. HASIL & BUKTI INDIKATOR DI LAYAR]
-   Tabel Hasil Screening menampilkan:
-   • Status: MATCHED (Semua syarat terpenuhi) atau NOT MATCHED (Ada syarat belum terpenuhi)
+  [4. HASIL KEPUTUSAN & BUKTI INDIKATOR DI LAYAR]
+   Tabel Screener menampilkan:
+   • Label Aksi: BUY (Hijau), SELL (Merah), atau Not matched
+   • Kode Alasan: RULE_MATCHED, CONDITIONS_NOT_MET, atau COOLDOWN_ACTIVE
    • Bukti per Syarat (Condition Evidence), Grafik TradingView, Riwayat & Ekspor CSV
 ```
 
-### Analogi Sederhana: "Staf Hitung & Supervisor"
-* **Go/WASM di Browser adalah Staf Hitung di Mejamu:** Ia mengerjakan hitungan matematika yang berat (menghitung rata-rata harga dan momentum puluhan hari) langsung di komputer kamu supaya server tidak keberatan saat banyak orang memakai aplikasi bersamaan.
-* **Server Go adalah Supervisor:** Staf hitung cukup mengirimkan lembar ringkasan angka (*Feature Vector*) melalui jalur khusus (*WebSocket*). Supervisor yang memegang buku aturan rahasia (*Decision Kernel*) lalu mengecek apakah angkanya memenuhi syarat dan memberikan cap **Matched** atau **Not Matched**.
+### Analogi Sederhana: "Staf Hitung & Supervisor Rahasia"
+* **Go/WASM di Browser adalah Staf Hitung:** Ia menghitung indikator di perangkat pengguna, sehingga pekerjaan indikator per pengguna tidak semuanya masuk server. Ini bukan jaminan server mampu melayani ribuan pengguna; CPU/RAM client dan server, latensi serta kegagalan perlu diuji.
+* **Server Go adalah Supervisor:** Staf hitung hanya mengirimkan ringkasan angka akhir. Supervisor yang menyimpan brankas strategi privat kemudian mencocokkannya dengan kriteria aturan pengguna dan memberi stempel keputusan: **BUY**, **SELL**, atau **Not matched**.
 
 ---
 
-## 3. Kamus Istilah (Glossary) untuk Pemula
-
-Jangan khawatir jika kamu baru pertama kali melihat istilah saham atau teknis di aplikasi. Berikut penjelasan bahasa sehari-harinya:
+## 3. Kamus Istilah (Glossary) Lengkap untuk Pemula
 
 ### A. Istilah Pasar & Data Saham
 
-| Istilah di Aplikasi | Arti Bahasa Sehari-hari | Contoh / Penjelasan Praktis |
+| Istilah | Arti Bahasa Sehari-hari | Contoh / Penjelasan Praktis |
 | :--- | :--- | :--- |
-| **Ticker / Symbol** | Kode singkat nama perusahaan di bursa saham. | `BBCA` / `BBCA.JK` (Bank Central Asia di IDX), `AAPL` (Apple di AS). |
-| **IDX vs US Market** | Pilihan bursa saham: **IDX** (Bursa Efek Indonesia dalam Rupiah/IDR) atau **US** (Nasdaq/NYSE dalam Dolar/USD). | Dalam 1 *Universe*, semua saham harus berasal dari pasar dan mata uang yang sama (tidak dicampur IDR & USD). |
-| **Stock Universe** | "Keranjang" atau daftar kelompok berisi **1 hingga 10 saham** yang ingin kamu saring bersama-sama. | Contoh: Universe *"Bank Besar"* berisi `BBCA`, `BBRI`, `BMRI`, `BBNI`. |
-| **Candle / OHLCV** | Rekaman pergerakan harga saham dalam 1 hari perdagangan (*Daily / 1d*). | **O**pen (Harga Buka), **H**igh (Tertinggi), **L**ow (Terendah), **C**lose (Harga Tutup), **V**olume (Jumlah transaksi). |
-| **Open & Close Price** | Harga saat bursa buka pagi hari (**Open**) dan harga resmi saat bursa tutup sore hari (**Close**). | Di SignalGen, indikator dihitung menggunakan **Close Price** (harga penutupan harian yang sudah selesai). |
-| **Daily Snapshot** | Potret data harian terakhir yang sudah selesai, bukan harga yang berkedip tiap detik (*bukan live streaming*). | Membantu kamu menganalisis dengan tenang tanpa terdistraksi fluktuasi palsu menit-menitan. |
+| **Ticker / Symbol** | Kode unik perusahaan di bursa efek. | `BBCA.JK` (Bank Central Asia di IDX), `NVDA` (Nvidia di Nasdaq AS). |
+| **IDX vs US Market** | Pilihan bursa: **IDX** (Indonesia, mata uang Rupiah/IDR) atau **US** (Amerika Serikat, mata uang Dolar/USD). | Saham dalam 1 *Universe* wajib berasal dari bursa yang sama (tidak boleh campur IDR dan USD). |
+| **Stock Universe** | Daftar kelompok berisi **1 hingga 10 saham** yang disaring bersama-sama. | Contoh: Universe *"Perbankan Unggulan"* berisi `BBCA`, `BBRI`, `BMRI`, `BBNI`. |
+| **Candle / OHLCV** | Rekaman pergerakan harga saham dalam 1 hari bursa (*Daily*): **O**pen (Buka), **H**igh (Tertinggi), **L**ow (Terendah), **C**lose (Tutup), **V**olume (Volume). | Di SignalGen, indikator teknikal dihitung berdasarkan harga penutupan resmi (**Close Price**). |
+| **Daily Snapshot** | Potret data harian terakhir yang sudah selesai (*closed candle*). | Membantu trading tenang berbasis data harian valid, bukan harga kedip-kedip tiap detik (*noise*). |
 
-### B. Indikator Teknikal yang Digunakan di SignalGen 2.0
+---
+
+### B. Indikator Teknikal yang Didukung
 
 ```text
   VISUALISASI TREN (PRICE, EMA 9, EMA 20)
   Harga
-    ▲             /\/\`  <-- PRICE (Harga Penutupan Hari Ini - Paling Responsif)
+    ▲             /\/\`  <-- PRICE (Harga Penutupan Hari Ini - Paling Cepat)
     │          /\/    \  <-- EMA 9 (Garis Cepat 9 Hari - Mengikuti Tren Pendek)
-    │       /\/        \ <-- EMA 20 (Garis Lambat 20 Hari - Fondasi Tren Menengah)
+    │       /\/        \ <-- EMA 20 (Garis Lambat 20 Hari - Penentu Tren Menengah)
     └──────────────────────► Waktu
-    * Saat PRICE > EMA 9 dan EMA 9 > EMA 20, artinya saham sedang dalam Tren Naik (Uptrend)!
 
   VISUALISASI MOMENTUM (RSI 14 — Skala 0 sampai 100)
-  0 ─────────── 30 ────────── 45 ─────────────── 75 ──── 70 ────────── 100
-  [ Jenuh Jual  ]             [ Zona Momentum    ]       [ Jenuh Beli   ]
-  [ (Oversold)  ]             [ Sehat / Ideal    ]       [ (Overbought) ]
-  Harga sudah turun           Tenaga naik kuat,          Harga sudah naik terlalu
-  terlalu dalam               belum kepanasan            tinggi, rawan koreksi/turun
+  0 ─────────── 30 ────────── 45 ─────────────── 70 ────────── 100
+  [ Jenuh Jual  ]             [ Zona Momentum    ]   [ Jenuh Beli   ]
+  [ (Oversold)  ]             [ Rentang contoh   ]   [ (Overbought) ]
+  Label momentum ini bukan penilaian murah/mahal atau jaminan arah harga berikutnya.
 ```
 
-| Indikator | Kepanjangan | Cara Mudah Memahaminya |
+| Indikator | Kepanjangan | Penjelasan Praktis |
 | :--- | :--- | :--- |
-| **`PRICE`** | *Closing Price* (Harga Penutupan) | Harga terakhir saham saat pasar tutup pada hari tersebut (dalam IDR untuk IDX, atau USD untuk saham AS). |
-| **`EMA9`** | *Exponential Moving Average (9)* | Rata-rata harga penutupan selama **9 hari terakhir** dengan bobot lebih besar pada hari-hari terbaru. Garis ini bergerak **cepat** mengikuti harga terbaru. |
-| **`EMA20`** | *Exponential Moving Average (20)* | Rata-rata harga penutupan selama **20 hari terakhir** (sekitar 1 bulan bursa). Garis ini bergerak **lebih lambat/halus** dan menjadi acuan tren menengah. |
-| **`RSI14`** | *Relative Strength Index (14)* | "Speedometer" kekuatan harga selama **14 hari terakhir** dengan nilai **0 sampai 100**:<br>• **Di bawah 30 (`< 30`):** *Oversold* (Jenuh Jual / harga sudah tertekan turun cukup dalam).<br>• **Antara 45 – 75:** Momentum kenaikan sehat (tenaga beli kuat tapi belum kepanasan).<br>• **Di atas 70–75 (`> 70`):** *Overbought* (Jenuh Beli / harga sudah naik terlalu kencang, rawan berbalik turun). |
-
-### C. Istilah Aturan (*Rules*) & Hasil Evaluasi
-
-| Istilah di Aplikasi | Arti Bahasa Sehari-hari | Cara Kerja di SignalGen |
-| :--- | :--- | :--- |
-| **Screening Rule** | Daftar syarat (*checklist*) yang kamu gunakan untuk menyaring saham. | Terdiri dari **System Rule** (bawaan SignalGen, *read-only*) dan **Private/Your Rule** (aturan buatanmu sendiri). |
-| **Condition (Syarat)** | Rumus perbandingan sederhana: `[Kiri] [Operator] [Kanan]`. | Operator yang didukung: `>` (lebih besar), `>=` (lebih besar/sama dengan), `<` (lebih kecil), `<=` (lebih kecil/sama dengan). |
-| **AND Logic** | Logika **"DAN"** — artinya **SEMUA syarat wajib terpenuhi**. | Jika kamu punya 4 syarat dan hanya 3 yang cocok sedangkan 1 gagal, maka hasilnya tetap **Not Matched**. |
-| **Cooldown (seconds)** | Jeda waktu tunggu minimum (dalam detik, 0–86.400 detik) sebelum sinyal yang sama boleh muncul lagi pada riwayat saham tersebut. | Mencegah sinyal berulang-ulang terlalu rapat pada rentang waktu yang berdekatan. |
-| **Matched (`RULE_MATCHED`)** | **Lolos Saringan!** | Seluruh syarat pada *Rule* terpenuhi oleh data saham pada *candle* terakhir. |
-| **Not Matched (`CONDITIONS_NOT_MET`)** | **Belum Lolos Saringan.** | Ada minimal satu syarat pada *Rule* yang belum terpenuhi. Ini **bukan error aplikasi**, melainkan tanda saham tersebut belum sesuai kriteriamu hari ini. |
-| **Condition Evidence** | Rincian bukti angka nyata untuk setiap syarat. | Menampilkan perbandingan langsung, misalnya: `RSI14 (27.28) < 30` → **Met (Terpenuhi)** atau `EMA9 (4,120) > EMA20 (4,180)` → **Not met (Tidak terpenuhi)**. |
+| **`PRICE`** | *Close Price* | Harga penutupan resmi saham pada hari bursa terakhir. |
+| **`EMA9`** | *Exponential Moving Average (9)* | Rata-rata pergerakan harga selama **9 hari terakhir** dengan pembobotan lebih tinggi pada hari terkini. Garis ini bergerak lincah dan cepat. |
+| **`EMA20`** | *Exponential Moving Average (20)* | Rata-rata harga selama **20 hari terakhir** (sekitar 1 bulan perdagangan). Garis ini lebih stabil dan menjadi garis acuan tren (*trendline*). |
+| **`RSI14`** | *Relative Strength Index (14)* | Mengukur momentum perubahan harga pada skala **0–100**. Angka 30/70 dapat dipakai sebagai batas contoh rule. RSI rendah bukan bukti saham murah, RSI tinggi bukan jaminan harga akan turun, dan keduanya tidak otomatis menentukan BUY/SELL. |
 
 ---
 
-## 4. Instruksi Lengkap Langkah demi Langkah Menggunakan Screener
+### C. Operator Pembanding & Persilangan (*Crossover*)
 
-Ikuti panduan berurutan ini dari awal hingga kamu mendapatkan hasil analisis sahammu:
+SignalGen 2.0 mendukung 6 jenis operator:
 
-### Langkah 0: Persiapan Awal & Login
-1. Pastikan *Backend Go API* sudah menyala (indikator koneksi aktif) dan buka halaman aplikasi web SignalGen.
-2. Masuk (*Sign in*) menggunakan akunmu.
-3. Pastikan akunmu memiliki hak akses (**Entitlement**) untuk fitur **Market Screener** (dapat dicek pada menu **Plan & Access** / `#app/subscription`).
+| Operator | Nama | Arti & Kapan Digunakan |
+| :--- | :--- | :--- |
+| **`>`** | Lebih Besar Dari | Memeriksa apakah nilai kiri lebih tinggi dari kanan (misal `PRICE > EMA20`). Bernilai `true` selama harga masih di atas garis. |
+| **`>=`** | Lebih Besar atau Sama | Memeriksa apakah nilai kiri setara atau lebih tinggi dari kanan. |
+| **`<`** | Lebih Kecil Dari | Memeriksa apakah nilai kiri lebih rendah dari kanan (misal `RSI14 < 30`). |
+| **`<=`** | Lebih Kecil atau Sama | Memeriksa apakah nilai kiri setara atau lebih rendah dari kanan. |
+| **`CROSS_UP`** | Melintas naik | Kondisi benar jika kiri sebelumnya ≤ kanan sebelumnya dan kiri sekarang > kanan sekarang. Contoh: `EMA9 CROSS_UP EMA20` atau `RSI14 CROSS_UP 30`. |
+| **`CROSS_DOWN`** | Melintas turun | Kondisi benar jika kiri sebelumnya ≥ kanan sebelumnya dan kiri sekarang < kanan sekarang. Contoh: `EMA9 CROSS_DOWN EMA20` atau `RSI14 CROSS_DOWN 70`. |
 
-### Langkah 1: Buat "Keranjang" Saham (*Stock Universe*)
-Sebelum menyaring, kamu perlu menentukan saham apa saja yang ingin dianalisis (maksimal 10 saham per *Universe*):
-1. Buka menu **Stock Universes** (`#app/universes`).
-2. Pilih pasar saham yang diinginkan (**IDX** untuk saham Indonesia atau **US** untuk Nasdaq/NYSE).
-   * *Catatan:* Satu *Universe* hanya boleh berisi saham dari pasar dan mata uang yang sama (minimum 1 saham, maksimum 10 saham).
-3. Cari dan klik **1 hingga 10 kode saham** dari katalog resmi (contoh IDX: `BBCA`, `BBRI`, `TLKM`, `BMRI`, `ASII`).
-4. Ketik nama kelompok saham pada kolom **Universe name** (contoh: *"Watchlist Perbankan IDX"*).
-5. Klik tombol **Create universe**.
+Crossover adalah perbandingan dua candle. Istilah Golden/Death Cross tidak perlu dipakai untuk semua pasangan indikator atau batas angka. Sinyal akhir tetap mengikuti rule dan cooldown.
+
+#### 🔍 Perbedaan Penting: Operator `>` vs `CROSS_UP`
+* `EMA9 > EMA20` bernilai benar selama EMA9 berada di atas EMA20.
+* `EMA9 CROSS_UP EMA20` bernilai benar ketika EMA9 sebelumnya ≤ EMA20 sebelumnya, lalu EMA9 sekarang > EMA20 sekarang. Dua nilai EMA20 itu dapat berbeda. Tanpa kandidat sebelumnya, crossover tidak dipicu.
+* Itu hasil **satu kondisi**, bukan jaminan sinyal akhir. Kondisi lain pada AND, kondisi alternatif pada OR dan cooldown tetap berpengaruh. Pada rule OR, kondisi lain yang terus benar dapat membuat rule tetap lolos meskipun crossover tidak terjadi lagi.
+
+---
+
+### D. Logika Aturan & Arah Tindakan Sinyal
+
+| Fitur | Pilihan | Arti & Fungsi |
+| :--- | :--- | :--- |
+| **Signal Action** | **`BUY`** | Aturan dirancang untuk mencari titik masuk beli (*Entry Position*). |
+| | **`SELL`** | Aturan dirancang untuk mencari titik keluar / jual (*Exit / Take Profit / Stop Loss*). |
+| **Rule Logic** | **`AND`** | **Semua syarat wajib terpenuhi**. Jika ada 4 syarat dan 1 saja gagal, saham dinyatakan *Not matched*. |
+| | **`OR`** | **Minimal satu syarat terpenuhi**. Sangat berguna untuk aturan proteksi/keluar (misal: Jual jika `RSI14 > 75` **ATAU** `PRICE < EMA20`). |
+| **Cooldown (Sec)** | `0 – 86400` | Jeda waktu minimum antar sinyal untuk simbol yang sama. Mencegah alarm sinyal berbunyi berkali-kali pada saham yang sama. |
+
+---
+
+### E. Status Keputusan Screener
+
+1. 🟢 **`BUY` (`RULE_MATCHED`)**: Rule berarah BUY lolos; AND membutuhkan semua kondisi, OR minimal satu, dan cooldown tidak menahan sinyal.
+2. 🔴 **`SELL` (`RULE_MATCHED`)**: Rule berarah SELL lolos dengan prinsip yang sama. Bukan transaksi jual otomatis.
+3. ⚪ **`Not matched` (`CONDITIONS_NOT_MET`)**: Saham belum memenuhi kriteria rumus aturan. (Bukan error aplikasi, melainkan kondisi pasar hari ini belum cocok dengan kriteriamu).
+4. 🟡 **`Cooldown` (`COOLDOWN_ACTIVE`)**: Rumus cocok tetapi sinyal ditahan. Pada respons sekarang `matched` bernilai false dan arah sinyal tidak dikirim. Cooldown dilacak per saham dalam evaluasi batch, bukan alarm persisten lintas seluruh klik Run.
+5. **`Matched` tanpa arah**: Riwayat lama kehilangan `signal_type`. UI tidak boleh menebaknya sebagai BUY. Jika data candle sebelumnya juga hilang, bukti crossover dinyatakan tidak tersedia. Jalankan ulang untuk hasil lengkap.
+
+---
+
+## 4. Panduan Langkah demi Langkah Menggunakan Screener
+
+### Langkah 1: Buat Kelompok Saham (*Stock Universe*)
+1. Buka menu **Stock Universes** di navigasi kiri (`#app/universes`).
+2. Tentukan pasar yang ingin dianalisis (**IDX** untuk saham Indonesia atau **US** untuk saham Amerika).
+3. Cari dan pilih **1 hingga 10 saham** dari katalog resmi (contoh IDX: `BBCA`, `BBRI`, `BMRI`, `TLKM`, `ASII`).
+4. Beri nama kelompok sahammu (misalnya *"Saham Bluechip IDX"*).
+5. Klik **Create universe**.
+
+---
 
 ### Langkah 2: Buat atau Pilih Aturan Saringan (*Screening Rule*)
-Kamu bisa langsung memakai aturan bawaan sistem (**Default Scalping**) atau membuat aturanmu sendiri tanpa koding:
 1. Buka menu **Rules** (`#app/rules`).
-2. Untuk membuat aturan baru, klik **New blank rule**, lalu isi:
-   * **Rule name:** Nama strategi (contoh: *"Cari Saham Diskon RSI Rendah"* atau *"Momentum Uptrend Harian"*).
-   * **Cooldown (seconds):** Jeda antar sinyal (default `300` detik; rentang `0` – `86400` detik).
-3. Pada bagian **Screening conditions**, klik **Add condition** (bisa memuat 1 sampai 20 syarat dengan logika **AND**):
-   * **Kotak Kiri (Indikator):** Pilih `PRICE`, `EMA9`, `EMA20`, atau `RSI14`.
-   * **Kotak Tengah (Operator):** Pilih `>`, `>=`, `<`, atau `<=`.
-   * **Kotak Kanan (Pembanding):** Ketik nama indikator lain (`EMA9`, `EMA20`, `PRICE`, `RSI14`) **ATAU** ketik angka langsung (misalnya `30`, `50`, atau harga dalam mata uang *Universe* tanpa titik/konversi kurs).
-4. Klik tombol **Save rule**.
-
-#### 💡 Contoh Resep Rule untuk Pemula:
-* **Resep 1 — System Rule "Default Scalping" (Tren Naik + Momentum Sehat):**
-  * `EMA9 > EMA20` *(Tren jangka pendek di atas tren menengah)*
-  * `PRICE > EMA9` *(Harga penutupan hari ini kuat di atas rata-rata 9 hari)*
-  * `RSI14 > 45` *(Momentum beli sudah mulai kuat)*
-  * `RSI14 < 75` *(Harga belum kepanasan / belum jenuh beli)*
-* **Resep 2 — "Berburu Saham Jenuh Jual / Oversold":**
-  * `RSI14 < 30` *(Mencari saham yang baru mengalami penurunan tajam dan berpotensi memantul)*
-* **Resep 3 — "Golden Cross Sederhana":**
-  * `PRICE > EMA20`
-  * `EMA9 >= EMA20`
-
-### Langkah 3: Jalankan Screener (*Run Screening*)
-1. Buka halaman **Screener** (`#app/analysis`).
-2. Pada dropdown **Screening rule**, pilih *Rule* yang ingin kamu gunakan (bisa *System rule* atau *Your saved rule*).
-3. Pada dropdown **Stock universe**, pilih *Universe* saham yang sudah kamu buat.
-4. Periksa ringkasan syarat (*badge* kondisi) yang muncul di bawah pilihanmu.
-5. Klik tombol **Run screening**.
-6. Perhatikan *Progress Bar* yang berjalan melalui 4 tahap otomatis:
-   * **15% — Checking account access:** Memastikan sesi aplikasi dan izin fitur *screener* aktif.
-   * **40% — Preparing daily data:** Mengambil *manifest* dataset harian (minimal 20 *candle* historis per saham) dari server/cache terenkripsi.
-   * **68% — Calculating indicators:** Mesin lokal **Go/WASM Worker** di browser menghitung `PRICE`, `EMA9`, `EMA20`, dan `RSI14` untuk semua saham sekaligus.
-   * **88% — Checking rule conditions:** Mengirim *batch feature vector* lewat **WebSocket** dengan *one-time socket ticket* ke *Decision Kernel* di server Go.
-   * **100% — Screening complete:** Hasil siap dibaca! *(Jika ingin membatalkan di tengah jalan, klik tombol **Cancel**).*
-
-### Langkah 4: Membaca Hasil, Bukti Indikator, & Grafik
-Setelah proses mencapai 100%, gulir ke bagian **Screening results**:
-1. **Filter, Cari, & Urutkan Tabel:**
-   * Gunakan filter status (**All**, **Matched**, **Not matched**) untuk menyaring tabel.
-   * Gunakan kotak pencarian (**Search**) untuk mencari kode saham tertentu.
-   * Urutkan berdasarkan kode saham (**Symbol**), harga, atau nilai indikator.
-2. **Klik Baris Saham untuk Melihat Bukti Detail (*Stock Detail & Condition Evidence*):**
-   * Saat kamu mengklik salah satu saham (misalnya `TLKM`), panel detail akan terbuka menampilkan:
-     * Nilai pasti **Open price**, **Close price**, **EMA 9**, **EMA 20**, dan **RSI 14** pada *candle* terakhir.
-     * **Condition evidence:** Daftar ceklis per syarat yang menjelaskan **mengapa** saham tersebut *Matched* atau *Not Matched* (angka kiri dibandingkan langsung dengan angka kanan).
-     * **Grafik Interaktif TradingView** untuk melihat bentuk *candlestick* secara visual.
-3. **Bandingkan dengan Riwayat Sebelumnya (*Screening History & Comparison*):**
-   * Klik panel lipat **Screening history** untuk meninjau hasil saringan terdahulu atau membandingkan perubahan hasil terbaru dengan saringan sebelumnya:
-     * **New matches:** Saham yang baru lolos saringan kali ini.
-     * **No longer matched:** Saham yang sebelumnya lolos tapi kali ini tidak lolos.
-     * **Still matched:** Saham yang konsisten tetap lolos.
-4. **Unduh Laporan ke Excel/Spreadsheet (*Export CSV*):**
-   * Klik tombol **Export CSV** di kanan atas tabel hasil untuk mengunduh file `signalgen-screening.csv` berisi seluruh angka harga, indikator, status keputusan, dan versi *rule*.
+2. Klik tombol **New blank rule**, lalu isi:
+   - **Rule name**: Beri nama yang jelas (contoh: *"Golden Cross Momentum Beli"*).
+   - **Signal action**: Pilih **`BUY`** (untuk mencari sinyal beli) atau **`SELL`** (untuk sinyal keluar).
+   - **Rule logic**: Pilih **`AND`** (semua syarat wajib cocok) atau **`OR`** (cukup salah satu syarat cocok).
+   - **Cooldown (seconds)**: Tentukan jeda waktu (default `300` detik = 5 menit).
+3. Tambahkan kondisi pada bagian **Screening conditions** (bisa 1 sampai 20 kondisi):
+   - **Kiri**: Pilih indikator utama (`PRICE`, `EMA9`, `EMA20`, `RSI14`).
+   - **Tengah**: Pilih operator (`>`, `>=`, `<`, `<=`, `CROSS_UP`, `CROSS_DOWN`).
+   - **Kanan**: Isi dengan indikator pembanding (misal `EMA20`) atau ketik angka langsung (misal `30` atau `70`).
+4. Klik **Save rule**.
 
 ---
 
-## 5. Tanya Jawab & Pemecahan Masalah Umum (FAQ Pemula)
+### 5 Contoh Rule untuk Belajar Operator
 
-* **T: Mengapa semua saham saya hasilnya "Not matched"? Apakah aplikasinya rusak?**
-  * **J:** Tidak rusak! **Not matched** artinya pada penutupan pasar terakhir, belum ada saham di *Universe*-mu yang memenuhi **seluruh** syarat pada *Rule* yang kamu pilih. Klik detail sahamnya untuk melihat syarat mana yang belum terpenuhi (pada bagian *Condition evidence*).
-* **T: Mengapa saya tidak bisa mencampur saham Indonesia (`BBCA.JK`) dan saham AS (`AAPL`) dalam satu Universe?**
-  * **J:** Karena harga saham IDX menggunakan **Rupiah (IDR)** (misalnya Rp10.000) sedangkan saham AS menggunakan **Dolar (USD)** (misalnya $200). Agar syarat seperti `PRICE > 5000` atau `EMA20` tidak salah arti akibat perbedaan mata uang, setiap *Universe* dikunci pada satu pasar/mata uang.
-* **T: Mengapa dibutuhkan minimal 20 candle (hari bursa) untuk menjalankan screener?**
-  * **J:** Karena indikator `EMA20` membutuhkan minimal 20 hari data penutupan historis dan `RSI14` membutuhkan minimal 15 hari data agar rumus matematikanya menghasilkan angka yang valid dan akurat.
-* **T: Apa yang harus dilakukan jika muncul pesan "Screener access is not active"?**
-  * **J:** Buka menu **Plan & Access** (`#app/subscription`) untuk memeriksa status langganan atau minta operator mengaktifkan *grant* fitur `screener` pada akunmu.
+Contoh berikut adalah latihan konfigurasi, bukan strategi yang sudah terbukti menguntungkan atau rekomendasi untuk membeli/menjual saham.
+
+#### Resep 1: Golden Cross Tren Naik (Aksi: BUY | Logika: AND)
+Cocok untuk mencari saham yang baru saja memulai tren kenaikan baru:
+1. `EMA9 CROSS_UP EMA20` *(Garis cepat memotong ke atas garis lambat)*
+2. `PRICE > EMA9` *(Harga tutup berada di atas EMA9)*
+3. `RSI14 > 45` *(Tenaga beli sudah mulai aktif)*
+4. `RSI14 < 70` *(Batas oscillator dalam contoh ini; bukan penilaian saham murah/mahal)*
+
+#### Resep 2: Pantulan Jenuh Jual / Oversold Rebound (Aksi: BUY | Logika: AND)
+Mencari saham yang baru selesai terkoreksi dalam dan mulai memantul naik:
+1. `RSI14 CROSS_UP 30` *(RSI baru saja menembus ke atas level 30 dari zona jenuh jual)*
+2. `PRICE > EMA9` *(Harga mulai berhasil menembus rata-rata 9 hari)*
+
+#### Resep 3: Amankan Profit / Exit Jenuh Beli (Aksi: SELL | Logika: OR)
+Menggunakan logika `OR` untuk memberikan peringatan jual jika salah satu kondisi bahaya muncul:
+1. `RSI14 CROSS_DOWN 70` *(RSI berbalik turun menembus 70 setelah jenuh beli)*
+2. `PRICE < EMA9` *(Harga mulai jatuh di bawah rata-rata 9 hari)*
+
+#### Resep 4: Death Cross Defensive (Aksi: SELL | Logika: AND)
+Peringatan pembalikan tren turun (*downtrend*):
+1. `EMA9 CROSS_DOWN EMA20` *(Garis EMA9 memotong ke bawah garis EMA20)*
+2. `PRICE < EMA20` *(Harga tertekan di bawah garis tren menengah)*
+
+#### Resep 5: Sistem Bawaan SignalGen ("Default Scalping")
+Strategi konservatif bawaan sistem untuk *swing trading* harian:
+- Sinyal: `BUY` | Logika: `AND`
+- `EMA9 > EMA20`
+- `PRICE > EMA9`
+- `RSI14 > 45`
+- `RSI14 < 75`
+
+---
+
+### Langkah 3: Jalankan Screener (*Run Screening*)
+1. Buka menu **Screener** (`#app/analysis`).
+2. Pilih aturan yang ingin kamu jalankan pada dropdown **Screening rule**.
+3. Pilih kelompok sahammu pada dropdown **Stock universe**.
+4. Klik tombol **Run screening**.
+5. Amati *Progress Bar* 4 tahap:
+   - **15% — Validating access**: Verifikasi sesi login dan hak akses akun.
+   - **40% — Preparing data**: Menyiapkan candle harian historis (minimal 20 hari).
+   - **68% — Loading engine (Go/WASM)**: Browser menghitung indikator `PRICE`, `EMA9`, `EMA20`, `RSI14`.
+   - **88% — Private scoring (WebSocket)**: Evaluasi privat di server Go via WebSocket satu tiket.
+   - **100% — Screening complete**: Hasil siap ditinjau!
+
+---
+
+### Langkah 4: Membaca Hasil & Bukti Indikator
+1. **Periksa Kolom Decision di Tabel**:
+   - Badge hijau **`BUY`**: Lolos aturan beli.
+   - Badge merah **`SELL`**: Lolos aturan jual.
+   - Badge abu-abu **`Not matched`**: Belum memenuhi syarat.
+2. **Klik Nama Saham untuk Membuka Detail**:
+   - Melihat nilai eksak harga buka, harga tutup, EMA9, EMA20, dan RSI14.
+   - Memeriksa **Condition Evidence**: Memperlihatkan perbandingan angka nyata per syarat sehingga kamu tahu persis syarat mana yang lolos dan syarat mana yang gagal.
+   - Menikmati tampilan grafik interaktif **TradingView**.
+3. **Ekspor CSV**:
+   - Klik tombol **Export CSV** untuk mengunduh laporan lengkap dalam format Excel/Spreadsheet.
+
+---
+
+## 5. Perbandingan: SignalGen 2.0 vs Legacy Screener (Claudio)
+
+Untuk kebutuhan laporan atau sidang skripsi, berikut perbandingan arsitektur SignalGen 2.0 dengan sistem warisan desktop lama:
+
+| Fitur / Parameter | Legacy Desktop (Claudio) | SignalGen 2.0 (Sekarang) |
+| :--- | :--- | :--- |
+| **Arsitektur Sistem** | Baseline desktop/Python/SQLite; lihat source legacy untuk rincian. | Web multi-user Go/Gin + React 18 + Supabase Postgres. |
+| **Komputasi Indikator** | Komputasi pada runtime Python legacy. | Indikator di browser Go/WASM, keputusan di server. Dampak efisiensi harus diukur, bukan diasumsikan. |
+| **Keamanan Strategi** | File lokal di komputer user. | Akses resource dibatasi per pengguna; pemilik dapat membaca rule miliknya. Rule sistem privat tetap di server, bukan jaminan tidak dapat dianalisis ulang. |
+| **Logika Aturan** | Hanya mendukung `AND`. | Mendukung **`AND` & `OR`**. |
+| **Tipe Sinyal** | Hanya filter kecocokan matematis. | **`BUY` (Entry) & `SELL` (Exit)** terintegrasi dengan badge visual. |
+| **Operator Persilangan** | Didukung (`CROSS_UP`/`CROSS_DOWN`). | **Didukung (`CROSS_UP`/`CROSS_DOWN`)** dengan perbandingan strictly chronological terhadap candle sebelumnya. |
+| **Komentar Kode** | Mengikuti source legacy. | Penjelasan Indonesia ditambahkan pada bagian tertentu; bukan klaim seluruh source sudah dikomentari. |
+
+---
+
+## 6. Tanya Jawab Umum (FAQ Pemula)
+
+* **T: Kenapa saham saya berlabel "Not matched"? Apakah ada error?**
+  * **J:** Tidak ada error! *Not matched* artinya data penutupan saham hari ini belum memenuhi rumus kriteriamu. Klik baris saham tersebut untuk melihat rincian syarat mana yang belum tercapai pada bagian *Condition evidence*.
+* **T: Mengapa satu universe dibatasi maksimal 10 saham?**
+  * **J:** Ini batas screening per universe saat ini, bukan jumlah seluruh saham dalam katalog. Batas tersebut membatasi pekerjaan satu run; kinerja tetap bergantung pada jumlah candle, perangkat dan jaringan. Tidak ada jaminan instan pada setiap perangkat.
+* **T: Kapan sebaiknya saya menjalankan screener?**
+  * **J:** Untuk memahami hasil aplikasi, periksa tanggal candle terakhir, periode dataset, timezone dan kualitas pada snapshot. Jangan menyimpulkan data sudah final hanya dari satu jam WIB: kalender bursa, timezone dan keterlambatan provider perlu diperhatikan. WebSocket di aplikasi ini mengirim hasil penilaian, bukan bukti harga real-time.

@@ -1,4 +1,6 @@
+// prettier-ignore
 async (page) => {
+  const origin = new URL(page.url()).origin;
   // All API responses and account state are synthetic. Never call a real account.
   const user = { id: "11111111-1111-4111-8111-111111111111", full_name: "Akun pengujian", email: "fixture@example.test", role: "operator", status: "active" };
   const now = new Date().toISOString();
@@ -88,7 +90,7 @@ async (page) => {
     else payload = { items: [] };
     return route.fulfill({ json: payload });
   });
-  await page.goto("http://127.0.0.1:5174/#app/analysis");
+  await page.goto(`${origin}/#app/analysis`);
   await page.reload();
   await page.getByRole("button", { name: "Export CSV" }).waitFor({ timeout: 10000 });
   await page.getByRole("button", { name: "BBCA", exact: true }).click({ timeout: 5000 });
@@ -113,7 +115,7 @@ async (page) => {
   if (await page.evaluate(key => localStorage.getItem(key), journalKey) !== "preserve-existing-drafts") throw Error("Old drafts were overwritten");
   if (await page.locator(".journal-capture").count()) throw Error("Journal form was persisted");
   await page.route("**/api/v1/stock-universes", route => route.fulfill({ json: { items: [universe, { ...universe, id: "fixture-energy", name: "Energy selection", symbols: ["PTBA.JK"] }] } }));
-  await page.goto("http://127.0.0.1:5174/#app/realtime");
+  await page.goto(`${origin}/#app/realtime`);
   await page.getByLabel("Stock universe", { exact: true }).waitFor();
   await page.waitForFunction(() => document.querySelector("#monitor-universe")?.textContent.includes("Bank pilihan"));
   if (await page.locator(".monitor-strip button").count() !== 2) throw Error("Monitor ignored saved universe");
@@ -147,7 +149,7 @@ async (page) => {
   await page.getByRole("columnheader", { name: "Change", exact: true }).waitFor();
   if (await page.locator(".monitor-ledger .monitor-change").first().innerText() !== "+6.32%") throw Error("Monitor percentages must show a sign and two decimals");
   await page.unroute("**/api/v1/stock-universes");
-  await page.goto("http://127.0.0.1:5174/#app/access");
+  await page.goto(`${origin}/#app/access`);
   const ended = page.locator(".account-session-ledger article").filter({ hasText: "Ended browser" });
   await ended.waitFor();
   await page.getByRole("button", { name: "Delete history for Ended browser", exact: true }).click();
@@ -171,7 +173,7 @@ async (page) => {
     await page.setViewportSize({ width, height: 1000 });
     for (let theme = 0; theme < 2; theme++) {
       for (const view of routes) {
-        await page.goto(`http://127.0.0.1:5174/#app/${view}`);
+        await page.goto(`${origin}/#app/${view}`);
         await page.locator(".demo-workbench").waitFor({ timeout: 10000 });
         await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
         await page.evaluate(() => Promise.all([
@@ -365,10 +367,10 @@ async (page) => {
     if (!stillOpen || stillOpen.x < 0) throw Error(`Navigation collapsed sidebar at ${width}`);
     await page.getByRole("button", { name: "Close menu", exact: true }).click({ timeout: 5000 });
   }
-  await page.goto("http://127.0.0.1:5174/#account");
+  await page.goto(`${origin}/#account`);
   await page.locator("main").waitFor({ timeout: 10000 });
   await page.screenshot({ path: "/private/tmp/signalgen-account.png", animations: "disabled", timeout: 10000 });
-  await page.goto("http://127.0.0.1:5174/#app/universes");
+  await page.goto(`${origin}/#app/universes`);
   await page.getByRole("button", { name: "Edit Bank pilihan", exact: true }).click({ timeout: 5000 });
   if(await page.locator('.universe-selection__stocks li').count() !== 2) throw Error("Selected stock cards missing");
   const stockCard = await page.locator('.universe-selection__stocks li').first().evaluate(el=>({radius:parseFloat(getComputedStyle(el).borderTopLeftRadius),padding:parseFloat(getComputedStyle(el).paddingLeft)}));
@@ -414,7 +416,7 @@ async (page) => {
   }
   failUniverseDelete = false;
   systemRule = true;
-  await page.goto("http://127.0.0.1:5174/#app/analysis");
+  await page.goto(`${origin}/#app/analysis`);
   await page.getByText("System rule conditions are checked automatically.", { exact: true }).waitFor({ timeout: 10000 });
   for (const width of [1440, 900, 390]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -427,7 +429,7 @@ async (page) => {
       await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
     }
   }
-  await page.goto("http://127.0.0.1:5174/#app/subscription");
+  await page.goto(`${origin}/#app/subscription`);
   await page.getByRole("heading", { name: "Quota usage", exact: true }).waitFor({ timeout: 10000 });
   const backtest = page.locator('.subscription-feature-grid [data-slot="card"]').filter({ hasText: "Backtest access" });
   if (!(await backtest.innerText()).includes("Not available yet")) throw Error("Backtest incorrectly presented as usable");
@@ -470,11 +472,11 @@ async (page) => {
     }
   }
   unauthorized = true;
-  await page.goto("http://127.0.0.1:5174/#app/analysis");
+  await page.goto(`${origin}/#app/analysis`);
   await page.waitForURL("**/#login", { timeout: 10000 });
   if (await page.evaluate(() => sessionStorage.getItem("signalgen.access-token"))) throw Error("401 retained auth");
   for (const route of ["home", "creators", "login", "register", "forgot-password", "reset-password"]) {
-    await page.goto(`http://127.0.0.1:5174/#${route}`);
+    await page.goto(`${origin}/#${route}`);
     await page.locator("main").waitFor({ timeout: 10000 });
     await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
     await page.waitForFunction(expected => document.documentElement.dataset.typography === expected, route === "home" ? "landing" : "workspace");
@@ -488,7 +490,7 @@ async (page) => {
   systemRule = false;
   await page.reload();
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto("http://127.0.0.1:5174/#app/rules");
+  await page.goto(`${origin}/#app/rules`);
   await page.getByRole("button", { name: "New blank rule", exact: true }).click();
   await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
   const draftInput = page.getByLabel("Rule name", { exact: true });
@@ -541,7 +543,7 @@ async (page) => {
   await page.waitForFunction(() => document.querySelector('#rule-name')?.value === '');
   if (!ruleWrite || ruleWrite.definition.conditions[0].op !== "CROSS_UP" || ruleWrite.definition.signal_type !== "BUY") throw Error("Preset save payload lost crossover or signal action");
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto("http://127.0.0.1:5174/#app/universes");
+  await page.goto(`${origin}/#app/universes`);
   const catalog = page.getByRole("table", { name: "Stock catalog", exact: true });
   await catalog.waitFor();
   await page.getByRole("button", { name: "United States · USD", exact: true }).click();
@@ -562,7 +564,7 @@ async (page) => {
   await page.getByRole("button", { name: "Indonesia · IDR", exact: true }).click();
   if (!(await catalog.innerText()).includes("BBCA") || (await catalog.innerText()).includes("AAPL")) throw Error("IDX catalog is not market isolated");
   largeUniverse = true;
-  await page.goto("http://127.0.0.1:5174/#app/analysis");
+  await page.goto(`${origin}/#app/analysis`);
   await page.getByRole("button", { name: "Export CSV", exact: true }).waitFor({ timeout: 10000 });
   if (await page.getByRole('list', { name: 'Selected universe stocks', exact: true }).getByRole('listitem').count() !== 10) throw Error('Selected universe stocks are not rendered as ten compact stock cards');
   await page.getByRole("group", { name: "Signal status", exact: true }).waitFor();
@@ -583,7 +585,7 @@ async (page) => {
     if (!await page.locator('.screener-criteria li').evaluateAll(items => items.length === 2 && items.every(el => parseFloat(getComputedStyle(el).borderRadius) >= 12 && parseFloat(getComputedStyle(el).borderTopWidth) >= 1))) throw Error('Rule preview is not presented as rounded cards');
   }
   savedCardFixture = true;
-  await page.goto("http://127.0.0.1:5174/#app/universes");
+  await page.goto(`${origin}/#app/universes`);
   await page.getByRole('button', { name: 'Edit Banking watchlist', exact:true }).waitFor();
   for (const width of [1440, 900, 390]) for (const theme of ['dark', 'light']) {
     await page.setViewportSize({ width, height: 1000 });
@@ -601,13 +603,13 @@ async (page) => {
   }
   await page.getByRole('button', { name:'Edit Banking watchlist', exact:true }).click();
   if (await page.getByLabel('Universe name', { exact:true }).inputValue() !== 'Banking watchlist') throw Error('Saved universe edit action broken');
-  await page.goto("http://127.0.0.1:5174/#app/analysis");
+  await page.goto(`${origin}/#app/analysis`);
   unauthorized = true;
   await page.reload();
   await page.waitForURL('**/#login', { timeout: 10000 });
   unauthorized = false;
   for (const view of ['login', 'register', 'forgot-password', 'reset-password']) {
-    await page.goto(`http://127.0.0.1:5174/#${view}`);
+    await page.goto(`${origin}/#${view}`);
     await page.locator('.auth-card').waitFor();
     for (const width of [1440, 900, 390, 320]) for (const theme of ['dark', 'light']) {
       await page.setViewportSize({ width, height: 1000 });

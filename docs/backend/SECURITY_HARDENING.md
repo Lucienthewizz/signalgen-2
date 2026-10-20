@@ -82,7 +82,63 @@ schema errors are never included in public readiness responses.
 `Allow`. Both use the shared request ID and `private, no-store` error contract.
 The raw WebSocket upgrade boundary remains unchanged.
 
+### Slow reads and transient recovery (19 October 2026)
+
+Ordinary GET/HEAD dependency work now inherits a 10-second context deadline.
+Repositories and Supabase verification receive that context, so a socket
+`WriteTimeout` is no longer the only limit on a slow read. Server failures after
+that deadline return HTTP 504 with `REQUEST_TIMEOUT`, the standard error envelope
+and request ID. Explicit 401/403 denials remain denials. The raw screener WebSocket
+retains its separate lifecycle; mutation processing is not given this read deadline.
+Cancellation is cooperative: a handler must pass its context to dependencies.
+
+New pgx connections are bounded to five seconds (a smaller configured value is
+preserved). The pool remains limited to five connections, not increased to hide
+latency. The pinned pgxpool otherwise defaults background connection construction
+to two minutes when ConnectTimeout is unset; a startup Ping deadline alone does
+not configure future connections.
+
+`database_operation` logs separate `connect`, `acquire` and `query` durations for
+slow/error operations, correlated to the request ID when available. Pool summaries
+contain occupancy, cumulative acquire time and canceled-acquire counts. They never
+include connection URLs, SQL, arguments, user IDs or raw error strings. Query timing
+includes network/result processing; it is not a server-side EXPLAIN measurement.
+
+The web client retries one transient authenticated GET after a 300 ms backoff.
+Concurrent identical reads share the recovery. Network failure, timeout and
+502/503/504 are eligible; 401/403/409/429 are not. A changed identity/session stops
+recovery. Mutations, login, refresh-token exchange and session creation are not
+replayed. Browser deadlines cover response bodies as well as headers. Outages
+preserve the current login, but a genuine invalid/revoked identity still signs out.
+
+This bounds failure and makes diagnosis possible; it does not prove the cloud
+network or database can no longer be slow. The observed 83/94-second request logs
+do not alone identify a specific query or prove a Supabase outage. No migration,
+RLS relaxation, credential change or account-permission bypass is part of this fix.
+
 ## Verification and remaining deployment work
+
+### Runtime and workspace follow-up (20 October 2026)
+
+The Go module and Docker build require Go 1.27.2; `golang.org/x/net` is pinned
+to 0.60.0 with its minimum compatible support-module upgrades. Rebuild the API
+image after pulling these changes; editing go.mod does not patch a running binary.
+The current API source scan reports zero reachable and zero imported-package
+vulnerabilities. Module-only advisory GO-2026-5932 remains on the unused,
+unmaintained `x/crypto/openpgp` package (no fixed version); SignalGen does not
+import that package. A scan is not a guarantee that a deployment is exploit-free.
+
+Readiness now includes `workspace_state`: its five required columns, enabled
+RLS, and the restricted role's SELECT/INSERT/UPDATE grants and backend policies.
+Missing migrations/permissions fail closed; readiness never grants access or
+repairs a cloud database. Existing migrations already provision this table,
+so no new schema migration or broader role grant is needed for this code change.
+Local rolled-back tests remove table/column/RLS/grants/policies and require
+readiness rejection. The real Postgres API test covers two-owner workspace
+isolation, persistence, stale-version rejection and one winning concurrent writer.
+
+Closed-daily data policy and its limits are documented in
+[daily data quality](DAILY_DATA_QUALITY.md).
 
 CI runs isolated schema/ownership/runtime-privilege checks, real Model A WASM
 integration, race tests, static analysis, pinned govulncheck and OpenAPI

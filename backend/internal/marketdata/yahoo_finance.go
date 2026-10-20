@@ -26,6 +26,7 @@ var (
 type YahooFinance struct {
 	baseURL string
 	client  *http.Client
+	now     func() time.Time
 }
 
 func NewYahooFinance(baseURL string, client *http.Client) (*YahooFinance, error) {
@@ -36,7 +37,7 @@ func NewYahooFinance(baseURL string, client *http.Client) (*YahooFinance, error)
 	if client == nil {
 		client = &http.Client{Timeout: 12 * time.Second}
 	}
-	return &YahooFinance{baseURL: baseURL, client: client}, nil
+	return &YahooFinance{baseURL: baseURL, client: client, now: time.Now}, nil
 }
 
 func (provider *YahooFinance) Daily(ctx context.Context, instruments []universe.Instrument, outputSize int) ([]Series, error) {
@@ -84,8 +85,17 @@ func (provider *YahooFinance) dailyOne(ctx context.Context, instrument universe.
 		return Series{}, ErrInvalidData
 	}
 	candles := make([]core.Candle, 0, length)
+	finality := newDailyFinality(chart.Meta, provider.now().UTC())
+	skippedNull, excludedOpen := 0, 0
 	for index := 0; index < length; index++ {
+		// interval=1d does not mean the current day's candle has closed. Never
+		// feed an unfinished (or unconfirmed) daily close into RSI/EMA screening.
+		if !finality.closed(chart.Timestamp[index]) {
+			excludedOpen++
+			continue
+		}
 		if quote.Open[index] == nil || quote.High[index] == nil || quote.Low[index] == nil || quote.Close[index] == nil || quote.Volume[index] == nil {
+			skippedNull++
 			continue
 		}
 		candles = append(candles, core.Candle{
@@ -103,7 +113,8 @@ func (provider *YahooFinance) dailyOne(ctx context.Context, instrument universe.
 	if len(candles) > outputSize {
 		candles = candles[len(candles)-outputSize:]
 	}
-	series := Series{Symbol: instrument.Symbol, Candles: candles, Timezone: "UTC"}
+	series := Series{Symbol: instrument.Symbol, Candles: candles, Timezone: "UTC",
+		QualityWarnings: dailyQualityWarnings(instrument.Symbol, skippedNull, excludedOpen, finality.fallback)}
 	if err := ValidateSeries([]Series{series}, []universe.Instrument{instrument}, outputSize); err != nil {
 		return Series{}, err
 	}
@@ -198,7 +209,8 @@ func minimumLength(values ...int) int {
 type yahooChartResponse struct {
 	Chart struct {
 		Result []struct {
-			Timestamp  []int64 `json:"timestamp"`
+			Meta       yahooMarketMeta `json:"meta"`
+			Timestamp  []int64         `json:"timestamp"`
 			Indicators struct {
 				Quote []struct {
 					Open   []*float64 `json:"open"`

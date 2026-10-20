@@ -507,7 +507,8 @@ export function ServerRulesPanel({
                   </SelectContent>
                 </Select>
                 <FieldDescription>
-                  Direction of signal generated when conditions match.
+                  Direction of the signal when this rule matches; not an
+                  automatic order.
                 </FieldDescription>
               </Field>
               <Field>

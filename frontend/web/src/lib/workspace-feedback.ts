@@ -1,6 +1,7 @@
 import type {
   RuleCondition,
   ScreenerFeatureVector,
+  ScreenerDecision,
   Subscription,
 } from "@/types";
 export function screeningFailure(error: {
@@ -32,6 +33,20 @@ export function screeningFailure(error: {
       detail: "Reload the rules and stock universes, then choose again.",
       action: "resources",
     };
+  if (error.code === "REQUEST_TIMEOUT" || error.status === 504)
+    return {
+      title: "Request timed out",
+      detail:
+        "The server took too long to respond. Your login is unchanged. Try again shortly.",
+      action: "retry",
+    };
+  if (error.status === 502 || error.status === 503)
+    return {
+      title: "Service temporarily unavailable",
+      detail:
+        "The service is temporarily unavailable. Try again shortly; signing in again is not required.",
+      action: "retry",
+    };
   if (error.status === 0)
     return {
       title: "Connection interrupted",
@@ -59,30 +74,31 @@ export function conditionEvidence(
     RSI14: features.rsi14,
   };
   const left = values[condition.left];
-  const previousValues: Record<string, number> | null = prevFeatures
-    ? {
-        PRICE: prevFeatures.price,
-        EMA9: prevFeatures.ema9,
-        EMA20: prevFeatures.ema20,
-        RSI14: prevFeatures.rsi14,
-      }
-    : null;
-  const previousLeft = previousValues?.[condition.left];
-  const previousRight =
-    typeof condition.right === "number"
-      ? condition.right
-      : previousValues?.[condition.right];
-  const crossover =
-    condition.op === "CROSS_UP" || condition.op === "CROSS_DOWN";
-  const available =
-    !crossover ||
-    (Number.isFinite(previousLeft) && Number.isFinite(previousRight));
   const right =
     typeof condition.right === "number"
       ? condition.right
       : values[condition.right];
   if (!Number.isFinite(left) || !Number.isFinite(right)) return null;
 
+  // Crossover memerlukan dua candle. Data lama yang kehilangan candle sebelumnya
+  // tidak boleh ditampilkan sebagai kondisi false seolah-olah sudah terverifikasi.
+  let previous: { left: number; right: number } | undefined;
+  if (condition.op === "CROSS_UP" || condition.op === "CROSS_DOWN") {
+    if (!prevFeatures) return null;
+    const previousValues: Record<string, number> = {
+      PRICE: prevFeatures.price,
+      EMA9: prevFeatures.ema9,
+      EMA20: prevFeatures.ema20,
+      RSI14: prevFeatures.rsi14,
+    };
+    const prevLeft = previousValues[condition.left];
+    const prevRight =
+      typeof condition.right === "number"
+        ? condition.right
+        : previousValues[condition.right];
+    if (!Number.isFinite(prevLeft) || !Number.isFinite(prevRight)) return null;
+    previous = { left: prevLeft, right: prevRight };
+  }
   let passed = false;
   switch (condition.op) {
     case ">":
@@ -98,41 +114,17 @@ export function conditionEvidence(
       passed = left <= right;
       break;
     case "CROSS_UP":
-      if (!prevFeatures) {
-        passed = false;
-      } else {
-        const prevValues: Record<string, number> = {
-          PRICE: prevFeatures.price,
-          EMA9: prevFeatures.ema9,
-          EMA20: prevFeatures.ema20,
-          RSI14: prevFeatures.rsi14,
-        };
-        const prevLeft = prevValues[condition.left];
-        const prevRight =
-          typeof condition.right === "number"
-            ? condition.right
-            : prevValues[condition.right];
-        passed = prevLeft <= prevRight && left > right;
-      }
+      passed = Boolean(
+        previous && previous.left <= previous.right && left > right,
+      );
       break;
     case "CROSS_DOWN":
-      if (!prevFeatures) {
-        passed = false;
-      } else {
-        const prevValues: Record<string, number> = {
-          PRICE: prevFeatures.price,
-          EMA9: prevFeatures.ema9,
-          EMA20: prevFeatures.ema20,
-          RSI14: prevFeatures.rsi14,
-        };
-        const prevLeft = prevValues[condition.left];
-        const prevRight =
-          typeof condition.right === "number"
-            ? condition.right
-            : prevValues[condition.right];
-        passed = prevLeft >= prevRight && left < right;
-      }
+      passed = Boolean(
+        previous && previous.left >= previous.right && left < right,
+      );
       break;
+    default:
+      return null;
   }
 
   return {
@@ -140,11 +132,63 @@ export function conditionEvidence(
     left,
     right,
     passed,
-    available,
-    crossover,
-    previousLeft,
-    previousRight,
+    ...(previous ? { previous } : {}),
+    // New workflow fields share the same validated two-candle evidence.
+    available: true,
+    crossover: Boolean(previous),
+    previousLeft: previous?.left,
+    previousRight: previous?.right,
   };
+}
+
+/** Match adalah status lolos rule; BUY/SELL adalah arah yang ditentukan rule.
+ * Riwayat lama tanpa signal_type tidak cukup untuk menyimpulkan BUY. */
+export function decisionLabel(
+  decision: Pick<ScreenerDecision, "matched" | "signal_type" | "reason_codes">,
+) {
+  if (!decision.matched)
+    return decision.reason_codes.includes("COOLDOWN_ACTIVE")
+      ? "Cooldown"
+      : "Not matched";
+  return decision.signal_type === "BUY" || decision.signal_type === "SELL"
+    ? decision.signal_type
+    : "Matched";
+}
+
+export function decisionReasons(reasons: string[], logic?: "AND" | "OR") {
+  if (!reasons.length) return "No decision reason was provided.";
+  return reasons
+    .map((reason) => {
+      if (reason === "RULE_MATCHED")
+        return logic === "OR"
+          ? "At least one condition met."
+          : logic === "AND"
+            ? "All conditions met."
+            : "Rule matched.";
+      if (reason === "CONDITIONS_NOT_MET")
+        return logic === "OR"
+          ? "No conditions met."
+          : logic === "AND"
+            ? "At least one condition was not met."
+            : "Rule conditions were not met.";
+      if (reason === "COOLDOWN_ACTIVE")
+        return "Rule conditions met, but the repeat-signal cooldown is active.";
+      return reason.toLowerCase().replaceAll("_", " ");
+    })
+    .join(" ");
+}
+
+export function decisionDescription(
+  decision: Pick<ScreenerDecision, "matched" | "signal_type" | "reason_codes">,
+) {
+  const label = decisionLabel(decision);
+  if (decision.matched)
+    return label === "Matched"
+      ? "Matched rule · signal direction unavailable"
+      : `Matched rule · ${label} signal (not an order)`;
+  return label === "Cooldown"
+    ? "Rule conditions met · signal withheld by cooldown"
+    : "Did not match rule";
 }
 export function subscriptionState(
   subscription: Subscription,

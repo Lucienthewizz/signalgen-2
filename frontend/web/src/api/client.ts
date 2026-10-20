@@ -248,7 +248,10 @@ async function refreshAuth(): Promise<void> {
         !result.refresh_token ||
         !(result.expires_in > 0)
       )
-        throw new ApiError("Your session could not be refreshed. Try again.", 503);
+        throw new ApiError(
+          "Your session could not be refreshed. Try again.",
+          503,
+        );
       session.setAuth(result, true);
     } catch (error) {
       if (error instanceof ApiError) throw error;
@@ -282,7 +285,7 @@ function request<T>(
   ]);
   const existing = pendingReads.get(key);
   if (existing) return existing as Promise<T>;
-  const pending = performRequest<T>(
+  const pending = readWithRecovery<T>(
     path,
     init,
     retryExpiredSession,
@@ -290,6 +293,34 @@ function request<T>(
   ).finally(() => pendingReads.delete(key));
   pendingReads.set(key, pending);
   return pending;
+}
+
+// Retry one transient read, never a login, save, session creation or mutation.
+// Concurrent callers share this entire recovery through pendingReads above.
+async function readWithRecovery<T>(
+  path: string,
+  init: RequestInit,
+  retryExpiredSession: boolean,
+  rawText: boolean,
+): Promise<T> {
+  const identity = authGeneration;
+  const appSession = session.getAppSession();
+  try {
+    return await performRequest<T>(path, init, retryExpiredSession, rawText);
+  } catch (error) {
+    const transient =
+      error instanceof ApiError &&
+      (error.code === "NETWORK_ERROR" ||
+        error.code === "REQUEST_TIMEOUT" ||
+        [502, 503, 504].includes(error.status));
+    const eligible = path.startsWith("/api/v1/") || path === "/api/auth/me";
+    if (!eligible || !transient || identity !== authGeneration) throw error;
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 300));
+    // Logout, account changes or revocation during backoff must stop recovery.
+    if (identity !== authGeneration || session.getAppSession() !== appSession)
+      throw error;
+    return performRequest<T>(path, init, retryExpiredSession, rawText);
+  }
 }
 
 async function performRequest<T>(
@@ -314,6 +345,8 @@ async function performRequest<T>(
   if (appSession) headers.set("X-App-Session", appSession);
 
   let response: Response;
+  let text = "";
+  let payload: unknown;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 15000);
   try {
@@ -322,31 +355,41 @@ async function performRequest<T>(
       headers,
       signal: controller.signal,
     });
+    // Keep the deadline until the response body is read, not just its headers.
+    if (rawText) {
+      text = await response.text();
+      if (!response.ok) {
+        try {
+          payload = JSON.parse(text);
+        } catch {
+          payload = {};
+        }
+      }
+    } else {
+      payload = await response.json().catch((error) => {
+        if (controller.signal.aborted) throw error;
+        return {};
+      });
+    }
   } catch {
+    const timedOut = controller.signal.aborted;
     throw new ApiError(
-      "The service is currently unavailable. Try again in a moment.",
+      timedOut
+        ? "The server took too long to respond. Try again shortly."
+        : "Unable to connect to the service. Check your connection and try again.",
       0,
+      timedOut ? "REQUEST_TIMEOUT" : "NETWORK_ERROR",
     );
   } finally {
     clearTimeout(timeout);
   }
 
-  // Preserve the exact UTF-8 content bytes for the dataset's server checksum.
-  // Re-serializing parsed JSON changes whitespace/number formatting in Go JSON.
-  const text = rawText ? await response.text() : "";
-  let payload: unknown;
-  if (rawText) {
-    // Successful snapshots are parsed once by the checksum/schema validator.
-    if (!response.ok) {
-      try {
-        payload = JSON.parse(text);
-      } catch {
-        payload = {};
-      }
-    }
-  } else payload = await response.json().catch(() => ({}));
+  // rawText preserves the exact snapshot bytes for checksum verification.
   if (identity !== authGeneration)
-    throw new ApiError("Your account changed. The previous request was cancelled.", 401);
+    throw new ApiError(
+      "Your account changed. The previous request was cancelled.",
+      401,
+    );
   if (!response.ok) {
     const envelope = errorEnvelope(payload);
     const sameIdentity =
@@ -421,7 +464,9 @@ function errorDetail(payload: unknown, status: number): string {
   if (apiError?.code === "RATE_LIMITED")
     return "Too many requests were sent. Wait a moment, then try again.";
   if (apiError?.code === "SERVICE_UNAVAILABLE")
-    return "The screening service is temporarily unavailable. Try again shortly.";
+    return "The service is temporarily unavailable. Try again shortly.";
+  if (apiError?.code === "REQUEST_TIMEOUT")
+    return "The server took too long to respond. Try again shortly.";
   if (apiError?.message) return apiError.message;
   if (Array.isArray(detail)) {
     return "Check your email, name, and password length, then try again.";

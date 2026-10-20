@@ -21,7 +21,13 @@ import {
 import { api, ApiError } from "@/api/client";
 import { TradingViewChart } from "@/components/tradingview-chart";
 import { candleDate } from "@/lib/data-freshness";
-import { conditionEvidence, screeningFailure } from "@/lib/workspace-feedback";
+import {
+  conditionEvidence,
+  decisionLabel,
+  decisionDescription,
+  decisionReasons,
+  screeningFailure,
+} from "@/lib/workspace-feedback";
 import {
   recordMonitorRun,
   monitorRuns,
@@ -101,19 +107,6 @@ function ruleSummary(rule?: RuleResource) {
   );
 }
 
-function decisionReasons(reasons: string[]) {
-  if (!reasons.length) return "No decision reason was provided.";
-  return reasons
-    .map((reason) =>
-      reason === "RULE_MATCHED"
-        ? "Rule criteria matched."
-        : reason === "CONDITIONS_NOT_MET"
-          ? "Some conditions were not met."
-          : reason.toLowerCase().replaceAll("_", " "),
-    )
-    .join(", ");
-}
-
 export function WorkspaceScreenerPanel({
   authenticated,
   backendOnline,
@@ -182,6 +175,7 @@ export function WorkspaceScreenerPanel({
     const version = ++resourceVersion.current;
     setLoadingResources(true);
     setError(null);
+    setFailure(null);
     try {
       const [accountResponse, ruleResponse, universeResponse] =
         await Promise.all([
@@ -222,6 +216,16 @@ export function WorkspaceScreenerPanel({
       setPreferencesReady(true);
     } catch (caught) {
       if (!mounted.current || version !== resourceVersion.current) return;
+      const feedback = screeningFailure(
+        caught instanceof ApiError
+          ? caught
+          : { message: "Screener resources could not be loaded." },
+      );
+      setFailure(
+        feedback.action === "retry"
+          ? { ...feedback, action: "resources" }
+          : feedback,
+      );
       setError(
         caught instanceof Error
           ? caught.message
@@ -725,7 +729,7 @@ export function WorkspaceScreenerPanel({
                     .includes(historySearch.toLowerCase().trim()),
               )
               .map((item) => (
-                <li key={item.recordedAt}>
+                <li key={`${item.run.result.request_id}-${item.recordedAt}`}>
                   <div>
                     <strong>{item.rule}</strong>
                     <span>
@@ -902,8 +906,8 @@ export function WorkspaceScreenerPanel({
                       "Decision",
                       "Market",
                       "Currency",
-                      "Open",
-                      "Close",
+                      `Open ${run.manifest.currency}`,
+                      `Close ${run.manifest.currency}`,
                       "RSI14",
                       "EMA9",
                       "EMA20",
@@ -951,11 +955,7 @@ export function WorkspaceScreenerPanel({
                     <h3>{detailRow.decision.symbol.replace(".JK", "")}</h3>
                     <p>
                       Candle {candleDate(detailRow.decision.timestamp)} ·{" "}
-                      {detailRow.decision.matched
-                        ? detailRow.decision.signal_type
-                          ? `Signal ${detailRow.decision.signal_type} (Matched rule)`
-                          : "Matched rule · signal direction not recorded"
-                        : "Did not match rule"}
+                      {decisionDescription(detailRow.decision)}
                     </p>
                   </div>
                   <Button
@@ -968,25 +968,44 @@ export function WorkspaceScreenerPanel({
                 </header>
                 <dl className="stock-detail__values">
                   {[
-                    ["Open price", detailRow.latestOpen],
-                    ["Close price", detailRow.latestClose],
-                    ["EMA 9", detailRow.features.ema9],
-                    ["EMA 20", detailRow.features.ema20],
+                    [
+                      `Open price (${run.manifest.currency})`,
+                      detailRow.latestOpen,
+                    ],
+                    [
+                      `Close price (${run.manifest.currency})`,
+                      detailRow.latestClose,
+                    ],
+                    [
+                      `EMA 9 (${run.manifest.currency})`,
+                      detailRow.features.ema9,
+                    ],
+                    [
+                      `EMA 20 (${run.manifest.currency})`,
+                      detailRow.features.ema20,
+                    ],
                     ["RSI 14", detailRow.features.rsi14],
                   ].map(([label, value]) => (
                     <div key={label}>
                       <dt>{label}</dt>
                       <dd>
                         {typeof value === "number"
-                          ? new Intl.NumberFormat("en-GB", {
-                              maximumFractionDigits: 2,
-                            }).format(value)
+                          ? label === "RSI 14"
+                            ? new Intl.NumberFormat("en-GB", {
+                                maximumFractionDigits: 2,
+                              }).format(value)
+                            : formatStockPrice(value, run.manifest.currency)
                           : "—"}
                       </dd>
                     </div>
                   ))}
                 </dl>
-                <p>{decisionReasons(detailRow.decision.reason_codes)}</p>
+                <p>
+                  {decisionReasons(
+                    detailRow.decision.reason_codes,
+                    evidenceRule?.definition?.logic,
+                  )}
+                </p>
                 <div className="stock-detail__evidence">
                   <h4>
                     Condition evidence{" "}
@@ -1024,14 +1043,20 @@ export function WorkspaceScreenerPanel({
                                   </Badge>
                                   <span className="stock-detail__condition">
                                     <strong>{evidence.label}</strong>
+                                    {evidence.previous && (
+                                      <small>
+                                        Previous candle:{" "}
+                                        {new Intl.NumberFormat("en-GB", {
+                                          maximumFractionDigits: 2,
+                                        }).format(evidence.previous.left)}{" "}
+                                        compared with{" "}
+                                        {new Intl.NumberFormat("en-GB", {
+                                          maximumFractionDigits: 2,
+                                        }).format(evidence.previous.right)}
+                                      </small>
+                                    )}
                                     <small>
-                                      {evidence.crossover && (
-                                        <span>
-                                          {evidence.available
-                                            ? `Previous candle: ${evidence.previousLeft?.toFixed(2)} compared with ${evidence.previousRight?.toFixed(2)} → Current: `
-                                            : "Previous candle unavailable. Current: "}
-                                        </span>
-                                      )}
+                                      {evidence.previous && "Current candle: "}
                                       {new Intl.NumberFormat("en-GB", {
                                         maximumFractionDigits: 2,
                                       }).format(evidence.left)}{" "}
@@ -1042,6 +1067,9 @@ export function WorkspaceScreenerPanel({
                                     </small>
                                   </span>
                                 </>
+                              ) : condition.op === "CROSS_UP" ||
+                                condition.op === "CROSS_DOWN" ? (
+                                "Previous-candle values are unavailable; this crossover cannot be verified."
                               ) : (
                                 "Condition values are unavailable."
                               )}
@@ -1234,9 +1262,7 @@ export function WorkspaceScreenerPanel({
                                     data-icon="inline-start"
                                     aria-hidden="true"
                                   />
-                                  {row.decision.signal_type === "BUY"
-                                    ? "BUY"
-                                    : "Matched"}
+                                  {decisionLabel(row.decision)}
                                 </>
                               )
                             ) : (
@@ -1270,7 +1296,10 @@ export function WorkspaceScreenerPanel({
                         <TableCell>{row.features.rsi14.toFixed(2)}</TableCell>
                         <TableCell>{row.features.ema20.toFixed(2)}</TableCell>
                         <TableCell>
-                          {decisionReasons(row.decision.reason_codes)}
+                          {decisionReasons(
+                            row.decision.reason_codes,
+                            evidenceRule?.definition?.logic,
+                          )}
                           <Button
                             variant="link"
                             size="sm"

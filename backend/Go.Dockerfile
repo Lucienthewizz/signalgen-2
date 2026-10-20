@@ -1,10 +1,11 @@
-FROM golang:1.27.1-bookworm AS source
+FROM golang:1.27.2-bookworm AS source
 
 WORKDIR /workspace/backend
 
 COPY backend/go.mod backend/go.sum ./
 COPY backend/contract.go backend/openapi.yaml ./
 COPY backend/core ./core
+COPY backend/contracts ./contracts
 COPY backend/cmd ./cmd
 COPY backend/internal ./internal
 

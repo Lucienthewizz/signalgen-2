@@ -504,6 +504,34 @@ func TestEvaluateDecisionSupportsCrossUp(t *testing.T) {
 	}
 }
 
+func TestMatchAndSignalDirectionAreSeparate(t *testing.T) {
+	// Angka indikator yang sama boleh match rule BUY maupun SELL; engine tidak
+	// menebak arah dari kenaikan/penurunan harga atau dari nilai RSI saja.
+	for _, action := range []string{"BUY", "SELL"} {
+		t.Run(action, func(t *testing.T) {
+			rule := RuleSnapshot{Name: "Direction example", Logic: "AND", SignalType: action,
+				Conditions: []Condition{{Left: "RSI14", Op: "<", Right: float64(30)}}}
+			candidates := []FeatureCandidate{{Symbol: "BBCA.JK", Timestamp: "2026-10-19T00:00:00Z",
+				Features: FeatureVector{Price: 100, EMA9: 101, EMA20: 102, RSI14: 23.52}}}
+			result, err := EvaluateDecision(DecisionRequest{Rule: rule, Candidates: candidates})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Signals) != 1 || !result.Evaluations[0].Matched || result.Evaluations[0].SignalType != action || result.Signals[0].SignalType != action {
+				t.Fatalf("matched rule must preserve configured %s direction: %+v", action, result)
+			}
+			candidates[0].Features.RSI14 = 50
+			result, err = EvaluateDecision(DecisionRequest{Rule: rule, Candidates: candidates})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Signals) != 0 || result.Evaluations[0].Matched || result.Evaluations[0].SignalType != "" {
+				t.Fatalf("unmatched rule must not emit %s: %+v", action, result)
+			}
+		})
+	}
+}
+
 func TestEvaluateDecisionSupportsCrossDown(t *testing.T) {
 	// Rule: RSI14 CROSS_DOWN 70 (Overbought Breakdown / Exit)
 	rule := RuleSnapshot{
@@ -542,5 +570,3 @@ func TestEvaluateDecisionSupportsCrossDown(t *testing.T) {
 		t.Fatalf("expected candle 3 not matched after crossover day")
 	}
 }
-
-
