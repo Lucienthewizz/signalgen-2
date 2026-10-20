@@ -285,3 +285,8 @@ initiating control. Cancel leaves the draft and saved data untouched. Replacing
 criteria updates only the editor; saving remains a separate action. The shared
 Base UI AlertDialog supplies modal focus management and accessible title/description;
 its surface uses the existing Signalgen theme tokens in light and dark modes.
+
+Draft recovery is a text action directly below New blank rule, not a page-wide
+alert. Restore draft is disabled when there is no pending saved draft or while
+rules are loading/saving. New blank rule still discards the pending draft;
+restoring retains the existing rule-version validation.

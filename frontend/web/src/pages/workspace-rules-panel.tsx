@@ -388,30 +388,19 @@ export function ServerRulesPanel({
               </p>
             </div>
           </div>
-          <Button variant="outline" onClick={startNew} disabled={saving}>
-            <CopyPlus data-icon="inline-start" /> New blank rule
-          </Button>
+          <div className="rule-composer__draft-actions">
+            <Button variant="outline" onClick={startNew} disabled={saving}>
+              <CopyPlus data-icon="inline-start" /> New blank rule
+            </Button>
+            <Button
+              variant="link"
+              onClick={restoreDraft}
+              disabled={!pendingDraft || loading || saving}
+            >
+              Restore draft
+            </Button>
+          </div>
         </header>
-
-        {pendingDraft && (
-          <Alert>
-            <Save />
-            <AlertTitle>Rule draft available</AlertTitle>
-            <AlertDescription>
-              <p>Restore your draft to continue, or start a blank rule.</p>
-              <Button
-                variant="outline"
-                onClick={restoreDraft}
-                disabled={loading}
-              >
-                Restore draft
-              </Button>
-              <Button variant="ghost" onClick={startNew}>
-                Discard draft
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
         {draftStorageFailed && (
           <Alert>
             <CircleAlert />

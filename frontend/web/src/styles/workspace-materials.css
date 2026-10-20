@@ -1,5 +1,14 @@
 /* Landing-inspired surface roles, shared across workspace routes.
    Keep controls, selection, semantic feedback and embedded charts independent. */
+.rule-composer__draft-actions {
+  display: grid;
+  justify-items: stretch;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.rule-composer__draft-actions > button {
+  min-height: 36px;
+}
 .signalgen-confirm__backdrop {
   position: fixed;
   z-index: 50;

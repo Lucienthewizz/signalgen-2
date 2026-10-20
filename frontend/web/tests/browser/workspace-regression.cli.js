@@ -500,6 +500,28 @@ async (page) => {
   await page.getByRole("button", { name: "New blank rule", exact: true }).click();
   await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
   const draftInput = page.getByLabel("Rule name", { exact: true });
+  const restoreDraftButton = page.getByRole("button", { name: "Restore draft", exact: true });
+  if (!await restoreDraftButton.isDisabled()) throw Error("Restore enabled without a saved draft");
+  await draftInput.fill("Draft recovery fixture");
+  await page.reload();
+  await page.waitForFunction(() => {
+    const button = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === 'Restore draft');
+    return button && !button.disabled && button.getAttribute('aria-disabled') !== 'true';
+  });
+  if (await page.getByText("Rule draft available", { exact: true }).count()) throw Error("Old draft banner is still rendered");
+  for (const width of [1456, 390]) for (const theme of ["dark", "light"]) {
+    await page.setViewportSize({ width, height: 853 });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    const newBounds = await page.getByRole("button", { name: "New blank rule", exact: true }).boundingBox();
+    const restoreBounds = await restoreDraftButton.boundingBox();
+    if (!newBounds || !restoreBounds || restoreBounds.y < newBounds.y + newBounds.height || Math.abs(restoreBounds.x - newBounds.x) > 1) throw Error("Restore is not aligned below New blank rule");
+    await page.screenshot({ path: `/private/tmp/signalgen-draft-action-${width}-${theme}.png`, animations: "disabled" });
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error("Draft action overflows");
+  }
+  await restoreDraftButton.click();
+  if (await draftInput.inputValue() !== "Draft recovery fixture" || !await restoreDraftButton.isDisabled()) throw Error("Draft restore failed or remained enabled without a pending draft");
+  await draftInput.fill("Bullish EMA cross");
+  await page.setViewportSize({ width: 1440, height: 1000 });
   const bearishPreset = page.getByRole("button", { name: "Bearish EMA cross", exact: true });
   await bearishPreset.click();
   const presetDialog = page.getByRole("alertdialog", { name: "Replace current criteria?" });
