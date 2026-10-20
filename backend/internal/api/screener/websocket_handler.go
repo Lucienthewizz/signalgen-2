@@ -140,9 +140,14 @@ func (server *Handler) ScreenerWebSocket(writer http.ResponseWriter, request *ht
 		return
 	}
 	trace.begin(screener.StageEvaluate)
-	decision, err := screener.EvaluateBatch(rule, message.Candidates, screener.DatasetScope{
+	scope := screener.DatasetScope{
 		Symbols: manifest.Symbols, From: manifest.AvailableRange.From, To: manifest.AvailableRange.To,
-	})
+	}
+	if manifest.AvailableTimestampRange != nil {
+		scope.TimestampFrom = manifest.AvailableTimestampRange.From
+		scope.TimestampTo = manifest.AvailableTimestampRange.To
+	}
+	decision, err := screener.EvaluateBatch(rule, message.Candidates, scope)
 	if err != nil {
 		trace.fail(screener.OutcomeInvalid)
 		writeObservedSocketError(trace, ctx, connection, message.RequestID, "INVALID_MESSAGE", "Feature candidate tidak valid.", false)

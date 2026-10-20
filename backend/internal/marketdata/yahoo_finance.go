@@ -108,7 +108,7 @@ func (provider *YahooFinance) dailyOne(ctx context.Context, instrument universe.
 		})
 	}
 	if len(candles) < 20 {
-		return Series{}, ErrInvalidData
+		return Series{}, fmt.Errorf("%w: %w", ErrInvalidData, ErrInsufficientCandles)
 	}
 	if len(candles) > outputSize {
 		candles = candles[len(candles)-outputSize:]

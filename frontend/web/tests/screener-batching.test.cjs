@@ -27,7 +27,7 @@ function load(name, context) {
 }
 function group(symbol, count) {
   return {
-    engine_version: "core-0.3.0",
+    engine_version: "core-0.4.0",
     feature_schema_version: "screener-features-1",
     execution: "client_go_features",
     candle_count: count,

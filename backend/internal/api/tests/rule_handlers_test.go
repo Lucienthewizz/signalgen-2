@@ -135,7 +135,7 @@ func TestCreateComputeGrantHidesUnknownCustomRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"fixture-v1","dataset_checksum":"sha256:data","rule_id":"rule_missing","definition_hash":"sha256:missing","engine_version":"core-0.3.0","schema_version":"signal-baseline-1"}`)
+	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"fixture-v1","dataset_checksum":"sha256:data","rule_id":"rule_missing","definition_hash":"sha256:missing","engine_version":"core-0.4.0","schema_version":"signal-baseline-1"}`)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/compute-grants", body)
 	request.Header.Set("Authorization", "Bearer user-token")
 	request.Header.Set("X-App-Session", "sgs_session")

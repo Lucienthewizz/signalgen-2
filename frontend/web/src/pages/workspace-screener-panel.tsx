@@ -19,6 +19,13 @@ import {
   type ScreenerStage,
 } from "@/analysis/screener";
 import { api, ApiError } from "@/api/client";
+import {
+  ScreenerMonitor,
+  screenerIntervals,
+  stoppedMonitor,
+  type MonitorState,
+} from "@/analysis/screener-monitor";
+import { CACHE_RESET_EVENT } from "@/data/historical-cache";
 import { TradingViewChart } from "@/components/tradingview-chart";
 import { candleDate } from "@/lib/data-freshness";
 import {
@@ -82,7 +89,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { AccountState, RuleResource, StockUniverse } from "@/types";
+import type {
+  AccountState,
+  RuleResource,
+  StockUniverse,
+  ScreenerTimeframe,
+} from "@/types";
 
 type Props = {
   authenticated: boolean;
@@ -139,8 +151,14 @@ export function WorkspaceScreenerPanel({
   const detailRow = run?.rows.find(
     (row) => row.decision.symbol === detailSymbol,
   );
-  const controller = useRef<AbortController | null>(null);
-  const running = useRef(false);
+  const [monitor] = useState(() => new ScreenerMonitor<LiveScreenerRun>());
+  const [monitorState, setMonitorState] = useState<MonitorState>({
+    ...stoppedMonitor,
+  });
+  const [timeframe, setTimeframe] = useState<ScreenerTimeframe>("5m");
+  const intervalPolicy = screenerIntervals.find(
+    (item) => item.value === timeframe,
+  )!;
   const mounted = useRef(false);
   const resourceVersion = useRef(0);
   const [failure, setFailure] = useState<ReturnType<
@@ -253,9 +271,22 @@ export function WorkspaceScreenerPanel({
     return () => {
       mounted.current = false;
       ++resourceVersion.current;
-      controller.current?.abort();
+      monitor.stop();
     };
   }, [authenticated, backendOnline, userId]);
+
+  useEffect(() => {
+    const stop = () => monitor.stop();
+    window.addEventListener(CACHE_RESET_EVENT, stop);
+    window.addEventListener("pagehide", stop);
+    window.addEventListener("signalgen:unauthorized", stop);
+    return () => {
+      window.removeEventListener(CACHE_RESET_EVENT, stop);
+      window.removeEventListener("pagehide", stop);
+      window.removeEventListener("signalgen:unauthorized", stop);
+      monitor.stop();
+    };
+  }, [monitor]);
 
   useEffect(() => {
     if (!preferencesReady || !account) return;
@@ -295,77 +326,85 @@ export function WorkspaceScreenerPanel({
     setProgress(stages[next][1]);
   }
 
-  async function execute() {
-    if (!selectedRule || !selectedUniverse || !canScreen || running.current)
+  function execute() {
+    if (!selectedRule || !selectedUniverse || !canScreen || monitorState.active)
       return;
-    running.current = true;
-    controller.current?.abort();
-    controller.current = new AbortController();
-    const activeController = controller.current;
-    setFailure(null);
-    setState("loading");
-    setProgress(5);
-    setStage("Starting screening");
-    setError(null);
-    try {
-      const result = await runLiveScreener(
-        selectedRule.id,
-        selectedUniverse.id,
-        activeController.signal,
-        (next) => {
-          if (mounted.current && !activeController.signal.aborted)
-            updateStage(next);
-        },
-      );
-      if (!mounted.current || activeController.signal.aborted) return;
-      setRun(result);
-      setDetailSymbol(null);
-      setRunContext({
-        rule: result.ruleSnapshot ?? selectedRule,
-        universe: selectedUniverse.name,
-        count: selectedUniverse.symbols.length,
-      });
-      setHistoricalRun(null);
-      if (account) {
-        recordMonitorRun(account.user.id, selectedRule.name, result, {
-          ruleId: selectedRule.id,
-          universeId: selectedUniverse.id,
-          universeName: selectedUniverse.name,
-          ruleSnapshot: frozenRule(result.ruleSnapshot ?? selectedRule),
+    let previous: LiveScreenerRun | null = null;
+    monitor.start(intervalPolicy.periodMs, {
+      state: (next) => {
+        if (mounted.current) setMonitorState(next);
+      },
+      task: async (signal) => {
+        setFailure(null);
+        setError(null);
+        setState("loading");
+        setProgress(5);
+        setStage("Checking completed candles");
+        return runLiveScreener(
+          selectedRule.id,
+          selectedUniverse.id,
+          signal,
+          (next) => {
+            if (mounted.current && !signal.aborted) updateStage(next);
+          },
+          { timeframe, previous },
+        );
+      },
+      result: (result) => {
+        previous = result;
+        setRun(result);
+        setDetailSymbol(null);
+        setRunContext({
+          rule: result.ruleSnapshot ?? selectedRule,
+          universe: selectedUniverse.name,
+          count: selectedUniverse.symbols.length,
         });
-        setHistory(monitorRuns(account.user.id));
-      }
-      setProgress(100);
-      setStage("Screening complete");
-      setState("completed");
-    } catch (caught) {
-      if (!mounted.current || activeController.signal.aborted) return;
-      setFailure(
-        screeningFailure(
-          caught instanceof ApiError
-            ? caught
-            : { message: caught instanceof Error ? caught.message : undefined },
-        ),
-      );
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Screening could not be completed.",
-      );
-      setProgress(0);
-      setStage("Screening failed");
-      setState("failed");
-    } finally {
-      if (controller.current === activeController) running.current = false;
-    }
+        setHistoricalRun(null);
+        if (account) {
+          recordMonitorRun(account.user.id, selectedRule.name, result, {
+            ruleId: selectedRule.id,
+            universeId: selectedUniverse.id,
+            universeName: selectedUniverse.name,
+            universeVersion: selectedUniverse.version,
+            ruleSnapshot: frozenRule(result.ruleSnapshot ?? selectedRule),
+          });
+          setHistory(monitorRuns(account.user.id));
+        }
+        setProgress(100);
+        setStage("Waiting for the next data check");
+        setState("completed");
+      },
+      error: (caught, retrying) => {
+        setFailure(
+          screeningFailure(
+            caught instanceof ApiError
+              ? caught
+              : {
+                  message: caught instanceof Error ? caught.message : undefined,
+                },
+          ),
+        );
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Screening could not be completed.",
+        );
+        setProgress(0);
+        setStage(
+          retrying
+            ? "Data check failed; retry scheduled"
+            : "Monitoring stopped",
+        );
+        setState("failed");
+      },
+    });
   }
 
   function cancel() {
-    controller.current?.abort();
-    running.current = false;
+    monitor.stop();
     setState(run ? "completed" : "idle");
     setProgress(0);
-    setStage("Screening cancelled");
+    setStage("Monitoring stopped");
   }
 
   if (!authenticated || !backendOnline) {
@@ -409,7 +448,7 @@ export function WorkspaceScreenerPanel({
               <p>Choose a rule and universe. Screening results appear below.</p>
             </div>
           </div>
-          <Badge variant="outline">Daily data · Yahoo Finance</Badge>
+          <Badge variant="outline">Closed candles · Yahoo Finance</Badge>
         </header>
 
         {loadingResources ? (
@@ -498,7 +537,7 @@ export function WorkspaceScreenerPanel({
                     label: rule.name,
                   }))}
                   value={ruleId}
-                  disabled={state === "loading"}
+                  disabled={monitorState.active}
                   onValueChange={(value) => setRuleId(value ?? "")}
                 >
                   <SelectTrigger id="screen-rule">
@@ -530,7 +569,7 @@ export function WorkspaceScreenerPanel({
                     label: universe.name,
                   }))}
                   value={universeId}
-                  disabled={state === "loading"}
+                  disabled={monitorState.active}
                   onValueChange={(value) => setUniverseId(value ?? "")}
                 >
                   <SelectTrigger id="screen-universe">
@@ -565,6 +604,40 @@ export function WorkspaceScreenerPanel({
                     `${selectedUniverse.symbols[0]?.endsWith(".JK") ? "IDX / IDR" : "US / USD"} · Price and EMA thresholds use this currency.`}
                 </FieldDescription>
               </Field>
+              <Field>
+                <FieldLabel htmlFor="screen-interval">
+                  Candle interval
+                </FieldLabel>
+                <Select
+                  items={screenerIntervals.map((item) => ({
+                    value: item.value,
+                    label: item.label,
+                  }))}
+                  value={timeframe}
+                  disabled={monitorState.active}
+                  onValueChange={(value) => {
+                    if (screenerIntervals.some((item) => item.value === value))
+                      setTimeframe(value as ScreenerTimeframe);
+                  }}
+                >
+                  <SelectTrigger id="screen-interval">
+                    <SelectValue>{intervalPolicy.label}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {screenerIntervals.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <FieldDescription>
+                  Automatic history: {intervalPolicy.range}. Up to 100 valid
+                  closed candles per stock; at least 20 required.
+                </FieldDescription>
+              </Field>
             </FieldGroup>
 
             <div className="screener-run-summary">
@@ -572,7 +645,8 @@ export function WorkspaceScreenerPanel({
                 <div className="screener-run-summary__title">
                   <strong>{selectedRule?.name}</strong>
                   <small>
-                    {selectedUniverse?.symbols.length ?? 0} stocks · Daily
+                    {selectedUniverse?.symbols.length ?? 0} stocks ·{" "}
+                    {intervalPolicy.label}
                   </small>
                 </div>
                 {!conditions.length && (
@@ -612,7 +686,7 @@ export function WorkspaceScreenerPanel({
                   size="lg"
                   onClick={() => void execute()}
                   disabled={
-                    state === "loading" || !selectedRule || !selectedUniverse
+                    monitorState.active || !selectedRule || !selectedUniverse
                   }
                 >
                   {state === "loading" ? (
@@ -623,11 +697,13 @@ export function WorkspaceScreenerPanel({
                   ) : (
                     <BarChart3 data-icon="inline-start" />
                   )}
-                  {state === "loading" ? "Screening stocks…" : "Run screening"}
+                  {monitorState.active
+                    ? "Monitoring active"
+                    : "Start screening"}
                 </Button>
-                {state === "loading" && (
+                {monitorState.active && (
                   <Button variant="ghost" onClick={cancel}>
-                    <XCircle data-icon="inline-start" /> Cancel
+                    <XCircle data-icon="inline-start" /> Stop
                   </Button>
                 )}
               </div>
@@ -635,6 +711,53 @@ export function WorkspaceScreenerPanel({
           </div>
         )}
 
+        <div
+          className="screener-monitor-status"
+          role="status"
+          aria-live="polite"
+        >
+          <strong>
+            {monitorState.active
+              ? monitorState.busy
+                ? "Checking data"
+                : monitorState.retrying
+                  ? "Retry scheduled · previous result is not updated"
+                  : "Waiting for new completed candles"
+              : "Monitoring stopped"}
+          </strong>
+          <span>
+            Periodic Yahoo updates, not a licensed real-time feed. Monitoring
+            ends when you leave this page.
+          </span>
+          <span>
+            Last successful check:{" "}
+            {monitorState.lastCheckedAt
+              ? new Date(monitorState.lastCheckedAt).toLocaleTimeString("en-GB")
+              : "—"}{" "}
+            · Next check:{" "}
+            {monitorState.nextCheckAt
+              ? new Date(monitorState.nextCheckAt).toLocaleTimeString("en-GB")
+              : "—"}
+          </span>
+          {run && (
+            <span>
+              Actual data:{" "}
+              {run.manifest.available_timestamp_range?.from ??
+                run.manifest.available_range.from}{" "}
+              —{" "}
+              {run.manifest.available_timestamp_range?.to ??
+                run.manifest.available_range.to}{" "}
+              · {run.manifest.candle_count} candles total ·{" "}
+              {run.manifest.timeframe}
+            </span>
+          )}
+          {run?.manifest.requested_timestamp_range && (
+            <span>
+              Requested history: {run.manifest.requested_timestamp_range.from} —{" "}
+              {run.manifest.requested_timestamp_range.to}
+            </span>
+          )}
+        </div>
         {state === "loading" && (
           <div className="screener-progress" role="status">
             <span>
@@ -743,7 +866,7 @@ export function WorkspaceScreenerPanel({
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={state === "loading"}
+                    disabled={monitorState.active}
                     onClick={() => {
                       setRun(item.run);
                       setRunContext(null);
@@ -837,7 +960,7 @@ export function WorkspaceScreenerPanel({
             <div>
               <h3 id="screener-results-title">Screening results</h3>
               <p>
-                Matching stocks, daily prices, and the evidence behind each
+                Matching stocks, candle prices, and the evidence behind each
                 decision.
               </p>
             </div>
@@ -868,7 +991,7 @@ export function WorkspaceScreenerPanel({
               </EmptyMedia>
               <EmptyTitle>Start with a rule and stock universe</EmptyTitle>
               <EmptyDescription>
-                Run screening above to see each stock's result and decision
+                Start screening above to see each stock's result and decision
                 evidence.
               </EmptyDescription>
             </EmptyHeader>
@@ -889,12 +1012,16 @@ export function WorkspaceScreenerPanel({
                     ? "A new screening is running. Your last result is still shown."
                     : historicalRun
                       ? `Result saved ${new Date(historicalRun.recordedAt).toLocaleString("en-GB")}. Not live prices.`
-                      : `Daily open and close · ${run.manifest.currency} · not live prices.`}
+                      : `${run.manifest.timeframe} open and close · ${run.manifest.currency} · periodically fetched, not live prices.`}
                 </p>
                 <p>
-                  Daily snapshot · latest candle{" "}
-                  {candleDate(run.latestDecision.timestamp)} · not real-time
-                  prices.
+                  {run.manifest.timeframe} snapshot · latest candle{" "}
+                  {candleDate(
+                    run.latestDecision.timestamp,
+                    run.manifest.timeframe,
+                    run.manifest.market,
+                  )}{" "}
+                  · not real-time prices.
                 </p>
               </div>
               <Button
@@ -954,8 +1081,13 @@ export function WorkspaceScreenerPanel({
                   <div>
                     <h3>{detailRow.decision.symbol.replace(".JK", "")}</h3>
                     <p>
-                      Candle {candleDate(detailRow.decision.timestamp)} ·{" "}
-                      {decisionDescription(detailRow.decision)}
+                      Candle{" "}
+                      {candleDate(
+                        detailRow.decision.timestamp,
+                        run.manifest.timeframe,
+                        run.manifest.market,
+                      )}{" "}
+                      · {decisionDescription(detailRow.decision)}
                     </p>
                   </div>
                   <Button

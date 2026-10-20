@@ -18,10 +18,11 @@ import (
 const dynamicOutputSize = 100
 
 type dynamicEntry struct {
-	owner     string
-	manifest  Manifest
-	content   []byte
-	expiresAt time.Time
+	contextKey string
+	owner      string
+	manifest   Manifest
+	content    []byte
+	expiresAt  time.Time
 }
 
 // SnapshotLimits bound private datasets without evicting active handles. Full
@@ -65,6 +66,12 @@ func NewDynamicStoreWithLimits(provider marketdata.Provider, universes universe.
 }
 
 func (store *DynamicStore) Prepare(ctx context.Context, owner string, request PrepareRequest) (Manifest, error) {
+	if request.Timeframe == "" {
+		request.Timeframe = "1d"
+	}
+	if _, err := marketdata.Policy(request.Timeframe); err != nil {
+		return Manifest{}, err
+	}
 	if err := ctx.Err(); err != nil {
 		return Manifest{}, err
 	}
@@ -77,8 +84,18 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	store.mu.Lock()
 	store.pruneExpiredLocked()
 	available := store.hasCapacityLocked(owner, 0)
+	contextKey := request.RuleID + "\x00" + request.UniverseID + "\x00" + request.Timeframe
+	canReuse := false
+	for _, entry := range store.entries {
+		if entry.owner == owner && entry.contextKey == contextKey {
+			canReuse = true
+			break
+		}
+	}
 	store.mu.Unlock()
-	if !available {
+	// Capacity is enforced atomically at publication, after checking whether an
+	// identical owner-scoped snapshot can be reused. Even a full store may reuse.
+	if !available && !canReuse {
 		return Manifest{}, ErrCapacity
 	}
 	instruments, err := store.universes.Instruments(ctx, owner, request.UniverseID)
@@ -96,7 +113,7 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	for index, item := range instruments {
 		exchanges[index] = item.Exchange
 	}
-	series, err := store.provider.Daily(ctx, instruments, dynamicOutputSize)
+	series, err := marketdata.ReadCandles(ctx, store.provider, instruments, dynamicOutputSize, request.Timeframe)
 	if err != nil {
 		return Manifest{}, err
 	}
@@ -112,7 +129,7 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 		"purpose":        "screen",
 		"market":         market,
 		"currency":       currency,
-		"timeframe":      "1d",
+		"timeframe":      request.Timeframe,
 		"timezone":       "UTC",
 		"adjustment":     "none",
 		"series":         series,
@@ -131,6 +148,9 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	hash := sha256.Sum256(content)
 	now := store.now().UTC()
 	expiresAt := now.Add(store.limits.TTL)
+	if request.Timeframe != "1d" {
+		expiresAt = now.Add(min(store.limits.TTL, 5*time.Minute))
+	}
 	source := marketdata.DescribeSource(store.provider)
 	// Keep request-specific quality evidence with this immutable snapshot.
 	// "complete" is the existing contract for validated selected candles, not
@@ -141,11 +161,15 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	manifest := Manifest{
 		DatasetID: id, Version: now.Format("20060102T150405Z"), ExpiresAt: expiresAt.Format(time.RFC3339),
 		SchemaVersion: "ohlcv-multi-1", Provider: source.Provider, Purpose: "screen",
-		Market: market, Currency: currency, Symbols: symbols, Exchanges: exchanges, Timeframe: "1d", Timezone: "UTC",
+		Market: market, Currency: currency, Symbols: symbols, Exchanges: exchanges, Timeframe: request.Timeframe, Timezone: "UTC",
 		RequestedRange: Range{From: from, To: to}, AvailableRange: Range{From: from, To: to},
 		WarmupCandles: 20, Adjustment: "none", CandleCount: candleCount, DecodedBytes: len(content),
 		Checksum: "sha256:" + hex.EncodeToString(hash[:]),
 		Quality:  Quality{Status: "complete", Warnings: source.Warnings},
+	}
+	manifest.AvailableTimestampRange, manifest.RequestedTimestampRange = timestampRanges(series)
+	if request.Timeframe != "1d" && manifest.RequestedTimestampRange != nil {
+		manifest.RequestedRange = Range{From: manifest.RequestedTimestampRange.From[:10], To: manifest.RequestedTimestampRange.To[:10]}
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
@@ -154,10 +178,15 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 		return Manifest{}, err
 	}
 	store.pruneExpiredLocked()
+	for _, entry := range store.entries {
+		if entry.owner == owner && entry.contextKey == contextKey && entry.manifest.Checksum == manifest.Checksum {
+			return cloneManifest(entry.manifest), nil
+		}
+	}
 	if !store.hasCapacityLocked(owner, len(content)) {
 		return Manifest{}, ErrCapacity
 	}
-	store.entries[id] = dynamicEntry{owner: owner, manifest: cloneManifest(manifest), content: content, expiresAt: expiresAt}
+	store.entries[id] = dynamicEntry{contextKey: contextKey, owner: owner, manifest: cloneManifest(manifest), content: content, expiresAt: expiresAt}
 	store.bytes += len(content)
 	return cloneManifest(manifest), nil
 }
@@ -212,6 +241,14 @@ func (store *DynamicStore) hasCapacityLocked(owner string, bytes int) bool {
 }
 
 func cloneManifest(manifest Manifest) Manifest {
+	if manifest.AvailableTimestampRange != nil {
+		copy := *manifest.AvailableTimestampRange
+		manifest.AvailableTimestampRange = &copy
+	}
+	if manifest.RequestedTimestampRange != nil {
+		copy := *manifest.RequestedTimestampRange
+		manifest.RequestedTimestampRange = &copy
+	}
 	manifest.Symbols = append([]string(nil), manifest.Symbols...)
 	manifest.Exchanges = append([]string(nil), manifest.Exchanges...)
 	manifest.Quality.Warnings = append([]string(nil), manifest.Quality.Warnings...)

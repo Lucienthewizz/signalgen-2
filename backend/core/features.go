@@ -3,9 +3,9 @@ package core
 // Version constants form the stable contract shared by the API, WebSocket,
 // and browser WASM worker. Change them only together with contract fixtures.
 const (
-	EngineVersion        = "core-0.3.0"
+	EngineVersion        = "core-0.4.0"
 	SchemaVersion        = "signal-baseline-1"
-	CapabilitiesVersion  = "capabilities-2"
+	CapabilitiesVersion  = "capabilities-3"
 	WorkerProtocol       = "worker-2"
 	FeatureSchemaVersion = "screener-features-1"
 	DecisionVersion      = "decision-1"

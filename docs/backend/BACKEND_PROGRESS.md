@@ -1,5 +1,24 @@
 # Backend progress
 
+## Monitoring Start–Stop dan intraday — 20 Oktober 2026
+
+Branch `frontend/intraday-monitor`: Start–Stop selama halaman terbuka, default
+5m, pilihan 1m/5m/15m/1h/1d. Range intraday 3 hari kalender diperluas hanya bila
+candle valid <20, maksimum 100 candle/saham dan 10 saham. Endpoint prepare
+menerima timeframe opsional, default tetap harian bagi klien lama. Snapshot
+intraday 5 menit, reuse owner-scoped dan cache terpisah per interval. Tidak ada
+endpoint background Start/Stop, IBKR, Redis atau migration database.
+
+Verifikasi lokal: 160 tes frontend + build; seluruh Go race suite dan `go vet`;
+actual WASM parity 3 series; OpenAPI validation; browser workspace/catalog/
+BUY-SELL/recovery dan monitor di 1440/390px serta kedua tema; 8 preflight layanan.
+Smoke Yahoo 5m terpisah pada 20 Oktober: BBCA.JK 100 candle selesai, AAPL 78;
+bukan bukti semua ticker/interval tersedia atau feed realtime berlisensi. Akun
+asli end-to-end dan Postgres/RLS opt-in tidak diulang pada slice ini.
+
+Kontrak OpenAPI 0.11.0, core-0.4.0, capabilities-3. API/WASM dibangun ulang
+berpasangan, frontend tetap 5174. [Panduan dan batas](INTRADAY_MONITOR.md).
+
 ## Perbaikan regresi screening — 20 Oktober 2026
 
 - JSON feature wajib lengkap/non-null; RSI 0 sah dibedakan dari RSI yang hilang.

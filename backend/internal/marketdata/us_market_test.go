@@ -37,3 +37,22 @@ func TestYahooUSLive(t *testing.T) {
 		t.Logf("%s: %d daily candles, %s to %s (UTC)", item.Symbol, len(item.Candles), item.Candles[0].Timestamp, item.Candles[len(item.Candles)-1].Timestamp)
 	}
 }
+
+func TestYahooIntradayLive(t *testing.T) {
+	if os.Getenv("SIGNALGEN_TEST_YAHOO_LIVE") != "1" {
+		t.Skip("opt-in live Yahoo intraday check")
+	}
+	provider, _ := NewYahooFinance("https://query1.finance.yahoo.com", &http.Client{Timeout: 12 * time.Second})
+	for _, symbol := range []string{"BBCA.JK", "AAPL"} {
+		t.Run(symbol, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+			defer cancel()
+			series, err := provider.Candles(ctx, []universe.Instrument{{Symbol: symbol, ProviderSymbol: symbol}}, 100, "5m")
+			if err != nil {
+				t.Fatal(err)
+			}
+			item := series[0]
+			t.Logf("%s: %d closed 5m candles, %s to %s; requested %s to %s", symbol, len(item.Candles), item.Candles[0].Timestamp, item.Candles[len(item.Candles)-1].Timestamp, item.RequestedFrom, item.RequestedTo)
+		})
+	}
+}

@@ -8,21 +8,26 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const catalogOnly = process.argv.includes("--catalog");
 const decisionsOnly = process.argv.includes("--decisions");
 const recoveryOnly = process.argv.includes("--recovery");
+const monitorOnly = process.argv.includes("--monitor");
 const baseURL = process.env.SIGNALGEN_TEST_BASE_URL || "http://127.0.0.1:5174";
-const testFilename = recoveryOnly
-  ? "tests/browser/resource-recovery.cli.js"
-  : decisionsOnly
-    ? "tests/browser/screener-decisions.cli.js"
-    : catalogOnly
-      ? "tests/browser/stock-catalog.cli.js"
-      : "tests/browser/workspace-regression.cli.js";
-const attributeName = recoveryOnly
-  ? "data-signalgen-recovery-tests"
-  : decisionsOnly
-    ? "data-signalgen-decision-tests"
-    : catalogOnly
-      ? "data-signalgen-catalog-tests"
-      : "data-signalgen-browser-tests";
+const testFilename = monitorOnly
+  ? "tests/browser/intraday-monitor.cli.js"
+  : recoveryOnly
+    ? "tests/browser/resource-recovery.cli.js"
+    : decisionsOnly
+      ? "tests/browser/screener-decisions.cli.js"
+      : catalogOnly
+        ? "tests/browser/stock-catalog.cli.js"
+        : "tests/browser/workspace-regression.cli.js";
+const attributeName = monitorOnly
+  ? "data-signalgen-monitor-tests"
+  : recoveryOnly
+    ? "data-signalgen-recovery-tests"
+    : decisionsOnly
+      ? "data-signalgen-decision-tests"
+      : catalogOnly
+        ? "data-signalgen-catalog-tests"
+        : "data-signalgen-browser-tests";
 const chromePath =
   process.env.SIGNALGEN_TEST_BROWSER_EXECUTABLE ||
   (fs.existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
@@ -91,7 +96,7 @@ if (usedCli) {
     const page = await context.newPage();
     await page.goto(baseURL);
     const code = fs.readFileSync(path.join(root, testFilename), "utf8");
-    const fn = eval("(" + code + ")");
+    const fn = eval("(" + code.trim().replace(/;$/, "") + ")");
     await fn(page);
     const result = await page.evaluate(
       (attr) => document.body.getAttribute(attr),
@@ -105,11 +110,13 @@ if (usedCli) {
 }
 
 console.log(
-  recoveryOnly
-    ? "PASS: transient resource recovery, bounded retries, persistent outage, explicit reload, session preservation, 1440/390px and both themes. Synthetic API/account data only."
-    : decisionsOnly
-      ? "PASS: BUY/SELL, AND/OR, crossover history/reload/evidence/CSV, legacy unknown direction, cooldown, IDR/USD, 1440/390px and both themes. Synthetic API/account data only."
-      : catalogOnly
-        ? "PASS: categories, search, 10-stock limit, paging, keyboard, empty/loading, 1440/900/390px and both themes. Synthetic catalog fixture only."
-        : "PASS: 10 workspace routes × 2 viewport sizes × 2 themes; public/account routes; history/evidence/CSV; monitor sorting; sidebar navigation; expired-session cleanup. API/account fixtures only.",
+  monitorOnly
+    ? "PASS: Start/Stop, real WASM, unchanged-data dedup, new candles, cancellation, navigation, 1440/390px and both themes; synthetic API/socket fixtures only."
+    : recoveryOnly
+      ? "PASS: transient resource recovery, bounded retries, persistent outage, explicit reload, session preservation, 1440/390px and both themes. Synthetic API/account data only."
+      : decisionsOnly
+        ? "PASS: BUY/SELL, AND/OR, crossover history/reload/evidence/CSV, legacy unknown direction, cooldown, IDR/USD, 1440/390px and both themes. Synthetic API/account data only."
+        : catalogOnly
+          ? "PASS: categories, search, 10-stock limit, paging, keyboard, empty/loading, 1440/900/390px and both themes. Synthetic catalog fixture only."
+          : "PASS: 10 workspace routes × 2 viewport sizes × 2 themes; public/account routes; history/evidence/CSV; monitor sorting; sidebar navigation; expired-session cleanup. API/account fixtures only.",
 );

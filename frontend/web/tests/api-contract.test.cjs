@@ -26,6 +26,7 @@ function client(reply, timers = {}) {
     Headers,
     Event,
     AbortController,
+    DOMException,
     clearTimeout,
     URL,
     crypto: webcrypto,
@@ -53,6 +54,22 @@ function client(reply, timers = {}) {
 }
 const response = (payload, status = 200) =>
   new Response(JSON.stringify(payload), { status });
+
+test("intraday requests pass timeframe and Stop aborts HTTP without a retry", async()=>{
+  const controller=new AbortController();
+  const c=client((_url,init)=>new Promise((_resolve,reject)=>init.signal.addEventListener("abort",()=>reject(new DOMException("Cancelled","AbortError")),{once:true})));
+  const pending=c.api.prepareDataset("rule","univ", "5m",controller.signal);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(JSON.parse(c.calls[0].init.body).timeframe,"5m");
+  controller.abort();
+  await assert.rejects(pending,error=>error.name==="AbortError");
+  assert.equal(c.calls.length,1);
+});
+
+test("provider Retry-After survives transport mapping for monitor backoff",async()=>{
+  const c=client(()=>new Response(JSON.stringify({error:{code:"PROVIDER_UNAVAILABLE",message:"Please wait"}}),{status:429,headers:{"Retry-After":"90"}}));
+  await assert.rejects(c.api.prepareDataset("rule","univ","5m"),error=>error.status===429&&error.retryAfterMs===90000);
+});
 
 test("transient resource reads recover once and concurrent readers share recovery", async () => {
   let attempts = 0;
@@ -454,7 +471,7 @@ test("hybrid screener calls use the implemented Go API contract", async () => {
   const rule = {
     id: "default-scalping-v1",
     definition_hash: "sha256:rule",
-    engine_version: "core-0.3.0",
+    engine_version: "core-0.4.0",
     schema_version: "signal-baseline-1",
   };
   await c.api.prepareDataset("default-scalping-v1", "universe-bank");

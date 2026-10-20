@@ -1,5 +1,13 @@
 # Signalgen Web
 
+Start–Stop monitoring: choose a rule, universe and interval, then Start. Default
+5m; options 1m/5m/15m/1h/1d. Intraday begins with 3 calendar days and extends
+only when fewer than 20 valid closed candles are available. At most 100 candles
+per stock, 10 stocks. Stop/logout/navigation ends monitoring; reload never
+auto-starts. This is periodic Yahoo historical polling, not a licensed realtime
+feed. `npm run test:monitor` uses synthetic accounts/API/socket with real Go/WASM.
+See [policy, contract, limitations and demo](../../docs/backend/INTRADAY_MONITOR.md).
+
 US stocks: choose the US/Nasdaq/NYSE market in the universe editor, select 1–10
 stocks, then run that universe in the screener. The catalog now imports eligible
 Nasdaq/NYSE stocks from the full official directories: 5,600 at the 19 October
@@ -72,7 +80,7 @@ states, and reduced-motion behavior remain independent of the font selection.
 
 ## Authorization contract
 
-Verified against the Go API `openapi.yaml` version 0.9.0 and private-screener
+Verified against the Go API `openapi.yaml` version 0.11.0 and private-screener
 contract on `feature/hybrid-screener-integration`:
 
 - `POST /api/auth/login`: JSON `{ email, password }`, returns token and public user fields.
@@ -120,7 +128,7 @@ docker build -f backend/Go.Dockerfile --target wasm-artifact \
 
 The generated directory is intentionally ignored by Git. The worker validates
 the runtime and WASM SHA-256 values from `signalgen_core.manifest.json` before
-execution. It requires `core-0.3.0`, `worker-2`, and
+execution. It requires `core-0.4.0`, `worker-2`, and
 `screener-features-1`; the system rule definition remains server-side. A real
 run requires a Supabase user with the `screener` entitlement;
 the guest state directs the user to sign in instead of showing fabricated data.
@@ -233,17 +241,18 @@ Prices and CSV headings use the snapshot's IDR/USD currency without FX conversio
 Run the focused regression against your running Vite instance:
 
 ```sh
-SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5175 npm run test:decisions
+SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5174 npm run test:decisions
 ```
 
 This uses synthetic API/account fixtures and checks BUY/SELL, AND/OR, crossover
 history, reload, details, CSV, legacy missing fields and cooldown at 1440/390px
 in both themes. It does not log into or change a real Supabase account.
 
-If Vite chooses 5175 because 5174 is occupied, the backend's local
-`SIGNALGEN_CORS_ORIGINS` must include that exact browser origin. HTTP proxying
-does not remove the WebSocket Origin check. After changing backend `.env`,
-recreate only `go-api` to reload its environment; do not use a wildcard.
+Vite is pinned to 5174 with `strictPort: true`: it exits if that port is occupied,
+rather than starting a second frontend on 5175. For an intentional port override,
+the backend's `SIGNALGEN_CORS_ORIGINS` must include the exact browser origin.
+HTTP proxying does not remove the WebSocket Origin check. After changing backend
+`.env`, recreate only `go-api` to reload its environment; do not use a wildcard.
 
 Indonesian backend walkthrough: [Match, BUY/SELL and the decision flow](../../docs/backend/SCREENER_DECISIONS.md).
 
@@ -259,7 +268,7 @@ Login, refresh exchange, saves and app-session creation are never replayed for
 transient failures. See [backend limits and safe timing logs](../../docs/backend/SECURITY_HARDENING.md#slow-reads-and-transient-recovery-19-october-2026).
 
 ```sh
-SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5175 npm run test:recovery
+SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5174 npm run test:recovery
 ```
 
 The isolated browser fixture checks automatic recovery, exactly two attempts on

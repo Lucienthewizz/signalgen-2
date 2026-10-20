@@ -113,6 +113,24 @@ function fixture() {
     execution: "client_wasm+server_private_scoring",
   };
 }
+
+test("intraday polling deduplicates history, replaces corrections and isolates interval/context",()=>{
+  const run=fixture();run.manifest.timeframe="5m";
+  const context={ruleId:"rule",universeId:"univ",universeVersion:1,universeName:"Stocks",ruleSnapshot:{version:1,definition_hash:"hash"}};
+  output.recordMonitorRun("intraday-owner","Rule",run,context);
+  output.recordMonitorRun("intraday-owner","Rule",run,context);
+  assert.equal(output.monitorRuns("intraday-owner").length,1);
+  run.manifest.checksum="corrected";
+  output.recordMonitorRun("intraday-owner","Rule",run,context);
+  assert.equal(output.monitorRuns("intraday-owner").length,1);
+  assert.equal(loadMonitor().monitorRuns("intraday-owner")[0].run.manifest.checksum,"corrected");
+  run.manifest.timeframe="1m";
+  output.recordMonitorRun("intraday-owner","Rule",run,context);
+  assert.equal(output.monitorRuns("intraday-owner").length,2);
+  output.recordMonitorRun("intraday-owner","Rule",run,{...context,universeVersion:2});
+  assert.equal(output.monitorRuns("intraday-owner").length,3);
+  assert.equal(output.monitorRuns("different-owner").length,0);
+});
 test("IDX codes normalize without accepting arbitrary widget symbols", () => {
   for (const value of ["bbca", "IDX:BBCA", "BBCA.JK", " BBCA "])
     assert.equal(output.idxTicker(value), "BBCA");

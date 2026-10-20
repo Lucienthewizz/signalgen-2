@@ -52,6 +52,15 @@ P0 selesai bukan berarti MVP selesai. Target satu minggu demo adalah estimasi aw
 
 ## 4. Functional requirements
 
+Revisi disetujui pengguna 20 Oktober 2026: monitoring Start–Stop di halaman
+screener, interval 1m/5m/15m/1h/1d (default UI 5m), range intraday otomatis
+3→7→30 hari kalender (1m berhenti di 7), hanya diperluas bila candle <20;
+harian tetap 6 bulan. Maksimal 100 candle/saham dan 10 saham. Monitoring berakhir
+saat Stop/logout/navigasi/halaman ditutup dan tidak otomatis hidup lagi.
+Pembagian Model A tidak berubah; ini polling Yahoo, bukan realtime production
+atau pekerjaan server tanpa browser. Detail kontrak, penerimaan dan limit:
+[INTRADAY_MONITOR](backend/INTRADAY_MONITOR.md).
+
 | ID | Tahap | Requirement | Acceptance criteria |
 | --- | --- | --- | --- |
 | MVP-AUTH-01 | P0 | Login, principal dan logout | Server memverifikasi identitas; logout mencabut sesi aplikasi; invalid session ditangani |

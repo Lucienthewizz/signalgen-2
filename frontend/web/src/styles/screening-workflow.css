@@ -362,3 +362,13 @@
     flex-wrap: wrap;
   }
 }
+.screener-monitor-status {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1rem;
+  margin-block: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
