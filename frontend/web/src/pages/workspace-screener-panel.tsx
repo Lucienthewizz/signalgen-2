@@ -20,7 +20,8 @@ import {
 } from "@/analysis/screener";
 import { api, ApiError } from "@/api/client";
 import { TradingViewChart } from "@/components/tradingview-chart";
-import { candleDate } from "@/lib/data-freshness";
+import { marketCandleDate, marketTimezone } from "@/lib/data-freshness";
+import { ScreeningDataQuality } from "@/components/screening-data-quality";
 import {
   conditionEvidence,
   decisionLabel,
@@ -654,6 +655,7 @@ export function WorkspaceScreenerPanel({
             <Button
               variant="outline"
               size="sm"
+              disabled={state === "loading" || loadingResources}
               onClick={() => {
                 if (failure?.action === "login") location.hash = "login";
                 else if (failure?.action === "subscription")
@@ -737,8 +739,38 @@ export function WorkspaceScreenerPanel({
                       {item.run.manifest.market} · {item.run.manifest.currency}
                     </span>
                     <time dateTime={item.recordedAt}>
-                      {new Date(item.recordedAt).toLocaleString("en-GB")}
+                      Saved {new Date(item.recordedAt).toLocaleString("en-GB")}
                     </time>
+                    <div
+                      className="screener-history-statuses"
+                      aria-label="Saved decision counts"
+                    >
+                      {Object.entries(
+                        item.run.rows.reduce<Record<string, number>>(
+                          (counts, row) => {
+                            const label =
+                              screeningStatusLabels[
+                                screeningStatus(row.decision)
+                              ];
+                            counts[label] = (counts[label] ?? 0) + 1;
+                            return counts;
+                          },
+                          {},
+                        ),
+                      ).map(([label, count]) => (
+                        <Badge variant="outline" key={label}>
+                          {label} {count}
+                        </Badge>
+                      ))}
+                    </div>
+                    <span>
+                      Candle{" "}
+                      {marketCandleDate(
+                        item.run.latestDecision.timestamp,
+                        item.run.manifest.market,
+                      )}{" "}
+                      · {marketTimezone(item.run.manifest.market)}
+                    </span>
                   </div>
                   <Button
                     variant="outline"
@@ -893,7 +925,11 @@ export function WorkspaceScreenerPanel({
                 </p>
                 <p>
                   Daily snapshot · latest candle{" "}
-                  {candleDate(run.latestDecision.timestamp)} · not real-time
+                  {marketCandleDate(
+                    run.latestDecision.timestamp,
+                    run.manifest.market,
+                  )}{" "}
+                  · {marketTimezone(run.manifest.market)} · not real-time
                   prices.
                 </p>
               </div>
@@ -943,6 +979,10 @@ export function WorkspaceScreenerPanel({
                 <Download data-icon="inline-start" /> Export CSV
               </Button>
             </div>
+            <ScreeningDataQuality
+              manifest={run.manifest}
+              timestamps={run.rows.map((row) => row.decision.timestamp)}
+            />
             {detailRow && (
               <section
                 className="stock-detail"
@@ -954,8 +994,12 @@ export function WorkspaceScreenerPanel({
                   <div>
                     <h3>{detailRow.decision.symbol.replace(".JK", "")}</h3>
                     <p>
-                      Candle {candleDate(detailRow.decision.timestamp)} ·{" "}
-                      {decisionDescription(detailRow.decision)}
+                      Candle{" "}
+                      {marketCandleDate(
+                        detailRow.decision.timestamp,
+                        run.manifest.market,
+                      )}{" "}
+                      · {decisionDescription(detailRow.decision)}
                     </p>
                   </div>
                   <Button
@@ -1043,28 +1087,41 @@ export function WorkspaceScreenerPanel({
                                   </Badge>
                                   <span className="stock-detail__condition">
                                     <strong>{evidence.label}</strong>
-                                    {evidence.previous && (
-                                      <small>
-                                        Previous candle:{" "}
-                                        {new Intl.NumberFormat("en-GB", {
-                                          maximumFractionDigits: 2,
-                                        }).format(evidence.previous.left)}{" "}
-                                        compared with{" "}
-                                        {new Intl.NumberFormat("en-GB", {
-                                          maximumFractionDigits: 2,
-                                        }).format(evidence.previous.right)}
-                                      </small>
-                                    )}
-                                    <small>
-                                      {evidence.previous && "Current candle: "}
-                                      {new Intl.NumberFormat("en-GB", {
-                                        maximumFractionDigits: 2,
-                                      }).format(evidence.left)}{" "}
-                                      compared with{" "}
-                                      {new Intl.NumberFormat("en-GB", {
-                                        maximumFractionDigits: 2,
-                                      }).format(evidence.right)}
-                                    </small>
+                                    <span
+                                      className="crossover-evidence"
+                                      data-crossover={Boolean(
+                                        evidence.previous,
+                                      )}
+                                    >
+                                      {evidence.previous && (
+                                        <span>
+                                          <small>Previous candle</small>
+                                          <span>
+                                            {new Intl.NumberFormat("en-GB", {
+                                              maximumFractionDigits: 2,
+                                            }).format(
+                                              evidence.previous.left,
+                                            )}{" "}
+                                            compared with{" "}
+                                            {new Intl.NumberFormat("en-GB", {
+                                              maximumFractionDigits: 2,
+                                            }).format(evidence.previous.right)}
+                                          </span>
+                                        </span>
+                                      )}
+                                      <span>
+                                        <small>Current candle</small>
+                                        <span>
+                                          {new Intl.NumberFormat("en-GB", {
+                                            maximumFractionDigits: 2,
+                                          }).format(evidence.left)}{" "}
+                                          compared with{" "}
+                                          {new Intl.NumberFormat("en-GB", {
+                                            maximumFractionDigits: 2,
+                                          }).format(evidence.right)}
+                                        </span>
+                                      </span>
+                                    </span>
                                   </span>
                                 </>
                               ) : condition.op === "CROSS_UP" ||
@@ -1372,7 +1429,10 @@ export function WorkspaceScreenerPanel({
             </div>
             <div>
               <span>Quality</span>
-              <strong>{run.manifest.quality.status}</strong>
+              <strong>
+                Validated payload · {run.manifest.quality.warnings.length} data
+                notes
+              </strong>
             </div>
             <div>
               <span>Checksum</span>

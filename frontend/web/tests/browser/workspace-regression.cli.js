@@ -232,6 +232,7 @@ async (page) => {
           if (width === 1440 && (!geometry.sideBySide || geometry.topOffset > 1 || geometry.bottomOffset > 1)) throw Error(`Chart and detail card edges must align: ${JSON.stringify(geometry)}`);
           if (width === 390 && !geometry.below) throw Error("Stock card must stack below chart on mobile");
           await page.locator(".monitor-ledger").screenshot({ path: `/private/tmp/signalgen-monitor-table-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+          if (!await page.locator('.monitor-ledger time').evaluateAll(items => items.length > 0 && items.every(el => el.textContent.includes('Asia/Jakarta')))) throw Error('Monitor candle dates are not labeled with the snapshot market timezone');
           await page.locator(".market-monitor").screenshot({ path: `/private/tmp/signalgen-monitor-lineup-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
         }
         if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Overflow: ${view} ${width}`);
@@ -502,11 +503,13 @@ async (page) => {
   await draftInput.fill("Bullish EMA cross");
   healthOffline = true;
   await page.getByText("Connection interrupted", { exact: true }).waitFor({ timeout: 10000 });
+  if (await page.locator('.workspace-connection').innerText() !== 'Offline') throw Error('Global API status did not reflect the failed probe');
   if (!await draftNode.evaluate(el => el.isConnected)) throw Error("Health interruption replaced the editor DOM");
   await draftInput.fill("Offline draft retained");
   if (!await page.getByRole("button", { name: "Save rule", exact: true }).isDisabled()) throw Error("Offline rule save is enabled");
   healthOffline = false;
   await page.getByText("Connection interrupted", { exact: true }).waitFor({ state: "hidden", timeout: 10000 });
+  if (await page.locator('.workspace-connection').innerText() !== 'Connected') throw Error('Global API status did not recover');
   if (await draftInput.inputValue() !== "Offline draft retained" || !await draftNode.evaluate(el => el.isConnected)) throw Error("Connection recovery resets the draft editor");
   await draftInput.fill("Bullish EMA cross");
   await page.getByRole("button", { name: "Add condition", exact: true }).click();

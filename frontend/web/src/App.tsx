@@ -1,6 +1,9 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useState } from "react";
 import { api, session } from "@/api/client";
-import { monitorBackendStatus } from "@/api/backend-status";
+import {
+  monitorBackendStatus,
+  type BackendConnection,
+} from "@/api/backend-status";
 import { Brand } from "@/components/brand";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AuthView } from "@/pages/auth-page";
@@ -71,6 +74,7 @@ function currentRoute(): Route {
 function RoutedApp() {
   const [route, setRoute] = useState<Route>(currentRoute);
   const [backendOnline, setBackendOnline] = useState(false);
+  const [connection, setConnection] = useState<BackendConnection>("checking");
   const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
 
@@ -99,6 +103,8 @@ function RoutedApp() {
     const stopBackendMonitor = monitorBackendStatus(
       api.status,
       setBackendOnline,
+      5000,
+      setConnection,
     );
     Promise.allSettled([
       session.getToken()
@@ -188,6 +194,7 @@ function RoutedApp() {
   if (route.startsWith("app/")) {
     return (
       <DemoWorkspace
+        connection={connection}
         view={route.replace("app/", "") as DemoView}
         backendOnline={backendOnline}
         authenticated={Boolean(user && session.getAppSession())}

@@ -70,3 +70,39 @@ test("a disposed or slow monitor neither overlaps probes nor updates state late"
   assert.deepEqual(statuses, []);
   assert.equal(c.pending.length, 0);
 });
+
+test("reconnecting is reported only while a recovery probe is actually running", async () => {
+  const c = monitor();
+  const phases = [];
+  let recover;
+  let calls = 0;
+  const stop = c.watch(
+    () => {
+      calls++;
+      if (calls === 1) return Promise.reject(Error("offline"));
+      if (calls === 2)
+        return new Promise((resolve) => {
+          recover = resolve;
+        });
+      return Promise.resolve();
+    },
+    () => {},
+    5000,
+    (value) => phases.push(value),
+  );
+  await new Promise(setImmediate);
+  assert.deepEqual(phases, ["checking", "offline"]);
+  const pending = c.pending.shift()();
+  assert.deepEqual(phases, ["checking", "offline", "reconnecting"]);
+  recover();
+  await pending;
+  await c.pending.shift()();
+  assert.deepEqual(phases, [
+    "checking",
+    "offline",
+    "reconnecting",
+    "online",
+    "online",
+  ]);
+  stop();
+});

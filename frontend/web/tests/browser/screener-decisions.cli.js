@@ -22,7 +22,7 @@ async (page) => {
     const decision = { symbol,timestamp:now,matched:item.matched,reason_codes:[item.reason],...(!item.legacy && item.matched ? {signal_type:item.signal} : {}) };
     const features = {price:100,ema9:99,ema20:101,rsi14:69};
     const row = {decision,features,latestOpen:101,latestClose:100,...(!item.legacy ? {prevFeatures:{price:103,ema9:102,ema20:100,rsi14:71}} : {})};
-    const manifest = {dataset_id:`qa-dataset-${index}`,version:"1",schema_version:"ohlcv-multi-1",provider:"yahoo_finance",purpose:"screen",market:item.market,currency:item.market === "IDX" ? "IDR" : "USD",symbols:[symbol],exchanges:[item.market === "IDX" ? "XIDX" : "XNAS"],timeframe:"1d",timezone:"UTC",requested_range:{from:day,to:day},available_range:{from:day,to:day},warmup_candles:20,adjustment:"split",candle_count:100,decoded_bytes:1000,checksum:`qa-checksum-${index}`,quality:{status:"complete",warnings:[]}};
+    const manifest = {dataset_id:`qa-dataset-${index}`,version:"1",schema_version:"ohlcv-multi-1",provider:"yahoo_finance",purpose:"screen",market:item.market,currency:item.market === "IDX" ? "IDR" : "USD",symbols:[symbol],exchanges:[item.market === "IDX" ? "XIDX" : "XNAS"],timeframe:"1d",timezone:"UTC",requested_range:{from:day,to:day},available_range:{from:day,to:day},warmup_candles:20,adjustment:"split",candle_count:100,decoded_bytes:1000,checksum:`qa-checksum-${index}`,quality:{status:"complete",warnings:index === 0 ? ["AAPL: excluded 1 unfinished or unconfirmed daily candle(s)", "AAPL: excluded 1 null OHLCV row(s); history may have gaps"] : []}};
     const run = {rows:[row],latestDecision:decision,features,latestOpen:101,latestClose:100,result:{type:"screener.result",protocol:"screener-private-1",request_id:`qa-request-${index}`,decision_version:"decision-1",results:[decision]},manifest,execution:"client_wasm+server_private_scoring"};
     return {rule:item.name,recordedAt:new Date(Date.now()-index*1000).toISOString(),run,context:{ruleId:rules[index].id,universeId:"qa-universe",universeName:`QA ${item.market}`,ruleSnapshot:{version:1,definition_hash:rules[index].definition_hash,definition:rules[index].definition}}};
   });
@@ -72,8 +72,17 @@ async (page) => {
       const summary=page.locator(".screener-history > summary");
       if(!await page.locator(".screener-history").evaluate(el=>el.open)) await summary.click();
       for(const item of cases) {
+        const past = page.locator('.screener-history li').filter({hasText:item.name});
+        if (!(await past.locator('.screener-history-statuses').innerText()).includes(`${item.label} 1`)) throw Error('History decision counts changed the saved signal meaning');
         await page.locator(".screener-history li").filter({hasText:item.name}).getByRole("button",{name:"Review result",exact:true}).click();
         const row=page.locator(".screener-result-ledger tbody tr").first();
+        const quality = page.getByRole('region', { name:'Data quality', exact:true });
+        await quality.waitFor();
+        if (!(await quality.innerText()).includes(item.market === 'US' ? 'America/New_York' : 'Asia/Jakarta')) throw Error('Market timezone missing from snapshot provenance');
+        const notes = quality.locator('details');
+        if (!await notes.evaluate(el => el.open)) await notes.locator('summary').click();
+        if (!(await quality.innerText()).includes('does not guarantee gap-free')) throw Error('Complete was presented as guaranteed data quality');
+        if (item.name === cases[0].name && await quality.locator('li').count() !== 2) throw Error('Provider warnings were lost after history reload');
         const label=(await row.getByRole("cell").nth(1).innerText()).trim();
         if(label !== item.label) throw Error(`Wrong direction after reload: ${item.name}: ${label}`);
         const currency=item.market === "IDX" ? "IDR" : "USD";
@@ -90,7 +99,14 @@ async (page) => {
           if(!evidence.includes("this crossover cannot be verified") || /\nNot met\n/.test(evidence)) throw Error("Missing legacy evidence was shown as false");
           if(!(await detail.innerText()).includes("signal direction unavailable")) throw Error("Legacy signal was guessed");
         } else if(item.name === cases[0].name) {
-          if(!evidence.includes("Previous candle: 71") || !evidence.includes("Current candle: 69") || !evidence.includes("\nMet\n") || !evidence.includes("\nNot met\n")) throw Error("SELL OR must preserve one true crossover plus one false condition");
+          if(!/Previous candle\s+71/.test(evidence) || !/Current candle\s+69/.test(evidence) || !evidence.includes("\nMet\n") || !evidence.includes("\nNot met\n")) throw Error("SELL OR must preserve one true crossover plus one false condition");
+          const comparison = detail.locator('.crossover-evidence[data-crossover="true"]');
+          if (!await comparison.evaluate(el => el.children.length === 2 && getComputedStyle(el).gridTemplateColumns.split(' ').length === 2)) throw Error('Crossover is not a two-column comparison');
+          await page.evaluate(() => window.scrollTo(0,0));
+          await page.screenshot({path:`/private/tmp/signalgen-evidence-flow-${width}-${theme}.png`,fullPage:true,animations:'disabled'});
+          await quality.screenshot({path:`/private/tmp/signalgen-data-quality-${width}-${theme}.png`,animations:'disabled'});
+          await detail.locator('.stock-detail__evidence').screenshot({path:`/private/tmp/signalgen-crossover-${width}-${theme}.png`,animations:'disabled'});
+          await page.locator('.screener-history').screenshot({path:`/private/tmp/signalgen-history-status-${width}-${theme}.png`,animations:'disabled'});
           if(!(await detail.innerText()).includes("SELL signal (not an order)")) throw Error("Detail lost SELL direction");
         }
         await page.getByRole("button",{name:"Close details",exact:true}).click();

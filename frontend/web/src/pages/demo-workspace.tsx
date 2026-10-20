@@ -10,6 +10,7 @@ import {
   lazy,
   Suspense,
 } from "react";
+import type { BackendConnection } from "@/api/backend-status";
 import {
   Activity,
   ArrowDownRight,
@@ -2225,12 +2226,14 @@ function formatDeviceTime(value: string): string {
 }
 
 export function DemoWorkspace({
+  connection = "checking",
   view,
   backendOnline,
   authenticated,
   user,
   onLogout,
 }: {
+  connection?: BackendConnection;
   view: DemoView;
   backendOnline: boolean;
   authenticated: boolean;
@@ -2363,6 +2366,21 @@ export function DemoWorkspace({
               </h1>
             </div>
             <div className="topbar__actions">
+              <span
+                className="workspace-connection"
+                data-state={connection}
+                role="status"
+                aria-live="polite"
+              >
+                <i aria-hidden="true" />
+                {connection === "online"
+                  ? "Connected"
+                  : connection === "offline"
+                    ? "Offline"
+                    : connection === "reconnecting"
+                      ? "Reconnecting"
+                      : "Checking connection"}
+              </span>
               <ThemeToggle compact />
             </div>
           </div>

@@ -15,6 +15,8 @@ import {
   X,
 } from "lucide-react";
 import { TradingViewChart } from "@/components/tradingview-chart";
+import { marketCandleDate, marketTimezone } from "@/lib/data-freshness";
+import { decisionLabel } from "@/lib/workspace-feedback";
 import { snapshotChartSymbol } from "@/lib/stock-market";
 import { api } from "@/api/client";
 import type { StockInstrument, StockUniverse } from "@/types";
@@ -478,8 +480,8 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
               </header>
               <TradingViewChart symbol={chartSymbol} label={selectedSymbol} />
               <footer>
-                Chart by TradingView. Availability and delays follow the data
-                provider.
+                TradingView chart · independent provider feed. Prices and delays
+                may differ from the saved screening snapshot.
               </footer>
             </section>
             <aside
@@ -575,9 +577,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                       }
                     >
                       {selectedSnapshot
-                        ? selectedSnapshot.decision.matched
-                          ? "Matched"
-                          : "Not matched"
+                        ? decisionLabel(selectedSnapshot.decision)
                         : "Not evaluated"}
                     </Badge>
                     <p>
@@ -586,7 +586,12 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                     </p>
                     {selectedSnapshot && (
                       <time dateTime={selectedSnapshot.decision.timestamp}>
-                        {date(selectedSnapshot.decision.timestamp)}
+                        Candle{" "}
+                        {marketCandleDate(
+                          selectedSnapshot.decision.timestamp,
+                          selectedMarket,
+                        )}{" "}
+                        · {marketTimezone(selectedMarket)}
                       </time>
                     )}
                   </div>
@@ -831,7 +836,13 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                   <TableCell data-label="Data time">
                     {snapshot ? (
                       <time dateTime={snapshot.decision.timestamp}>
-                        {date(snapshot.decision.timestamp)}
+                        {marketCandleDate(
+                          snapshot.decision.timestamp,
+                          snapshot.record.run.manifest.market,
+                        )}
+                        <span className="monitor-company">
+                          {marketTimezone(snapshot.record.run.manifest.market)}
+                        </span>
                       </time>
                     ) : (
                       "—"

@@ -1,4 +1,123 @@
 /* Extend the workspace ledger; keep the shared panel gutters and typography. */
+.workspace-connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.workspace-connection i {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.workspace-connection[data-state="online"] i {
+  background: var(--green);
+}
+.screening-data-quality {
+  margin: 0 var(--workspace-panel-gutter) 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--accent-surface);
+}
+.screening-data-quality header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.screening-data-quality h4 {
+  margin: 0;
+  font-size: 18px;
+}
+.screening-data-quality dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.screening-data-quality dt,
+.screening-data-quality p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.screening-data-quality dd {
+  margin: 4px 0 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.screening-data-quality p {
+  margin: 8px 0 0;
+  max-width: 72ch;
+}
+.screening-data-quality details {
+  margin-top: 12px;
+}
+.screening-data-quality summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.screening-data-quality summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 4px;
+}
+.screening-data-quality li {
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.screener-history-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-block: 8px;
+}
+.crossover-evidence {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+}
+.crossover-evidence[data-crossover="true"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.crossover-evidence > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.crossover-evidence small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.crossover-evidence > span > span {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .screening-data-quality {
+    padding: 16px;
+  }
+  .screening-data-quality dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .workspace-connection {
+    max-width: 116px;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+}
 .universe-market-field {
   margin: 0 var(--workspace-panel-gutter) 24px;
 }
