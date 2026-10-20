@@ -65,6 +65,9 @@ func NewDynamicStoreWithLimits(provider marketdata.Provider, universes universe.
 }
 
 func (store *DynamicStore) Prepare(ctx context.Context, owner string, request PrepareRequest) (Manifest, error) {
+	if err := ctx.Err(); err != nil {
+		return Manifest{}, err
+	}
 	owner = strings.TrimSpace(owner)
 	if owner == "" || request.Purpose != "screen" || strings.TrimSpace(request.RuleID) == "" || strings.TrimSpace(request.UniverseID) == "" {
 		return Manifest{}, ErrInvalidRequest
@@ -95,6 +98,9 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	}
 	series, err := store.provider.Daily(ctx, instruments, dynamicOutputSize)
 	if err != nil {
+		return Manifest{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return Manifest{}, err
 	}
 	if err := marketdata.ValidateSeries(series, instruments, dynamicOutputSize); err != nil {
@@ -143,6 +149,10 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	// Do not publish a new handle when this request already timed out or left.
+	if err := ctx.Err(); err != nil {
+		return Manifest{}, err
+	}
 	store.pruneExpiredLocked()
 	if !store.hasCapacityLocked(owner, len(content)) {
 		return Manifest{}, ErrCapacity

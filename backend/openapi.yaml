@@ -9,7 +9,8 @@ info:
     token. Proposed routes that are not implemented are intentionally excluded.
     Server-generated X-Request-ID correlates responses with private operational
     logs. Allowlisted browser origins may read X-Request-ID, Retry-After and ETag.
-    Ordinary GET/HEAD requests have a 10-second dependency-work deadline;
+    Ordinary GET/HEAD requests and transient POST dataset preparation have a
+    10-second dependency-work deadline;
     expiration returns HTTP 504 with code REQUEST_TIMEOUT, not a login denial.
     Raw WebSocket has its own deadlines. Mutations are not automatically replayed.
     A recovered panic before response commitment uses the standard error
@@ -1028,6 +1029,7 @@ paths:
             schema:
               $ref: "#/components/schemas/DatasetPrepareRequest"
       responses:
+        "504": {$ref: "#/components/responses/RequestTimeout"}
         "200":
           description: Prepared owner-scoped Yahoo Finance manifest. Date metadata is derived by the server.
           headers:

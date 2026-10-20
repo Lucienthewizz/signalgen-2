@@ -81,12 +81,16 @@
         "symbol": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" },
         "matched": { "type": "boolean" },
+        "signal_type": { "type": "string", "enum": ["BUY", "SELL"] },
         "reason_codes": {
           "type": "array",
           "maxItems": 16,
           "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$" }
         }
-      }
+      },
+      "if": { "properties": { "matched": { "const": true } } },
+      "then": { "required": ["signal_type"] },
+      "else": { "not": { "required": ["signal_type"] } }
     },
     "resultMessage": {
       "type": "object",

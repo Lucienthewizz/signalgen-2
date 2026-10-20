@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,6 +17,61 @@ type providerFunc func(context.Context, []universe.Instrument, int) ([]Series, e
 
 func (function providerFunc) Daily(ctx context.Context, instruments []universe.Instrument, size int) ([]Series, error) {
 	return function(ctx, instruments, size)
+}
+
+func TestCacheBatchFetchesAreBoundedAndKeepInstrumentOrder(t *testing.T) {
+	var active, peak, calls atomic.Int32
+	upstream := providerFunc(func(ctx context.Context, instruments []universe.Instrument, _ int) ([]Series, error) {
+		calls.Add(1)
+		current := active.Add(1)
+		defer active.Add(-1)
+		for old := peak.Load(); current > old && !peak.CompareAndSwap(old, current); old = peak.Load() {
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(10 * time.Millisecond):
+			return []Series{validSeries(instruments[0].Symbol)}, nil
+		}
+	})
+	provider, _ := NewCachedProvider(upstream, DefaultCacheOptions())
+	instruments := make([]universe.Instrument, 10)
+	for i := range instruments {
+		symbol := fmt.Sprintf("TEST%d", i)
+		instruments[i] = universe.Instrument{Symbol: symbol, ProviderSymbol: symbol}
+	}
+	for run := 0; run < 2; run++ {
+		series, err := provider.Daily(context.Background(), instruments, 20)
+		if err != nil || len(series) != 10 {
+			t.Fatalf("run=%d len=%d error=%v", run, len(series), err)
+		}
+		for i := range series {
+			if series[i].Symbol != instruments[i].Symbol {
+				t.Fatal("parallel fetch changed instrument order")
+			}
+		}
+	}
+	if calls.Load() != 10 || peak.Load() < 2 || peak.Load() > 3 {
+		t.Fatalf("upstream calls=%d peak=%d; want 10 fetches and 2..3 concurrently", calls.Load(), peak.Load())
+	}
+}
+
+func TestCacheBatchErrorAndCancellationNeverReturnPartialSuccess(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		provider, _ := NewCachedProvider(providerFunc(func(ctx context.Context, instruments []universe.Instrument, _ int) ([]Series, error) {
+			if fail && instruments[0].Symbol == "BAD" {
+				return nil, ErrUnavailable
+			}
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}), CacheOptions{TTL: time.Minute, FetchTimeout: 30 * time.Millisecond, MaxEntries: 4, MaxCandles: 100, MaxInFlight: 3})
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+		series, err := provider.Daily(ctx, []universe.Instrument{{Symbol: "OK", ProviderSymbol: "OK"}, {Symbol: "BAD", ProviderSymbol: "BAD"}}, 20)
+		cancel()
+		if err == nil || series != nil {
+			t.Fatalf("partial batch accepted: len=%d error=%v", len(series), err)
+		}
+	}
 }
 
 func validSeries(symbol string) Series {

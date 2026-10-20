@@ -68,6 +68,27 @@ func (fake fakeUniverseRepository) Delete(context.Context, string, string, int) 
 
 type fakeMarketProvider struct{}
 
+type cancellingMarketProvider struct{ cancel context.CancelFunc }
+
+func (provider cancellingMarketProvider) Daily(ctx context.Context, instruments []universe.Instrument, size int) ([]marketdata.Series, error) {
+	series, err := (fakeMarketProvider{}).Daily(ctx, instruments, size)
+	provider.cancel()
+	return series, err
+}
+
+func TestCancelledPreparationDoesNotPublishSnapshot(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store, err := NewDynamicStore(cancellingMarketProvider{cancel}, fakeUniverseRepository{owner: "user-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Prepare(ctx, "user-a", PrepareRequest{Purpose: "screen", RuleID: "rule-a", UniverseID: "univ-a"})
+	if !errors.Is(err, context.Canceled) || len(store.entries) != 0 || store.bytes != 0 {
+		t.Fatalf("cancelled request published a snapshot: error=%v entries=%d bytes=%d", err, len(store.entries), store.bytes)
+	}
+}
+
 func (fakeMarketProvider) Daily(_ context.Context, instruments []universe.Instrument, _ int) ([]marketdata.Series, error) {
 	candles := make([]core.Candle, 20)
 	for index := range candles {

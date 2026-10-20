@@ -59,7 +59,6 @@ func (provider *CachedProvider) Daily(ctx context.Context, instruments []univers
 	if len(instruments) < 1 || len(instruments) > universe.MaxSymbols || outputSize < 20 || outputSize > 5000 {
 		return nil, ErrInvalidData
 	}
-	result := make([]Series, 0, len(instruments))
 	seen := make(map[string]bool, len(instruments))
 	for _, instrument := range instruments {
 		if instrument.Symbol == "" || instrument.ProviderSymbol == "" || seen[instrument.Symbol] {
@@ -67,12 +66,38 @@ func (provider *CachedProvider) Daily(ctx context.Context, instruments []univers
 		}
 		seen[instrument.Symbol] = true
 	}
-	for _, instrument := range instruments {
-		series, err := provider.dailyOne(ctx, instrument, outputSize)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, series)
+	// A ten-stock cold cache must not require ten sequential network round trips.
+	// Keep at most three concurrent waits per batch; the shared MaxInFlight limit
+	// still caps all upstream work across users. Never fan out without a bound.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	workers := min(3, provider.options.MaxInFlight, len(instruments))
+	result := make([]Series, len(instruments))
+	var group sync.WaitGroup
+	var firstFailure sync.Once
+	var batchErr error
+	for offset := 0; offset < workers; offset++ {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			for index := offset; index < len(instruments); index += workers {
+				series, err := provider.dailyOne(ctx, instruments[index], outputSize)
+				if err != nil {
+					firstFailure.Do(func() { batchErr = err; cancel() })
+					return
+				}
+				// Separate indices are safe to write concurrently. Preserve catalog
+				// order even when provider responses arrive in a different order.
+				result[index] = series
+			}
+		}()
+	}
+	group.Wait()
+	if batchErr != nil {
+		return nil, batchErr
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return result, nil
 }

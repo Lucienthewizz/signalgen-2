@@ -1,5 +1,20 @@
 # Backend progress
 
+## Perbaikan regresi screening — 20 Oktober 2026
+
+- JSON feature wajib lengkap/non-null; RSI 0 sah dibedakan dari RSI yang hilang.
+- Pengambilan cache dingin dibatasi tiga saham paralel per batch, tetap memakai
+  batas global upstream. Prepare dataset mendapat budget total 10 detik agar
+  timeout menjadi error JSON sebelum write timeout; request batal tidak
+  menerbitkan snapshot baru.
+- Schema hasil selaras dengan BUY/SELL dan diuji menggunakan respons WebSocket
+  aktual. Validasi candle core juga menolak NaN/Inf dan volume negatif.
+- Tes regresi, seluruh Go race suite/actual WASM dan pemeriksaan frontend/build
+  lulus lokal. Tidak ada migration cloud atau perubahan izin/akun pada slice ini;
+  tes Postgres opt-in tidak diulang pada slice ini.
+
+Rincian dan batas klaim: [validasi input dan timeout](SCREENER_INPUT_AND_TIMEOUTS.md).
+
 ## Checkpoint terbaru — 20 Oktober 2026
 
 Branch aktif: `integration/backend-frontend-20261019`, melanjutkan merge frontend
