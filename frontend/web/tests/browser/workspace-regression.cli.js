@@ -21,6 +21,7 @@ async (page) => {
   let failUniverseDelete = false;
   let universeWrite = null;
   let ruleWrite = null;
+  let ruleDeletes = 0;
   let largeUniverse = false;
   let savedCardFixture = false;
   let healthOffline = false;
@@ -64,6 +65,10 @@ async (page) => {
     if (p === "/api/v1/rules" && route.request().method() === "POST") {
       ruleWrite = route.request().postDataJSON();
       return route.fulfill({ json: { ...rule, name: ruleWrite.definition.name, definition: ruleWrite.definition } });
+    }
+    if (p === "/api/v1/rules/fixture-rule" && route.request().method() === "DELETE") {
+      ruleDeletes++;
+      return route.fulfill({ status: 204 });
     }
     if (p.startsWith("/api/v1/account/sessions/") && route.request().method() !== "GET") sessionMutations++;
     if (p.startsWith("/api/v1/stock-universes") && ["POST", "PATCH"].includes(route.request().method())) {
@@ -495,6 +500,33 @@ async (page) => {
   await page.getByRole("button", { name: "New blank rule", exact: true }).click();
   await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
   const draftInput = page.getByLabel("Rule name", { exact: true });
+  const bearishPreset = page.getByRole("button", { name: "Bearish EMA cross", exact: true });
+  await bearishPreset.click();
+  const presetDialog = page.getByRole("alertdialog", { name: "Replace current criteria?" });
+  await presetDialog.waitFor();
+  if (await draftInput.inputValue() !== "Bullish EMA cross") throw Error("Preset changed before confirmation");
+  if (!await presetDialog.getByRole("button", { name: "Cancel", exact: true }).evaluate(el => el === document.activeElement)) throw Error("Confirmation did not focus safe action");
+  await page.keyboard.press("Escape");
+  await presetDialog.waitFor({ state: "hidden" });
+  if (await draftInput.inputValue() !== "Bullish EMA cross") throw Error("Escape replaced current criteria");
+  if (!await bearishPreset.evaluate(el => el === document.activeElement)) throw Error("Confirmation did not restore focus");
+  for (const width of [1440, 1218, 390]) for (const theme of ["dark", "light"]) {
+    await page.setViewportSize({ width, height: 853 });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    await bearishPreset.click();
+    await presetDialog.waitFor();
+    await page.screenshot({ path: `/private/tmp/signalgen-confirm-${width}-${theme}.png`, animations: "disabled" });
+    const bounds = await presetDialog.boundingBox();
+    if (!bounds || bounds.x < 0 || bounds.x + bounds.width > width) throw Error("Confirmation exceeds viewport");
+    await presetDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  }
+  await bearishPreset.click();
+  await presetDialog.getByRole("button", { name: "Replace criteria", exact: true }).click();
+  await presetDialog.waitFor({ state: "hidden" });
+  if (await draftInput.inputValue() !== "Bearish EMA cross" || ruleWrite) throw Error("Preset confirmation failed or saved without permission");
+  await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
+  await presetDialog.getByRole("button", { name: "Replace criteria", exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await draftInput.fill("Draft stability check");
   const draftNode = await draftInput.elementHandle();
   const initialTimeOrigin = await page.evaluate(() => performance.timeOrigin);
@@ -545,6 +577,16 @@ async (page) => {
   await page.getByRole("button", { name: "Save rule", exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#rule-name')?.value === '');
   if (!ruleWrite || ruleWrite.definition.conditions[0].op !== "CROSS_UP" || ruleWrite.definition.signal_type !== "BUY") throw Error("Preset save payload lost crossover or signal action");
+  await page.getByRole("button", { name: "Delete Rule fixture", exact: true }).click();
+  const deleteRuleDialog = page.getByRole("alertdialog", { name: "Delete this rule?" });
+  await deleteRuleDialog.waitFor();
+  if (!(await deleteRuleDialog.innerText()).includes("Rule fixture") || ruleDeletes !== 0) throw Error("Rule deletion lacks protected confirmation");
+  await deleteRuleDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  if (ruleDeletes !== 0) throw Error("Cancel deleted the saved rule");
+  await page.getByRole("button", { name: "Delete Rule fixture", exact: true }).click();
+  await deleteRuleDialog.getByRole("button", { name: "Delete rule", exact: true }).click();
+  await page.waitForResponse(response => response.url().endsWith('/api/v1/rules') && response.request().method() === 'GET');
+  if (ruleDeletes !== 1) throw Error("Rule confirmation did not issue exactly one deletion");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${origin}/#app/universes`);
   const catalog = page.getByRole("table", { name: "Stock catalog", exact: true });
@@ -629,6 +671,45 @@ async (page) => {
       }
     }
   }
+  let registrationCalls = 0;
+  let registrationFails = true;
+  await page.route('**/api/auth/register', async route => {
+    registrationCalls++;
+    return registrationFails
+      ? route.fulfill({status:503,json:{error:{code:'SERVICE_UNAVAILABLE',message:'Synthetic registration failure'}}})
+      : route.fulfill({json:{user}});
+  });
+  await page.goto(`${origin}/#register`);
+  await page.getByLabel('Full name', {exact:true}).fill('Synthetic registration');
+  await page.getByLabel('Email', {exact:true}).fill('signup@example.test');
+  await page.getByLabel('Password', {exact:true}).fill('Synthetic-pass-123');
+  await page.getByLabel('Confirm password', {exact:true}).fill('Different-pass-123');
+  await page.getByRole('button', {name:'Create account',exact:true}).click();
+  await page.getByText('The passwords do not match.', {exact:true}).waitFor();
+  if (registrationCalls) throw Error('Mismatched registration was submitted');
+  await page.getByLabel('Confirm password', {exact:true}).fill('Synthetic-pass-123');
+  await page.getByRole('button', {name:'Create account',exact:true}).click();
+  await page.getByText('The service is temporarily unavailable. Try again shortly.', {exact:true}).waitFor();
+  if (await page.getByLabel('Password', {exact:true}).inputValue() !== 'Synthetic-pass-123') throw Error('Failed registration cleared the editable form');
+  registrationFails = false;
+  await page.getByRole('button', {name:'Create account',exact:true}).click();
+  const confirmation = page.getByRole('region', {name:'Registration confirmation',exact:true});
+  await confirmation.waitFor();
+  if (await page.locator('.auth-card input, .auth-card form').count()) throw Error('Registration fields remain after successful account creation');
+  if (await page.getByRole('button', {name:'Create account',exact:true}).count()) throw Error('Registration can be submitted again after success');
+  if (!await confirmation.evaluate(el => el === document.activeElement)) throw Error('Registration confirmation did not receive focus');
+  for (const width of [1440,390]) for (const theme of ['dark','light']) {
+    await page.setViewportSize({width,height:1000});
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole('button',{name:/Switch to .* mode/}).click();
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error('Registration confirmation overflows');
+    await page.locator('.auth-card').screenshot({path:`/private/tmp/signalgen-registration-success-${width}-${theme}.png`,animations:'disabled'});
+  }
+  await page.locator('.auth-registration-success a[href="#login"]').click();
+  await page.getByLabel('Password', {exact:true}).waitFor();
+  if (await page.getByLabel('Password', {exact:true}).inputValue()) throw Error('Registration password leaked into sign in');
+  await page.goto(`${origin}/#register`);
+  await page.getByLabel('Full name', {exact:true}).waitFor();
+  if (await page.getByLabel('Password', {exact:true}).inputValue() || await page.getByLabel('Full name', {exact:true}).inputValue()) throw Error('Registration data survived reopening the form');
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));
 }

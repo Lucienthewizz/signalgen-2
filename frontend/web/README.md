@@ -265,3 +265,23 @@ SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5175 npm run test:recovery
 The isolated browser fixture checks automatic recovery, exactly two attempts on
 persistent failure, timeout wording, explicit reload, preserved login and responsive
 overflow at 1440/390px in both themes. It never uses a real account or cloud data.
+
+## Registration confirmation
+
+After a successful registration response, the form is reset and removed; password
+and confirmation state are cleared. When email confirmation is required, the card
+shows inbox guidance and a Continue to sign in link rather than another Create
+account button. A response containing an access token retains the existing app-session
+bootstrap and workspace redirect. Failed registration requests leave the form editable. Switching
+auth views resets the local confirmation state. Browser regression checks use only
+synthetic registration responses; they do not create users or send confirmation email.
+
+## Rules confirmations
+
+Replacing populated criteria with a preset and deleting a saved rule use the
+Signalgen confirmation dialog instead of browser-native prompts. The dialog names
+the preset or rule, focuses Cancel first, supports Escape, and returns focus to the
+initiating control. Cancel leaves the draft and saved data untouched. Replacing
+criteria updates only the editor; saving remains a separate action. The shared
+Base UI AlertDialog supplies modal focus management and accessible title/description;
+its surface uses the existing Signalgen theme tokens in light and dark modes.

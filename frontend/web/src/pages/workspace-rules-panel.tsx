@@ -18,6 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useActionNotifications } from "@/components/ui/toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Empty,
   EmptyDescription,
@@ -113,6 +114,12 @@ export function ServerRulesPanel({
   const [notice, setNotice] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [confirmation, setConfirmation] = useState<
+    | { kind: "preset"; preset: (typeof rulePresets)[number] }
+    | { kind: "delete"; rule: RuleResource }
+    | null
+  >(null);
+  const confirmationTrigger = useRef<HTMLElement | null>(null);
   const validation = validateRule(definition);
   useActionNotifications(notice, error);
   const [draftOwner, setDraftOwner] = useState<string | undefined>();
@@ -132,6 +139,7 @@ export function ServerRulesPanel({
     setLoading(false);
     setError(null);
     setNotice(null);
+    setConfirmation(null);
     setDraftStorageFailed(false);
   }, [authenticated, userId]);
 
@@ -277,7 +285,6 @@ export function ServerRulesPanel({
   }
 
   async function remove(rule: RuleResource) {
-    if (!window.confirm(`Delete rule “${rule.name}”?`)) return;
     setError(null);
     setNotice(null);
     const owner = userId;
@@ -291,6 +298,20 @@ export function ServerRulesPanel({
       if (activeUser.current !== owner) return;
       setError(readableError(caught));
     }
+  }
+
+  function applyPreset(preset: (typeof rulePresets)[number]) {
+    setEditing(null);
+    setPresetId([preset.id]);
+    setSubmitted(false);
+    setError(null);
+    setNotice(null);
+    setDefinition({
+      ...preset.definition,
+      conditions: preset.definition.conditions.map((condition) => ({
+        ...condition,
+      })),
+    });
   }
 
   // A failed health probe must not replace a live editor and drop its focus.
@@ -315,6 +336,32 @@ export function ServerRulesPanel({
 
   return (
     <div className="rules-workspace">
+      <ConfirmDialog
+        open={confirmation !== null}
+        title={
+          confirmation?.kind === "delete"
+            ? "Delete this rule?"
+            : "Replace current criteria?"
+        }
+        description={
+          confirmation?.kind === "delete"
+            ? `“${confirmation.rule.name}” will be deleted from your account. This cannot be undone.`
+            : `Use “${confirmation?.preset.name ?? "this preset"}” instead of your current criteria. Unsaved edits will be replaced; saved rules stay unchanged until you save.`
+        }
+        confirmLabel={
+          confirmation?.kind === "delete" ? "Delete rule" : "Replace criteria"
+        }
+        destructive={confirmation?.kind === "delete"}
+        returnFocus={confirmationTrigger}
+        onCancel={() => setConfirmation(null)}
+        onConfirm={() => {
+          if (!confirmation) return;
+          const choice = confirmation;
+          setConfirmation(null);
+          if (choice.kind === "preset") applyPreset(choice.preset);
+          else void remove(choice.rule);
+        }}
+      />
       {!backendOnline && (
         <Alert>
           <CircleAlert />
@@ -408,24 +455,11 @@ export function ServerRulesPanel({
                     (item) => item.id === values[0],
                   );
                   if (!preset) return;
-                  if (
-                    (editing || definition.conditions.length > 0) &&
-                    !window.confirm(
-                      "Replace the current criteria with this preset? Your saved rule will not change until you save.",
-                    )
-                  )
-                    return;
-                  setEditing(null);
-                  setPresetId([preset.id]);
-                  setSubmitted(false);
-                  setError(null);
-                  setNotice(null);
-                  setDefinition({
-                    ...preset.definition,
-                    conditions: preset.definition.conditions.map(
-                      (condition) => ({ ...condition }),
-                    ),
-                  });
+                  if (editing || definition.conditions.length > 0) {
+                    confirmationTrigger.current =
+                      document.activeElement as HTMLElement;
+                    setConfirmation({ kind: "preset", preset });
+                  } else applyPreset(preset);
                 }}
               >
                 {rulePresets.map((preset) => (
@@ -890,7 +924,10 @@ export function ServerRulesPanel({
                         <Button
                           variant="destructive"
                           size="icon"
-                          onClick={() => void remove(rule)}
+                          onClick={(event) => {
+                            confirmationTrigger.current = event.currentTarget;
+                            setConfirmation({ kind: "delete", rule });
+                          }}
                           disabled={saving || !backendOnline}
                           aria-label={`Delete ${rule.name}`}
                         >

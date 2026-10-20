@@ -1,5 +1,86 @@
 /* Landing-inspired surface roles, shared across workspace routes.
    Keep controls, selection, semantic feedback and embedded charts independent. */
+.signalgen-confirm__backdrop {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  background: rgb(0 0 0 / 60%);
+  backdrop-filter: blur(5px);
+}
+.signalgen-confirm__viewport {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+.signalgen-confirm {
+  width: min(480px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--green-deep) 9%, var(--surface)),
+    var(--surface) 70%
+  );
+  color: var(--text);
+  outline: none;
+}
+.signalgen-confirm__icon {
+  display: inline-flex;
+  padding: 10px;
+  margin-bottom: 18px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  color: var(--green);
+}
+.signalgen-confirm__icon[data-destructive] {
+  color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+}
+.signalgen-confirm__icon svg {
+  width: 24px;
+  height: 24px;
+}
+.signalgen-confirm__title {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.2;
+}
+.signalgen-confirm__description {
+  margin: 12px 0 24px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.signalgen-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.signalgen-confirm__actions .ui-button {
+  min-height: 44px;
+}
+@media (max-width: 480px) {
+  .signalgen-confirm {
+    padding: 24px;
+  }
+  .signalgen-confirm__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .signalgen-confirm__backdrop {
+    backdrop-filter: none;
+  }
+}
 .demo-workbench,
 .auth-layout {
   --workspace-page-gradient:
@@ -120,6 +201,14 @@
 }
 .auth-layout .forgot-link {
   color: var(--green);
+}
+.auth-registration-success {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.auth-registration-success .auth-note {
+  margin: 0;
 }
 @media (max-width: 1020px) {
   .auth-layout {
