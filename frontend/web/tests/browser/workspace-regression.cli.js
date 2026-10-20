@@ -187,6 +187,7 @@ async (page) => {
           document.fonts.load('500 14px "Saira Condensed"'),
           document.fonts.load('13px "Geist Mono Variable"'),
         ]));
+        if (errors.length) throw Error(`Route ${view}: ${errors.join('; ')}`);
         const typography = await page.evaluate(() => ({
           body: getComputedStyle(document.body).fontFamily,
           nav: getComputedStyle(document.querySelector(".nav-group button")).fontFamily,
@@ -548,6 +549,43 @@ async (page) => {
   if (await draftInput.inputValue() !== "Bearish EMA cross" || ruleWrite) throw Error("Preset confirmation failed or saved without permission");
   await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
   await presetDialog.getByRole("button", { name: "Replace criteria", exact: true }).click();
+  if (!await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).getByLabel("Selected preset").count()) throw Error("Selected preset has no checkmark");
+  await page.getByText("Draft saved on this device", { exact: true }).waitFor();
+  const library = page.getByRole("region", { name: "Saved rules", exact: true });
+  await page.getByLabel("Search saved rules", { exact: true }).fill("not-a-rule");
+  await library.getByText("No matching rules", { exact: true }).waitFor();
+  await page.getByLabel("Search saved rules", { exact: true }).fill("Rule fixture");
+  const signalFilters = page.getByRole("group", { name: "Filter rules by signal", exact: true });
+  await signalFilters.getByRole("button", { name: "SELL", exact: true }).click();
+  await library.getByText("No matching rules", { exact: true }).waitFor();
+  await signalFilters.getByRole("button", { name: "BUY", exact: true }).click();
+  await library.getByRole("button", { name: "Edit Rule fixture", exact: true }).waitFor();
+  await signalFilters.getByRole("button", { name: "All signals", exact: true }).click();
+  await page.getByLabel("Search saved rules", { exact: true }).fill("");
+  const previewButton = page.getByRole("button", { name: "Preview criteria", exact: true });
+  const preview = page.getByRole("dialog", { name: "Preview criteria", exact: true });
+  for (const width of [1456, 390]) for (const theme of ["dark", "light"]) {
+    await page.setViewportSize({ width, height: 853 });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    await previewButton.click();
+    await preview.waitFor();
+    if (!(await preview.innerText()).includes("EMA 9 crosses above EMA 20")) throw Error("Preview differs from draft criteria");
+    if (ruleWrite) throw Error("Preview saved the draft");
+    const popupBounds = await preview.boundingBox();
+    if (!popupBounds || Math.abs(popupBounds.x + popupBounds.width / 2 - width / 2) > 2 || popupBounds.x < 0 || popupBounds.y < 0) throw Error("Preview is not centered or exceeds viewport");
+    await page.screenshot({ path: `/private/tmp/signalgen-rule-preview-${width}-${theme}.png`, animations: "disabled" });
+    await page.keyboard.press("Escape");
+    await preview.waitFor({ state: "hidden" });
+    if (!await previewButton.evaluate(el => el === document.activeElement)) throw Error("Preview did not return focus");
+  }
+  await page.getByLabel("Condition reference 1", { exact: true }).click();
+  await page.getByRole("option", { name: "Numeric value", exact: true }).click();
+  await page.getByLabel("Condition value 1", { exact: true }).fill("42");
+  await previewButton.click();
+  if (!(await preview.innerText()).includes("crosses above 42")) throw Error("Numeric reference not reflected in preview");
+  await preview.getByRole("button", { name: "Back to editing", exact: true }).click();
+  await page.getByLabel("Condition reference 1", { exact: true }).click();
+  await page.getByRole("option", { name: "EMA 20", exact: true }).click();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await draftInput.fill("Draft stability check");
   const draftNode = await draftInput.elementHandle();
@@ -570,10 +608,12 @@ async (page) => {
   await page.getByRole("button", { name: "Add condition", exact: true }).click();
   if (await page.getByLabel("Rule name", { exact: true }).inputValue() !== "Bullish EMA cross") throw Error("Preset did not populate rule name");
   if (!await page.getByLabel("Rule summary", { exact: true }).innerText().then(text => text.includes("crosses above"))) throw Error("Preset summary missing crossover semantics");
-  await page.getByLabel("Condition value 1", { exact: true }).fill("EMA9");
+  await page.getByLabel("Condition reference 1", { exact: true }).click();
+  await page.getByRole("option", { name: "EMA 9", exact: true }).click();
   await page.getByRole("button", { name: "Save rule", exact: true }).click();
   if (!await page.getByText("Choose a different reference; an indicator cannot compare with itself.", { exact: true }).count()) throw Error("Self-comparison validation missing");
-  await page.getByLabel("Condition value 1", { exact: true }).fill("EMA20");
+  await page.getByLabel("Condition reference 1", { exact: true }).click();
+  await page.getByRole("option", { name: "EMA 20", exact: true }).click();
   if (ruleWrite) throw Error("Invalid criteria were sent to the API");
   const notifications = await page.getByRole("button", { name: "Dismiss notification", exact: true, includeHidden: true }).elementHandles();
   await Promise.all(notifications.map(close => close.click({ force: true, timeout: 1000 }).catch(() => {})));

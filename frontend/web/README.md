@@ -290,3 +290,17 @@ Draft recovery is a text action directly below New blank rule, not a page-wide
 alert. Restore draft is disabled when there is no pending saved draft or while
 rules are loading/saving. New blank rule still discards the pending draft;
 restoring retains the existing rule-version validation.
+
+## Rules workflow preview
+
+Selected starting presets show a checkmark. The composer footer distinguishes
+device-only draft storage from saving a rule to the account, including storage
+failure feedback. Indicator references use a dropdown; choosing Numeric value
+reveals a number input. Existing rule validation still applies.
+
+Preview criteria opens a centered, keyboard-accessible dialog showing the current
+draft, signal, logic, conditions and cooldown without saving or running it. This is
+a criteria preview, not market results: the current dataset/compute API requires a
+saved rule ID and definition hash. Save and run the rule in Screener for results.
+Saved rules can be searched by name and filtered by BUY/SELL, with condition counts
+and a separate no-matching-rules state. Filters do not mutate saved rules.

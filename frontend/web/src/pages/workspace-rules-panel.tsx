@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpenCheck,
+  Check,
   CircleAlert,
   CopyPlus,
   ListChecks,
@@ -9,9 +10,11 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Eye,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
+import { Dialog } from "@base-ui/react/dialog";
 import { api, ApiError } from "@/api/client";
 import { ResourceQuota } from "@/components/resource-quota";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,6 +39,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   indicatorLabels,
+  conditionSummary,
   operatorLabels,
   rulePresets,
   ruleSummary,
@@ -114,6 +118,10 @@ export function ServerRulesPanel({
   const [notice, setNotice] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const previewTrigger = useRef<HTMLButtonElement>(null);
+  const [ruleSearch, setRuleSearch] = useState("");
+  const [signalFilter, setSignalFilter] = useState<string[]>(["all"]);
   const [confirmation, setConfirmation] = useState<
     | { kind: "preset"; preset: (typeof rulePresets)[number] }
     | { kind: "delete"; rule: RuleResource }
@@ -140,6 +148,9 @@ export function ServerRulesPanel({
     setError(null);
     setNotice(null);
     setConfirmation(null);
+    setPreviewOpen(false);
+    setRuleSearch("");
+    setSignalFilter(["all"]);
     setDraftStorageFailed(false);
   }, [authenticated, userId]);
 
@@ -196,13 +207,22 @@ export function ServerRulesPanel({
     void load();
   }, [authenticated, backendOnline, userId]);
 
-  const privateRules = useMemo(
-    () => rules.filter((rule) => rule.owner_type === "user"),
-    [rules],
+  const filteredRules = useMemo(
+    () =>
+      rules.filter(
+        (rule) =>
+          rule.name.toLowerCase().includes(ruleSearch.trim().toLowerCase()) &&
+          (signalFilter[0] === "all" ||
+            rule.definition?.signal_type === signalFilter[0]),
+      ),
+    [rules, ruleSearch, signalFilter],
+  );
+  const privateRules = filteredRules.filter(
+    (rule) => rule.owner_type === "user",
   );
   const systemRules = useMemo(
-    () => rules.filter((rule) => rule.owner_type === "system"),
-    [rules],
+    () => filteredRules.filter((rule) => rule.owner_type === "system"),
+    [filteredRules],
   );
 
   function startNew() {
@@ -336,6 +356,58 @@ export function ServerRulesPanel({
 
   return (
     <div className="rules-workspace">
+      <Dialog.Root open={previewOpen} onOpenChange={setPreviewOpen}>
+        <Dialog.Portal>
+          <Dialog.Backdrop className="signalgen-confirm__backdrop" />
+          <Dialog.Viewport className="signalgen-confirm__viewport">
+            <Dialog.Popup
+              className="signalgen-confirm rule-preview"
+              finalFocus={previewTrigger}
+            >
+              <Dialog.Title className="signalgen-confirm__title">
+                Preview criteria
+              </Dialog.Title>
+              <Dialog.Description className="signalgen-confirm__description">
+                Review your current draft. This preview does not run a screen or
+                save changes.
+              </Dialog.Description>
+              <h4>{definition.name.trim() || "Untitled rule"}</h4>
+              <div className="rule-preview__meta">
+                <Badge>{definition.signal_type}</Badge>
+                <span>
+                  {definition.logic === "OR"
+                    ? "Match any condition"
+                    : "Match all conditions"}
+                </span>
+                <span>Daily · {definition.cooldown_sec}s cooldown</span>
+              </div>
+              <ol className="rule-preview__conditions">
+                {definition.conditions.map((condition, index) => (
+                  <li key={index}>{conditionSummary(condition)}</li>
+                ))}
+              </ol>
+              {!definition.conditions.length && (
+                <p>Add a condition to preview your criteria.</p>
+              )}
+              {!validation.valid && (
+                <p className="rule-preview__note">
+                  Some fields need attention. Check the rule name, cooldown and
+                  conditions before saving.
+                </p>
+              )}
+              <p className="rule-preview__note">
+                Market results require a saved rule. Save your rule, then choose
+                it in Screener to test against a stock universe.
+              </p>
+              <div className="signalgen-confirm__actions">
+                <Dialog.Close render={<Button variant="outline" />}>
+                  Back to editing
+                </Dialog.Close>
+              </div>
+            </Dialog.Popup>
+          </Dialog.Viewport>
+        </Dialog.Portal>
+      </Dialog.Root>
       <ConfirmDialog
         open={confirmation !== null}
         title={
@@ -458,7 +530,15 @@ export function ServerRulesPanel({
                     aria-label={preset.name}
                     aria-describedby={`preset-meta-${preset.id}`}
                   >
-                    <strong>{preset.name}</strong>
+                    <strong>
+                      {preset.name}
+                      {presetId[0] === preset.id && (
+                        <Check
+                          aria-label="Selected preset"
+                          className="rule-presets__check"
+                        />
+                      )}
+                    </strong>
                     <small id={`preset-meta-${preset.id}`}>
                       {preset.definition.signal_type} ·{" "}
                       {preset.definition.conditions.length}{" "}
@@ -730,30 +810,82 @@ export function ServerRulesPanel({
                             </SelectContent>
                           </Select>
                         </Field>
-                        <Field data-invalid={!!validation.conditions[index]}>
+                        <Field
+                          className="rule-reference-field"
+                          data-numeric={
+                            typeof condition.right === "number" ||
+                            condition.right === "" ||
+                            undefined
+                          }
+                          data-invalid={!!validation.conditions[index]}
+                        >
                           <FieldLabel
                             className="rule-condition-field-label"
                             htmlFor={`condition-reference-${index}`}
                           >
                             Reference
                           </FieldLabel>
-                          <Input
-                            id={`condition-reference-${index}`}
-                            aria-label={`Condition value ${index + 1}`}
-                            value={String(condition.right)}
-                            onChange={(event) =>
+                          <Select
+                            value={
+                              typeof condition.right === "number" ||
+                              condition.right === ""
+                                ? "number"
+                                : condition.right
+                            }
+                            items={[
+                              ...Object.entries(indicatorLabels).map(
+                                ([value, label]) => ({ value, label }),
+                              ),
+                              { value: "number", label: "Numeric value" },
+                            ]}
+                            onValueChange={(value) =>
                               setCondition(index, {
-                                right: rightValue(event.target.value),
+                                right: value === "number" ? 55 : String(value),
                               })
                             }
-                            placeholder="EMA20 or 55"
-                            aria-invalid={!!validation.conditions[index]}
-                            aria-describedby={
-                              validation.conditions[index]
-                                ? `condition-error-${index}`
-                                : undefined
-                            }
-                          />
+                          >
+                            <SelectTrigger
+                              id={`condition-reference-${index}`}
+                              aria-label={`Condition reference ${index + 1}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                {Object.entries(indicatorLabels).map(
+                                  ([value, label]) => (
+                                    <SelectItem key={value} value={value}>
+                                      {label}
+                                    </SelectItem>
+                                  ),
+                                )}
+                                <SelectItem value="number">
+                                  Numeric value
+                                </SelectItem>
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                          {(typeof condition.right === "number" ||
+                            condition.right === "") && (
+                            <Input
+                              type="number"
+                              step="any"
+                              aria-label={`Condition value ${index + 1}`}
+                              value={String(condition.right)}
+                              onChange={(event) =>
+                                setCondition(index, {
+                                  right: rightValue(event.target.value),
+                                })
+                              }
+                              placeholder="Enter a value"
+                              aria-invalid={!!validation.conditions[index]}
+                              aria-describedby={
+                                validation.conditions[index]
+                                  ? `condition-error-${index}`
+                                  : undefined
+                              }
+                            />
+                          )}
                         </Field>
                         <Button
                           type="button"
@@ -821,27 +953,46 @@ export function ServerRulesPanel({
               </Alert>
             )}
             <footer className="rule-composer__footer">
-              <span>
-                {definition.conditions.length} / 20 conditions · Daily · IDX or
-                US
-              </span>
-              <Button
-                type="submit"
-                size="lg"
-                disabled={saving || !backendOnline}
-              >
-                {saving ? (
-                  <LoaderCircle
-                    data-icon="inline-start"
-                    className="is-spinning"
-                  />
-                ) : editing ? (
-                  <Pencil data-icon="inline-start" />
-                ) : (
-                  <Save data-icon="inline-start" />
-                )}
-                {editing ? "Update rule" : "Save rule"}
-              </Button>
+              <div className="rule-composer__save-status">
+                <span role="status">
+                  {draftStorageFailed
+                    ? "Draft not saved on this device"
+                    : definition.name || definition.conditions.length
+                      ? "Draft saved on this device"
+                      : "No unsaved draft"}
+                </span>
+                <small>
+                  {definition.conditions.length} / 20 conditions · Daily · IDX
+                  or US · Save to add this rule to your account
+                </small>
+              </div>
+              <div className="rule-composer__save-actions">
+                <Button
+                  ref={previewTrigger}
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPreviewOpen(true)}
+                >
+                  <Eye data-icon="inline-start" /> Preview criteria
+                </Button>
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={saving || !backendOnline}
+                >
+                  {saving ? (
+                    <LoaderCircle
+                      data-icon="inline-start"
+                      className="is-spinning"
+                    />
+                  ) : editing ? (
+                    <Pencil data-icon="inline-start" />
+                  ) : (
+                    <Save data-icon="inline-start" />
+                  )}
+                  {editing ? "Update rule" : "Save rule"}
+                </Button>
+              </div>
             </footer>
           </fieldset>
         </form>
@@ -870,6 +1021,34 @@ export function ServerRulesPanel({
             </Button>
           </div>
         </header>
+        <div className="rule-library__filters">
+          <Field>
+            <FieldLabel htmlFor="saved-rule-search">
+              Search saved rules
+            </FieldLabel>
+            <Input
+              id="saved-rule-search"
+              value={ruleSearch}
+              onChange={(event) => setRuleSearch(event.target.value)}
+              placeholder="Search by rule name"
+            />
+          </Field>
+          <ToggleGroup
+            aria-label="Filter rules by signal"
+            value={signalFilter}
+            onValueChange={(values) =>
+              setSignalFilter(values.length ? values : ["all"])
+            }
+            variant="outline"
+          >
+            <ToggleGroupItem value="all">All signals</ToggleGroupItem>
+            <ToggleGroupItem value="BUY">BUY</ToggleGroupItem>
+            <ToggleGroupItem value="SELL">SELL</ToggleGroupItem>
+          </ToggleGroup>
+          <span role="status">
+            {filteredRules.length} of {rules.length} rules
+          </span>
+        </div>
         {loading && !rules.length ? (
           <div className="resource-loading">
             <Skeleton />
@@ -882,9 +1061,13 @@ export function ServerRulesPanel({
               <EmptyMedia variant="icon">
                 <ListChecks />
               </EmptyMedia>
-              <EmptyTitle>No saved rules yet</EmptyTitle>
+              <EmptyTitle>
+                {rules.length ? "No matching rules" : "No saved rules yet"}
+              </EmptyTitle>
               <EmptyDescription>
-                Create a blank rule above and add your conditions.
+                {rules.length
+                  ? "Try another name or signal filter."
+                  : "Create a blank rule above and add your conditions."}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -898,6 +1081,10 @@ export function ServerRulesPanel({
                     <article key={rule.id}>
                       <div>
                         <strong>{rule.name}</strong>
+                        <small className="rule-library__condition-count">
+                          {rule.definition?.conditions.length ?? 0} conditions ·{" "}
+                          {rule.definition?.signal_type || "No direction"}
+                        </small>
                         <p>{summary(rule.definition)}</p>
                       </div>
                       <div>
@@ -938,6 +1125,10 @@ export function ServerRulesPanel({
                     <article key={rule.id}>
                       <div>
                         <strong>{rule.name}</strong>
+                        <small className="rule-library__condition-count">
+                          {rule.definition?.conditions.length ?? 0} conditions ·{" "}
+                          {rule.definition?.signal_type || "No direction"}
+                        </small>
                         <p>{summary(rule.definition)}</p>
                       </div>
                       <Badge variant="secondary">System</Badge>
