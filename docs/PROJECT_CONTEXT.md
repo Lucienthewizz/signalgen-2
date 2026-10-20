@@ -76,7 +76,7 @@ FE tidak menentukan izin, memegang server secrets atau mengirim order broker. Co
 Satu API boundary `/api`; setiap route punya satu pemilik. Route `/api/v1` untuk
 account/session/rules/universe/dataset/compute/screener/subscription/operator
 sudah diimplementasikan di Go. Daftar aktual mengikuti `backend/openapi.yaml`
-(0.10.0), bukan semua endpoint dalam kontrak target. Jurnal/portfolio/backtest
+(0.11.0), bukan semua endpoint dalam kontrak target. Jurnal/portfolio/backtest
 tetap pekerjaan terbuka. Runtime aktif tidak dual-write SQLite/Postgres.
 
 Legacy auth /api/auth/register, /api/auth/login, /api/auth/me tetap kompatibel; field/response tidak diganti diam-diam. Kontrak API dan worker dibekukan M0 lalu diterbitkan OpenAPI/schema. Base URL/version/WASM URL terpusat; FE mengikuti runtime yang benar.
@@ -119,6 +119,13 @@ pada direktori resmi (5.600 pada impor 19 Oktober), market `US` dan currency
 uji tidak diimpor; cakupan bukan OTC/seluruh venue AS. [Kontrak dan batas](backend/US_STOCKS.md).
 
 ## 6. Runtime dan realtime
+
+Revisi pengguna 20 Oktober 2026: screener memiliki Start–Stop dengan polling
+selama halaman terbuka, default 5m, pilihan 1m/5m/15m/1h/1d. Intraday mulai
+3 hari kalender, diperluas hanya jika <20 candle valid; maksimum 100 candle
+per saham. Model A tetap, bukan kembali ke engine Python/IBKR. Ini pembaruan
+historis Yahoo berkala, bukan feed realtime production. [Kontrak dan batas
+Start–Stop](backend/INTRADAY_MONITOR.md).
 
 Frontend static assets/CDN; SSR/Next.js tidak diperlukan. Go API aktif pada port 8080. Python/Socket.IO pada port lama hanya arsip untuk pembanding.
 

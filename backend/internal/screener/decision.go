@@ -12,9 +12,11 @@ import (
 // Diambil dari manifes dataset milik pengguna di sisi server.
 // Fitur yang dikirim oleh client dibatasi hanya pada daftar simbol dan rentang tanggal historis ini.
 type DatasetScope struct {
-	Symbols []string
-	From    string
-	To      string
+	TimestampFrom string
+	TimestampTo   string
+	Symbols       []string
+	From          string
+	To            string
 }
 
 // EvaluateBatch menjalankan evaluasi core screening secara terpisah untuk setiap simbol/saham.
@@ -33,6 +35,14 @@ func EvaluateBatch(rule core.RuleSnapshot, candidates []core.FeatureCandidate, s
 		return core.DecisionResult{}, fmt.Errorf("invalid dataset interval")
 	}
 	end := to.AddDate(0, 0, 1) // Batas akhir inklusif hingga akhir hari tanggal To
+	if scope.TimestampFrom != "" || scope.TimestampTo != "" {
+		from, fromErr = time.Parse(time.RFC3339, scope.TimestampFrom)
+		to, toErr = time.Parse(time.RFC3339, scope.TimestampTo)
+		if fromErr != nil || toErr != nil || to.Before(from) {
+			return core.DecisionResult{}, fmt.Errorf("invalid dataset timestamps")
+		}
+		end = to.Add(time.Nanosecond)
+	}
 
 	// 3. Inisialisasi wadah pengelompokan kandidat per simbol emiten
 	groups := make(map[string][]core.FeatureCandidate, len(scope.Symbols))

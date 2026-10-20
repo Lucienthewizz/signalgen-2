@@ -42,7 +42,7 @@ async (page) => {
       mode="transient"; reads=0;
       await page.goto(`${origin}/#app/analysis`);
       await page.reload();
-      const run=page.getByRole("button",{name:"Run screening",exact:true});
+      const run=page.getByRole("button",{name:"Start screening",exact:true});
       await run.waitFor({timeout:15000});
       if(reads !== 2) throw Error(`Expected one automatic retry, got ${reads}`);
       if(await page.getByText("Service temporarily unavailable",{exact:true}).count()) throw Error("Recovered outage still visible");

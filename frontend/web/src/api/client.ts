@@ -45,6 +45,7 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code?: string,
     public readonly requestId?: string,
+    public readonly retryAfterMs = 0,
   ) {
     super(message);
   }
@@ -276,6 +277,9 @@ function request<T>(
 ): Promise<T> {
   if (init.method && init.method !== "GET")
     return performRequest<T>(path, init, retryExpiredSession, rawText);
+  // A caller-owned abort must not cancel another reader's shared request.
+  if (init.signal)
+    return readWithRecovery<T>(path, init, retryExpiredSession, rawText);
   const key = JSON.stringify([
     path,
     session.getToken(),
@@ -314,10 +318,20 @@ async function readWithRecovery<T>(
         error.code === "REQUEST_TIMEOUT" ||
         [502, 503, 504].includes(error.status));
     const eligible = path.startsWith("/api/v1/") || path === "/api/auth/me";
-    if (!eligible || !transient || identity !== authGeneration) throw error;
+    if (
+      !eligible ||
+      !transient ||
+      identity !== authGeneration ||
+      init.signal?.aborted
+    )
+      throw error;
     await new Promise<void>((resolve) => window.setTimeout(resolve, 300));
     // Logout, account changes or revocation during backoff must stop recovery.
-    if (identity !== authGeneration || session.getAppSession() !== appSession)
+    if (
+      identity !== authGeneration ||
+      session.getAppSession() !== appSession ||
+      init.signal?.aborted
+    )
       throw error;
     return performRequest<T>(path, init, retryExpiredSession, rawText);
   }
@@ -329,11 +343,13 @@ async function performRequest<T>(
   retryExpiredSession = true,
   rawText = false,
 ): Promise<T> {
+  init.signal?.throwIfAborted();
   if (
     session.needsRefresh() &&
     !/^\/api\/auth\/(login|register|refresh|password)/.test(path)
   )
     await refreshAuth();
+  init.signal?.throwIfAborted();
   const identity = authGeneration;
   const token = session.getToken();
   const requestIdentityRevision = identityRevision;
@@ -349,6 +365,9 @@ async function performRequest<T>(
   let payload: unknown;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 15000);
+  const cancel = () => controller.abort();
+  init.signal?.addEventListener("abort", cancel, { once: true });
+  if (init.signal?.aborted) controller.abort();
   try {
     response = await fetch(`${API_ORIGIN}${path}`, {
       ...init,
@@ -372,6 +391,8 @@ async function performRequest<T>(
       });
     }
   } catch {
+    if (init.signal?.aborted)
+      throw new DOMException("Analysis cancelled.", "AbortError");
     const timedOut = controller.signal.aborted;
     throw new ApiError(
       timedOut
@@ -382,6 +403,7 @@ async function performRequest<T>(
     );
   } finally {
     clearTimeout(timeout);
+    init.signal?.removeEventListener("abort", cancel);
   }
 
   // rawText preserves the exact snapshot bytes for checksum verification.
@@ -438,6 +460,12 @@ async function performRequest<T>(
       response.status,
       envelope?.code,
       envelope?.request_id,
+      Number.isFinite(retryAfter) && retryAfter > 0
+        ? retryAfter * 1000
+        : Math.max(
+            0,
+            Date.parse(response.headers.get("Retry-After") ?? "") - Date.now(),
+          ) || 0,
     );
   }
   return (rawText ? text : payload) as T;
@@ -515,7 +543,7 @@ export const api = {
         password,
       }),
     }),
-  me: () => request<User>("/api/auth/me"),
+  me: (signal?: AbortSignal) => request<User>("/api/auth/me", { signal }),
   workspace: () =>
     request<{
       items: {
@@ -574,8 +602,10 @@ export const api = {
       `/api/v1/account/devices/${encodeURIComponent(installationId)}`,
       { method: "PATCH", body: JSON.stringify({ status: "revoked" }) },
     ),
-  getRule: (id: string) =>
-    request<RuleResource>(`/api/v1/rules/${encodeURIComponent(id)}`),
+  getRule: (id: string, signal?: AbortSignal) =>
+    request<RuleResource>(`/api/v1/rules/${encodeURIComponent(id)}`, {
+      signal,
+    }),
   listRules: () => request<RuleListResponse>("/api/v1/rules"),
   createRule: (definition: UserRuleDefinition) =>
     request<RuleResource>("/api/v1/rules", {
@@ -618,33 +648,46 @@ export const api = {
       method: "DELETE",
       body: JSON.stringify({ version }),
     }),
-  prepareDataset: (ruleId: string, universeId: string) =>
+  prepareDataset: (
+    ruleId: string,
+    universeId: string,
+    timeframe?: import("@/types").ScreenerTimeframe,
+    signal?: AbortSignal,
+  ) =>
     request<DatasetManifest>("/api/v1/datasets/prepare", {
       method: "POST",
       body: JSON.stringify({
         purpose: "screen",
         rule_id: ruleId,
         universe_id: universeId,
+        ...(timeframe ? { timeframe } : {}),
       }),
+      signal,
     }),
   getDatasetContent: (datasetId: string) =>
     request<DatasetContent>(
       `/api/v1/datasets/${encodeURIComponent(datasetId)}/content`,
     ),
-  getDatasetManifest: (datasetId: string) =>
+  getDatasetManifest: (datasetId: string, signal?: AbortSignal) =>
     request<DatasetManifest>(
       `/api/v1/datasets/${encodeURIComponent(datasetId)}/manifest`,
+      { signal },
     ),
-  getDatasetContentText: (datasetId: string) =>
+  getDatasetContentText: (datasetId: string, signal?: AbortSignal) =>
     request<string>(
       `/api/v1/datasets/${encodeURIComponent(datasetId)}/content`,
-      {},
+      { signal },
       true,
       true,
     ),
-  createComputeGrant: (manifest: DatasetManifest, rule: RuleResource) =>
+  createComputeGrant: (
+    manifest: DatasetManifest,
+    rule: RuleResource,
+    signal?: AbortSignal,
+  ) =>
     request<ComputeGrant>("/api/v1/compute-grants", {
       method: "POST",
+      signal,
       body: JSON.stringify({
         purpose: "screen",
         dataset_id: manifest.dataset_id,
@@ -656,9 +699,10 @@ export const api = {
         schema_version: rule.schema_version,
       }),
     }),
-  createScreenerSocketTicket: (computeGrantId: string) =>
+  createScreenerSocketTicket: (computeGrantId: string, signal?: AbortSignal) =>
     request<ScreenerSocketTicket>("/api/v1/screener/socket-tickets", {
       method: "POST",
+      signal,
       body: JSON.stringify({
         compute_grant_id: computeGrantId,
         protocol: "screener-private-1",

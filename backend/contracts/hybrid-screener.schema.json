@@ -63,7 +63,7 @@
         "type": { "const": "screener.evaluate" },
         "protocol": { "$ref": "#/$defs/protocol" },
         "request_id": { "type": "string", "minLength": 1, "maxLength": 100 },
-        "engine_version": { "const": "core-0.3.0" },
+        "engine_version": { "const": "core-0.4.0" },
         "feature_schema_version": { "const": "screener-features-1" },
         "candidates": {
           "type": "array",

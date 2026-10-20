@@ -22,8 +22,14 @@ export function ScreeningDataQuality({
       </header>
       <dl>
         <div>
-          <dt>Daily candle dates</dt>
-          <dd>{candleRange(timestamps, manifest.market)}</dd>
+          <dt>
+            {manifest.timeframe === "1d"
+              ? "Daily candle dates"
+              : `${manifest.timeframe} candle times`}
+          </dt>
+          <dd>
+            {candleRange(timestamps, manifest.market, manifest.timeframe)}
+          </dd>
         </div>
         <div>
           <dt>Market / currency</dt>

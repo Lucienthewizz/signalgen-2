@@ -168,5 +168,16 @@ func scanPostgresRule(row ruleScanner) (Rule, error) {
 		return Rule{}, fmt.Errorf("decode Postgres rule: %w", err)
 	}
 	item.OwnerType, item.ReadOnly = "user", false
+	item = compatibleRuntimeRule(item)
 	return item, nil
+}
+
+// core-0.4.0 adds candle intervals, not a new rule language or formula. Existing
+// valid 0.3.0 definitions can run unchanged; project the execution version on
+// read without rewriting user definitions, hashes, timestamps or DB versions.
+func compatibleRuntimeRule(item Rule) Rule {
+	if item.EngineVersion == "core-0.3.0" && item.SchemaVersion == core.SchemaVersion && core.ValidateRule(item.Definition) == nil {
+		item.EngineVersion = core.EngineVersion
+	}
+	return item
 }

@@ -15,7 +15,7 @@ export function packCandidateBatches(
   for (const group of groups) {
     if (
       !group ||
-      group.engine_version !== "core-0.3.0" ||
+      group.engine_version !== "core-0.4.0" ||
       group.feature_schema_version !== "screener-features-1" ||
       !Array.isArray(group.candidates) ||
       !group.candidates.length

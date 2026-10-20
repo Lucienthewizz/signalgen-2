@@ -140,7 +140,12 @@ func TestDynamicSnapshotsExpireAndPreserveActiveHandles(t *testing.T) {
 	}
 	manifest.Symbols[0] = "CORRUPT.JK"
 	manifest.Quality.Warnings[0] = "corrupt"
-	if _, err := store.Prepare(context.Background(), "user-a", input); !errors.Is(err, ErrCapacity) {
+	if reused, err := store.Prepare(context.Background(), "user-a", input); err != nil || reused.DatasetID != manifest.DatasetID {
+		t.Fatalf("identical polling snapshot not reused: error=%v", err)
+	}
+	different := input
+	different.RuleID = "rule-b"
+	if _, err := store.Prepare(context.Background(), "user-a", different); !errors.Is(err, ErrCapacity) {
 		t.Fatalf("capacity error=%v", err)
 	}
 	content, original, err := store.Content(context.Background(), "user-a", "  "+manifest.DatasetID+"  ")

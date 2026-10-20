@@ -42,7 +42,7 @@ func GetCapabilities() Capabilities {
 		WorkerProtocol:       WorkerProtocol,
 		Purposes:             []string{"screen"},
 		Markets:              []string{"IDX", "US"},
-		Timeframes:           []string{"1d"},
+		Timeframes:           []string{"1m", "5m", "15m", "1h", "1d"},
 		Indicators:           []string{"PRICE", "EMA9", "EMA20", "RSI14"},
 		Operators:            []string{"<", "<=", ">", ">=", "CROSS_UP", "CROSS_DOWN"},
 		RuleLogic:            []string{"AND", "OR"},

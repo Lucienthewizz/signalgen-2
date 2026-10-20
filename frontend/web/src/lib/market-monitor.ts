@@ -16,6 +16,7 @@ export type MonitorRun = {
     ruleId: string;
     universeId: string;
     universeName: string;
+    universeVersion?: number;
     ruleSnapshot?: RuleSnapshot;
   };
 };
@@ -142,6 +143,8 @@ const fields = new Set([
   "timezone",
   "requested_range",
   "available_range",
+  "available_timestamp_range",
+  "requested_timestamp_range",
   "from",
   "to",
   "warmup_candles",
@@ -211,7 +214,7 @@ function validRun(value: unknown): value is LiveScreenerRun {
             ? exchange === "XIDX"
             : exchange === "XNAS" || exchange === "XNYS",
         ))) &&
-    manifest.timeframe === "1d" &&
+    ["1m", "5m", "15m", "1h", "1d"].includes(manifest.timeframe) &&
     manifest.timezone === "UTC" &&
     [
       manifest.dataset_id,
@@ -300,6 +303,9 @@ function storedRuns(value: unknown): MonitorRun[] {
             ruleId: c.ruleId,
             universeId: c.universeId,
             universeName: c.universeName,
+            ...(Number.isSafeInteger(c.universeVersion) && c.universeVersion > 0
+              ? { universeVersion: c.universeVersion }
+              : {}),
             ...(safeRuleSnapshot(c.ruleSnapshot)
               ? { ruleSnapshot: safeRuleSnapshot(c.ruleSnapshot) }
               : {}),
@@ -331,7 +337,36 @@ export function recordMonitorRun(
     },
   ])[0];
   if (!snapshot) return;
-  history.set(userId, [snapshot, ...monitorRuns(userId)].slice(0, 10));
+  // Replace corrections to the same candle/context, rather than creating a
+  // fresh history row on every polling cycle. The map is scoped to this user.
+  const identity = (item: MonitorRun) =>
+    JSON.stringify([
+      item.context?.ruleId ?? item.rule,
+      item.context?.ruleSnapshot?.definition_hash,
+      item.context?.ruleSnapshot?.version,
+      item.context?.universeId,
+      item.context?.universeVersion,
+      item.run.manifest.symbols,
+      item.run.manifest.timeframe,
+      item.run.rows.map((row) => [row.decision.symbol, row.decision.timestamp]),
+    ]);
+  const previous = monitorRuns(userId);
+  const key = identity(snapshot);
+  if (
+    previous.some(
+      (item) =>
+        identity(item) === key &&
+        item.run.manifest.checksum === snapshot.run.manifest.checksum,
+    )
+  )
+    return;
+  history.set(
+    userId,
+    [snapshot, ...previous.filter((item) => identity(item) !== key)].slice(
+      0,
+      10,
+    ),
+  );
   const durable = [...(history.get(userId) ?? [])];
   while (
     durable.length &&
@@ -354,7 +389,16 @@ export function monitorRuns(userId?: string) {
       combined
         .sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt))
         .filter((item) => {
-          const key = `${item.recordedAt}:${item.rule}`;
+          const key = JSON.stringify([
+            item.recordedAt,
+            item.rule,
+            item.context?.ruleId,
+            item.context?.ruleSnapshot?.version,
+            item.context?.universeId,
+            item.context?.universeVersion,
+            item.run.manifest.timeframe,
+            item.run.manifest.checksum,
+          ]);
           if (seen.has(key)) return false;
           seen.add(key);
           return true;

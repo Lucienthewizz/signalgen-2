@@ -9,9 +9,11 @@ import (
 )
 
 type Series struct {
-	Symbol   string        `json:"symbol"`
-	Candles  []core.Candle `json:"candles"`
-	Timezone string        `json:"timezone"`
+	RequestedFrom string        `json:"-"`
+	RequestedTo   string        `json:"-"`
+	Symbol        string        `json:"symbol"`
+	Candles       []core.Candle `json:"candles"`
+	Timezone      string        `json:"timezone"`
 	// QualityWarnings travels with the fetched series through the shared cache.
 	// It is published in manifest.quality.warnings, not in the OHLCV payload.
 	QualityWarnings []string `json:"-"`

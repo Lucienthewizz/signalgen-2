@@ -41,3 +41,12 @@ test("mixed candle days are disclosed instead of claiming every stock uses one d
     "18 Oct 2026 – 19 Oct 2026",
   );
 });
+test("intraday candle labels preserve market-local time and mixed timestamp ranges", () => {
+  const first = "2026-10-20T14:30:00Z";
+  const second = "2026-10-20T14:35:00Z";
+  assert.match(output.marketCandleDate(first, "US", "5m"), /10:30/);
+  assert.match(output.marketCandleDate(first, "IDX", "5m"), /21:30/);
+  const range = output.candleRange([first, second], "US", "5m");
+  assert.match(range, /10:30.*–.*10:35/);
+  assert.equal(output.candleDate(first, "5m", "US"), output.marketCandleDate(first, "US", "5m"));
+});

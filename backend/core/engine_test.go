@@ -211,8 +211,8 @@ func TestCapabilitiesDescribeImplementedSubset(t *testing.T) {
 	if len(capabilities.Markets) != 2 || capabilities.Markets[0] != "IDX" || capabilities.Markets[1] != "US" {
 		t.Fatalf("markets = %v, want [IDX US]", capabilities.Markets)
 	}
-	if len(capabilities.Timeframes) != 1 || capabilities.Timeframes[0] != "1d" {
-		t.Fatalf("timeframes = %v, want [1d]", capabilities.Timeframes)
+	if len(capabilities.Timeframes) != 5 || capabilities.Timeframes[0] != "1m" || capabilities.Timeframes[4] != "1d" {
+		t.Fatalf("timeframes = %v, want intraday and daily", capabilities.Timeframes)
 	}
 }
 

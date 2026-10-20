@@ -85,7 +85,7 @@ async function loadEngine(): Promise<void> {
   if (!manifestResponse.ok) throw new Error("WASM manifest not found");
   const manifest = (await manifestResponse.json()) as WasmManifest;
   if (
-    manifest.engine_version !== "core-0.3.0" ||
+    manifest.engine_version !== "core-0.4.0" ||
     manifest.worker_protocol !== "worker-2" ||
     manifest.feature_schema_version !== "screener-features-1"
   )

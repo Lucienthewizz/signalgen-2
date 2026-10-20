@@ -6,9 +6,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/marketdata"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 )
 
@@ -48,6 +50,27 @@ func TestDatasetErrorMappingPreservesContract(t *testing.T) {
 		}
 		if strings.Contains(response.Body.String(), private.Error()) {
 			t.Fatal("provider detail leaked")
+		}
+	}
+}
+
+func TestDataFailuresNeverBecomeNoMatchAndPreserveRetryAfter(t *testing.T) {
+	for _, tc := range []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{marketdata.ErrInsufficientCandles, 422, "INSUFFICIENT_CANDLES"},
+		{marketdata.ErrIntervalUnavailable, 422, "INTERVAL_UNAVAILABLE"},
+		{&marketdata.HTTPError{Status: 429, RetryAfter: 90 * time.Second}, 429, "PROVIDER_UNAVAILABLE"},
+	} {
+		response := httptest.NewRecorder()
+		writeDatasetError(response, httptest.NewRequest("POST", "/api/v1/datasets/prepare", nil), tc.err, operationPrepare)
+		if response.Code != tc.status || !strings.Contains(response.Body.String(), tc.code) {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		if tc.status == 429 && response.Header().Get("Retry-After") != "90" {
+			t.Fatal("provider retry header lost")
 		}
 	}
 }

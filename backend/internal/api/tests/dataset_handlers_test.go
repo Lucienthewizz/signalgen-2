@@ -72,7 +72,7 @@ func TestCreateComputeGrantBindsVerifiedVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"fixture-v1","dataset_checksum":"sha256:data","rule_id":"default-scalping-v1","definition_hash":"sha256:74cb82c5bf9cf8fc06ce6eab0c054734110ad6775b0ab57a203836d588d1f52a","engine_version":"core-0.3.0","schema_version":"signal-baseline-1"}`)
+	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"fixture-v1","dataset_checksum":"sha256:data","rule_id":"default-scalping-v1","definition_hash":"sha256:74cb82c5bf9cf8fc06ce6eab0c054734110ad6775b0ab57a203836d588d1f52a","engine_version":"core-0.4.0","schema_version":"signal-baseline-1"}`)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/compute-grants", body)
 	request.Header.Set("Authorization", "Bearer user-token")
 	request.Header.Set("X-App-Session", "sgs_session")
@@ -98,7 +98,7 @@ func TestCreateComputeGrantRejectsVersionMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"wrong","dataset_checksum":"sha256:data","rule_id":"default-scalping-v1","definition_hash":"sha256:74cb82c5bf9cf8fc06ce6eab0c054734110ad6775b0ab57a203836d588d1f52a","engine_version":"core-0.3.0","schema_version":"signal-baseline-1"}`)
+	body := bytes.NewBufferString(`{"purpose":"screen","dataset_id":"fixture-1","dataset_version":"wrong","dataset_checksum":"sha256:data","rule_id":"default-scalping-v1","definition_hash":"sha256:74cb82c5bf9cf8fc06ce6eab0c054734110ad6775b0ab57a203836d588d1f52a","engine_version":"core-0.4.0","schema_version":"signal-baseline-1"}`)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/compute-grants", body)
 	request.Header.Set("Authorization", "Bearer user-token")
 	request.Header.Set("X-App-Session", "sgs_session")
