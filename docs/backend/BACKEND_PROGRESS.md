@@ -1,5 +1,36 @@
 # Backend progress
 
+## Perbaikan readiness dan pengujian demo — 20 Oktober 2026
+
+Branch `frontend/intraday-monitor`: pemeriksaan cloud dingin sebelumnya diputus
+oleh batas handler/probe 2s dan Docker 3s. Sekarang memakai budget berurutan
+8s / 9s / 10s; request API tetap dibatasi 10s. Pemeriksaan schema, RLS, role,
+grants/policies dan dataset tetap aktif, bukan diganti liveness atau bypass.
+Tidak ada migration/SQL write, perubahan kredensial, role atau entitlement.
+
+Tes regresi mencakup dependensi sehat yang memerlukan >2s, penolakan 503 untuk
+dependensi gagal, deadline parent 504, probe gagal koneksi, dan konsistensi
+budget Docker. Seluruh Go race suite tanpa cache dan `go vet` lolos. Tes cloud
+read-only dari pool dingin memverifikasi schema/RLS/izin runtime dalam 2,657s.
+Backend hasil rebuild healthy, delapan preflight termasuk readiness lolos.
+
+Pengujian akun asli melalui `http://localhost:5174`: rule RSI14 <30 berjalan
+pada 3 saham IDX (300 candle 5m), 10 saham IDX (1.000 candle 5m), dan 10 saham
+AS (880 candle 5m). WebSocket upgrade 101, hasil dikirim (`result_written`).
+Hasil No match sesuai nilai RSI yang ditampilkan, bukan error. Stop mengosongkan
+jadwal berikutnya dan mempertahankan hasil. Pada 10 saham AS interval 1m,
+siklus kedua berjalan otomatis tanpa Start ulang: pemeriksaan 22:26:00 menjadi
+22:27:10 WITA; candle terakhir bergeser dari 14:24 ke 14:25 UTC. Jadwal dihitung
+setelah siklus selesai, bukan jaminan polling tepat pada detik yang sama.
+Rule sistem juga diuji pada 10 saham AS 5m: pemeriksaan 22:28:35 WITA memakai
+890 candle, menghasilkan BUY untuk AMZN/TSLA dan No match untuk delapan lainnya.
+Ini keputusan rule pada snapshot tersebut, bukan transaksi broker atau jaminan
+hasil investasi. Monitoring dihentikan setelah pengujian.
+Tidak mengubah definisi rule atau universe tersimpan; grant/history dari
+pengujian mengikuti alur screening normal.
+Ini bukti demo lokal pada waktu pengujian, bukan jaminan layanan cloud/Yahoo
+selalu tersedia atau uji seluruh ticker/interval/kapasitas produksi.
+
 ## Monitoring Start–Stop dan intraday — 20 Oktober 2026
 
 Branch `frontend/intraday-monitor`: Start–Stop selama halaman terbuka, default

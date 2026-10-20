@@ -117,3 +117,30 @@ Smoke Yahoo opt-in terpisah dari fixture deterministik: BBCA.JK dan AAPL 5m;
 jumlah/timestamp dicatat tanpa token/account. Hasil live dapat berubah setiap
 run dan bukan bukti semua ticker/interval sudah tersedia. UI demo tetap pada
 http://127.0.0.1:5174, backend Go 8080; jangan menjalankan frontend kedua.
+
+## Pemeriksaan kesiapan sebelum demo
+
+Healthcheck tidak boleh membatalkan koneksi cloud yang masih sehat sebelum
+seluruh pemeriksaan metadata selesai. Batas berurutan: handler `/ready` **8s**,
+probe `signalgen-healthcheck` **9s**, Docker **10s**. Handler/probe berbagi
+konstanta di `backend/internal/platform/healthcheck/policy.go`; tes menjaga
+budget Docker lebih panjang. Deadline request API tetap 10s, bukan diperpanjang
+untuk seluruh endpoint. `/health` tetap hanya liveness, `/ready` tetap memeriksa
+schema, RLS, role runtime terbatas, grants/policies dan provider.
+
+Pada 20 Oktober, pool cloud dingin lolos seluruh pemeriksaan schema/RLS/runtime
+dalam **2,657s**, melampaui batas lama 2s. Tidak ada perubahan SQL, migration,
+role, entitlement, password atau bypass pemeriksaan. Tes read-only opt-in:
+
+```sh
+SIGNALGEN_RUN_POSTGRES_RUNTIME_READINESS=1 go test -v ./internal/platform/database -run '^TestPostgresRuntimeReadinessFromColdPool$' -count=1
+```
+
+Jalankan dari `backend/` dengan `SUPABASE_DB_URL` role runtime yang sudah dimuat
+secara lokal; jangan menempelkan URL/password ke laporan atau commit.
+
+Frontend tetap satu proses di port 5174. `localhost` dan `127.0.0.1` adalah
+origin berbeda: jika keduanya dipakai untuk demo, daftarkan keduanya secara
+eksplisit di `SIGNALGEN_CORS_ORIGINS` lokal dan restart backend. Jangan memakai
+wildcard atau menonaktifkan validasi Origin. Koneksi yang ditolak sebelum
+WebSocket upgrade bukan hasil `No match`.

@@ -3,9 +3,9 @@ package systemapi
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/api/shared"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/platform/healthcheck"
 )
 
 // Health is a lightweight liveness endpoint. It does not touch dependencies.
@@ -17,7 +17,7 @@ func (server *Handler) Health(writer http.ResponseWriter, _ *http.Request) {
 // accepting real traffic.
 func (server *Handler) Ready(checkers []shared.ReadinessChecker) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(request.Context(), healthcheck.ReadinessTimeout)
 		defer cancel()
 		for _, checker := range checkers {
 			if err := checker.Ready(ctx); err != nil {
