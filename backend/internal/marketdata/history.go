@@ -23,8 +23,9 @@ func (err *HTTPError) Error() string { return "market data provider HTTP " + str
 func (err *HTTPError) Unwrap() error { return ErrUnavailable }
 
 type History struct {
-	Series          Series `json:"series"`
-	SkippedNullRows int    `json:"skipped_null_rows"`
+	Series           Series `json:"series"`
+	SkippedNullRows  int    `json:"skipped_null_rows"`
+	ExcludedOpenRows int    `json:"excluded_open_rows,omitempty"`
 }
 
 // DailyHistory collects one instrument in an explicit [from, to) window.
@@ -60,9 +61,14 @@ func (provider *YahooFinance) DailyHistory(ctx context.Context, instrument unive
 		return History{}, ErrInvalidData
 	}
 	result := History{Series: Series{Symbol: instrument.Symbol, Timezone: "UTC", Candles: make([]core.Candle, 0, n)}}
+	finality := newDailyFinality(chart.Meta, provider.now().UTC())
 	for index, timestamp := range chart.Timestamp {
 		stamp := time.Unix(timestamp, 0).UTC()
 		if stamp.Before(from) || !stamp.Before(to) {
+			continue
+		}
+		if !finality.closed(timestamp) {
+			result.ExcludedOpenRows++
 			continue
 		}
 		if quote.Open[index] == nil || quote.High[index] == nil || quote.Low[index] == nil || quote.Close[index] == nil || quote.Volume[index] == nil {
@@ -74,6 +80,7 @@ func (provider *YahooFinance) DailyHistory(ctx context.Context, instrument unive
 			Low: *quote.Low[index], Close: *quote.Close[index], Volume: *quote.Volume[index],
 		})
 	}
+	result.Series.QualityWarnings = dailyQualityWarnings(instrument.Symbol, result.SkippedNullRows, result.ExcludedOpenRows, finality.fallback)
 	if err := ValidateHistory(result.Series, instrument.Symbol, from, to); err != nil {
 		return History{}, err
 	}

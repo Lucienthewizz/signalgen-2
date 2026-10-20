@@ -1,4 +1,4 @@
-FROM golang:1.27.1-bookworm AS source
+FROM golang:1.27.2-bookworm AS source
 
 WORKDIR /workspace/backend
 

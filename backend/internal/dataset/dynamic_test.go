@@ -3,6 +3,7 @@ package dataset
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,33 @@ import (
 
 type fakeUniverseRepository struct {
 	owner string
+}
+
+type qualityMarketProvider struct{ fakeMarketProvider }
+
+func (provider qualityMarketProvider) Daily(ctx context.Context, instruments []universe.Instrument, size int) ([]marketdata.Series, error) {
+	series, err := provider.fakeMarketProvider.Daily(ctx, instruments, size)
+	series[0].QualityWarnings = []string{"BBCA.JK: excluded 1 null OHLCV row; history may have gaps"}
+	return series, err
+}
+
+func TestDynamicStorePreservesPerSeriesQualityThroughCache(t *testing.T) {
+	cache, _ := marketdata.NewCachedProvider(qualityMarketProvider{}, marketdata.DefaultCacheOptions())
+	store, _ := NewDynamicStore(cache, fakeUniverseRepository{owner: "user-a"})
+	input := PrepareRequest{Purpose: "screen", RuleID: "rule-a", UniverseID: "univ-a"}
+	first, err := store.Prepare(context.Background(), "user-a", input)
+	if err != nil || first.Quality.Status != "complete" || !strings.Contains(strings.Join(first.Quality.Warnings, "\n"), "1 null OHLCV") {
+		t.Fatalf("manifest=%+v error=%v", first, err)
+	}
+	first.Quality.Warnings[1] = "mutated"
+	second, err := store.Prepare(context.Background(), "user-a", input)
+	if err != nil || !strings.Contains(strings.Join(second.Quality.Warnings, "\n"), "1 null OHLCV") {
+		t.Fatalf("cached manifest=%+v error=%v", second, err)
+	}
+	bytes, _, err := store.Content(context.Background(), "user-a", second.DatasetID)
+	if err != nil || strings.Contains(string(bytes), "null OHLCV") {
+		t.Fatal("quality changed OHLCV schema")
+	}
 }
 
 func (fake fakeUniverseRepository) Catalog(context.Context) ([]universe.Instrument, error) {

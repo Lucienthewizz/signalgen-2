@@ -160,5 +160,6 @@ func (provider *CachedProvider) evictOldestLocked() {
 
 func cloneSeries(series Series) Series {
 	series.Candles = append([]core.Candle(nil), series.Candles...)
+	series.QualityWarnings = append([]string(nil), series.QualityWarnings...)
 	return series
 }

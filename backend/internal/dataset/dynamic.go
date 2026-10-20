@@ -126,6 +126,12 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	now := store.now().UTC()
 	expiresAt := now.Add(store.limits.TTL)
 	source := marketdata.DescribeSource(store.provider)
+	// Keep request-specific quality evidence with this immutable snapshot.
+	// "complete" is the existing contract for validated selected candles, not
+	// proof of gap-free exchange history; omissions must remain visible here.
+	for _, item := range series {
+		source.Warnings = append(source.Warnings, item.QualityWarnings...)
+	}
 	manifest := Manifest{
 		DatasetID: id, Version: now.Format("20060102T150405Z"), ExpiresAt: expiresAt.Format(time.RFC3339),
 		SchemaVersion: "ohlcv-multi-1", Provider: source.Provider, Purpose: "screen",

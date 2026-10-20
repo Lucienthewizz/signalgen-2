@@ -52,8 +52,12 @@ func TestArchiveReturnsBoundedValidatedCopies(t *testing.T) {
 		t.Fatalf("series=%+v error=%v", series, err)
 	}
 	series[0].Candles[0].Close = 1
+	if len(series[0].QualityWarnings) == 0 {
+		t.Fatal("archive quality warnings were lost")
+	}
+	series[0].QualityWarnings[0] = "mutated warning"
 	again, err := provider.Daily(context.Background(), instruments, 100)
-	if err != nil || len(again[0].Candles) != 25 || again[0].Candles[5].Close != 101 {
+	if err != nil || len(again[0].Candles) != 25 || again[0].Candles[5].Close != 101 || again[0].QualityWarnings[0] == "mutated warning" {
 		t.Fatal("caller mutated archive or short history was fabricated")
 	}
 	source := provider.Source()
@@ -192,7 +196,7 @@ func TestArchiveRejectsCorruptSnapshot(t *testing.T) {
 }
 
 func TestArchiveRejectsBadMetadataAndActiveWriter(t *testing.T) {
-	for _, mutation := range []string{"schema", "hash binding", "status", "window", "duplicate", "path code", "no successes", "lock"} {
+	for _, mutation := range []string{"schema", "hash binding", "status", "window", "duplicate", "path code", "no successes", "lock", "negative open rows"} {
 		t.Run(mutation, func(t *testing.T) {
 			directory, _ := makeArchive(t, 25)
 			var report Report
@@ -206,6 +210,8 @@ func TestArchiveRejectsBadMetadataAndActiveWriter(t *testing.T) {
 				report.CatalogSHA256 = strings.Repeat("b", 64)
 			case "status":
 				report.Entries[0].Status = "unknown"
+			case "negative open rows":
+				report.Entries[0].ExcludedOpenRows = -1
 			case "window":
 				report.RequestedToExclusive = report.RequestedFrom
 			case "duplicate":

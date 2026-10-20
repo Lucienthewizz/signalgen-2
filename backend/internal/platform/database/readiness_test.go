@@ -40,6 +40,9 @@ alter table signalgen.audit_events add constraint audit_events_action_check chec
 		{"missing_audit_index", `drop index signalgen.audit_events_target_id_idx`},
 		{"disabled_audit_trigger", `alter table signalgen.audit_events disable trigger reject_audit_update`},
 		{"disabled_rules_rls", `alter table signalgen.user_rules disable row level security`},
+		{"disabled_workspace_rls", `alter table signalgen.workspace_state disable row level security`},
+		{"missing_workspace_table", `alter table signalgen.workspace_state rename to incomplete_workspace_state`},
+		{"missing_workspace_version", `alter table signalgen.workspace_state rename column version to incomplete_version`},
 		{"missing_bootstrap_table", `alter table signalgen.operator_bootstrap_state rename to incomplete_bootstrap_state`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -84,6 +87,13 @@ func TestRuntimeReadinessRejectsIncompleteAccess(t *testing.T) {
 	}{
 		{"complete_access", "", true},
 		{"missing_rules_insert", `revoke insert on signalgen.user_rules from signalgen_api`, false},
+		{"missing_workspace_select", `revoke select on signalgen.workspace_state from signalgen_api`, false},
+		{"missing_workspace_insert", `revoke insert on signalgen.workspace_state from signalgen_api`, false},
+		{"missing_workspace_update", `revoke update on signalgen.workspace_state from signalgen_api`, false},
+		{"missing_workspace_select_policy", `drop policy backend_select on signalgen.workspace_state`, false},
+		{"denied_workspace_insert_policy", `alter policy backend_insert on signalgen.workspace_state with check (false)`, false},
+		{"denied_workspace_update_policy", `alter policy backend_update on signalgen.workspace_state using (false) with check (false)`, false},
+		{"restrictive_workspace_policy", `create policy accidental_deny on signalgen.workspace_state as restrictive for all to signalgen_api using (false) with check (false)`, false},
 		{"missing_profile_update", `revoke update on signalgen.account_profiles from signalgen_api`, false},
 		{"missing_schema_usage", `revoke usage on schema signalgen from signalgen_api`, false},
 		{"missing_audit_sequence", `revoke usage on sequence signalgen.audit_events_id_seq from signalgen_api`, false},

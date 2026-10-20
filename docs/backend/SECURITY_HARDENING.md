@@ -118,6 +118,28 @@ RLS relaxation, credential change or account-permission bypass is part of this f
 
 ## Verification and remaining deployment work
 
+### Runtime and workspace follow-up (20 October 2026)
+
+The Go module and Docker build require Go 1.27.2; `golang.org/x/net` is pinned
+to 0.60.0 with its minimum compatible support-module upgrades. Rebuild the API
+image after pulling these changes; editing go.mod does not patch a running binary.
+The current API source scan reports zero reachable and zero imported-package
+vulnerabilities. Module-only advisory GO-2026-5932 remains on the unused,
+unmaintained `x/crypto/openpgp` package (no fixed version); SignalGen does not
+import that package. A scan is not a guarantee that a deployment is exploit-free.
+
+Readiness now includes `workspace_state`: its five required columns, enabled
+RLS, and the restricted role's SELECT/INSERT/UPDATE grants and backend policies.
+Missing migrations/permissions fail closed; readiness never grants access or
+repairs a cloud database. Existing migrations already provision this table,
+so no new schema migration or broader role grant is needed for this code change.
+Local rolled-back tests remove table/column/RLS/grants/policies and require
+readiness rejection. The real Postgres API test covers two-owner workspace
+isolation, persistence, stale-version rejection and one winning concurrent writer.
+
+Closed-daily data policy and its limits are documented in
+[daily data quality](DAILY_DATA_QUALITY.md).
+
 CI runs isolated schema/ownership/runtime-privilege checks, real Model A WASM
 integration, race tests, static analysis, pinned govulncheck and OpenAPI
 validation. The application integration tests use `SET SESSION AUTHORIZATION signalgen_api` for

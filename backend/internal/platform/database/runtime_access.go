@@ -24,6 +24,7 @@ func runtimeAccessReady(ctx context.Context, db rowQuerier) error {
     ('user_rules', array['select','insert','update','delete']),
     ('stock_universes', array['select','insert','update','delete']),
     ('stock_universe_members', array['select','insert','delete']),
+    ('workspace_state', array['select','insert','update']),
     ('compute_grants', array['select','insert']),
     ('audit_events', array['select','insert']),
     ('subscription_events', array['insert']),

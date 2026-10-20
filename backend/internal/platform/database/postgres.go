@@ -99,6 +99,11 @@ func schemaReady(ctx context.Context, db rowQuerier) error {
   to_regclass('signalgen.stock_catalog') is not null and
   to_regclass('signalgen.stock_universes') is not null and
   to_regclass('signalgen.stock_universe_members') is not null and
+  to_regclass('signalgen.workspace_state') is not null and
+  (select count(*)=5 from pg_attribute
+   where attrelid=to_regclass('signalgen.workspace_state')
+     and attname in ('user_id','kind','data','version','updated_at')
+     and not attisdropped) and
   (select count(*)=4 from pg_attribute
    where attrelid=to_regclass('signalgen.account_profiles')
      and attname in ('display_name','bio','profile_version','profile_updated_at')
@@ -113,13 +118,13 @@ func schemaReady(ctx context.Context, db rowQuerier) error {
   exists (select 1 from pg_trigger
     where tgrelid=to_regclass('signalgen.audit_events')
       and tgname='reject_audit_update' and tgenabled in ('O','A') and not tgisinternal) and
-  (select count(*)=15 and bool_and(relrowsecurity) from pg_class
+  (select count(*)=16 and bool_and(relrowsecurity) from pg_class
     where relnamespace=to_regnamespace('signalgen') and relkind='r'
       and relname in ('account_profiles','feature_grants','app_sessions',
         'account_device_state','user_rules','compute_grants','operator_bootstrap_state',
         'audit_events','subscription_plans','subscription_plan_features',
         'subscriptions','subscription_events','stock_catalog','stock_universes',
-        'stock_universe_members'))`).Scan(&migrated)
+        'stock_universe_members','workspace_state'))`).Scan(&migrated)
 	if err != nil {
 		return fmt.Errorf("Postgres readiness: %w", err)
 	}

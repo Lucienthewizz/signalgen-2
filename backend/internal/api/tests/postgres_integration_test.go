@@ -32,6 +32,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/workspace"
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -105,6 +106,7 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 	}
 	subscriptions := subscription.NewPostgresRepository(runtimeDB)
 	universes := universe.NewPostgresRepository(runtimeDB)
+	workspaces := &workspace.PostgresStore{DB: runtimeDB}
 	fixtureBytes, err := os.ReadFile("../../../core/testdata/default_scalping_v1.json")
 	if err != nil {
 		t.Fatal(err)
@@ -134,6 +136,7 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 			api.WithTrafficObserver(platformhttp.NewTrafficObserver(nil)),
 			api.WithScreeningObserver(observability.NewScreenerObserver(nil)),
 			api.WithSubscriptionService(subscriptions),
+			api.WithWorkspaceStore(workspaces),
 			api.WithUniverseStore(universes))
 		if err != nil {
 			t.Fatal(err)
@@ -165,6 +168,60 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 	}
 	tokenA := createSession(serverA, "browser-a")
 	tokenB := createSession(serverB, "browser-b")
+	// Exercise real restricted-role SQL, not only fake handler ownership. The
+	// same workspace kind is a separate resource for each authenticated owner.
+	responseA := call(serverA, "PUT", "/api/v1/workspace/watchlist", `{"version":0,"data":["BBCA"]}`, tokenA)
+	if responseA.Code != http.StatusOK {
+		t.Fatalf("create workspace: %d %s", responseA.Code, responseA.Body.String())
+	}
+	for _, entry := range []struct {
+		server *api.Server
+		token  string
+		count  int
+	}{{newServer(userA), tokenA, 1}, {serverB, tokenB, 0}} {
+		response := call(entry.server, "GET", "/api/v1/workspace", "", entry.token)
+		var output struct {
+			Items []workspace.Item `json:"items"`
+		}
+		if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &output) != nil || len(output.Items) != entry.count {
+			t.Fatalf("workspace owner isolation: %d %s", response.Code, response.Body.String())
+		}
+	}
+	staleWorkspace := call(serverA, "PUT", "/api/v1/workspace/watchlist", `{"version":0,"data":["TLKM"]}`, tokenA)
+	assertErrorCode(t, staleWorkspace, 409, "VERSION_CONFLICT")
+	if response := call(serverA, "PUT", "/api/v1/workspace/watchlist", `{"version":1,"data":["TLKM"]}`, tokenA); response.Code != 200 {
+		t.Fatalf("update workspace: %d %s", response.Code, response.Body.String())
+	}
+	// Owner B cannot reuse A's version to change A's row. B can independently
+	// create version zero, and the API never takes an owner from the payload.
+	if _, err := workspaces.Put(ctx, userB, "watchlist", 2, json.RawMessage(`["ASII"]`)); err != workspace.ErrConflict {
+		t.Fatalf("cross-owner workspace version accepted: %v", err)
+	}
+	if _, err := workspaces.Put(ctx, userB, "watchlist", 0, json.RawMessage(`["ASII"]`)); err != nil {
+		t.Fatal(err)
+	}
+	itemsA, err := workspaces.List(ctx, userA)
+	if err != nil || len(itemsA) != 1 || string(itemsA[0].Data) != `["TLKM"]` || itemsA[0].Version != 2 {
+		t.Fatalf("owner A workspace changed: %+v %v", itemsA, err)
+	}
+	var workspaceWriters sync.WaitGroup
+	var workspaceWins atomic.Int32
+	for range 8 {
+		workspaceWriters.Add(1)
+		go func() {
+			defer workspaceWriters.Done()
+			_, err := workspaces.Put(ctx, userA, "watchlist", 2, json.RawMessage(`["BBRI"]`))
+			if err == nil {
+				workspaceWins.Add(1)
+			} else if err != workspace.ErrConflict {
+				t.Errorf("workspace CAS: %v", err)
+			}
+		}()
+	}
+	workspaceWriters.Wait()
+	if workspaceWins.Load() != 1 {
+		t.Fatalf("workspace CAS winners=%d", workspaceWins.Load())
+	}
 	// Editable profile must persist, remain private and reject stale writers.
 	profileUpdate := call(serverA, "PATCH", "/api/v1/account/profile", `{"display_name":"Lucien","bio":"Belajar saham","version":1}`, tokenA)
 	if profileUpdate.Code != http.StatusOK {

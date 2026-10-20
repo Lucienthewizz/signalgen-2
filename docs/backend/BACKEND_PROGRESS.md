@@ -1,4 +1,36 @@
-# Backend progress — 6 Oktober 2026
+# Backend progress
+
+## Checkpoint terbaru — 20 Oktober 2026
+
+Branch aktif: `integration/backend-frontend-20261019`, melanjutkan merge frontend
+`a1f5b12`. Perubahan yang diselesaikan pada slice hardening ini:
+
+- Go module dan Docker memakai Go 1.27.2; dependensi jaringan `x/net` 0.60.0.
+- Adapter Yahoo dan collector baru memfilter candle harian belum tutup, serta
+  melaporkan null rows/finality fallback. Warning tidak hilang melalui cache/arsip.
+- Readiness mencakup tabel, kolom, RLS dan izin workspace. Tidak ada migration
+  cloud baru atau perubahan password/role/entitlement pengguna pada slice ini.
+- Tes Postgres nyata memakai role runtime terbatas untuk persistensi workspace,
+  isolasi dua pemilik, stale version dan satu pemenang dari delapan writer.
+
+Bukti lokal: sebelas migration dan tiga pemeriksaan SQL pada Postgres 16 sementara;
+seluruh Go race suite dengan Postgres/actual WASM, `go vet`, 151 tes frontend,
+TypeScript/production build, lima tes preflight dan delapan pemeriksaan runtime
+lolos. API Go yang dibangun ulang healthy di 8080; frontend/proxy di 5175.
+Pemindaian API menemukan nol kerentanan terjangkau dan nol imported-package
+findings; advisory module-only OpenPGP tidak digunakan, detail di hardening.
+Ini bukan verifikasi production/load, feed resmi, atau demo ulang akun nyata.
+
+Panduan: [kualitas candle harian](DAILY_DATA_QUALITY.md) dan
+[keamanan/runtime](SECURITY_HARDENING.md). Jurnal transaksi backend, posisi/P&L,
+policy backtest, kalender/corporate actions serta bukti efisiensi produksi tetap
+pekerjaan terpisah. Warnings sudah dikirim API tetapi belum semuanya ditampilkan
+oleh footer screener frontend; UI tidak diubah pada slice backend ini.
+
+## Arsip checkpoint — 6 Oktober 2026
+
+Bagian di bawah adalah catatan historis, termasuk branch, port, jumlah tes,
+dan pekerjaan terbuka pada tanggal tersebut; bukan status terbaru.
 
 Checkpoint aktif untuk persiapan asis 7 Oktober. Ini bukan klaim seluruh PRD,
 penelitian atau deployment production selesai.

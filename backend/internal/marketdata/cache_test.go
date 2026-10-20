@@ -35,7 +35,9 @@ func TestCacheCoalescesAndIsolatesReturnedData(t *testing.T) {
 		calls.Add(1)
 		close(started)
 		<-release
-		return []Series{validSeries("BBCA.JK")}, nil
+		series := validSeries("BBCA.JK")
+		series.QualityWarnings = []string{"original quality warning"}
+		return []Series{series}, nil
 	})
 	provider, _ := NewCachedProvider(upstream, DefaultCacheOptions())
 	var group sync.WaitGroup
@@ -49,13 +51,14 @@ func TestCacheCoalescesAndIsolatesReturnedData(t *testing.T) {
 				return
 			}
 			series[0].Candles[0].Close = 999
+			series[0].QualityWarnings[0] = "mutated warning"
 		}()
 	}
 	<-started
 	close(release)
 	group.Wait()
 	series, err := provider.Daily(context.Background(), cacheInstruments, 20)
-	if err != nil || calls.Load() != 1 || series[0].Candles[0].Close != 101 {
+	if err != nil || calls.Load() != 1 || series[0].Candles[0].Close != 101 || series[0].QualityWarnings[0] != "original quality warning" {
 		t.Fatalf("calls=%d, error=%v, series=%v", calls.Load(), err, series)
 	}
 }
