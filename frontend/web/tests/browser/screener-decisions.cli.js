@@ -76,13 +76,13 @@ async (page) => {
         if (!(await past.locator('.screener-history-statuses').innerText()).includes(`${item.label} 1`)) throw Error('History decision counts changed the saved signal meaning');
         await page.locator(".screener-history li").filter({hasText:item.name}).getByRole("button",{name:"Review result",exact:true}).click();
         const row=page.locator(".screener-result-ledger tbody tr").first();
-        const quality = page.getByRole('region', { name:'Data quality', exact:true });
+        await page.getByRole('button', {name:/View data quality/}).click();
+        const quality = page.getByRole('dialog', { name:'Data quality', exact:true });
         await quality.waitFor();
         if (!(await quality.innerText()).includes(item.market === 'US' ? 'America/New_York' : 'Asia/Jakarta')) throw Error('Market timezone missing from snapshot provenance');
-        const notes = quality.locator('details');
-        if (!await notes.evaluate(el => el.open)) await notes.locator('summary').click();
         if (!(await quality.innerText()).includes('does not guarantee gap-free')) throw Error('Complete was presented as guaranteed data quality');
         if (item.name === cases[0].name && await quality.locator('li').count() !== 2) throw Error('Provider warnings were lost after history reload');
+        await quality.getByRole('button', {name:'Close', exact:true}).click();
         const label=(await row.getByRole("cell").nth(1).innerText()).trim();
         if(label !== item.label) throw Error(`Wrong direction after reload: ${item.name}: ${label}`);
         const currency=item.market === "IDX" ? "IDR" : "USD";
@@ -104,7 +104,9 @@ async (page) => {
           if (!await comparison.evaluate(el => el.children.length === 2 && getComputedStyle(el).gridTemplateColumns.split(' ').length === 2)) throw Error('Crossover is not a two-column comparison');
           await page.evaluate(() => window.scrollTo(0,0));
           await page.screenshot({path:`/private/tmp/signalgen-evidence-flow-${width}-${theme}.png`,fullPage:true,animations:'disabled'});
+          await page.getByRole('button', {name:/View data quality/}).click();
           await quality.screenshot({path:`/private/tmp/signalgen-data-quality-${width}-${theme}.png`,animations:'disabled'});
+          await quality.getByRole('button', {name:'Close', exact:true}).click();
           await detail.locator('.stock-detail__evidence').screenshot({path:`/private/tmp/signalgen-crossover-${width}-${theme}.png`,animations:'disabled'});
           await page.locator('.screener-history').screenshot({path:`/private/tmp/signalgen-history-status-${width}-${theme}.png`,animations:'disabled'});
           if(!(await detail.innerText()).includes("SELL signal (not an order)")) throw Error("Detail lost SELL direction");

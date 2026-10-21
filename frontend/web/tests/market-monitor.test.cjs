@@ -114,22 +114,81 @@ function fixture() {
   };
 }
 
-test("intraday polling deduplicates history, replaces corrections and isolates interval/context",()=>{
-  const run=fixture();run.manifest.timeframe="5m";
-  const context={ruleId:"rule",universeId:"univ",universeVersion:1,universeName:"Stocks",ruleSnapshot:{version:1,definition_hash:"hash"}};
-  output.recordMonitorRun("intraday-owner","Rule",run,context);
-  output.recordMonitorRun("intraday-owner","Rule",run,context);
-  assert.equal(output.monitorRuns("intraday-owner").length,1);
-  run.manifest.checksum="corrected";
-  output.recordMonitorRun("intraday-owner","Rule",run,context);
-  assert.equal(output.monitorRuns("intraday-owner").length,1);
-  assert.equal(loadMonitor().monitorRuns("intraday-owner")[0].run.manifest.checksum,"corrected");
-  run.manifest.timeframe="1m";
-  output.recordMonitorRun("intraday-owner","Rule",run,context);
-  assert.equal(output.monitorRuns("intraday-owner").length,2);
-  output.recordMonitorRun("intraday-owner","Rule",run,{...context,universeVersion:2});
-  assert.equal(output.monitorRuns("intraday-owner").length,3);
-  assert.equal(output.monitorRuns("different-owner").length,0);
+test("history deletion is device-only, persists on reload, and does not change synced snapshots", () => {
+  const user = "history-delete-owner";
+  const run = fixture();
+  output.recordMonitorRun(user, "Delete fixture", run);
+  output.recordMonitorRun("history-other-owner", "Other owner", run);
+  const item = output.monitorRuns(user)[0];
+  const rawBefore = storageModule.readWorkspaceData(user, "monitor-history");
+  const metaBefore = storageModule.syncMeta(user, "monitor-history");
+  assert.equal(output.hideMonitorRun(user, item), true);
+  assert.equal(output.monitorRuns(user).length, 0);
+  assert.equal(loadMonitor().monitorRuns(user).length, 0);
+  assert.equal(output.monitorRuns("history-other-owner").length, 1);
+  assert.deepEqual(
+    storageModule.readWorkspaceData(user, "monitor-history"),
+    rawBefore,
+  );
+  assert.deepEqual(storageModule.syncMeta(user, "monitor-history"), metaBefore);
+  assert.equal(output.hideMonitorRun("history-other-owner", item), false);
+  assert.equal(output.hideMonitorRun("", item), false);
+  const newer = fixture();
+  newer.manifest.timeframe = "5m";
+  newer.manifest.checksum = "new-after-deletion";
+  output.recordMonitorRun(user, "New result", newer);
+  assert.equal(output.monitorRuns(user).length, 1);
+  assert.equal(
+    storageModule.readWorkspaceData(user, "monitor-history").length,
+    2,
+  );
+  assert.equal(loadMonitor().monitorRuns(user).length, 1);
+});
+
+test("history deletion reports blocked storage without losing the result", () => {
+  output.recordMonitorRun("history-storage-failure", "Rule", fixture());
+  const item = output.monitorRuns("history-storage-failure")[0];
+  const set = browser.localStorage.setItem;
+  browser.localStorage.setItem = () => {
+    throw Error("Storage blocked");
+  };
+  try {
+    assert.equal(output.hideMonitorRun("history-storage-failure", item), false);
+    assert.equal(output.monitorRuns("history-storage-failure").length, 1);
+  } finally {
+    browser.localStorage.setItem = set;
+  }
+});
+
+test("intraday polling deduplicates history, replaces corrections and isolates interval/context", () => {
+  const run = fixture();
+  run.manifest.timeframe = "5m";
+  const context = {
+    ruleId: "rule",
+    universeId: "univ",
+    universeVersion: 1,
+    universeName: "Stocks",
+    ruleSnapshot: { version: 1, definition_hash: "hash" },
+  };
+  output.recordMonitorRun("intraday-owner", "Rule", run, context);
+  output.recordMonitorRun("intraday-owner", "Rule", run, context);
+  assert.equal(output.monitorRuns("intraday-owner").length, 1);
+  run.manifest.checksum = "corrected";
+  output.recordMonitorRun("intraday-owner", "Rule", run, context);
+  assert.equal(output.monitorRuns("intraday-owner").length, 1);
+  assert.equal(
+    loadMonitor().monitorRuns("intraday-owner")[0].run.manifest.checksum,
+    "corrected",
+  );
+  run.manifest.timeframe = "1m";
+  output.recordMonitorRun("intraday-owner", "Rule", run, context);
+  assert.equal(output.monitorRuns("intraday-owner").length, 2);
+  output.recordMonitorRun("intraday-owner", "Rule", run, {
+    ...context,
+    universeVersion: 2,
+  });
+  assert.equal(output.monitorRuns("intraday-owner").length, 3);
+  assert.equal(output.monitorRuns("different-owner").length, 0);
 });
 test("IDX codes normalize without accepting arbitrary widget symbols", () => {
   for (const value of ["bbca", "IDX:BBCA", "BBCA.JK", " BBCA "])
@@ -375,6 +434,17 @@ test("run comparison only evaluates overlapping symbols, not missing stocks", ()
   assert.equal(diff.unpaired.join(), "TLKM");
   assert.equal(diff.lost.length, 0);
   assert.equal(diff.sameRule, false);
+});
+test("results from different candle intervals never become match-change claims", () => {
+  const before = { run: fixture() };
+  const after = { run: fixture() };
+  before.run.manifest.timeframe = "1d";
+  after.run.manifest.timeframe = "5m";
+  before.run.rows[0].decision.matched = false;
+  const diff = output.compareMonitorRuns(before, after);
+  assert.equal(diff.sameInterval, false);
+  assert.equal(diff.gained.length + diff.lost.length + diff.retained.length, 0);
+  assert.equal(diff.unpaired.length, 1);
 });
 test("open-close percentages never use missing, zero or invalid opening prices", () => {
   assert.equal(output.openCloseChange(100, 110), 10);

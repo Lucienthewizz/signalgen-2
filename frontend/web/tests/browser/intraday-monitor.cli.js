@@ -38,6 +38,7 @@ async (page) => {
     sockets = 0,
     hold = false,
     release;
+  let providerFailure = "";
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(() => {
@@ -162,6 +163,20 @@ async (page) => {
       };
     else if (p === "/api/v1/datasets/prepare") {
       prepares++;
+      if (providerFailure)
+        return route.fulfill({
+          status: providerFailure === "PROVIDER_UNAVAILABLE" ? 503 : 422,
+          headers:
+            providerFailure === "PROVIDER_UNAVAILABLE"
+              ? { "Retry-After": "600" }
+              : {},
+          json: {
+            error: {
+              code: providerFailure,
+              message: "Synthetic provider failure",
+            },
+          },
+        });
       if (hold) await new Promise((resolve) => (release = resolve));
       payload = await snapshot(request.postDataJSON().timeframe ?? "1d");
     } else if (p.match(/^\/api\/v1\/datasets\/[^/]+\/manifest$/))
@@ -241,9 +256,28 @@ async (page) => {
     throw Error(`First cycle grants=${grants} sockets=${sockets}`);
   if (!(await page.locator("#screen-interval").isDisabled()))
     throw Error("Interval not locked while monitoring");
-  if (!(await page.getByText("Actual data:", { exact: false }).count()))
+  await page
+    .getByRole("button", { name: "Monitoring details", exact: true })
+    .click();
+  const monitorDialog = page.getByRole("dialog", {
+    name: "Monitoring details",
+    exact: true,
+  });
+  await monitorDialog.waitFor();
+  if (!(await monitorDialog.innerText()).includes("Actual data (5m, UTC)"))
     throw Error("Actual candle range missing");
+  await monitorDialog
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
   const initialPrepares = prepares;
+  const correctOrder = await page.evaluate(() => {
+    const results = document.querySelector('.screener-results'), history = document.querySelector('.screener-history'), data = document.querySelector('.screener-technical');
+    return Boolean(results && history && data && (results.compareDocumentPosition(history) & Node.DOCUMENT_POSITION_FOLLOWING) && (history.compareDocumentPosition(data) & Node.DOCUMENT_POSITION_FOLLOWING));
+  });
+  if (!correctOrder) throw Error('History must sit below results and above Data information');
+  if (await page.locator('.screener-results__header .screener-result-actions').count()) throw Error('Result actions must not be in the heading');
+  const resultBar = page.locator('.screener-result-statusbar');
+  if (await resultBar.getByRole('button', {name:/View data quality/}).count() !== 1 || await resultBar.getByRole('button', {name:'Export CSV', exact:true}).count() !== 1) throw Error('Quality and CSV must be beside the lower status filters');
   await page.clock.fastForward(300001);
   await wait(() => prepares > initialPrepares, "Next cycle did not run");
   await page
@@ -260,6 +294,49 @@ async (page) => {
     .waitFor();
   if (!(await page.getByText("Screening history (2)", { exact: true }).count()))
     throw Error("New candle missing from history");
+  await page.getByText("Screening history (2)", { exact: true }).click();
+  await page.locator("#history-interval").click();
+  await page.getByRole("option", { name: "Daily", exact: true }).click();
+  await page
+    .getByText("No saved screens match these filters.", { exact: true })
+    .waitFor();
+  await page.locator("#history-interval").click();
+  await page.getByRole("option", { name: "5 minutes", exact: true }).click();
+  await page.getByText("2 of 2 saved screens", { exact: true }).waitFor();
+  await page.getByText("Screening history (2)", { exact: true }).click();
+  await page.getByRole("button", { name: /View data quality/ }).click();
+  const qualityDialog = page.getByRole("dialog", {
+    name: "Data quality",
+    exact: true,
+  });
+  await qualityDialog.waitFor();
+  if (!(await qualityDialog.innerText()).includes("Total supplied candles"))
+    throw Error("Data quality does not explain candle totals");
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (let theme = 0; theme < 2; theme++) {
+      const bounds = await qualityDialog.boundingBox();
+      if (
+        !bounds ||
+        bounds.x < 0 ||
+        bounds.x + bounds.width > width + 1 ||
+        Math.abs(bounds.x + bounds.width / 2 - width / 2) > 2
+      )
+        throw Error("Quality dialog is not centered or overflows");
+      await page.screenshot({
+        path: `output/playwright/screener-quality-${width}-${theme}.png`,
+      });
+      await page.evaluate(
+        () =>
+          (document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === "light"
+              ? "dark"
+              : "light"),
+      );
+    }
+  }
+  await page.keyboard.press("Escape");
+  await qualityDialog.waitFor({ state: "hidden" });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.clock.runFor(300);
@@ -274,6 +351,8 @@ async (page) => {
         path: `output/playwright/intraday-monitor-${width}-${theme}.png`,
         fullPage: true,
       });
+      await resultBar.screenshot({path:`output/playwright/screener-result-actions-${width}-${theme}.png`});
+      await page.locator('.screener-monitor-status').screenshot({path:`output/playwright/screener-controls-${width}-${theme}.png`});
       await page.getByRole("button", { name: /Switch to .* mode/ }).click();
     }
   }
@@ -290,14 +369,127 @@ async (page) => {
   if (prepares !== beforeStop + 1 || grants !== 2)
     throw Error("Stop allowed more work or a late scoring result");
   hold = false;
+  providerFailure = "PROVIDER_UNAVAILABLE";
+  await page
+    .getByRole("button", { name: "Start screening", exact: true })
+    .click();
+  await page
+    .locator(".screener-monitor-status")
+    .getByText("Retry scheduled", { exact: true })
+    .waitFor();
+  await page
+    .getByText(
+      "Previous result retained. The latest check did not update prices.",
+      { exact: true },
+    )
+    .waitFor();
+  const errorDialog = page.getByRole("dialog");
+  await errorDialog.waitFor();
+  if (
+    !(await page
+      .getByRole("button", { name: "Automatic retry scheduled", exact: true })
+      .isDisabled())
+  )
+    throw Error("Manual retry can bypass provider delay");
+  const beforeBackoff = prepares;
+  await page.clock.fastForward(300001);
+  if (prepares !== beforeBackoff) throw Error("Retry-After was not respected");
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (let theme = 0; theme < 2; theme++) {
+      await page.screenshot({
+        path: `output/playwright/intraday-retry-${width}-${theme}.png`,
+        fullPage: true,
+      });
+      await page.evaluate(
+        () =>
+          (document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === "light"
+              ? "dark"
+              : "light"),
+      );
+    }
+  }
+  await errorDialog.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  providerFailure = "INTERVAL_UNAVAILABLE";
+  await page
+    .getByRole("button", { name: "Start screening", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Candle interval unavailable", exact: true })
+    .waitFor();
+  await page
+    .getByRole("button", { name: "Change interval", exact: true })
+    .click();
+  await page.waitForFunction(
+    () => document.getElementById("screen-interval") === document.activeElement,
+  );
+  providerFailure = "";
+  const beforeNavigation = prepares;
   await page.goto(`${origin}/#app/rules`);
   await page.goto(`${origin}/#app/analysis`);
   await page
     .getByRole("button", { name: "Start screening", exact: true })
     .waitFor();
   await page.clock.fastForward(600000);
-  if (prepares !== beforeStop + 1)
+  if (prepares !== beforeNavigation)
     throw Error("Navigation automatically restarted monitor");
+  await page.goto(`${origin}/#app/realtime`);
+  const savedRows = page.locator('.monitor-history li');
+  await savedRows.first().waitFor();
+  const beforeDelete = await savedRows.count();
+  const originalHistory = await page.evaluate((id) => localStorage.getItem(`signalgen:workspace:v1:${id}:monitor-history`), user.id);
+  const deleteButton = savedRows.first().getByRole('button', {name:/Delete history for/});
+  await deleteButton.click();
+  const confirm = page.getByRole('alertdialog', {name:'Delete screening history?', exact:true});
+  await confirm.waitFor();
+  await page.clock.runFor(100);
+  if (!await confirm.getByRole('button', {name:'Cancel', exact:true}).evaluate(el => el === document.activeElement)) throw Error('Delete confirmation must focus Cancel');
+  await confirm.getByRole('button', {name:'Cancel', exact:true}).click();
+  if (await savedRows.count() !== beforeDelete) throw Error('Cancel removed history');
+  await deleteButton.click();
+  await confirm.getByRole('button', {name:'Delete history', exact:true}).click();
+  await page.waitForFunction((count) => document.querySelectorAll('.monitor-history li').length === count - 1, beforeDelete);
+  if (await page.evaluate((id) => localStorage.getItem(`signalgen:workspace:v1:${id}:monitor-history`), user.id) !== originalHistory) throw Error('Display-only deletion rewrote synced history');
+  await page.reload();
+  await savedRows.first().waitFor();
+  if (await savedRows.count() !== beforeDelete - 1) throw Error('Deleted history returned on reload');
+  const monitorTools = page.locator('.monitor-history__tools');
+  const countBox = await monitorTools.locator('[data-slot="badge"]').boundingBox();
+  const allBox = await monitorTools.getByRole('button',{name:'Delete all',exact:true}).boundingBox();
+  if (!countBox || !allBox || Math.abs(countBox.height-allBox.height)>1) throw Error('History count and Delete all heights differ');
+  await monitorTools.getByRole('button',{name:'Delete all',exact:true}).click();
+  const allConfirmation = page.getByRole('alertdialog',{name:'Delete all screening history?',exact:true});
+  await allConfirmation.getByRole('button',{name:'Cancel',exact:true}).click();
+  if (await savedRows.count() !== beforeDelete-1) throw Error('Delete all Cancel removed history');
+  await page.goto(`${origin}/#app/analysis`);
+  await page.locator('.screener-history summary').click();
+  const historyCards = page.locator('.screener-history-list > li');
+  if (await historyCards.count() !== beforeDelete-1) throw Error('Screener history did not respect local deletions');
+  const card = historyCards.first();
+  if (await card.locator('.screener-history-facts > div').count() !== 5) throw Error('History metadata tiles missing');
+  for (const width of [1440,390]) for (const theme of ['dark','light']) {
+    await page.setViewportSize({width,height:1000});
+    await page.evaluate(theme => document.documentElement.dataset.theme=theme,theme);
+    await card.screenshot({path:`output/playwright/history-card-${width}-${theme}.png`});
+    if (await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)) throw Error('History cards overflow');
+    const review = await card.getByRole('button',{name:'Review result',exact:true}).boundingBox();
+    const remove = await card.getByRole('button',{name:/Delete history for/}).boundingBox();
+    if (!review || !remove || Math.abs(review.y+review.height/2-remove.y-remove.height/2)>2) throw Error('Review and Delete are not adjacent');
+  }
+  await card.getByRole('button',{name:/Delete history for/}).click();
+  await page.getByRole('alertdialog',{name:'Delete screening history?',exact:true}).getByRole('button',{name:'Cancel',exact:true}).click();
+  await page.locator('.screener-history-toolbar').getByRole('button',{name:'Delete all',exact:true}).click();
+  await allConfirmation.getByRole('button',{name:'Cancel',exact:true}).click();
+  if (await historyCards.count() !== beforeDelete-1) throw Error('Screener Delete all Cancel removed history');
+  await page.locator('.screener-history-toolbar').getByRole('button',{name:'Delete all',exact:true}).click();
+  await allConfirmation.getByRole('button',{name:'Delete all history',exact:true}).click();
+  await page.locator('.screener-history').waitFor({state:'hidden'});
+  if (await page.evaluate((id)=>localStorage.getItem(`signalgen:workspace:v1:${id}:monitor-history`),user.id) !== originalHistory) throw Error('Delete all rewrote synced history');
+  await page.reload();
+  await page.getByRole('button',{name:'Start screening',exact:true}).waitFor();
+  if (await page.locator('.screener-history').count()) throw Error('Deleted history returned');
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() =>
     document.body.setAttribute("data-signalgen-monitor-tests", "complete"),

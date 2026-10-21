@@ -84,7 +84,7 @@ async (page) => {
     else if (p === "/api/v1/account/me") payload = { user, features: ["screener", "backtest"], session: { id: "fixture", expires_at: subscription.current_period_end }, device: { installation_id: "fixture", label: "Fixture browser", current: true }, capabilities_version: "fixture" };
     else if (p === "/api/v1/account/sessions") payload = { items: sessionFixtures };
     else if (p === "/api/v1/rules") payload = { items: [systemRule ? { ...rule, name: "Default Scalping", owner_type: "system", definition: undefined } : rule], next_cursor: null };
-    else if (p === "/api/v1/stock-universes") payload = { items: [largeUniverse ? { ...universe, symbols: ["BBCA.JK", "BBRI.JK", "AADI.JK", "AALI.JK", "ABBA.JK", "ABDA.JK", "ABMM.JK", "ACES.JK", "ACRO.JK", "ACST.JK"] } : universe, ...(savedCardFixture ? [{ ...universe, id: "fixture-second-universe", name: "Banking watchlist" }] : [])] };
+    else if (p === "/api/v1/stock-universes") payload = { items: [largeUniverse ? { ...universe, symbols: ["BBCA.JK", "BBRI.JK", "AADI.JK", "AALI.JK", "ABBA.JK", "ABDA.JK", "ABMM.JK", "ACES.JK", "ACRO.JK", "ACST.JK"] } : universe, ...(savedCardFixture ? [{ ...universe, id: "fixture-second-universe", name: "Banking watchlist" }, { ...universe, id: "fixture-third-universe", name: "Third universe", symbols: ["BBRI.JK"] }] : [])] };
     else if (p === "/api/v1/stocks") payload = { items: [...universe.symbols.map(symbol => ({ symbol, name: symbol, exchange: "XIDX", currency: "IDR" })), ...["AAPL", "JPM", "XOM", "PG", "PLD", "AGRO", "BBSI", "GOOD"].map(symbol => ({ symbol, name: symbol, exchange: "XNAS", currency: "USD" }))] };
     else if (p === "/api/v1/subscription") payload = { subscription };
     else if (p === "/api/v1/subscription/plans") payload = { items: plans };
@@ -243,6 +243,14 @@ async (page) => {
         }
         if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Overflow: ${view} ${width}`);
         if (view === "analysis") {
+          const controlGeometry = await page.locator('.screener-monitor-status').evaluate(el => {
+            const start = el.querySelector('.screener-run-summary__action'), times = el.querySelector('.screener-monitor-status__times');
+            return {left: el.querySelector('.screener-monitor-status__icon').getBoundingClientRect().left, expected: document.querySelector('.screener-pickers').getBoundingClientRect().left + parseFloat(getComputedStyle(document.querySelector('.screener-pickers')).paddingLeft), start: start.getBoundingClientRect().left, times: times.getBoundingClientRect().right};
+          });
+          if (Math.abs(controlGeometry.left - controlGeometry.expected) > 1) throw Error('Monitor status padding is not aligned');
+          if (width === 1440 && controlGeometry.start < controlGeometry.times) throw Error('Start/Stop must be right of check times');
+          const actions = await page.locator('.screener-result-actions > button').evaluateAll(items => items.map(el => el.getBoundingClientRect().height));
+          if (actions.length !== 2 || Math.abs(actions[0] - actions[1]) > 1) throw Error('Quality and CSV buttons do not align');
           const offset = await page.evaluate(() => {
             const note = document.querySelector(".screener-result-count");
             const label = document.querySelector(".screener-result-filters label");
@@ -253,11 +261,13 @@ async (page) => {
           if (offset > 2) throw Error(`Misaligned screener explanation: ${offset}px`);
           if (await page.locator(".screener-results .screener-technical").count()) throw Error("Technical card still nested in results");
           const technical = page.locator(".screener-workspace > .screener-technical");
-          await technical.getByRole("heading", { name: "Data information", exact: true }).waitFor({ timeout: 5000 });
-          if (await technical.locator("summary").count()) throw Error("Technical card still collapsible");
+          await technical.locator("summary").filter({hasText:"Data information"}).waitFor({ timeout: 5000 });
+          if (!await technical.evaluate(el => el instanceof HTMLDetailsElement)) throw Error("Data information must be a dropdown");
+          if (!await technical.evaluate(el => el.open)) await technical.locator("summary").click();
           const layout = await technical.evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), text: parseFloat(getComputedStyle(el.querySelector(".dataset-provenance strong")).fontSize), left: el.getBoundingClientRect().left - document.querySelector(".screener-results").getBoundingClientRect().left }));
-          if (layout.radius < 12 || layout.text > 14 || Math.abs(layout.left) > 1) throw Error(`Technical card layout incorrect: ${JSON.stringify(layout)}`);
+          if (layout.text > 14 || Math.abs(layout.left) > 1) throw Error(`Technical dropdown layout incorrect: ${JSON.stringify(layout)}`);
           await technical.screenshot({ path: `/private/tmp/signalgen-technical-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+          await technical.locator("summary").click();
           await page.getByRole("button", { name: "BBCA", exact: true }).click({ timeout: 5000 });
           const detail = page.locator(".stock-detail");
           await detail.getByRole("heading", { name: /Condition evidence/ }).waitFor({ timeout: 5000 });
@@ -284,6 +294,12 @@ async (page) => {
           if (alignment > 2) throw Error(`Dashboard gutters inconsistent: ${alignment}px`);
         }
         if (view === "rules") {
+          const filters = await page.locator('.rule-library__filters').evaluate(el => {
+            const search = el.querySelector('input').getBoundingClientRect();
+            const buttons = [...el.querySelectorAll('[data-signal]')].map(item => item.getBoundingClientRect().height);
+            return { height: search.height, buttons, divider: parseFloat(getComputedStyle(el.querySelector('[role="status"]')).borderLeftWidth) };
+          });
+          if (filters.buttons.some(height => Math.abs(height - filters.height) > 1) || filters.divider < 1) throw Error(`Rule filters must match the search height and separate the rule count: ${JSON.stringify(filters)}`);
           const refresh = page.locator(".rule-library").getByRole("button", { name: "Refresh", exact: true });
           if (!(await refresh.getAttribute("class")).split(" ").includes("bg-primary")) throw Error("Rules refresh not primary");
           if (await page.locator(".rule-library__rows").getByText("v2", { exact: true }).count()) throw Error("Rule version badge still visible");
@@ -430,7 +446,7 @@ async (page) => {
     for (let theme = 0; theme < 2; theme++) {
       await page.locator(".screener-run-summary").screenshot({ path: `/private/tmp/signalgen-summary-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
       if (width >= 900) {
-        const difference = await page.locator(".screener-run-summary").evaluate(el => { const title = el.querySelector("strong").getBoundingClientRect(), button = el.querySelector("button").getBoundingClientRect(); return Math.abs(title.y + title.height / 2 - button.y - button.height / 2); });
+        const difference = await page.locator(".screener-run-summary").evaluate(el => { const title = el.querySelector("strong").getBoundingClientRect(), badge = el.querySelector('[data-slot="badge"]').getBoundingClientRect(); return Math.abs(title.y + title.height / 2 - badge.y - badge.height / 2); });
         if (difference > 2) throw Error(`Misaligned screener title/action: ${difference}px`);
       }
       await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
@@ -527,10 +543,12 @@ async (page) => {
   await bearishPreset.click();
   const presetDialog = page.getByRole("alertdialog", { name: "Replace current criteria?" });
   await presetDialog.waitFor();
+  await page.waitForFunction(() => document.querySelector('[role="alertdialog"] button') === document.activeElement);
   if (await draftInput.inputValue() !== "Bullish EMA cross") throw Error("Preset changed before confirmation");
   if (!await presetDialog.getByRole("button", { name: "Cancel", exact: true }).evaluate(el => el === document.activeElement)) throw Error("Confirmation did not focus safe action");
   await page.keyboard.press("Escape");
   await presetDialog.waitFor({ state: "hidden" });
+  await page.waitForFunction(() => document.activeElement?.textContent.includes('Bearish EMA cross'));
   if (await draftInput.inputValue() !== "Bullish EMA cross") throw Error("Escape replaced current criteria");
   if (!await bearishPreset.evaluate(el => el === document.activeElement)) throw Error("Confirmation did not restore focus");
   for (const width of [1440, 1218, 390]) for (const theme of ["dark", "light"]) {
@@ -607,7 +625,12 @@ async (page) => {
   await page.getByRole("button", { name: "Add condition", exact: true }).click();
   await page.getByRole("button", { name: "Add condition", exact: true }).click();
   if (await page.getByLabel("Rule name", { exact: true }).inputValue() !== "Bullish EMA cross") throw Error("Preset did not populate rule name");
-  if (!await page.getByLabel("Rule summary", { exact: true }).innerText().then(text => text.includes("crosses above"))) throw Error("Preset summary missing crossover semantics");
+  await page.getByRole('button', {name:'Translate', exact:true}).click();
+  const translation = page.getByRole('dialog', {name:'In plain English', exact:true});
+  await translation.waitFor();
+  if (!await translation.getByLabel("Rule summary", { exact: true }).innerText().then(text => text.includes("crosses above"))) throw Error("Preset summary missing crossover semantics");
+  await translation.getByRole('button', {name:'Close', exact:true}).click();
+  await translation.waitFor({state:'hidden'});
   await page.getByLabel("Condition reference 1", { exact: true }).click();
   await page.getByRole("option", { name: "EMA 9", exact: true }).click();
   await page.getByRole("button", { name: "Save rule", exact: true }).click();
@@ -689,11 +712,12 @@ async (page) => {
       return [...rows.values()].every(row => Math.abs(row[0].left - outer.left) < 1 && Math.abs(row[row.length - 1].right - outer.right) < 1);
     });
     if (!cards) throw Error(`Stock cards do not fill every row: ${width} ${theme}`);
-    if (!await page.locator('.screener-criteria li').evaluateAll(items => items.length === 2 && items.every(el => parseFloat(getComputedStyle(el).borderRadius) >= 12 && parseFloat(getComputedStyle(el).borderTopWidth) >= 1))) throw Error('Rule preview is not presented as rounded cards');
+    if (!await page.locator('.screener-criteria li').evaluateAll(items => items.length === 2 && items.every(el => parseFloat(getComputedStyle(el).borderRadius) >= 10 && parseFloat(getComputedStyle(el).borderTopWidth) >= 1))) throw Error('Rule preview is not presented as rounded cards');
   }
   savedCardFixture = true;
   await page.goto(`${origin}/#app/universes`);
   await page.getByRole('button', { name: 'Edit Banking watchlist', exact:true }).waitFor();
+  if (await page.locator('.universe-library__rows > article').count() !== 2) throw Error('Universe preview must contain only two cards');
   for (const width of [1440, 900, 390]) for (const theme of ['dark', 'light']) {
     await page.setViewportSize({ width, height: 1000 });
     if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole('button', { name: /Switch to .* mode/ }).click();
@@ -701,15 +725,59 @@ async (page) => {
       const css = getComputedStyle(card), r = card.getBoundingClientRect();
       return parseFloat(css.borderRadius) >= 12 && parseFloat(css.paddingLeft) >= 16 && [...card.querySelectorAll('[data-slot="badge"]')].every(badge => {
         const b = badge.getBoundingClientRect(), style = getComputedStyle(badge);
-        return b.left >= r.left + 15 && b.right <= r.right - 15 && b.height >= 40 && parseFloat(style.borderRadius) >= 8 && getComputedStyle(badge, '::before').content === 'none';
+        return b.left >= r.left + 15 && b.right <= r.right - 15 && b.height >= 32 && parseFloat(style.borderRadius) >= 8 && getComputedStyle(badge, '::before').content === 'none';
       });
     }));
     if (!valid) throw Error(`Saved universe cards or ticker cards invalid: ${width} ${theme}`);
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error('Saved card layout overflows');
     await page.locator('.universe-library').screenshot({ path: `/private/tmp/signalgen-saved-universes-${width}-${theme}.png`, animations:'disabled' });
+    await page.getByRole('button', {name:'See all stock universes (3)', exact:true}).click();
+    const directory = page.getByRole('dialog', {name:'Your stock universes', exact:true});
+    await directory.waitFor();
+    if (await directory.locator('.universe-directory > li').count() !== 3) throw Error('All-universes popup omitted a saved universe');
+    const row = directory.locator('.universe-directory > li').last();
+    if (!(await row.innerText()).includes('Third universe') || !(await row.innerText()).includes('BBRI')) throw Error('Universe names or stocks missing');
+    if (width === 1440 && !await row.evaluate(el => el.querySelector('.universe-directory__symbols').getBoundingClientRect().left > el.querySelector('.universe-directory__identity').getBoundingClientRect().right)) throw Error('Universe name and stocks are not side by side');
+    await page.screenshot({path:`/private/tmp/signalgen-universe-directory-${width}-${theme}.png`, animations:'disabled'});
+    await page.keyboard.press('Escape');
+    await directory.waitFor({state:'hidden'});
   }
+  await page.getByRole('button', {name:'See all stock universes (3)', exact:true}).click();
+  await page.getByRole('dialog', {name:'Your stock universes', exact:true}).getByRole('button', {name:'Edit Third universe', exact:true}).click();
+  await page.waitForFunction(() => document.getElementById('universe-name') === document.activeElement).catch(async () => { throw Error(`Universe edit did not restore focus: ${await page.evaluate(() => document.activeElement?.tagName)}`); });
+  if (await page.getByLabel('Universe name', {exact:true}).inputValue() !== 'Third universe') throw Error('Popup did not edit hidden third universe');
   await page.getByRole('button', { name:'Edit Banking watchlist', exact:true }).click();
   if (await page.getByLabel('Universe name', { exact:true }).inputValue() !== 'Banking watchlist') throw Error('Saved universe edit action broken');
+  await page.goto(`${origin}/#app/rules`);
+  const editRule = page.getByRole('button', {name:'Edit Rule fixture', exact:true});
+  if (!(await editRule.innerText()).includes('Edit rules')) throw Error('Edit rules label missing');
+  await editRule.click();
+  const editDialog = page.getByRole('dialog', {name:'Edit rules', exact:true});
+  await editDialog.waitFor();
+  if (await editDialog.getByLabel('Rule name', {exact:true}).inputValue() !== rule.name) throw Error('Editor popup loaded wrong rule');
+  await editDialog.getByLabel('Rule name', {exact:true}).fill('Retained popup draft');
+  for (const width of [1440,390]) {
+    await page.setViewportSize({width,height:1000});
+    const box = await editDialog.boundingBox();
+    if (!box || box.x < 0 || box.x+box.width > width+1) throw Error('Rule editor exceeds viewport');
+    const add = await editDialog.getByRole('button',{name:'Add condition',exact:true}).boundingBox();
+    const section = await editDialog.locator('.rule-condition-section').boundingBox();
+    if (!add || !section || Math.abs(add.width-section.width)>2) throw Error('Add condition is not full width');
+    await page.screenshot({path:`/private/tmp/signalgen-edit-rule-${width}.png`,animations:'disabled'});
+  }
+  await editDialog.getByRole('button',{name:'Translate',exact:true}).click();
+  await page.getByRole('dialog',{name:'In plain English',exact:true}).waitFor();
+  await page.keyboard.press('Escape');
+  await editDialog.waitFor();
+  await editDialog.getByLabel('Condition operator 1',{exact:true}).click();
+  await page.locator('[role="option"] .rule-operator-symbol').first().waitFor();
+  const symbolOptions = await page.locator('[role="option"] .rule-operator-symbol').allTextContents();
+  if (!symbolOptions.some(text=>text.includes('≥')) || !symbolOptions.some(text=>text.includes('↗'))) throw Error('Comparison symbols missing');
+  await page.keyboard.press('Escape');
+  await editDialog.getByRole('button',{name:'Close',exact:true}).click();
+  await page.getByRole('button',{name:'Continue editing',exact:true}).click();
+  if (await editDialog.getByLabel('Rule name',{exact:true}).inputValue() !== 'Retained popup draft') throw Error('Closing popup lost editing draft');
+  await editDialog.getByRole('button',{name:'Close',exact:true}).click();
   await page.goto(`${origin}/#app/analysis`);
   unauthorized = true;
   await page.reload();

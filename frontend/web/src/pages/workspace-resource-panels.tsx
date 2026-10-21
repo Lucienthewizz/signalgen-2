@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ResourceQuota } from "@/components/resource-quota";
+import { InfoDialog } from "@/components/ui/info-dialog";
 import { StockCatalogPicker } from "@/components/stock-catalog-picker";
 import { universeSelectionLimit } from "@/lib/stock-catalog";
 import { marketLabels, stockMarket, symbolMarket } from "@/lib/stock-market";
@@ -121,6 +122,8 @@ export function StockUniversesPanel({
     [catalog, market],
   );
   const [universes, setUniverses] = useState<StockUniverse[]>([]);
+  const [allUniversesOpen, setAllUniversesOpen] = useState(false);
+  const libraryReturnFocus = useRef<HTMLElement | null>(null);
   const [editing, setEditing] = useState<StockUniverse | null>(null);
   const [name, setName] = useState("");
   const [symbols, setSymbols] = useState<StockInstrument["symbol"][]>([]);
@@ -162,15 +165,22 @@ export function StockUniversesPanel({
     setNotice(null);
   }
 
-  function edit(universe: StockUniverse) {
+  function edit(universe: StockUniverse, focusEditor = true) {
     setMarket(symbolMarket(universe.symbols[0] ?? "BBCA.JK"));
     setEditing(universe);
     setName(universe.name);
     setSymbols([...universe.symbols]);
     setError(null);
     setNotice(null);
-    document.getElementById("universe-name")?.focus();
+    if (focusEditor) document.getElementById("universe-name")?.focus();
   }
+
+  // The keyed catalog remounts when editing another universe. Resolve the new
+  // input before the directory returns focus, rather than retaining a detached node.
+  useEffect(() => {
+    if (libraryReturnFocus.current?.id === "universe-name")
+      libraryReturnFocus.current = document.getElementById("universe-name");
+  }, [editing?.id, market]);
 
   function toggleSymbol(symbol: StockInstrument["symbol"]) {
     if (!marketCatalog.some((stock) => stock.symbol === symbol)) return;
@@ -399,12 +409,9 @@ export function StockUniversesPanel({
         aria-labelledby="universe-library-title"
       >
         <header className="universe-section-heading">
-          <div>
+          <div className="universe-library__heading">
             <h3 id="universe-library-title">Your stock universes</h3>
-            <p>
-              {universes.length} saved{" "}
-              {universes.length === 1 ? "universe" : "universes"}
-            </p>
+            <Badge variant="outline">{universes.length} saved</Badge>
           </div>
           <Button
             variant="ghost"
@@ -442,7 +449,7 @@ export function StockUniversesPanel({
           </Empty>
         ) : (
           <div className="universe-library__rows">
-            {universes.map((universe) => (
+            {universes.slice(0, 2).map((universe) => (
               <article
                 key={universe.id}
                 data-editing={editing?.id === universe.id || undefined}
@@ -457,11 +464,16 @@ export function StockUniversesPanel({
                   </div>
                 </div>
                 <div className="universe-library__symbols">
-                  {universe.symbols.map((symbol) => (
+                  {universe.symbols.slice(0, 4).map((symbol) => (
                     <Badge key={symbol} variant="outline">
                       {symbol.replace(".JK", "")}
                     </Badge>
                   ))}
+                  {universe.symbols.length > 4 && (
+                    <Badge variant="outline">
+                      +{universe.symbols.length - 4} more
+                    </Badge>
+                  )}
                 </div>
                 <div className="universe-library__actions">
                   <Button
@@ -470,6 +482,7 @@ export function StockUniversesPanel({
                     onClick={() => edit(universe)}
                     disabled={saving || loading}
                     aria-label={`Edit ${universe.name}`}
+                    className="workspace-glass-action"
                   >
                     <Pencil data-icon="inline-start" />
                     Edit
@@ -480,6 +493,8 @@ export function StockUniversesPanel({
                     onClick={() => void remove(universe)}
                     disabled={saving || loading}
                     aria-label={`Delete ${universe.name}`}
+                    className="workspace-glass-action"
+                    data-destructive="true"
                   >
                     <Trash2 />
                   </Button>
@@ -488,7 +503,82 @@ export function StockUniversesPanel({
             ))}
           </div>
         )}
+        {universes.length > 2 && (
+          <Button
+            className="universe-library__more"
+            variant="outline"
+            size="sm"
+            onClick={(event) => {
+              libraryReturnFocus.current = event.currentTarget;
+              setAllUniversesOpen(true);
+            }}
+          >
+            See all stock universes ({universes.length})
+          </Button>
+        )}
       </section>
+      <InfoDialog
+        open={allUniversesOpen}
+        onOpenChange={setAllUniversesOpen}
+        title="Your stock universes"
+        description={`${universes.length} saved universes. Choose Edit to update a selection.`}
+        returnFocus={libraryReturnFocus}
+        wide
+      >
+        <ul className="universe-directory">
+          {universes.map((universe) => (
+            <li key={universe.id}>
+              <div className="universe-directory__identity">
+                <strong>{universe.name}</strong>
+                <small>
+                  {universe.symbols.length} stocks ·{" "}
+                  {symbolMarket(universe.symbols[0] ?? "BBCA.JK")} · Updated{" "}
+                  {formatDate(universe.updated_at)}
+                </small>
+              </div>
+              <div
+                className="universe-directory__symbols"
+                aria-label={`Stocks in ${universe.name}`}
+              >
+                {universe.symbols.map((symbol) => (
+                  <Badge key={symbol} variant="outline">
+                    {symbol.replace(/\.JK$/, "")}
+                  </Badge>
+                ))}
+              </div>
+              <div className="universe-directory__actions">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="workspace-glass-action"
+                  aria-label={`Edit ${universe.name}`}
+                  disabled={loading || saving}
+                  onClick={() => {
+                    libraryReturnFocus.current =
+                      document.getElementById("universe-name");
+                    setAllUniversesOpen(false);
+                    edit(universe, false);
+                  }}
+                >
+                  <Pencil data-icon="inline-start" />
+                  Edit
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="workspace-glass-action"
+                  data-destructive="true"
+                  aria-label={`Delete ${universe.name}`}
+                  disabled={loading || saving}
+                  onClick={() => void remove(universe)}
+                >
+                  <Trash2 />
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </InfoDialog>
     </div>
   );
 }

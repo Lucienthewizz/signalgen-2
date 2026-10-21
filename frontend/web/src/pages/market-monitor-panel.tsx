@@ -13,8 +13,11 @@ import {
   Minus,
   Plus,
   X,
+  Trash2,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TradingViewChart } from "@/components/tradingview-chart";
+import { screenerIntervals } from "@/analysis/screener-monitor";
 import { marketCandleDate, marketTimezone } from "@/lib/data-freshness";
 import { decisionLabel } from "@/lib/workspace-feedback";
 import { snapshotChartSymbol } from "@/lib/stock-market";
@@ -58,6 +61,8 @@ import {
   openCloseChange,
   snapshotAge,
   formatSignedPercent,
+  hideMonitorRun,
+  type MonitorRun,
 } from "@/lib/market-monitor";
 import {
   hasWorkspaceData,
@@ -112,6 +117,11 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [runs, setRuns] = useState(() => monitorRuns(userId));
+  const [pendingDelete, setPendingDelete] = useState<MonitorRun | null>(null);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const deleteTrigger = useRef<HTMLElement | null>(null);
+  const historyHeading = useRef<HTMLHeadingElement>(null);
   const [sort, setSort] = useState("watchlist");
   const [universes, setUniverses] = useState<StockUniverse[]>([]);
   const [catalog, setCatalog] = useState<StockInstrument[]>([]);
@@ -119,6 +129,11 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   const [loadingUniverses, setLoadingUniverses] = useState(false);
   const [universeError, setUniverseError] = useState(false);
   const [showCards, setShowCards] = useState(true);
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
   const boardRef = useRef<HTMLDivElement>(null);
   const ledgerRef = useRef<HTMLElement>(null);
   const universe = universes.find((item) => item.id === universeId);
@@ -586,9 +601,28 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                         {marketCandleDate(
                           selectedSnapshot.decision.timestamp,
                           selectedMarket,
+                          selectedSnapshot.record.run.manifest.timeframe,
                         )}{" "}
                         · {marketTimezone(selectedMarket)}
+                        {" · "}
+                        {selectedSnapshot.record.run.manifest.timeframe} candles
                       </time>
+                    )}
+                    {selectedSnapshot &&
+                      now - Date.parse(selectedSnapshot.record.recordedAt) >
+                        2 *
+                          (screenerIntervals.find(
+                            (item) =>
+                              item.value ===
+                              selectedSnapshot.record.run.manifest.timeframe,
+                          )?.periodMs ?? 900000) && (
+                        <Badge variant="outline">Not recently screened</Badge>
+                      )}
+                    {selectedSnapshot && (
+                      <p className="monitor-company">
+                        Last screened {date(selectedSnapshot.record.recordedAt)}{" "}
+                        · not a live quote
+                      </p>
                     )}
                   </div>
                 </CardContent>
@@ -676,10 +710,6 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
               </SelectContent>
             </Select>
           </Field>
-          <p>
-            Percentages compare the open and close of the same candle, not the
-            previous day's close.
-          </p>
         </div>
         <Table>
           <colgroup>
@@ -835,9 +865,15 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                         {marketCandleDate(
                           snapshot.decision.timestamp,
                           snapshot.record.run.manifest.market,
+                          snapshot.record.run.manifest.timeframe,
                         )}
                         <span className="monitor-company">
                           {marketTimezone(snapshot.record.run.manifest.market)}
+                          {" · "}
+                          {snapshot.record.run.manifest.timeframe} candles
+                        </span>
+                        <span className="monitor-company">
+                          Screened {date(snapshot.record.recordedAt)}
                         </span>
                       </time>
                     ) : (
@@ -895,9 +931,28 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
         aria-labelledby="monitor-history-title"
       >
         <header>
-          <h3 id="monitor-history-title">Screening history {selected}</h3>
-          <span>Saved history · not automated signals</span>
+          <h3 id="monitor-history-title" ref={historyHeading} tabIndex={-1}>
+            Screening history {selected}
+          </h3>
+          <div className="monitor-history__tools">
+            <Badge variant="outline">{entries.length} results</Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="monitor-history__delete-all"
+              disabled={!entries.length || !userId}
+              onClick={(event) => {
+                deleteTrigger.current = event.currentTarget;
+                setHistoryError("");
+                setDeleteAllOpen(true);
+              }}
+            >
+              <Trash2 data-icon="inline-start" />
+              Delete all
+            </Button>
+          </div>
         </header>
+        {historyError && <p role="alert">{historyError}</p>}
         {entries.length ? (
           <ol>
             {entries.map(({ decision, record }, index) => (
@@ -907,8 +962,20 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                 </time>
                 <strong>{record.rule}</strong>
                 <Badge variant={decision.matched ? "secondary" : "outline"}>
-                  {decision.matched ? "Matched" : "Not matched"}
+                  {decisionLabel(decision)}
                 </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Delete history for ${record.rule}, ${date(record.recordedAt)}`}
+                  onClick={(event) => {
+                    deleteTrigger.current = event.currentTarget;
+                    setHistoryError("");
+                    setPendingDelete(record);
+                  }}
+                >
+                  <Trash2 />
+                </Button>
               </li>
             ))}
           </ol>
@@ -919,6 +986,47 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           </p>
         )}
       </section>
+      <ConfirmDialog
+        open={Boolean(pendingDelete) || deleteAllOpen}
+        title={
+          deleteAllOpen
+            ? "Delete all screening history?"
+            : "Delete screening history?"
+        }
+        description={
+          deleteAllOpen
+            ? `Remove all ${entries.length} saved screens shown for ${selected} from this browser? Each screen includes all of its stocks, so these results will also disappear for other stocks in those screens. Account history and backend data stay unchanged.`
+            : pendingDelete
+              ? `Remove “${pendingDelete.rule}” from ${date(pendingDelete.recordedAt)} on this browser? This result includes ${pendingDelete.run.rows.length} stock${pendingDelete.run.rows.length === 1 ? "" : "s"}. Account history and backend data stay unchanged.`
+              : ""
+        }
+        confirmLabel={deleteAllOpen ? "Delete all history" : "Delete history"}
+        destructive
+        returnFocus={deleteTrigger}
+        onCancel={() => {
+          setPendingDelete(null);
+          setDeleteAllOpen(false);
+        }}
+        onConfirm={() => {
+          if (!userId) return;
+          const targets = deleteAllOpen
+            ? entries.map(({ record }) => record)
+            : pendingDelete
+              ? [pendingDelete]
+              : [];
+          const removed = targets
+            .map((record) => hideMonitorRun(userId, record))
+            .every(Boolean);
+          deleteTrigger.current = historyHeading.current;
+          setRuns(monitorRuns(userId));
+          if (!removed)
+            setHistoryError(
+              "History could not be removed. Allow browser storage and try again.",
+            );
+          setPendingDelete(null);
+          setDeleteAllOpen(false);
+        }}
+      />
     </div>
   );
 }

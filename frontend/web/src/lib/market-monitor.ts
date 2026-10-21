@@ -57,6 +57,8 @@ function safeRuleSnapshot(value: unknown): RuleSnapshot | undefined {
 }
 
 export function compareMonitorRuns(before: MonitorRun, after: MonitorRun) {
+  const sameInterval =
+    before.run.manifest.timeframe === after.run.manifest.timeframe;
   const old = new Map(
     before.run.rows.map((row) => [
       monitorTicker(row.decision.symbol, before.run.manifest.market),
@@ -75,6 +77,10 @@ export function compareMonitorRuns(before: MonitorRun, after: MonitorRun) {
     unpaired: string[] = [];
   for (const [symbol, matched] of next) {
     if (!symbol) continue;
+    if (!sameInterval) {
+      unpaired.push(symbol);
+      continue;
+    }
     if (!old.has(symbol)) {
       unpaired.push(symbol);
       continue;
@@ -99,6 +105,7 @@ export function compareMonitorRuns(before: MonitorRun, after: MonitorRun) {
     unpaired,
     common: [...next.keys()].filter((key) => old.has(key)).length,
     sameRule,
+    sameInterval,
   };
 }
 const history = new Map<string, MonitorRun[]>();
@@ -350,7 +357,7 @@ export function recordMonitorRun(
       item.run.manifest.timeframe,
       item.run.rows.map((row) => [row.decision.symbol, row.decision.timestamp]),
     ]);
-  const previous = monitorRuns(userId);
+  const previous = monitorRuns(userId, true);
   const key = identity(snapshot);
   if (
     previous.some(
@@ -376,7 +383,65 @@ export function recordMonitorRun(
   if (typeof window !== "undefined")
     window.dispatchEvent(new Event("signalgen:monitor-run"));
 }
-export function monitorRuns(userId?: string) {
+// Device-only visibility markers are deliberately outside workspace sync.
+// Keep the original snapshots intact so a later run cannot delete cloud history.
+const hiddenHistoryKey = (userId: string) =>
+  `signalgen:monitor-hidden:${encodeURIComponent(userId)}`;
+export function monitorRunKey(item: MonitorRun) {
+  return JSON.stringify([
+    item.recordedAt,
+    item.rule,
+    item.run.manifest.checksum,
+    item.run.manifest.timeframe,
+  ]);
+}
+function hiddenMonitorRuns(
+  userId: string,
+): Array<{ key: string; hiddenAt: number }> {
+  try {
+    const items: unknown = JSON.parse(
+      window.localStorage.getItem(hiddenHistoryKey(userId)) ?? "[]",
+    );
+    if (!Array.isArray(items)) return [];
+    return items
+      .filter(
+        (item) =>
+          item &&
+          typeof item.key === "string" &&
+          item.key.length <= 1500 &&
+          Number.isFinite(item.hiddenAt) &&
+          item.hiddenAt <= Date.now() + 60_000 &&
+          Date.now() - item.hiddenAt <= WORKSPACE_MAX_AGE,
+      )
+      .slice(-200);
+  } catch {
+    return [];
+  }
+}
+export function hideMonitorRun(userId: string, item: MonitorRun): boolean {
+  if (
+    !userId ||
+    !monitorRuns(userId, true).some(
+      (saved) => monitorRunKey(saved) === monitorRunKey(item),
+    )
+  )
+    return false;
+  try {
+    const key = monitorRunKey(item);
+    const markers = hiddenMonitorRuns(userId).filter(
+      (marker) => marker.key !== key,
+    );
+    window.localStorage.setItem(
+      hiddenHistoryKey(userId),
+      JSON.stringify([...markers, { key, hiddenAt: Date.now() }].slice(-200)),
+    );
+    window.dispatchEvent(new Event("signalgen:monitor-run"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+export function monitorRuns(userId?: string, includeHidden = false) {
   if (!userId) return [];
   const stored = readWorkspaceData(userId, "monitor-history");
   if (stored === null && hasWorkspaceData(userId, "monitor-history"))
@@ -410,7 +475,9 @@ export function monitorRuns(userId?: string) {
     (item) => Date.now() - Date.parse(item.recordedAt) <= WORKSPACE_MAX_AGE,
   );
   history.set(userId, current);
-  return current;
+  if (includeHidden) return current;
+  const hidden = new Set(hiddenMonitorRuns(userId).map((item) => item.key));
+  return current.filter((item) => !hidden.has(monitorRunKey(item)));
 }
 export function idxTicker(value: string) {
   const ticker = value

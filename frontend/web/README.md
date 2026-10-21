@@ -1,5 +1,38 @@
 # Signalgen Web
 
+## Workspace refinements (21 October 2026)
+
+Screener keeps rule, universe and candle interval together. Start/Stop and the
+last/next check sit in the aligned bottom control bar; Stop uses the destructive
+surface. Data quality and Export CSV sit after the lower signal-status filters,
+not in the results heading. Data quality and screening failures open centered
+Base UI dialogs with keyboard dismissal and recovery actions. Background retries
+do not repeatedly reopen an acknowledged failure. Data information is a
+full-width disclosure; result data remains timestamped snapshots, not live quotes.
+History follows the results table, with one card per screen, compact metadata
+tiles, adjacent Review/Delete actions and a confirmed Delete all action. Results
+tables use centered cells, subtle column dividers, underlined details and compact
+glass journal actions.
+
+Saved universes show two compact cards, with all groups available in a directory
+dialog (name left, stock symbols right on desktop). The selection card keeps its
+natural content height. Rules signal filters match the search height and use
+neutral/BUY/SELL semantics; workspace navigation is visually uppercase. Edit and
+delete controls share restrained glass surfaces with reduced-transparency support.
+Edit rules opens the composer in a dialog, keeping an unfinished editing draft
+available through Continue editing. Comparison choices include mathematical and
+crossover symbols without changing the saved operators or evaluation logic.
+
+Market Monitor history deletion requires confirmation and hides the entire
+selected run for this browser/account only. Device-only visibility markers are
+also used by the screener history. Market Monitor's Delete all targets the
+screens shown for the selected stock, explicitly including their other stocks.
+Its count and destructive action share the same height. Visibility markers are
+kept outside workspace sync: raw account history is not rewritten, including
+when a later run is saved. Blocked storage reports failure instead of claiming a
+successful deletion. Tests use synthetic account/API boundaries, never cloud
+credential changes or destructive operations against real accounts.
+
 Start–Stop monitoring: choose a rule, universe and interval, then Start. Default
 5m; options 1m/5m/15m/1h/1d. Intraday begins with 3 calendar days and extends
 only when fewer than 20 valid closed candles are available. At most 100 candles

@@ -1,5 +1,30 @@
 /* Landing-inspired surface roles, shared across workspace routes.
    Keep controls, selection, semantic feedback and embedded charts independent. */
+.screener-monitor-status__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.screener-monitor-status__times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  color: var(--muted);
+}
+.screener-monitor-status__times > svg {
+  width: 16px;
+  height: 16px;
+}
+.screener-monitor-status__retained {
+  margin: 4px 0 0;
+  color: var(--text);
+}
+.screener-history__count {
+  padding-inline: 24px;
+  color: var(--muted);
+  font-size: 14px;
+}
 .rule-presets__choices strong {
   display: flex;
   align-items: center;
@@ -42,7 +67,69 @@
 }
 .rule-library__filters > span {
   color: var(--muted);
-  padding-bottom: 10px;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.rule-library__filters
+  :is(
+    [data-slot="input"],
+    [data-slot="toggle-group"],
+    [data-slot="toggle-group-item"]
+  ) {
+  height: 48px;
+  min-height: 48px;
+}
+.rule-library__filters [data-signal="all"] {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.rule-library__filters [data-signal="buy"] {
+  color: var(--green);
+  background: var(--accent-surface);
+}
+.rule-library__filters [data-signal="sell"] {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, var(--surface));
+}
+.rule-library__filters [data-signal][data-pressed] {
+  border-color: currentColor;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+.workspace-glass-action,
+.workspace-glass-surface {
+  min-height: 44px;
+  border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+  border-radius: 12px;
+  background: linear-gradient(
+    155deg,
+    color-mix(in srgb, var(--text) 10%, transparent),
+    color-mix(in srgb, var(--surface) 65%, transparent)
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 15%, transparent),
+    0 4px 12px rgb(0 0 0 / 8%);
+  backdrop-filter: blur(12px) saturate(130%);
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+.workspace-glass-action:hover {
+  border-color: var(--accent-border);
+  background-color: var(--accent-surface);
+}
+.workspace-glass-action[data-destructive] {
+  color: var(--danger);
+  background-color: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .workspace-glass-action {
+    backdrop-filter: none;
+    background: var(--surface-2);
+  }
 }
 .rule-library__condition-count {
   display: block;
@@ -121,6 +208,7 @@
   z-index: 50;
   inset: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 20px;
   overflow-y: auto;
@@ -172,6 +260,49 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+.signalgen-info[data-wide] {
+  width: min(700px, 100%);
+}
+.signalgen-info {
+  position: relative;
+}
+.signalgen-info .signalgen-confirm__title {
+  padding-right: 36px;
+}
+.signalgen-info__close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+.signalgen-info .signalgen-confirm__actions {
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+.screening-info-facts {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+}
+.screening-info-facts > div {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.screening-info-facts dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+.screening-info-facts dd {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.screening-info-note {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
 }
 .signalgen-confirm__actions .ui-button {
   min-height: 44px;
@@ -337,6 +468,83 @@
   .auth-layout .auth-theme-toggle {
     top: 20px;
     right: 20px;
+  }
+}
+
+.signalgen-info:has(.rule-composer) {
+  width: min(1040px, 100%);
+  min-width: 0;
+  max-width: 100%;
+}
+.signalgen-info .rule-composer {
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.signalgen-info .rule-composer__header {
+  padding-inline: 0;
+}
+.rule-editor-resume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 20px var(--workspace-panel-gutter);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.rule-operator-symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  margin-right: 6px;
+  color: var(--green);
+  font-family: inherit;
+  font-weight: 700;
+}
+.rule-editor-resume > div {
+  flex: 1;
+  min-width: 180px;
+}
+.rule-editor-resume p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.monitor-ledger table :is(th, td) + :is(th, td) {
+  border-left: 1px solid var(--line-soft);
+}
+.monitor-history__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.monitor-history .monitor-history__tools > :is([data-slot="badge"], button) {
+  height: 34px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.monitor-history__delete-all {
+  background: color-mix(in srgb, #7f2028 36%, var(--surface));
+  color: #ffb3b8;
+  border: 1px solid color-mix(in srgb, #e66d78 35%, var(--line));
+}
+.monitor-history__delete-all:hover {
+  background: color-mix(in srgb, #7f2028 50%, var(--surface));
+}
+[data-theme="light"] .monitor-history__delete-all {
+  background: #6b2029;
+  color: #fff;
+}
+@media (max-width: 640px) {
+  .monitor-history > header {
+    flex-wrap: wrap;
+    gap: 12px;
   }
 }
 

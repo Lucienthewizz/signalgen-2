@@ -26,6 +26,20 @@ test("screening errors offer permission, rate-limit, missing resource and networ
   ])
     assert.equal(output.screeningFailure({ status }).action, action);
 });
+test("data gaps and unsupported intervals direct users to selections, not blind retries or No match", () => {
+  const interval = output.screeningFailure({
+    status: 422,
+    code: "INTERVAL_UNAVAILABLE",
+  });
+  assert.equal(interval.action, "interval");
+  assert.match(interval.detail, /no daily fallback/);
+  const insufficient = output.screeningFailure({
+    status: 422,
+    code: "INSUFFICIENT_CANDLES",
+  });
+  assert.equal(insufficient.action, "interval");
+  assert.match(insufficient.detail, /not a No match/);
+});
 test("condition evidence uses real feature values and handles unknown operands", () => {
   const values = { price: 100, ema9: 99, ema20: 100, rsi14: 55 };
   assert.equal(

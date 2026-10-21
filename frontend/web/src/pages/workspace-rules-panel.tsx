@@ -22,6 +22,7 @@ import { useActionNotifications } from "@/components/ui/toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { InfoDialog } from "@/components/ui/info-dialog";
 import {
   Empty,
   EmptyDescription,
@@ -77,6 +78,15 @@ const blankDefinition = (): UserRuleDefinition => ({
   conditions: [],
 });
 
+const operatorSymbols: Record<RuleCondition["op"], string> = {
+  ">": ">",
+  ">=": "≥",
+  "<": "<",
+  "<=": "≤",
+  CROSS_UP: "↗",
+  CROSS_DOWN: "↘",
+};
+
 const blankCondition = (): RuleCondition => ({
   left: "PRICE",
   op: ">",
@@ -119,6 +129,10 @@ export function ServerRulesPanel({
   const [presetId, setPresetId] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [translationOpen, setTranslationOpen] = useState(false);
+  const translationTrigger = useRef<HTMLButtonElement | null>(null);
+  const editorTrigger = useRef<HTMLElement | null>(null);
   const previewTrigger = useRef<HTMLButtonElement>(null);
   const [ruleSearch, setRuleSearch] = useState("");
   const [signalFilter, setSignalFilter] = useState<string[]>(["all"]);
@@ -149,6 +163,8 @@ export function ServerRulesPanel({
     setNotice(null);
     setConfirmation(null);
     setPreviewOpen(false);
+    setEditorOpen(false);
+    setTranslationOpen(false);
     setRuleSearch("");
     setSignalFilter(["all"]);
     setDraftStorageFailed(false);
@@ -180,6 +196,7 @@ export function ServerRulesPanel({
         return;
       }
       setEditing(rule);
+      setEditorOpen(true);
     } else setEditing(null);
     setDefinition(pendingDraft.definition);
     setPendingDraft(null);
@@ -226,6 +243,7 @@ export function ServerRulesPanel({
   );
 
   function startNew() {
+    setEditorOpen(false);
     setPresetId([]);
     setSubmitted(false);
     if (userId) saveRuleDraft(userId, null);
@@ -250,7 +268,7 @@ export function ServerRulesPanel({
     });
     setError(null);
     setNotice(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setEditorOpen(true);
   }
 
   function setCondition(index: number, patch: Partial<RuleCondition>) {
@@ -321,7 +339,7 @@ export function ServerRulesPanel({
   }
 
   function applyPreset(preset: (typeof rulePresets)[number]) {
-    setEditing(null);
+    if (!editorOpen) setEditing(null);
     setPresetId([preset.id]);
     setSubmitted(false);
     setError(null);
@@ -354,8 +372,23 @@ export function ServerRulesPanel({
     );
   }
 
-  return (
-    <div className="rules-workspace">
+  const editor = (
+    <>
+      <InfoDialog
+        open={translationOpen}
+        onOpenChange={setTranslationOpen}
+        title="In plain English"
+        description="Your current criteria explained in readable language. This does not run or save a rule."
+        returnFocus={translationTrigger}
+      >
+        <section className="rule-explanation" aria-label="Rule summary">
+          <p>{ruleSummary(definition)}</p>
+          <small>
+            Crossovers compare two consecutive daily candles. Cooldown can
+            suppress a repeated signal even when criteria match.
+          </small>
+        </section>
+      </InfoDialog>
       <Dialog.Root open={previewOpen} onOpenChange={setPreviewOpen}>
         <Dialog.Portal>
           <Dialog.Backdrop className="signalgen-confirm__backdrop" />
@@ -776,7 +809,10 @@ export function ServerRulesPanel({
                           <Select
                             value={condition.op}
                             items={Object.entries(operatorLabels).map(
-                              ([value, label]) => ({ value, label }),
+                              ([value, label]) => ({
+                                value,
+                                label: `${operatorSymbols[value as RuleCondition["op"]]} ${label}`,
+                              }),
                             )}
                             onValueChange={(value) =>
                               setCondition(index, {
@@ -803,6 +839,12 @@ export function ServerRulesPanel({
                                   ] as const
                                 ).map((value) => (
                                   <SelectItem key={value} value={value}>
+                                    <span
+                                      className="rule-operator-symbol"
+                                      aria-hidden="true"
+                                    >
+                                      {operatorSymbols[value]}
+                                    </span>
                                     {operatorLabels[value]}
                                   </SelectItem>
                                 ))}
@@ -934,17 +976,6 @@ export function ServerRulesPanel({
               )}
             </div>
 
-            {definition.conditions.length > 0 && (
-              <section className="rule-explanation" aria-label="Rule summary">
-                <h4>In plain English</h4>
-                <p>{ruleSummary(definition)}</p>
-                <small>
-                  Crossovers compare two consecutive daily candles. Cooldown can
-                  suppress a repeated signal even when criteria match.
-                </small>
-              </section>
-            )}
-
             {error && (
               <Alert variant="destructive">
                 <CircleAlert />
@@ -967,6 +998,15 @@ export function ServerRulesPanel({
                 </small>
               </div>
               <div className="rule-composer__save-actions">
+                <Button
+                  ref={translationTrigger}
+                  type="button"
+                  variant="outline"
+                  onClick={() => setTranslationOpen(true)}
+                  disabled={!definition.conditions.length}
+                >
+                  Translate
+                </Button>
                 <Button
                   ref={previewTrigger}
                   type="button"
@@ -997,7 +1037,44 @@ export function ServerRulesPanel({
           </fieldset>
         </form>
       </section>
-
+    </>
+  );
+  return (
+    <div className="rules-workspace">
+      {editing ? (
+        <>
+          {!editorOpen && (
+            <section className="rule-editor-resume">
+              <div>
+                <strong>{definition.name || editing.name}</strong>
+                <p>
+                  Your editing draft is kept until you save or start a new rule.
+                </p>
+              </div>
+              <Button variant="outline" onClick={() => setEditorOpen(true)}>
+                Continue editing
+              </Button>
+              <Button variant="ghost" onClick={startNew}>
+                New blank rule
+              </Button>
+            </section>
+          )}
+          <InfoDialog
+            open={editorOpen}
+            onOpenChange={(open) => {
+              if (!saving) setEditorOpen(open);
+            }}
+            title="Edit rules"
+            description="Update your criteria, then save the changes to your account."
+            returnFocus={editorTrigger}
+            wide
+          >
+            {editor}
+          </InfoDialog>
+        </>
+      ) : (
+        editor
+      )}
       <section className="rule-library" aria-labelledby="rule-library-title">
         <header className="resource-library__header">
           <div>
@@ -1041,9 +1118,15 @@ export function ServerRulesPanel({
             }
             variant="outline"
           >
-            <ToggleGroupItem value="all">All signals</ToggleGroupItem>
-            <ToggleGroupItem value="BUY">BUY</ToggleGroupItem>
-            <ToggleGroupItem value="SELL">SELL</ToggleGroupItem>
+            <ToggleGroupItem value="all" data-signal="all">
+              All signals
+            </ToggleGroupItem>
+            <ToggleGroupItem value="BUY" data-signal="buy">
+              BUY
+            </ToggleGroupItem>
+            <ToggleGroupItem value="SELL" data-signal="sell">
+              SELL
+            </ToggleGroupItem>
           </ToggleGroup>
           <span role="status">
             {filteredRules.length} of {rules.length} rules
@@ -1090,12 +1173,16 @@ export function ServerRulesPanel({
                       <div>
                         <Button
                           variant="ghost"
-                          size="icon"
-                          onClick={() => edit(rule)}
+                          size="sm"
+                          onClick={(event) => {
+                            editorTrigger.current = event.currentTarget;
+                            edit(rule);
+                          }}
                           disabled={saving}
                           aria-label={`Edit ${rule.name}`}
+                          className="workspace-glass-action"
                         >
-                          <Pencil />
+                          <Pencil data-icon="inline-start" /> Edit rules
                         </Button>
                         <Button
                           variant="destructive"
@@ -1106,6 +1193,8 @@ export function ServerRulesPanel({
                           }}
                           disabled={saving || !backendOnline}
                           aria-label={`Delete ${rule.name}`}
+                          className="workspace-glass-action"
+                          data-destructive="true"
                         >
                           <Trash2 />
                         </Button>
