@@ -52,6 +52,11 @@ import { Brand } from "@/components/brand";
 import { AccountMenu } from "@/components/account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HistoricalCachePanel } from "@/components/historical-cache-panel";
+import { JournalScreeningVerification } from "@/components/journal-screening-verification";
+import { JournalPnlChart } from "@/components/journal-pnl-chart";
+import { useActionNotifications } from "@/components/ui/toast";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import type { JournalScreeningDraft } from "@/lib/journal-screening";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -115,7 +120,11 @@ const MarketMonitorPanel = lazy(() =>
     default: m.MarketMonitorPanel,
   })),
 );
-import { journalPerformance, localJournalDate } from "@/lib/journal";
+import {
+  journalPerformance,
+  localJournalDate,
+  filterJournalMonth,
+} from "@/lib/journal";
 const WorkspaceNewsPanel = lazy(() =>
   import("@/pages/workspace-news-panel").then((m) => ({
     default: m.WorkspaceNewsPanel,
@@ -250,6 +259,7 @@ type JournalRecord = {
   direction: "Long" | "Short";
   entryAt: string;
   exitAt: string;
+  closedAt: string;
   size: string;
   entry: number;
   exit: number;
@@ -265,6 +275,7 @@ type JournalRecord = {
 const journalRecords: JournalRecord[] = [
   {
     id: "jr-bbca",
+    closedAt: "2026-09-16T14:42:00+07:00",
     journal: "Momentum book",
     symbol: "BBCA",
     direction: "Long",
@@ -283,6 +294,7 @@ const journalRecords: JournalRecord[] = [
   },
   {
     id: "jr-tlkm",
+    closedAt: "2026-09-15T15:21:00+07:00",
     journal: "Momentum book",
     symbol: "TLKM",
     direction: "Long",
@@ -301,6 +313,7 @@ const journalRecords: JournalRecord[] = [
   },
   {
     id: "jr-asii",
+    closedAt: "2026-09-12T13:08:00+07:00",
     journal: "Swing review",
     symbol: "ASII",
     direction: "Long",
@@ -319,6 +332,7 @@ const journalRecords: JournalRecord[] = [
   },
   {
     id: "jr-bmri",
+    closedAt: "2026-09-10T14:56:00+07:00",
     journal: "Momentum book",
     symbol: "BMRI",
     direction: "Short",
@@ -1385,45 +1399,58 @@ function RulesPanel({
 function JournalPanel({
   draftSymbol,
   clearDraft,
+  screeningDraft,
+  userId,
 }: {
   draftSymbol: string | null;
   clearDraft: () => void;
+  screeningDraft: JournalScreeningDraft | null;
+  userId?: string;
 }) {
   const [journal, setJournal] = useState<
     "All journals" | JournalRecord["journal"]
   >("All journals");
   const [instrument, setInstrument] = useState("All instruments");
+  const [month, setMonth] = useState("");
   const [selectedId, setSelectedId] = useState(journalRecords[0].id);
-  const [captureOpen, setCaptureOpen] = useState(Boolean(draftSymbol));
+  const [captureOpen, setCaptureOpen] = useState(
+    Boolean(draftSymbol) && !screeningDraft,
+  );
+  const captureTrigger = useRef<HTMLButtonElement>(null);
+  const [formMarket, setFormMarket] = useState({
+    market: "IDX",
+    currency: "IDR",
+  });
   const [captureError, setCaptureError] = useState<string | null>(null);
+  useActionNotifications(null, captureError);
   const [form, setForm] = useState({
     symbol: draftSymbol ?? "",
-    side: "BUY" as "BUY" | "SELL",
+    side: "BUY" as "" | "BUY" | "SELL",
     quantity: "",
     price: "",
     fee: "0",
     date: localJournalDate(),
   });
   useEffect(() => {
-    if (draftSymbol) {
+    if (draftSymbol && !screeningDraft) {
       setForm((current) => ({ ...current, symbol: draftSymbol }));
       setCaptureOpen(true);
     }
-  }, [draftSymbol]);
+  }, [draftSymbol, screeningDraft]);
 
   const visibleRecords = useMemo(
     () =>
-      journalRecords.filter(
+      filterJournalMonth(journalRecords, month).filter(
         (record) =>
           (journal === "All journals" || record.journal === journal) &&
           (instrument === "All instruments" || record.symbol === instrument),
       ),
-    [instrument, journal],
+    [instrument, journal, month],
   );
   const selectedRecord =
     visibleRecords.find((record) => record.id === selectedId) ??
     visibleRecords[0];
-  const { totalPnl, winRate, averageWin, profitFactor, chartCoordinates } =
+  const { totalPnl, winRate, averageWin, profitFactor } =
     journalPerformance(visibleRecords);
 
   function addTransaction(event: FormEvent) {
@@ -1434,6 +1461,7 @@ function JournalPanel({
     const fee = Number(form.fee);
     if (
       !/^[A-Z][A-Z0-9.:-]{0,19}$/.test(symbol) ||
+      !["BUY", "SELL"].includes(form.side) ||
       !Number.isInteger(quantity) ||
       quantity < 1 ||
       !Number.isFinite(price) ||
@@ -1452,14 +1480,34 @@ function JournalPanel({
     );
   }
 
-  const chartPoints = chartCoordinates
-    .map((point) => point.join(","))
-    .join(" ");
-
   return (
     <div className="journal-workspace">
+      <JournalScreeningVerification
+        draft={screeningDraft}
+        userId={userId}
+        returnFocus={captureTrigger}
+        onClose={clearDraft}
+        onVerified={(draft) => {
+          const row = draft.run.rows.find(
+            (item) => item.decision.symbol === draft.symbol,
+          )!;
+          setForm((current) => ({
+            ...current,
+            symbol: draft.symbol.replace(/\.JK$/, ""),
+            side: row.decision.signal_type ?? "",
+            price: String(row.latestClose),
+          }));
+          setFormMarket({
+            market: draft.run.manifest.market,
+            currency: draft.run.manifest.currency,
+          });
+          clearDraft();
+          setCaptureOpen(true);
+          setCaptureError(null);
+        }}
+      />
       <section className="journal-toolbar" aria-label="Journal filters">
-        <div className="journal-toolbar__filters">
+        <FieldGroup className="journal-toolbar__filters">
           <label>
             Journal
             <select
@@ -1490,20 +1538,43 @@ function JournalPanel({
               <option>BMRI</option>
             </select>
           </label>
-          <div className="journal-period">
-            <span>Period</span>
-            <span className="journal-date">
-              <CalendarRange />
-              01–16 Sep 2026
-            </span>
-          </div>
-        </div>
+          <Field className="journal-month-filter">
+            <FieldLabel htmlFor="journal-month">Month</FieldLabel>
+            <div>
+              <Input
+                id="journal-month"
+                type="month"
+                value={month}
+                onChange={(event) => setMonth(event.target.value)}
+              />
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Clear month filter"
+                disabled={!month}
+                onClick={() => setMonth("")}
+              >
+                <X />
+              </Button>
+            </div>
+          </Field>
+        </FieldGroup>
         <div className="journal-toolbar__actions">
           <Button
-            onClick={() => setCaptureOpen((open) => !open)}
+            ref={captureTrigger}
+            variant={captureOpen ? "destructive" : "default"}
+            onClick={() => {
+              if (captureOpen) clearDraft();
+              setCaptureOpen((open) => !open);
+            }}
             aria-expanded={captureOpen}
           >
-            <Plus data-icon="inline-start" /> Open journal form
+            {captureOpen ? (
+              <X data-icon="inline-start" />
+            ) : (
+              <Plus data-icon="inline-start" />
+            )}{" "}
+            {captureOpen ? "Close journal form" : "Open journal form"}
           </Button>
         </div>
       </section>
@@ -1541,15 +1612,19 @@ function JournalPanel({
               <select
                 value={form.side}
                 onChange={(e) =>
-                  setForm({ ...form, side: e.target.value as "BUY" | "SELL" })
+                  setForm({
+                    ...form,
+                    side: e.target.value as "" | "BUY" | "SELL",
+                  })
                 }
               >
+                <option value="">Choose side</option>
                 <option>BUY</option>
                 <option>SELL</option>
               </select>
             </label>
             <label>
-              Lot
+              {formMarket.market === "US" ? "Shares" : "Lot"}
               <Input
                 type="number"
                 min="1"
@@ -1559,10 +1634,11 @@ function JournalPanel({
               />
             </label>
             <label>
-              Entry price
+              Entry price ({formMarket.currency})
               <Input
                 type="number"
-                min="1"
+                min="0.01"
+                step="any"
                 value={form.price}
                 onChange={(e) => setForm({ ...form, price: e.target.value })}
                 required
@@ -1586,23 +1662,25 @@ function JournalPanel({
                 required
               />
             </label>
-            <Button
-              className="ui-button ui-button--primary control-wide"
-              type="submit"
-              disabled
-            >
-              <Save data-icon="inline-start" /> Saving unavailable
-            </Button>
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => {
-                clearDraft();
-                setCaptureOpen(false);
-              }}
-            >
-              Close form
-            </Button>
+            <div className="journal-capture-actions control-wide">
+              <Button
+                className="ui-button ui-button--primary"
+                type="submit"
+                disabled
+              >
+                <Save data-icon="inline-start" /> Saving unavailable
+              </Button>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  clearDraft();
+                  setCaptureOpen(false);
+                }}
+              >
+                Close form
+              </Button>
+            </div>
           </form>
         </section>
       )}
@@ -1610,12 +1688,15 @@ function JournalPanel({
       <section className="journal-performance" aria-label="Trading performance">
         <div className="journal-performance__summary">
           <div>
-            <span>Sample performance — not your account data</span>
+            <span>Performance of displayed trades</span>
             <strong className={totalPnl >= 0 ? "positive" : "negative"}>
               {totalPnl >= 0 ? "+" : "-"}
               {formatRupiah(totalPnl)}
             </strong>
-            <small>after the selected filters</small>
+            <small>
+              {visibleRecords.length} sample closed trades · same filters as the
+              table · not account data
+            </small>
           </div>
           <dl>
             <div>
@@ -1634,22 +1715,7 @@ function JournalPanel({
             </div>
           </dl>
         </div>
-        <figure className="journal-pnl-chart">
-          <figcaption>
-            <span>Realized P&amp;L sequence</span>
-            <small>Ordered by closed trade, not a live price chart.</small>
-          </figcaption>
-          <svg
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            aria-label="Illustrative realized profit and loss sequence"
-          >
-            <line x1="0" x2="100" y1="25" y2="25" />
-            <line x1="0" x2="100" y1="50" y2="50" />
-            <line x1="0" x2="100" y1="75" y2="75" />
-            <polyline points={chartPoints} />
-          </svg>
-        </figure>
+        <JournalPnlChart records={visibleRecords} />
       </section>
 
       <section className="journal-ledger" aria-label="Closed trade history">
@@ -2273,13 +2339,20 @@ export function DemoWorkspace({
 
   useEffect(() => () => workspaceMotion.current?.cancel(), []);
   const [draftSymbol, setDraftSymbol] = useState<string | null>(null);
+  const [screeningDraft, setScreeningDraft] =
+    useState<JournalScreeningDraft | null>(null);
+  useEffect(() => {
+    setDraftSymbol(null);
+    setScreeningDraft(null);
+  }, [user?.id]);
   const meta = viewMeta[view];
   const PageIcon = meta.icon;
   function go(next: DemoView) {
     location.hash = `app/${next}`;
   }
-  function draft(symbol: string) {
+  function draft(symbol: string, evidence?: JournalScreeningDraft) {
     setDraftSymbol(symbol);
+    setScreeningDraft(evidence ?? null);
     go("journal");
   }
   return (
@@ -2477,7 +2550,12 @@ export function DemoWorkspace({
                     {view === "journal" && (
                       <JournalPanel
                         draftSymbol={draftSymbol}
-                        clearDraft={() => setDraftSymbol(null)}
+                        screeningDraft={screeningDraft}
+                        userId={user?.id}
+                        clearDraft={() => {
+                          setDraftSymbol(null);
+                          setScreeningDraft(null);
+                        }}
                       />
                     )}
                     {view === "access" && (

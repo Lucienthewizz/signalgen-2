@@ -33,6 +33,11 @@ import { TradingViewChart } from "@/components/tradingview-chart";
 import { marketCandleDate, marketTimezone } from "@/lib/data-freshness";
 import { ScreeningDataQuality } from "@/components/screening-data-quality";
 import { InfoDialog } from "@/components/ui/info-dialog";
+import { toast } from "@/components/ui/toast";
+import {
+  checkJournalScreening,
+  type JournalScreeningDraft,
+} from "@/lib/journal-screening";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   conditionEvidence,
@@ -107,7 +112,7 @@ type Props = {
   authenticated: boolean;
   backendOnline: boolean;
   userId?: string;
-  onDraft: (symbol: string) => void;
+  onDraft: (symbol: string, evidence?: JournalScreeningDraft) => void;
 };
 
 type RunState = "idle" | "loading" | "completed" | "failed";
@@ -1512,9 +1517,47 @@ export function WorkspaceScreenerPanel({
                             variant="ghost"
                             size="sm"
                             className="workspace-glass-action screener-journal-action"
-                            onClick={() =>
-                              onDraft(row.decision.symbol.replace(".JK", ""))
-                            }
+                            onClick={() => {
+                              const evidence: JournalScreeningDraft = {
+                                ownerId: userId ?? "",
+                                symbol: row.decision.symbol,
+                                ruleName:
+                                  historicalRun?.rule ??
+                                  runContext?.rule.name ??
+                                  "Screening result",
+                                ruleSnapshot: evidenceRule
+                                  ? {
+                                      version: evidenceRule.version,
+                                      definition_hash:
+                                        evidenceRule.definition_hash,
+                                      definition: evidenceRule.definition,
+                                    }
+                                  : undefined,
+                                screenedAt:
+                                  history.find(
+                                    (item) =>
+                                      item.run.result.request_id ===
+                                      run.result.request_id,
+                                  )?.recordedAt ?? new Date().toISOString(),
+                                run,
+                              };
+                              const check = checkJournalScreening(
+                                evidence,
+                                userId,
+                              );
+                              if (!check.ok) {
+                                toast.add({
+                                  type: "error",
+                                  title: "Cannot add to journal",
+                                  description: check.reason,
+                                });
+                                return;
+                              }
+                              onDraft(
+                                row.decision.symbol.replace(/\.JK$/, ""),
+                                evidence,
+                              );
+                            }}
                           >
                             Add to journal
                           </Button>

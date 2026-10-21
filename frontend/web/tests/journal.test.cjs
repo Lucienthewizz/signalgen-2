@@ -15,6 +15,7 @@ vm.runInNewContext(
   { exports: exportsForTest },
 );
 const { journalPerformance, localJournalDate } = exportsForTest;
+const { filterJournalMonth, journalTimeline } = exportsForTest;
 
 test("empty and loss-only filters never produce NaN or infinite chart points", () => {
   for (const records of [[], [{ pnl: -32000 }], [{ pnl: 0 }]]) {
@@ -42,4 +43,24 @@ test("profit factor uses money and the chart follows chronological filtered trad
 
 test("entry date uses local calendar components in ISO input format", () => {
   assert.equal(localJournalDate(new Date(2026, 0, 2, 0, 1)), "2026-01-02");
+});
+
+test("month filters drive the same rows, totals and dated P&L points", () => {
+  const rows = [
+    { id: "later", closedAt: "2026-10-20T09:00:00+07:00", pnl: 250 },
+    { id: "earlier", closedAt: "2026-10-02T09:00:00+07:00", pnl: -50 },
+    { id: "september", closedAt: "2026-09-30T09:00:00+07:00", pnl: 100 },
+  ];
+  const filtered = filterJournalMonth(rows, "2026-10");
+  assert.equal(filtered.length, 2);
+  assert.equal(journalPerformance(filtered).totalPnl, 200);
+  const timeline = journalTimeline(filtered);
+  assert.equal(timeline[1].record.id, "earlier");
+  assert.equal(timeline[1].value, -50);
+  assert.equal(timeline[2].value, 200);
+  assert.equal(filterJournalMonth(rows, "").length, 3);
+  assert.equal(filterJournalMonth(rows, "2026-13").length, 0);
+  assert.equal(filterJournalMonth(rows, "2026-11").length, 0);
+  assert.equal(journalTimeline([])[0].value, 0);
+  assert.equal(rows[0].id, "later", "Chart must not mutate table order");
 });

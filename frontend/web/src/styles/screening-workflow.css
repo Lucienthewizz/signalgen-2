@@ -679,6 +679,12 @@
   min-height: 44px;
   border-radius: 12px;
   background: color-mix(in srgb, var(--danger) 18%, var(--surface));
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--line));
+  font-family: inherit;
+  font-weight: 750;
+}
+.screener-stop svg {
   color: var(--danger);
 }
 .screener-stop:hover {

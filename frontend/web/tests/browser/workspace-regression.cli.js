@@ -112,8 +112,40 @@ async (page) => {
   const journalKey = `signalgen:journal-drafts:${user.id}`;
   await page.evaluate(key => localStorage.setItem(key, "preserve-existing-drafts"), journalKey);
   await page.getByRole("button", { name: "Add to journal", exact: true }).first().click({ timeout: 5000 });
+  await page.waitForURL('**/#app/journal');
+  const journalVerification = page.getByRole('dialog',{name:'Verify screening details',exact:true});
+  await journalVerification.waitFor();
+  if (!(await journalVerification.innerText()).includes('BBCA') || await journalVerification.locator('tbody tr').count() !== 2) throw Error('Journal verification omitted captured condition evidence');
+  const verificationTheme = await page.evaluate(()=>document.documentElement.dataset.theme);
+  for (const width of [1440,390]) for (const theme of ['dark','light']) {
+    await page.setViewportSize({width,height:1000});
+    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+    const box=await journalVerification.boundingBox();
+    if (!box || box.x<0 || box.x+box.width>width+1) throw Error('Journal verification popup exceeds viewport');
+    await page.screenshot({path:`/private/tmp/signalgen-journal-verification-${width}-${theme}.png`,animations:'disabled'});
+  }
+  await page.evaluate(theme=>document.documentElement.dataset.theme=theme,verificationTheme);
+  await journalVerification.getByRole('button',{name:'Use in journal form',exact:true}).click();
   await page.getByRole("heading", { name: "Record a trade", exact: true }).waitFor({ timeout: 5000 });
   if (await page.locator(".journal-capture input").first().inputValue() !== "BBCA") throw Error("Screener did not prefill journal symbol");
+  await page.getByRole('button',{name:'Close journal form',exact:true}).waitFor();
+  if (await page.getByLabel('Entry price (IDR)',{exact:true}).inputValue() !== '100') throw Error('Journal price differs from screening snapshot');
+  await page.getByText('Screening verified',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Close journal form',exact:true}).click();
+  await page.getByRole('button',{name:'Open journal form',exact:true}).waitFor();
+  await page.getByLabel('Month',{exact:true}).fill('2026-10');
+  await page.getByText('No closed trades in this period',{exact:true}).waitFor();
+  await page.getByText('No closed trades match these filters.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Clear month filter',exact:true}).click();
+  await page.getByText('No closed trades match these filters.',{exact:true}).waitFor({state:'hidden'});
+  if (await page.locator('.journal-ledger tbody tr').count() !== 4) throw Error('Clearing month did not restore table');
+  const summaryText = await page.locator('.journal-performance__summary').innerText();
+  if (!summaryText.includes('326,600') || !summaryText.includes('4 sample closed trades')) throw Error('Journal total does not match visible sample rows');
+  if (!(await page.locator('.journal-pnl-chart svg').textContent()).includes('Cumulative P&L (IDR)')) throw Error('Chart axis labels missing');
+  await page.getByRole('button',{name:'Open journal form',exact:true}).click();
+  const saveBox=await page.getByRole('button',{name:'Saving unavailable',exact:true}).boundingBox();
+  const closeBox=await page.getByRole('button',{name:'Close form',exact:true}).boundingBox();
+  if (!saveBox || !closeBox || Math.abs(saveBox.width-closeBox.width)>1 || Math.abs(saveBox.height-closeBox.height)>1) throw Error('Journal form actions differ in size');
   if (!await page.getByRole("button", { name: "Saving unavailable", exact: true }).isDisabled()) throw Error("Unavailable journal storage must not submit");
   if (await page.locator(".journal-drafts").count()) throw Error("Local draft workflow still visible");
   await page.reload();
@@ -297,9 +329,10 @@ async (page) => {
           const filters = await page.locator('.rule-library__filters').evaluate(el => {
             const search = el.querySelector('input').getBoundingClientRect();
             const buttons = [...el.querySelectorAll('[data-signal]')].map(item => item.getBoundingClientRect().height);
-            return { height: search.height, buttons, divider: parseFloat(getComputedStyle(el.querySelector('[role="status"]')).borderLeftWidth) };
+            return { height: search.height, buttons, misplacedCount: Boolean(el.querySelector('[role="status"]')) };
           });
-          if (filters.buttons.some(height => Math.abs(height - filters.height) > 1) || filters.divider < 1) throw Error(`Rule filters must match the search height and separate the rule count: ${JSON.stringify(filters)}`);
+          if (filters.buttons.some(height => Math.abs(height - filters.height) > 1) || filters.misplacedCount) throw Error(`Rule filters must match the search height with count moved beside Your rules: ${JSON.stringify(filters)}`);
+          if (!(await page.locator('.rule-library__list-heading [role="status"]').innerText()).includes('[')) throw Error('Bracketed rule count missing');
           const refresh = page.locator(".rule-library").getByRole("button", { name: "Refresh", exact: true });
           if (!(await refresh.getAttribute("class")).split(" ").includes("bg-primary")) throw Error("Rules refresh not primary");
           if (await page.locator(".rule-library__rows").getByText("v2", { exact: true }).count()) throw Error("Rule version badge still visible");

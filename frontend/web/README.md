@@ -1,5 +1,29 @@
 # Signalgen Web
 
+## Dashboard and journal review (21 October 2026)
+
+Dashboard resources use larger landing-style boxes. Recent runs include glass
+interval/time labels and semantic matched counts. Rules place the bracketed
+filtered count beside Your rules, preserving search/filter height and row gutters.
+Shared information dialogs align a larger close action with the title.
+
+Add to journal accepts only a valid matched snapshot from the current account.
+It opens a centered verification dialog **on the journal route**, with frozen
+prices, currency, interval/time, indicators, condition values and crossover history.
+Legacy/private rule definitions remain unavailable rather than being reconstructed.
+Confirmation copies the snapshot price and known signal direction into an
+**unsaved** form. Unknown legacy direction must be selected manually. Toasts
+distinguish verification success from saving a transaction; no journal endpoint,
+local ledger, broker order or account performance is invented.
+
+The journal toolbar toggles Open/Close with a destructive close state. Save/Close
+actions share one aligned footer. Month, instrument and book filters drive the
+same table rows, summary and dated cumulative P&L chart. Chart points expose date,
+closing price and cumulative IDR value on hover/focus; the axis is P&L, not a stock
+quote. **Rows are still explicitly labelled sample records** until the backend
+implements the authoritative journal API. This UI change does not make sample
+performance into account data.
+
 ## Workspace refinements (21 October 2026)
 
 Screener keeps rule, universe and candle interval together. Start/Stop and the

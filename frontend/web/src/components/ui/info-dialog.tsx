@@ -35,22 +35,24 @@ export function InfoDialog({
             initialFocus={closeRef}
             finalFocus={() => returnFocus?.current ?? true}
           >
-            <Dialog.Close
-              render={
-                <Button
-                  ref={closeRef}
-                  variant="ghost"
-                  size="icon"
-                  className="signalgen-info__close"
-                  aria-label="Close dialog"
-                />
-              }
-            >
-              <X />
-            </Dialog.Close>
-            <Dialog.Title className="signalgen-confirm__title">
-              {title}
-            </Dialog.Title>
+            <div className="signalgen-info__heading">
+              <Dialog.Title className="signalgen-confirm__title">
+                {title}
+              </Dialog.Title>
+              <Dialog.Close
+                render={
+                  <Button
+                    ref={closeRef}
+                    variant="ghost"
+                    size="icon"
+                    className="signalgen-info__close"
+                    aria-label="Close dialog"
+                  />
+                }
+              >
+                <X />
+              </Dialog.Close>
+            </div>
             <Dialog.Description className="signalgen-confirm__description">
               {description}
             </Dialog.Description>

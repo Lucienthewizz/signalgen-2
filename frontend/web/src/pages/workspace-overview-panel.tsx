@@ -348,15 +348,30 @@ export function WorkspaceOverviewPanel({
                         .join(", ")}
                   </p>
                 </div>
-                <time dateTime={item.recordedAt}>
-                  {new Date(item.recordedAt).toLocaleString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </time>
-                <Badge variant="secondary">
+                <div className="overview-run-meta">
+                  <Badge variant="outline" className="workspace-glass-surface">
+                    {item.run.manifest.timeframe} candles
+                  </Badge>
+                  <time
+                    className="workspace-glass-surface"
+                    dateTime={item.recordedAt}
+                  >
+                    {new Date(item.recordedAt).toLocaleString("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                </div>
+                <Badge
+                  variant={
+                    item.run.rows.some((row) => row.decision.matched)
+                      ? "success"
+                      : "destructive"
+                  }
+                  className="overview-match-count"
+                >
                   {item.run.rows.filter((row) => row.decision.matched).length} /{" "}
                   {item.run.rows.length} matched
                 </Badge>

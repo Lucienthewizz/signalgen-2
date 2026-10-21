@@ -1128,9 +1128,12 @@ export function ServerRulesPanel({
               SELL
             </ToggleGroupItem>
           </ToggleGroup>
-          <span role="status">
-            {filteredRules.length} of {rules.length} rules
-          </span>
+        </div>
+        <div className="rule-library__list-heading">
+          <span>Your rules</span>
+          <Badge variant="outline" role="status">
+            [ {filteredRules.length} of {rules.length} rules ]
+          </Badge>
         </div>
         {loading && !rules.length ? (
           <div className="resource-loading">
@@ -1158,7 +1161,6 @@ export function ServerRulesPanel({
           <div className="rule-library__groups">
             {privateRules.length > 0 && (
               <div>
-                <span className="rule-library__eyebrow">Your rules</span>
                 <div className="rule-library__rows">
                   {privateRules.map((rule) => (
                     <article key={rule.id}>
