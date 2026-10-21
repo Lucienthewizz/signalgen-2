@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
-  BadgeCheck,
   Boxes,
   Clock3,
   ListChecks,
@@ -12,6 +11,7 @@ import {
   Newspaper,
 } from "lucide-react";
 import { api } from "@/api/client";
+import { FeatureFigure } from "@/components/feature-figure";
 import { monitorRuns, type MonitorRun } from "@/lib/market-monitor";
 import { screeningStatus, screeningStatusLabels } from "@/lib/screening-status";
 import {
@@ -294,31 +294,64 @@ export function WorkspaceOverviewPanel({
           </button>
         </nav>
       </div>
-      <section className="overview-counts" aria-label="Workspace overview">
-        <button onClick={() => go("rules")}>
-          <ListChecks aria-hidden="true" />
-          <span>Rules</span>
-          <strong>{rules.length}</strong>
-        </button>
-        <button onClick={() => go("universes")}>
-          <Boxes aria-hidden="true" />
-          <span>Stock universes</span>
-          <strong>{universes.length}</strong>
-        </button>
-        <button onClick={() => go("subscription")}>
-          <BadgeCheck aria-hidden="true" />
-          <span>Plan</span>
-          <strong>{subscription?.plan_name ?? "—"}</strong>
-        </button>
-        <button onClick={() => go("access")}>
-          <ShieldCheck aria-hidden="true" />
-          <span>Account</span>
-          <strong>
-            {account?.user.status === "active"
-              ? "Active"
-              : (account?.user.status ?? "—")}
-          </strong>
-        </button>
+      <section
+        className="overview-resources feature-gallery"
+        aria-label="Workspace overview"
+      >
+        {(
+          [
+            {
+              view: "rules",
+              figure: "rules",
+              label: "Rules",
+              value: rules.length,
+              action: "Manage rules",
+            },
+            {
+              view: "universes",
+              figure: "analysis",
+              label: "Stock universes",
+              value: universes.length,
+              action: "Manage universes",
+            },
+            {
+              view: "subscription",
+              figure: "journal",
+              label: "Plan",
+              value: subscription?.plan_name ?? "—",
+              action: "View plan",
+            },
+            {
+              view: "access",
+              figure: "access",
+              label: "Account",
+              value:
+                account?.user.status === "active"
+                  ? "Active"
+                  : (account?.user.status ?? "—"),
+              action: "View account",
+            },
+          ] as const
+        ).map((resource) => (
+          <a
+            className="feature-gallery__item"
+            href={`#app/${resource.view}`}
+            key={resource.view}
+          >
+            <div className="feature-gallery__figure">
+              <div className="feature-gallery__depth">
+                <FeatureFigure kind={resource.figure} />
+              </div>
+            </div>
+            <div className="feature-gallery__copy">
+              <strong>{resource.label}</strong>
+              <p className="overview-resources__value">{resource.value}</p>
+              <span>
+                {resource.action} <ArrowUpRight aria-hidden="true" />
+              </span>
+            </div>
+          </a>
+        ))}
       </section>
       <section
         className="overview-activity"
@@ -349,12 +382,13 @@ export function WorkspaceOverviewPanel({
                   </p>
                 </div>
                 <div className="overview-run-meta">
-                  <Badge variant="outline" className="workspace-glass-surface">
+                  <Badge variant="secondary" className="overview-run-chip">
                     {item.run.manifest.timeframe} candles
                   </Badge>
-                  <time
-                    className="workspace-glass-surface"
-                    dateTime={item.recordedAt}
+                  <Badge
+                    variant="secondary"
+                    className="overview-run-chip"
+                    render={<time dateTime={item.recordedAt} />}
                   >
                     {new Date(item.recordedAt).toLocaleString("en-GB", {
                       day: "numeric",
@@ -362,23 +396,28 @@ export function WorkspaceOverviewPanel({
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
-                  </time>
+                  </Badge>
+                  <Badge
+                    variant={
+                      item.run.rows.some((row) => row.decision.matched)
+                        ? "success"
+                        : "destructive"
+                    }
+                    className="overview-run-chip overview-match-count"
+                  >
+                    {item.run.rows.filter((row) => row.decision.matched).length}{" "}
+                    / {item.run.rows.length} matched
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="overview-run-chip"
+                    onClick={() => continueScreen(item)}
+                  >
+                    Use selection
+                    <ArrowUpRight data-icon="inline-end" />
+                  </Button>
                 </div>
-                <Badge
-                  variant={
-                    item.run.rows.some((row) => row.decision.matched)
-                      ? "success"
-                      : "destructive"
-                  }
-                  className="overview-match-count"
-                >
-                  {item.run.rows.filter((row) => row.decision.matched).length} /{" "}
-                  {item.run.rows.length} matched
-                </Badge>
-                <Button variant="outline" onClick={() => continueScreen(item)}>
-                  Use selection
-                  <ArrowUpRight data-icon="inline-end" />
-                </Button>
               </li>
             ))}
           </ul>

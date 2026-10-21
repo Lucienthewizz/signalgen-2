@@ -310,73 +310,51 @@
   padding: 4px 8px;
   font-variant-numeric: tabular-nums;
 }
-.overview-board .overview-counts {
-  gap: 14px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  overflow: visible;
-}
-.overview-board .overview-counts > button {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-content: space-between;
-  gap: 16px;
-  padding: 22px;
-  min-height: 150px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--workspace-card-gradient, var(--surface));
-  text-align: left;
-}
-.overview-counts > button > svg {
-  width: 24px;
-  height: 24px;
-  grid-column: 2;
-  grid-row: 1;
-  color: var(--green);
-}
-.overview-counts > button > span {
-  grid-column: 1;
-  grid-row: 1;
-  color: var(--muted);
-  font-size: 14px;
-}
-.overview-counts > button > strong {
-  grid-column: 1 / -1;
-  font-size: 28px;
-  line-height: 1.1;
+.overview-resources .overview-resources__value {
+  min-height: 50px;
   color: var(--text);
+  font-size: 32px;
+  font-weight: 650;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+.overview-resources .feature-gallery__item:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -3px;
+}
+.overview-board .overview-activity li {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 .overview-run-meta {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, 116px);
   align-items: center;
-  justify-content: flex-end;
   gap: 8px;
 }
-.overview-run-meta .workspace-glass-surface {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding: 6px 10px;
+.overview-activity .overview-run-chip {
+  width: 116px;
+  height: 30px;
+  min-height: 30px;
+  padding: 4px 10px;
   font-size: 12px;
-  border-radius: 9px;
-  color: var(--text);
-  white-space: nowrap;
+  line-height: 20px;
+  border-radius: 999px;
+  font-weight: 650;
 }
 .overview-match-count {
-  min-height: 30px;
   font-weight: 750;
 }
-@media (max-width: 760px) {
+@media (max-width: 1050px) {
   .overview-run-meta {
-    justify-content: flex-start;
+    grid-template-columns: repeat(2, 116px);
   }
-  .overview-board .overview-counts > button {
-    min-height: 128px;
-    padding: 18px;
+}
+@media (max-width: 760px) {
+  .overview-board .overview-activity li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .overview-run-meta {
+    justify-content: start;
   }
 }
 .signalgen-info .signalgen-confirm__actions {

@@ -324,6 +324,39 @@ async (page) => {
             return Math.max(Math.abs(title.x - selection.x), Math.abs(title.x - history.x), Math.abs(history.x - row.x));
           });
           if (alignment > 2) throw Error(`Dashboard gutters inconsistent: ${alignment}px`);
+          const resources = page.getByRole('region', {name:'Workspace overview',exact:true});
+          if (await resources.locator('.feature-gallery__item .feature-figure').count() !== 4) throw Error('Dashboard must reuse all four landing illustration panels');
+          const destinations = await resources.locator('a').evaluateAll(links => links.map(link=>link.getAttribute('href')));
+          if (destinations.join(',') !== '#app/rules,#app/universes,#app/subscription,#app/access') throw Error('Dashboard resource navigation changed');
+          const values = await resources.locator('.overview-resources__value').allTextContents();
+          if (values.join(',') !== '1,1,Pro,Active') throw Error(`Dashboard resource values differ from account data: ${values}`);
+          const chips = await page.locator('.overview-activity li').first().locator('.overview-run-chip').evaluateAll(items => items.map(el => {
+            const rect=el.getBoundingClientRect(), style=getComputedStyle(el);
+            return {width:rect.width,height:rect.height,radius:style.borderRadius,padding:style.padding,overflow:el.scrollWidth>el.clientWidth+1};
+          }));
+          if (chips.length !== 4 || chips.some(chip=>chip.width!==chips[0].width || chip.height!==chips[0].height || chip.radius!==chips[0].radius || chip.padding!==chips[0].padding || chip.overflow)) throw Error(`Recent screening pills must match: ${JSON.stringify(chips)}`);
+          if (await page.locator('.overview-run-meta time[datetime]').count() !== 2) throw Error('Screening date semantics lost');
+          await resources.screenshot({path:`/private/tmp/signalgen-overview-resources-${width}-${theme}.png`,animations:'disabled'});
+          await page.locator('.overview-activity').screenshot({path:`/private/tmp/signalgen-overview-recent-${width}-${theme}.png`,animations:'disabled'});
+          const overviewPanel = await resources.locator('.feature-gallery__item').first().evaluate(el => {
+            const css=getComputedStyle(el),figure=getComputedStyle(el.querySelector('.feature-gallery__figure'));
+            return {height:css.minHeight,padding:css.padding,background:css.backgroundImage,size:css.backgroundSize,radius:css.borderRadius,figure:figure.minHeight};
+          });
+          await page.goto(`${origin}/#home`);
+          const landingCard=page.locator('#capabilities .feature-gallery__item').first();
+          await landingCard.waitFor();
+          const landingPanel = await landingCard.evaluate(el => {
+            const css=getComputedStyle(el),figure=getComputedStyle(el.querySelector('.feature-gallery__figure'));
+            return {height:css.minHeight,padding:css.padding,background:css.backgroundImage,size:css.backgroundSize,radius:css.borderRadius,figure:figure.minHeight};
+          });
+          if (JSON.stringify(overviewPanel)!==JSON.stringify(landingPanel)) throw Error(`Dashboard panel differs from landing: ${JSON.stringify({overviewPanel,landingPanel})}`);
+          if (width===1440) await landingCard.screenshot({path:`/private/tmp/signalgen-landing-panel-${theme}.png`,animations:'disabled'});
+          await page.goto(`${origin}/#app/overview`);
+          await page.locator('.overview-resources').waitFor();
+          await page.locator('.overview-activity').getByRole('button',{name:'Use selection',exact:true}).first().click();
+          await page.waitForURL('**/#app/analysis');
+          await page.goto(`${origin}/#app/overview`);
+          await page.locator('.overview-resources').waitFor();
         }
         if (view === "rules") {
           const filters = await page.locator('.rule-library__filters').evaluate(el => {
