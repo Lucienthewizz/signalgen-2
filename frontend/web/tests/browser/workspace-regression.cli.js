@@ -260,6 +260,8 @@ async (page) => {
         if (surfaceContrast.min < 4.5) throw Error(`Shared surface text contrast below AA: ${JSON.stringify(surfaceContrast)}`);
         await page.screenshot({ path: `/private/tmp/signalgen-${view}-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
         if (view === "realtime") {
+          if (!await page.locator('.monitor-ledger table th, .monitor-ledger table td').evaluateAll(items=>items.length>0 && items.every(el=>getComputedStyle(el).textAlign==='center'))) throw Error('Every monitor table header and cell must be centered');
+          if (!await page.locator('.monitor-ledger .monitor-result').evaluateAll(items=>items.every(el=>getComputedStyle(el).justifyItems==='center'))) throw Error('Monitor result badges must be centered');
           if (!await page.locator(".monitor-change").first().evaluate(el => getComputedStyle(el).fontFamily.includes("Geist Mono Variable") && document.fonts.check('13px "Geist Mono Variable"'))) throw Error("Market numbers must use loaded Geist Mono");
           const geometry = await page.locator(".monitor-board-grid").evaluate(el => {
             const chart = el.querySelector(".monitor-chart").getBoundingClientRect();
@@ -275,6 +277,12 @@ async (page) => {
         }
         if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Overflow: ${view} ${width}`);
         if (view === "analysis") {
+          const matchMode = page.locator('.screener-run-summary__title .screener-match-mode');
+          if (await matchMode.innerText() !== 'Match all 2 conditions' || !await matchMode.evaluate(el=>el.previousElementSibling.textContent==='BUY')) throw Error('Match mode must be a card next to the signal badge');
+          if (await page.locator('.screener-criteria > p').count()) throw Error('Match mode remains below the signal badges');
+          const operators = await page.locator('.screener-criteria .rule-operator-symbol').allTextContents();
+          if (operators.join(',')!=='>,>') throw Error(`Screening conditions omit the Rules comparison symbols: ${operators}`);
+          await page.locator('.screener-run-summary').screenshot({path:`/private/tmp/signalgen-criteria-${width}-${theme}.png`,animations:'disabled'});
           const controlGeometry = await page.locator('.screener-monitor-status').evaluate(el => {
             const start = el.querySelector('.screener-run-summary__action'), times = el.querySelector('.screener-monitor-status__times');
             return {left: el.querySelector('.screener-monitor-status__icon').getBoundingClientRect().left, expected: document.querySelector('.screener-pickers').getBoundingClientRect().left + parseFloat(getComputedStyle(document.querySelector('.screener-pickers')).paddingLeft), start: start.getBoundingClientRect().left, times: times.getBoundingClientRect().right};
@@ -318,14 +326,23 @@ async (page) => {
           await page.locator(".overview-launch").screenshot({ path: `/private/tmp/signalgen-dashboard-gradient-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           const alignment = await page.evaluate(() => {
             const title = document.querySelector(".overview-next h3").getBoundingClientRect();
-            const selection = document.querySelector(".overview-selection").getBoundingClientRect();
             const history = document.querySelector(".overview-activity header h3").getBoundingClientRect();
             const row = document.querySelector(".overview-activity li > div").getBoundingClientRect();
-            return Math.max(Math.abs(title.x - selection.x), Math.abs(title.x - history.x), Math.abs(history.x - row.x));
+            return Math.max(Math.abs(title.x - history.x), Math.abs(history.x - row.x));
           });
           if (alignment > 2) throw Error(`Dashboard gutters inconsistent: ${alignment}px`);
+          if (await page.locator('.overview-selection').count()) throw Error('Rule and universe selection must not clutter dashboard hero');
+          const launchButton = await page.locator('.overview-next .overview-open-screener').evaluate(el => {
+            const css=getComputedStyle(el); return {height:el.getBoundingClientRect().height,font:parseFloat(css.fontSize),glass:css.backdropFilter,background:css.backgroundImage};
+          });
+          if (launchButton.height<52 || launchButton.font<20 || !launchButton.glass.includes('blur') || !launchButton.background.includes('linear-gradient')) throw Error(`Large green glass screener action missing: ${JSON.stringify(launchButton)}`);
           const resources = page.getByRole('region', {name:'Workspace overview',exact:true});
-          if (await resources.locator('.feature-gallery__item .feature-figure').count() !== 4) throw Error('Dashboard must reuse all four landing illustration panels');
+          const icons = await resources.locator('.overview-resources__icon > svg').evaluateAll(items => items.map(el => el.getAttribute('class')));
+          if (icons.length !== 4 || new Set(icons).size !== 4 || !['list-checks','boxes','crown','user-round'].every((name,i)=>icons[i].includes(`lucide-${name}`))) throw Error(`Dashboard icons must be distinct and match each resource: ${icons}`);
+          const resourceSizes = await resources.locator('.feature-gallery__item').evaluateAll(items => items.map(el => ({height:el.getBoundingClientRect().height,width:el.getBoundingClientRect().width})));
+          if (resourceSizes.some(size=>size.height>280 || size.height<200 || Math.abs(size.height-resourceSizes[0].height)>1)) throw Error(`Dashboard cards are not compact and equal: ${JSON.stringify(resourceSizes)}`);
+          if (!await resources.locator('.feature-gallery__copy').evaluateAll(items=>items.every(el=>getComputedStyle(el).textAlign==='center' && getComputedStyle(el).justifyItems==='center'))) throw Error('Overview resource copy must be centered');
+          if (width===390 && await resources.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)!==2) throw Error('Compact mobile resources must use two columns');
           const destinations = await resources.locator('a').evaluateAll(links => links.map(link=>link.getAttribute('href')));
           if (destinations.join(',') !== '#app/rules,#app/universes,#app/subscription,#app/access') throw Error('Dashboard resource navigation changed');
           const values = await resources.locator('.overview-resources__value').allTextContents();
@@ -339,15 +356,15 @@ async (page) => {
           await resources.screenshot({path:`/private/tmp/signalgen-overview-resources-${width}-${theme}.png`,animations:'disabled'});
           await page.locator('.overview-activity').screenshot({path:`/private/tmp/signalgen-overview-recent-${width}-${theme}.png`,animations:'disabled'});
           const overviewPanel = await resources.locator('.feature-gallery__item').first().evaluate(el => {
-            const css=getComputedStyle(el),figure=getComputedStyle(el.querySelector('.feature-gallery__figure'));
-            return {height:css.minHeight,padding:css.padding,background:css.backgroundImage,size:css.backgroundSize,radius:css.borderRadius,figure:figure.minHeight};
+            const css=getComputedStyle(el);
+            return {background:css.backgroundImage,size:css.backgroundSize,radius:css.borderRadius};
           });
           await page.goto(`${origin}/#home`);
           const landingCard=page.locator('#capabilities .feature-gallery__item').first();
           await landingCard.waitFor();
           const landingPanel = await landingCard.evaluate(el => {
-            const css=getComputedStyle(el),figure=getComputedStyle(el.querySelector('.feature-gallery__figure'));
-            return {height:css.minHeight,padding:css.padding,background:css.backgroundImage,size:css.backgroundSize,radius:css.borderRadius,figure:figure.minHeight};
+            const css=getComputedStyle(el);
+            return {background:css.backgroundImage,size:css.backgroundSize,radius:css.borderRadius};
           });
           if (JSON.stringify(overviewPanel)!==JSON.stringify(landingPanel)) throw Error(`Dashboard panel differs from landing: ${JSON.stringify({overviewPanel,landingPanel})}`);
           if (width===1440) await landingCard.screenshot({path:`/private/tmp/signalgen-landing-panel-${theme}.png`,animations:'disabled'});

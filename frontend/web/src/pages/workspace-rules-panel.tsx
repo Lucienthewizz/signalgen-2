@@ -42,6 +42,7 @@ import {
   indicatorLabels,
   conditionSummary,
   operatorLabels,
+  operatorSymbols,
   rulePresets,
   ruleSummary,
   validateRule,
@@ -77,15 +78,6 @@ const blankDefinition = (): UserRuleDefinition => ({
   cooldown_sec: 300,
   conditions: [],
 });
-
-const operatorSymbols: Record<RuleCondition["op"], string> = {
-  ">": ">",
-  ">=": "≥",
-  "<": "<",
-  "<=": "≤",
-  CROSS_UP: "↗",
-  CROSS_DOWN: "↘",
-};
 
 const blankCondition = (): RuleCondition => ({
   left: "PRICE",

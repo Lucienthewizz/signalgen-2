@@ -3,15 +3,16 @@ import {
   ArrowUpRight,
   Boxes,
   Clock3,
+  Crown,
   ListChecks,
   RefreshCw,
   SearchCheck,
   ShieldCheck,
   Activity,
   Newspaper,
+  UserRound,
 } from "lucide-react";
 import { api } from "@/api/client";
-import { FeatureFigure } from "@/components/feature-figure";
 import { monitorRuns, type MonitorRun } from "@/lib/market-monitor";
 import { screeningStatus, screeningStatusLabels } from "@/lib/screening-status";
 import {
@@ -101,12 +102,6 @@ export function WorkspaceOverviewPanel({
       active = false;
     };
   }, [authenticated, backendOnline, userId, reload]);
-  const preferences = userId ? readScreenerPreferences(userId) : null;
-  const activeRule =
-    rules.find((rule) => rule.id === preferences?.ruleId) ?? rules[0];
-  const activeUniverse =
-    universes.find((universe) => universe.id === preferences?.universeId) ??
-    universes[0];
   const ready =
     Boolean(account?.features.includes("screener")) &&
     rules.length > 0 &&
@@ -215,25 +210,6 @@ export function WorkspaceOverviewPanel({
                   : "Choose a rule and stock universe, then review the results and evidence."
                 : "You need screener access, a rule, and a stock universe to run an analysis."}
             </p>
-            <dl className="overview-selection">
-              <div>
-                <dt>
-                  <ListChecks aria-hidden="true" />
-                  Rule
-                </dt>
-                <dd>{activeRule?.name ?? "Not selected"}</dd>
-              </div>
-              <div>
-                <dt>
-                  <Boxes aria-hidden="true" />
-                  Stock universe
-                </dt>
-                <dd>{activeUniverse?.name ?? "Not created"}</dd>
-                {activeUniverse && (
-                  <span>{activeUniverse.symbols.length} stocks</span>
-                )}
-              </div>
-            </dl>
             {latest && (
               <div
                 className="overview-last-screen"
@@ -262,6 +238,7 @@ export function WorkspaceOverviewPanel({
           </div>
           <Button
             size="lg"
+            className="workspace-glass-action overview-open-screener"
             onClick={() => (ready ? continueScreen() : go(nextStep))}
           >
             <SearchCheck data-icon="inline-start" />
@@ -302,28 +279,28 @@ export function WorkspaceOverviewPanel({
           [
             {
               view: "rules",
-              figure: "rules",
+              icon: ListChecks,
               label: "Rules",
               value: rules.length,
               action: "Manage rules",
             },
             {
               view: "universes",
-              figure: "analysis",
+              icon: Boxes,
               label: "Stock universes",
               value: universes.length,
               action: "Manage universes",
             },
             {
               view: "subscription",
-              figure: "journal",
+              icon: Crown,
               label: "Plan",
               value: subscription?.plan_name ?? "—",
               action: "View plan",
             },
             {
               view: "access",
-              figure: "access",
+              icon: UserRound,
               label: "Account",
               value:
                 account?.user.status === "active"
@@ -332,16 +309,14 @@ export function WorkspaceOverviewPanel({
               action: "View account",
             },
           ] as const
-        ).map((resource) => (
+        ).map(({ icon: Icon, ...resource }) => (
           <a
             className="feature-gallery__item"
             href={`#app/${resource.view}`}
             key={resource.view}
           >
-            <div className="feature-gallery__figure">
-              <div className="feature-gallery__depth">
-                <FeatureFigure kind={resource.figure} />
-              </div>
+            <div className="feature-gallery__figure overview-resources__icon">
+              <Icon aria-hidden="true" strokeWidth={1.25} />
             </div>
             <div className="feature-gallery__copy">
               <strong>{resource.label}</strong>

@@ -91,7 +91,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { conditionSummary } from "@/lib/rule-workflow";
+import { conditionSummary, operatorSymbols } from "@/lib/rule-workflow";
 import { screeningStatus, screeningStatusLabels } from "@/lib/screening-status";
 import {
   Table,
@@ -749,6 +749,17 @@ export function WorkspaceScreenerPanel({
                     {selectedRule?.definition?.signal_type ?? "System rule"}
                   </Badge>
                   {conditions.length > 0 && (
+                    <Badge
+                      variant="outline"
+                      className="workspace-glass-surface screener-match-mode"
+                    >
+                      Match{" "}
+                      {selectedRule?.definition?.logic === "OR" ? "any" : "all"}{" "}
+                      {conditions.length}{" "}
+                      {conditions.length === 1 ? "condition" : "conditions"}
+                    </Badge>
+                  )}
+                  {conditions.length > 0 && (
                     <Button
                       className="workspace-glass-action"
                       variant="outline"
@@ -764,17 +775,17 @@ export function WorkspaceScreenerPanel({
                 )}
                 {conditions.length > 0 && (
                   <div className="screener-criteria">
-                    <p>
-                      Match{" "}
-                      {selectedRule?.definition?.logic === "OR" ? "any" : "all"}{" "}
-                      {conditions.length}{" "}
-                      {conditions.length === 1 ? "condition" : "conditions"}
-                    </p>
                     <ol>
                       {selectedRule?.definition?.conditions.map(
                         (condition, index) => (
                           <li key={index}>
                             <span>{index + 1}</span>
+                            <span
+                              className="rule-operator-symbol"
+                              aria-hidden="true"
+                            >
+                              {operatorSymbols[condition.op]}
+                            </span>
                             {conditionSummary(condition)}
                           </li>
                         ),
