@@ -35,8 +35,8 @@ type ManagedAccount struct {
 }
 
 type AccountQuery struct {
-	Limit               int
-	After, Role, Status string
+	Limit                       int
+	After, Role, Status, Search string
 }
 type AccountPage struct {
 	Items      []ManagedAccount `json:"items"`
@@ -83,6 +83,15 @@ func ValidUserID(value string) bool {
 }
 
 func NormalizeAccountQuery(query AccountQuery) (AccountQuery, error) {
+	query.Search = strings.TrimSpace(query.Search)
+	if !utf8.ValidString(query.Search) || utf8.RuneCountInString(query.Search) > 200 {
+		return query, access.ErrInvalidValue
+	}
+	for _, char := range query.Search {
+		if unicode.IsControl(char) {
+			return query, access.ErrInvalidValue
+		}
+	}
 	if query.Limit == 0 {
 		query.Limit = 25
 	}

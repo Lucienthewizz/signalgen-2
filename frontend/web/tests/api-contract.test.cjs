@@ -29,6 +29,7 @@ function client(reply, timers = {}) {
     DOMException,
     clearTimeout,
     URL,
+    URLSearchParams,
     crypto: webcrypto,
     navigator: { userAgent: "TestBrowser/1.0", platform: "Test OS" },
     sessionStorage: {
@@ -834,6 +835,38 @@ test("admin mutations carry the target, reason and authenticated session", async
     assert.equal(call.init.headers.get("X-App-Session"), "sgs_operator");
     assert.ok(call.url.includes("/api/v1/operator/"));
   }
+});
+
+test("operator account search encodes filters and preserves private request headers", async () => {
+  const c = client(() => response({ items: [] }));
+  c.session.setToken("synthetic-operator");
+  c.session.setAppSession("synthetic-operator-session");
+  const controller = new AbortController();
+  await c.api.listOperatorAccounts(
+    {
+      q: " member+demo@example.test ",
+      after: "11111111-1111-1111-1111-111111111111",
+      status: "active",
+    },
+    controller.signal,
+  );
+  const url = new URL(c.calls[0].url);
+  assert.equal(url.pathname, "/api/v1/operator/accounts");
+  assert.equal(url.searchParams.get("q"), "member+demo@example.test");
+  assert.equal(url.searchParams.get("limit"), "25");
+  assert.equal(
+    url.searchParams.get("after"),
+    "11111111-1111-1111-1111-111111111111",
+  );
+  assert.equal(url.searchParams.get("status"), "active");
+  assert.equal(
+    c.calls[0].init.headers.get("X-App-Session"),
+    "synthetic-operator-session",
+  );
+  assert.equal(
+    c.calls[0].init.headers.get("Authorization"),
+    "Bearer synthetic-operator",
+  );
 });
 
 test("admin readiness uses the public readiness endpoint", async () => {

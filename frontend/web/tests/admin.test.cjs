@@ -12,7 +12,7 @@ vm.runInNewContext(
   ).outputText,
   { exports: exportsForTest },
 );
-const { validateAdminChange } = exportsForTest;
+const { validateAdminChange, accessExpiry } = exportsForTest;
 const uuid = "11111111-2222-3333-4444-555555555555";
 const now = Date.parse("2026-10-06T00:00:00Z");
 
@@ -63,5 +63,23 @@ test("revocation and role changes do not require an expiry", () => {
   assert.equal(
     validateAdminChange(uuid, "Approved operator", "role", "", now),
     null,
+  );
+});
+
+test("access presets use local dates while retaining the intended duration", () => {
+  for (const days of [7, 30, 90]) {
+    const end = new Date(accessExpiry(days, now)).valueOf();
+    assert.ok(end <= now + days * 86400000);
+    assert.ok(end > now + days * 86400000 - 60000);
+  }
+  assert.match(
+    validateAdminChange(
+      uuid,
+      "private\nvalue",
+      "grant",
+      accessExpiry(7, now),
+      now,
+    ),
+    /single-line/,
   );
 });

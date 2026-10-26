@@ -210,6 +210,15 @@ export type AccountRole = {
   updated_at: string;
 };
 
+export type ManagedAccount = AccountRole & {
+  email: string;
+  created_at: string;
+};
+export type OperatorAccountPage = {
+  items: ManagedAccount[];
+  next_cursor?: string;
+};
+
 export type ComputeGrant = {
   id: string;
   purpose: "screen";

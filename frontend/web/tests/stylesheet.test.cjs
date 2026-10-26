@@ -19,6 +19,7 @@ const modules = [
   "screening-workflow",
   "workspace-review",
   "backtesting",
+  "admin-access",
 ];
 
 test("stylesheet entry keeps explicit cascade order and imports each module once", () => {

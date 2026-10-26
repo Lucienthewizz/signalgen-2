@@ -2,7 +2,9 @@
 
 Admin disebut **operator** dalam kontrak dan database. Ini kelanjutan backend
 yang diminta pengguna, bukan perubahan fokus menjadi desktop atau klaim semua
-fitur admin P2 sudah selesai. UI admin belum dibuat pada tahap ini.
+fitur admin P2 sudah selesai. UI admin dasar tersedia di `#app/admin`;
+pada 26 Oktober 2026 ditambahkan pencarian email, pemilihan pengguna dan preset
+durasi akses. [Panduan pemberian akses](../../frontend/web/README.md#admin-access-management-26-october-2026).
 
 ## Yang bisa digunakan
 
@@ -39,6 +41,10 @@ Respons `items` berisi `user_id`, `email`, `role`, `status`, `created_at` dan
 `updated_at`. `next_cursor` hanya muncul jika masih ada halaman berikutnya.
 Gunakan nilainya sebagai `after`; urutan naik berdasarkan UUID, bukan nama atau
 waktu daftar. `limit` default 25, maksimum 100. Filter `role`/`status` opsional.
+Filter `q` opsional mencari substring email profil atau UUID tanpa membedakan
+huruf besar/kecil, maksimal 200 karakter setelah trim. `%` dan `_` diperlakukan
+sebagai teks literal, bukan wildcard. Search/filter diterapkan sebelum pagination;
+ubah pencarian dengan cursor awal, bukan meneruskan cursor pencarian sebelumnya.
 Parameter kosong, berulang, tak dikenal, atau cursor bukan UUID ditolak 422.
 
 Audit wajib menyebut target `user_id`. Urutan turun berdasarkan ID; kirim
@@ -149,10 +155,10 @@ menggantikan deployment image backend terbaru. Security advisors tidak menemukan
 kategori baru; peringatan lama fungsi public dan proteksi password masih ada.
 Database/container uji lokal tidak menggantikan database kamu.
 
-Belum termasuk UI admin, penghapusan akun, perubahan password oleh operator,
+Belum termasuk UI suspend/audit penuh, penghapusan akun, perubahan password oleh operator,
 payment/webhook, refund, daftar subscription semua user, metrics dashboard,
 mass actions atau pengiriman email. Bootstrap production/least-privilege DB role
-dan validasi frontend nyata tetap perlu proses deployment terpisah.
+dan validasi dengan akun operator nyata tetap perlu proses deployment terpisah.
 
 ## Bukti verifikasi lokal — 6 Oktober 2026
 

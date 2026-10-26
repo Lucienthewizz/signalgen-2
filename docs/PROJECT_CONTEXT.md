@@ -100,8 +100,9 @@ dan index baru sudah diterapkan ke Supabase cloud pada 6 Oktober 2026, dengan
 riwayat delapan migration sinkron (termasuk runtime privilege) serta
 RLS/privilege audit tetap terjaga.
 Deployment schema bukan bukti pengujian operator nyata atau deployment image API.
-Frontend memiliki surface operator/grant/subscription; admin account/status/audit
-backend tidak berarti seluruh UI admin selesai. Payment/full admin suite tetap
+Frontend memiliki surface operator/grant/subscription; daftar/pencarian email
+profil dan pemberian akses dengan durasi tersedia di `#app/admin` sejak
+26 Oktober 2026. UI suspend/audit penuh tetap terbuka. Payment/full admin suite tetap
 terpisah; lihat [admin backend](backend/ADMIN_BACKEND.md).
 
 ## 5. Data dan proteksi

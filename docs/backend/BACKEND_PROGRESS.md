@@ -1,5 +1,27 @@
 # Backend progress
 
+## Kemudahan pemberian akses admin — 26 Oktober 2026
+
+Branch `frontend/admin-access`: panel admin yang ada kini mempunyai directory
+profil dengan pencarian email/UUID, filter status, pagination 25 pengguna,
+pemilihan langsung dan pemuatan grant otomatis. Preset akses 7/30/90 hari memakai
+waktu lokal; email/UUID penerima ikut review sebelum grant/revoke dikirim. Reason,
+konfirmasi, pemeriksaan operator database dan audit server tetap berlaku.
+Pergantian identitas membersihkan target/review dan mengabaikan respons lama.
+
+`GET /api/v1/operator/accounts` menerima filter `q` opsional, case-insensitive dan
+literal (bukan SQL wildcard), maksimum 200 karakter. Tidak ada migration, perubahan
+role/grant akun nyata, atau bootstrap operator dalam pekerjaan ini. Runtime API
+Docker lokal dibangun ulang; database sementara untuk tes sudah dihapus.
+
+Verifikasi: 181 tes frontend + build, seluruh Go race suite dan vet, serta schema
+harness (11 migration/3 policy checks) dan tes PostgreSQL operator terisolasi.
+Tes SQL memeriksa pencarian email/UUID, wildcard/injection literal, kontrol akses,
+pagination dan atomicity status/sesi/audit. Playwright admin memeriksa search,
+filter/paging, keyboard, grant/revoke/review/cancel, failed writes dan non-operator
+di 1440/390px, kedua tema, dengan akun/API sintetis. Akun operator cloud nyata
+belum digunakan untuk grant/revoke pada slice ini.
+
 ## UI pengujian backtest — 26 Oktober 2026
 
 Branch `frontend/backtesting-workspace` menambahkan halaman `#app/backtest` untuk

@@ -63,6 +63,7 @@ func managementRequest(method, path, body string) *http.Request {
 func TestManagementRoutesRequireOperatorAndValidSession(t *testing.T) {
 	for _, tc := range []struct{ method, path, body string }{
 		{"GET", "/api/v1/operator/accounts", ""},
+		{"GET", "/api/v1/operator/accounts?q=member", ""},
 		{"GET", "/api/v1/operator/audit-events?user_id=" + managementTarget, ""},
 		{"PATCH", "/api/v1/operator/accounts/" + managementTarget + "/status", `{"status":"suspended","expected_status":"active","reason":"test"}`},
 	} {
@@ -111,6 +112,11 @@ func TestManagementActorFiltersAndStrictInput(t *testing.T) {
 		t.Fatalf("list = %d %+v", res.Code, store)
 	}
 	res = httptest.NewRecorder()
+	server.ServeHTTP(res, managementRequest("GET", "/api/v1/operator/accounts?q=Member%40Example.test&limit=2&status=active", ""))
+	if res.Code != 200 || store.query.Search != "Member@Example.test" || store.query.Status != "active" {
+		t.Fatal("account search filter was not forwarded")
+	}
+	res = httptest.NewRecorder()
 	server.ServeHTTP(res, managementRequest("GET", "/api/v1/operator/audit-events?user_id="+managementTarget+"&before=9223372036854775807&limit=1", ""))
 	if res.Code != 200 || store.audit.Before != 9223372036854775807 || store.audit.UserID != managementTarget {
 		t.Fatal("audit pagination")
@@ -124,6 +130,7 @@ func TestManagementActorFiltersAndStrictInput(t *testing.T) {
 		"/api/v1/operator/accounts?limit=0", "/api/v1/operator/accounts?limit=101", "/api/v1/operator/accounts?limit=1&limit=2",
 		"/api/v1/operator/accounts?email=private", "/api/v1/operator/accounts?after=not-uuid", "/api/v1/operator/accounts?status=paid",
 		"/api/v1/operator/accounts?role=admin", "/api/v1/operator/accounts?limit=", "/api/v1/operator/accounts?bad=%ZZ",
+		"/api/v1/operator/accounts?q=", "/api/v1/operator/accounts?q=a&q=b", "/api/v1/operator/accounts?q=" + strings.Repeat("x", 201), "/api/v1/operator/accounts?q=mail%00value",
 		"/api/v1/operator/audit-events", "/api/v1/operator/audit-events?user_id=" + managementTarget + "&before=0",
 	} {
 		before := store.calls

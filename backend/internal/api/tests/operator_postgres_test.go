@@ -128,6 +128,14 @@ func TestPostgresOperatorManagement(t *testing.T) {
 	if len(seen) != 3 {
 		t.Fatal("pagination omitted profiles")
 	}
+	for _, search := range []struct{ query, want string }{
+		{"MEMBER@TEST", member}, {member, member}, {"%", ""}, {"' OR 1=1 --", ""},
+	} {
+		page, err := store.ListAccounts(ctx, actor, account.AccountQuery{Search: search.query, Limit: 1, Status: "active"})
+		if err != nil || (search.want == "" && len(page.Items) != 0) || (search.want != "" && (len(page.Items) != 1 || page.Items[0].UserID != search.want)) {
+			t.Fatalf("literal account search returned unexpected rows: %v", err)
+		}
+	}
 	res := call(newServer(member), "GET", "/api/v1/operator/accounts", "", oldSession.Token)
 	assertErrorCode(t, res, 403, "ROLE_REQUIRED")
 	if _, err := store.ListAccounts(ctx, member, account.AccountQuery{}); !errors.Is(err, access.ErrRoleRequired) {

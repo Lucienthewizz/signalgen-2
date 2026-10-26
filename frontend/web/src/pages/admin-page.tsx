@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
-import { api } from "@/api/client";
+import { api, session } from "@/api/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useActionNotifications } from "@/components/ui/toast";
 import { Badge } from "@/components/ui/badge";
@@ -48,12 +48,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { validateAdminChange, type AdminAction } from "@/lib/admin";
-import type { AccountState, FeatureGrant, SubscriptionPlan } from "@/types";
+import {
+  accessExpiry,
+  validateAdminChange,
+  type AdminAction,
+} from "@/lib/admin";
+import { AdminAccountDirectory } from "./admin-account-directory";
+import type {
+  AccountState,
+  FeatureGrant,
+  ManagedAccount,
+  SubscriptionPlan,
+} from "@/types";
 
 type PendingChange = {
   action: AdminAction;
   userId: string;
+  userLabel: string;
   reason: string;
   value: string;
   until: string;
@@ -94,12 +105,15 @@ export function AdminPage({
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [planError, setPlanError] = useState<string | null>(null);
   const [target, setTarget] = useState("");
+  const [targetAccount, setTargetAccount] = useState<ManagedAccount | null>(
+    null,
+  );
   const [reason, setReason] = useState("");
   const [feature, setFeature] = useState<FeatureGrant["feature"]>("screener");
   const [plan, setPlan] = useState("");
   const [role, setRole] = useState<"user" | "operator">("user");
-  const [grantUntil, setGrantUntil] = useState("");
-  const [periodEnd, setPeriodEnd] = useState("");
+  const [grantUntil, setGrantUntil] = useState(() => accessExpiry(30));
+  const [periodEnd, setPeriodEnd] = useState(() => accessExpiry(30));
   const [grants, setGrants] = useState<FeatureGrant[] | null>(null);
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [busy, setBusy] = useState(false);
@@ -129,8 +143,21 @@ export function AdminPage({
   }
   useEffect(() => {
     alive.current = true;
+    const unsubscribe = session.onIdentityChange(() => {
+      setAccount(null);
+      setTarget("");
+      setTargetAccount(null);
+      setGrants(null);
+      setPending(null);
+      setReason("");
+      setMessage(null);
+      setError(null);
+      setActivity([]);
+      setPermissionAttempt((value) => value + 1);
+    });
     return () => {
       alive.current = false;
+      unsubscribe();
     };
   }, []);
 
@@ -203,17 +230,22 @@ export function AdminPage({
       target.trim(),
     );
 
-  function changeTarget(value: string) {
+  function changeTarget(value: string, item: ManagedAccount | null = null) {
     setTarget(value);
+    setTargetAccount(item);
     setGrants(null);
     setPending(null);
     setError(null);
     setMessage(null);
     setReason("");
   }
-  async function inspect() {
+  async function inspect(userId = target.trim()) {
     if (!authorized || locked.current) return;
-    if (!uuidValid) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        userId,
+      )
+    ) {
       setError("Enter a valid account User ID (UUID).");
       return;
     }
@@ -222,11 +254,14 @@ export function AdminPage({
     setError(null);
     setMessage(null);
     setGrants(null);
+    const revision = session.getIdentityRevision();
     try {
-      const response = await api.listFeatureGrants(target.trim());
-      if (alive.current) setGrants(response.items);
+      const response = await api.listFeatureGrants(userId);
+      if (alive.current && revision === session.getIdentityRevision())
+        setGrants(response.items);
     } catch (caught) {
-      if (alive.current) setError(errorMessage(caught));
+      if (alive.current && revision === session.getIdentityRevision())
+        setError(errorMessage(caught));
     } finally {
       locked.current = false;
       if (alive.current) setBusy(false);
@@ -265,6 +300,7 @@ export function AdminPage({
     setPending({
       action,
       userId: target.trim(),
+      userLabel: targetAccount?.email ?? "",
       reason: reason.trim(),
       value,
       until:
@@ -278,6 +314,7 @@ export function AdminPage({
   async function confirm() {
     if (!pending || !authorized || locked.current) return;
     const change = pending;
+    const revision = session.getIdentityRevision();
     const invalid = validateAdminChange(
       change.userId,
       change.reason,
@@ -319,7 +356,7 @@ export function AdminPage({
           change.value as "user" | "operator",
           change.reason,
         );
-      if (!alive.current) return;
+      if (!alive.current || revision !== session.getIdentityRevision()) return;
       setMessage(`${change.title}: saved.`);
       setPending(null);
       setReason("");
@@ -343,9 +380,10 @@ export function AdminPage({
       } else if (change.action === "grant" || change.action === "revoke") {
         try {
           const response = await api.listFeatureGrants(change.userId);
-          if (alive.current) setGrants(response.items);
+          if (alive.current && revision === session.getIdentityRevision())
+            setGrants(response.items);
         } catch {
-          if (alive.current) {
+          if (alive.current && revision === session.getIdentityRevision()) {
             setGrants(null);
             setMessage(
               `${change.title}: saved. Refresh grants to load the latest access.`,
@@ -354,7 +392,8 @@ export function AdminPage({
         }
       }
     } catch (caught) {
-      if (alive.current) setError(errorMessage(caught));
+      if (alive.current && revision === session.getIdentityRevision())
+        setError(errorMessage(caught));
     } finally {
       locked.current = false;
       if (alive.current) setBusy(false);
@@ -440,57 +479,83 @@ export function AdminPage({
           <div>
             <h3 id="admin-account-title">Choose an account</h3>
             <p>
-              Manage one account at a time. Use its User ID to inspect direct
-              feature grants.
+              Find a member by email, select their account, then choose a
+              feature and access duration below.
             </p>
           </div>
         </div>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void inspect();
-          }}
-          className="admin-account-form"
-        >
-          <FieldGroup>
-            <Field data-invalid={Boolean(target && !uuidValid)}>
-              <FieldLabel htmlFor="admin-target">Account User ID</FieldLabel>
-              <Input
-                id="admin-target"
-                value={target}
-                disabled={!editable}
-                onChange={(event) => changeTarget(event.target.value)}
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                aria-invalid={Boolean(target && !uuidValid)}
-                aria-describedby="admin-target-hint"
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <FieldDescription id="admin-target-hint">
-                Email search is not available yet. Use the account's Supabase
-                Auth User ID.
-              </FieldDescription>
-            </Field>
-          </FieldGroup>
-          <div className="admin-account-actions">
-            <Button type="submit" disabled={!editable || !uuidValid}>
-              {busy ? (
-                <LoaderCircle data-icon="inline-start" />
-              ) : (
-                <RefreshCw data-icon="inline-start" />
-              )}
-              Inspect access
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!editable || !account}
-              onClick={() => changeTarget(account?.user.id ?? "")}
-            >
-              Use my account
-            </Button>
+        {authorized && (
+          <AdminAccountDirectory
+            key={account.user.id}
+            selectedId={target}
+            disabled={!editable}
+            onSelect={(item) => {
+              changeTarget(item.user_id, item);
+              void inspect(item.user_id);
+            }}
+          />
+        )}
+        {target && (
+          <div className="admin-selected-account" role="status">
+            <strong>{targetAccount?.email || "Selected User ID"}</strong>
+            <code>{target}</code>
+            {targetAccount?.status === "suspended" && (
+              <p>
+                This account is suspended and cannot use analysis features. A
+                grant does not reactivate it.
+              </p>
+            )}
           </div>
-        </form>
+        )}
+        <details className="admin-manual-target">
+          <summary>Use a User ID instead</summary>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void inspect();
+            }}
+            className="admin-account-form"
+          >
+            <FieldGroup>
+              <Field data-invalid={Boolean(target && !uuidValid)}>
+                <FieldLabel htmlFor="admin-target">Account User ID</FieldLabel>
+                <Input
+                  id="admin-target"
+                  value={target}
+                  disabled={!editable}
+                  onChange={(event) => changeTarget(event.target.value)}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  aria-invalid={Boolean(target && !uuidValid)}
+                  aria-describedby="admin-target-hint"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <FieldDescription id="admin-target-hint">
+                  Use this fallback if you already know the member's application
+                  User ID.
+                </FieldDescription>
+              </Field>
+            </FieldGroup>
+            <div className="admin-account-actions">
+              <Button type="submit" disabled={!editable || !uuidValid}>
+                {busy ? (
+                  <LoaderCircle data-icon="inline-start" />
+                ) : (
+                  <RefreshCw data-icon="inline-start" />
+                )}
+                Inspect access
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!editable || !account}
+                onClick={() => changeTarget(account?.user.id ?? "")}
+              >
+                Use my account
+              </Button>
+            </div>
+          </form>
+        </details>
       </section>
       <Tabs
         defaultValue="grants"
@@ -567,15 +632,39 @@ export function AdminPage({
               <FieldDescription>
                 Choose a future date in your local timezone.
               </FieldDescription>
+              <div
+                className="admin-duration-presets"
+                role="group"
+                aria-label="Access duration presets"
+              >
+                {[7, 30, 90].map((days) => (
+                  <Button
+                    key={days}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!editable}
+                    onClick={() => {
+                      setGrantUntil(accessExpiry(days));
+                      setPending(null);
+                    }}
+                  >
+                    {days} days
+                  </Button>
+                ))}
+              </div>
             </Field>
           </FieldGroup>
           <div className="admin-actions">
-            <Button disabled={!editable} onClick={() => review("grant")}>
+            <Button
+              disabled={!editable || !uuidValid}
+              onClick={() => review("grant")}
+            >
               Review access grant
             </Button>
             <Button
               variant="outline"
-              disabled={!editable}
+              disabled={!editable || !uuidValid}
               onClick={() => review("revoke")}
             >
               Review revocation
@@ -593,8 +682,7 @@ export function AdminPage({
                   </EmptyMedia>
                   <EmptyTitle>No account inspected</EmptyTitle>
                   <EmptyDescription>
-                    Enter a User ID above and select Inspect access. No account
-                    data is loaded until you do.
+                    Select a member above to load their direct feature grants.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -886,7 +974,15 @@ export function AdminPage({
               <dl className="admin-confirm-details">
                 <div>
                   <dt>Account</dt>
-                  <dd>{pending.userId}</dd>
+                  <dd>
+                    {pending.userLabel && (
+                      <strong>
+                        {pending.userLabel}
+                        <br />
+                      </strong>
+                    )}
+                    {pending.userId}
+                  </dd>
                 </div>
                 {pending.until && (
                   <div>

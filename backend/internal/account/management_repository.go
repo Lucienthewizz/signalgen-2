@@ -47,7 +47,8 @@ func (store *PostgresRepository) ListAccounts(ctx context.Context, actor string,
 	defer tx.Rollback(ctx)
 	rows, err := tx.Query(ctx, `select `+managementColumns+` from signalgen.account_profiles
 where ($1='' or user_id>nullif($1,'')::uuid) and ($2='' or role=$2) and ($3='' or status=$3)
-order by user_id limit $4`, query.After, query.Role, query.Status, query.Limit+1)
+and ($5='' or position(lower($5) in lower(email))>0 or position(lower($5) in user_id::text)>0)
+order by user_id limit $4`, query.After, query.Role, query.Status, query.Limit+1, query.Search)
 	if err != nil {
 		return AccountPage{}, err
 	}

@@ -789,6 +789,23 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ at_period_end: atPeriodEnd, reason }),
     }),
+  listOperatorAccounts: (
+    filters: {
+      q?: string;
+      after?: string;
+      status?: "active" | "suspended";
+    } = {},
+    signal?: AbortSignal,
+  ) => {
+    const query = new URLSearchParams({ limit: "25" });
+    if (filters.q?.trim()) query.set("q", filters.q.trim());
+    if (filters.after) query.set("after", filters.after);
+    if (filters.status) query.set("status", filters.status);
+    return request<import("@/types").OperatorAccountPage>(
+      `/api/v1/operator/accounts?${query}`,
+      { signal },
+    );
+  },
   listFeatureGrants: (userId: string) =>
     request<{ items: FeatureGrant[] }>(
       `/api/v1/operator/grants?user_id=${encodeURIComponent(userId)}`,

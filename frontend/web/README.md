@@ -1,5 +1,39 @@
 # Signalgen Web
 
+## Admin access management (26 October 2026)
+
+Open `#app/admin` (alias of `#app/operator`) or **Administration → Admin**.
+An active backend `operator` account is required. The browser cannot grant itself
+this role. [Initial operator setup](../../backend/README.md) remains an out-of-band
+step for a new installation.
+
+1. Search the registered application profiles by email or User ID, optionally
+   filter by account status, and Select account. Search covers the full directory;
+   Previous/Next traverse pages of 25 matching accounts.
+2. Feature access loads the selected member's direct grants. Choose Screener or
+   Backtest and a 7/30/90-day duration, or edit the expiry in your local timezone.
+3. Add a reason, Review access grant, verify the recipient and expiry, then Confirm
+   change. Review/Cancel do not write anything. Review revocation uses the same
+   explicit review step.
+
+The selected email and UUID stay visible. Selecting another member clears the
+pending change. Session identity changes clear account data and pending reviews;
+late reads cannot restore them. The backend still verifies the active operator
+and writes the grant/revocation audit. Direct grants and subscription access are
+separate; revoking a grant may leave subscription access in effect. A suspended
+account remains suspended. Subscription activation and operator-role controls
+remain in their separate tabs.
+
+The API must include the optional `q` filter on `/api/v1/operator/accounts`.
+Members appear after their application profile exists; signing in once normally
+creates it. The directory does not enumerate all Supabase Auth identities.
+The User ID fallback remains under a disclosure.
+
+Run `npm run test:admin` against Vite on 5174 for isolated Playwright checks of
+search/paging, status filtering, keyboard selection, durations, reviewed grants,
+revocation, failed requests, and non-operator denial at 1440/390px in both themes.
+All account/API fixtures are synthetic; this test never grants real users access.
+
 ## Basic backtesting workspace (26 October 2026)
 
 Open `#app/backtest` or **Analysis → Backtesting** with a signed-in account that

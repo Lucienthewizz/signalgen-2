@@ -18,12 +18,12 @@ func (server *Handler) ListAccounts(writer http.ResponseWriter, request *http.Re
 	if !ok || !server.managementReady(writer, request) {
 		return
 	}
-	limit, ok := listLimit(writer, request, "limit", "after", "role", "status")
+	limit, ok := listLimit(writer, request, "limit", "after", "role", "status", "q")
 	if !ok {
 		return
 	}
 	query, err := account.NormalizeAccountQuery(account.AccountQuery{Limit: limit,
-		After: request.URL.Query().Get("after"), Role: request.URL.Query().Get("role"), Status: request.URL.Query().Get("status")})
+		After: request.URL.Query().Get("after"), Role: request.URL.Query().Get("role"), Status: request.URL.Query().Get("status"), Search: request.URL.Query().Get("q")})
 	if err != nil {
 		writeManagementError(writer, request, err)
 		return
