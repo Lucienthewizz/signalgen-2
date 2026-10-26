@@ -169,8 +169,27 @@ func ComputeBacktestFeatures(request FeatureRequest) (FeatureResult, error) {
 	if request.Purpose != "backtest" || len(request.Candles) > MaxBacktestCandles {
 		return FeatureResult{}, fmt.Errorf("invalid backtest feature scope")
 	}
+	if err := validateBacktestDays(request.Candles); err != nil {
+		return FeatureResult{}, err
+	}
 	request.Purpose = "screen"
 	return ComputeFeatures(request)
+}
+
+func validateBacktestDays(candles []Candle) error {
+	previousDay := ""
+	for _, candle := range candles {
+		stamp, err := time.Parse(time.RFC3339, candle.Timestamp)
+		if err != nil {
+			return fmt.Errorf("invalid backtest candle timestamp")
+		}
+		day := stamp.UTC().Format("2006-01-02")
+		if day <= previousDay {
+			return fmt.Errorf("backtest requires one candle per UTC session date")
+		}
+		previousDay = day
+	}
+	return nil
 }
 
 // RunBacktest consumes entry decisions, never private rule definitions.
@@ -193,15 +212,15 @@ func RunBacktest(request BacktestRequest) (BacktestResult, error) {
 		if err := validateFeatureRequest(FeatureRequest{Purpose: "screen", Symbol: item.Symbol, Candles: item.Candles}); err != nil {
 			return BacktestResult{}, err
 		}
+		if err := validateBacktestDays(item.Candles); err != nil {
+			return BacktestResult{}, err
+		}
 		// Canonical UTC keys make equivalent timestamp offsets order identically.
 		candles := append([]Candle(nil), item.Candles...)
 		for i := range candles {
 			stamp, _ := time.Parse(time.RFC3339, candles[i].Timestamp)
-			if i > 0 && stamp.UTC().Format("2006-01-02") <= candles[i-1].Timestamp[:10] {
-				return BacktestResult{}, fmt.Errorf("backtest requires one candle per UTC session date")
-			}
-			candles[i].Timestamp = stamp.UTC().Format(time.RFC3339)
-			timelineSet[candles[i].Timestamp] = true
+			candles[i].Timestamp = stamp.UTC().Format(time.RFC3339Nano)
+			timelineSet[candles[i].Timestamp[:10]+"T00:00:00Z"] = true
 		}
 		series[item.Symbol] = candles
 	}
@@ -213,7 +232,7 @@ func RunBacktest(request BacktestRequest) (BacktestResult, error) {
 		if err != nil || series[entry.Symbol] == nil || (entry.SignalType != "" && entry.SignalType != "BUY") {
 			return BacktestResult{}, fmt.Errorf("unsupported entry direction, timestamp or symbol")
 		}
-		entry.Timestamp = stamp.UTC().Format(time.RFC3339)
+		entry.Timestamp = stamp.UTC().Format(time.RFC3339Nano)
 		entry.SignalType = "BUY"
 		if entry.Timestamp[:10] < request.Config.From || entry.Timestamp[:10] > request.Config.To {
 			return BacktestResult{}, fmt.Errorf("entry outside requested range")
@@ -232,10 +251,7 @@ func RunBacktest(request BacktestRequest) (BacktestResult, error) {
 		seen[key] = true
 	}
 	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].Timestamp == entries[j].Timestamp {
-			return entries[i].Symbol < entries[j].Symbol
-		}
-		return entries[i].Timestamp < entries[j].Timestamp
+		return backtestEntryBefore(entries[i], entries[j])
 	})
 	timeline := make([]string, 0, len(timelineSet))
 	for stamp := range timelineSet {
@@ -259,6 +275,15 @@ type scheduledEntry struct {
 	fillTime string
 }
 
+func backtestEntryBefore(left, right BacktestEntry) bool {
+	leftTime, _ := time.Parse(time.RFC3339Nano, left.Timestamp)
+	rightTime, _ := time.Parse(time.RFC3339Nano, right.Timestamp)
+	if leftTime.Equal(rightTime) {
+		return left.Symbol < right.Symbol
+	}
+	return leftTime.Before(rightTime)
+}
+
 func simulateBacktest(config BacktestConfig, entries []BacktestEntry, series map[string][]Candle, timeline []string, step int) BacktestHorizon {
 	result := BacktestHorizon{Step: step, Label: fmt.Sprintf("T+%d", step), Trades: []BacktestTrade{}, Skipped: []BacktestSkipped{}, EquityCurve: []BacktestEquity{{Timestamp: "", Equity: config.InitialCapital}}}
 	pending := []scheduledEntry{}
@@ -272,13 +297,10 @@ func simulateBacktest(config BacktestConfig, entries []BacktestEntry, series map
 		pending = append(pending, scheduledEntry{entry, i, candles[i].Timestamp})
 	}
 	sort.SliceStable(pending, func(i, j int) bool {
-		if pending[i].fillTime == pending[j].fillTime {
-			if pending[i].entry.Timestamp == pending[j].entry.Timestamp {
-				return pending[i].entry.Symbol < pending[j].entry.Symbol
-			}
-			return pending[i].entry.Timestamp < pending[j].entry.Timestamp
+		if pending[i].fillTime[:10] == pending[j].fillTime[:10] {
+			return backtestEntryBefore(pending[i].entry, pending[j].entry)
 		}
-		return pending[i].fillTime < pending[j].fillTime
+		return pending[i].fillTime[:10] < pending[j].fillTime[:10]
 	})
 	cash, peak := config.InitialCapital, config.InitialCapital
 	active := -1
@@ -290,7 +312,7 @@ func simulateBacktest(config BacktestConfig, entries []BacktestEntry, series map
 	for _, stamp := range timeline {
 		// An existing position occupies this session through its close. Other entries
 		// at that session's open cannot spend the proceeds of that later close.
-		for cursor < len(pending) && pending[cursor].fillTime == stamp {
+		for cursor < len(pending) && pending[cursor].fillTime[:10] == stamp[:10] {
 			item := pending[cursor]
 			cursor++
 			if active >= 0 {
@@ -314,7 +336,7 @@ func simulateBacktest(config BacktestConfig, entries []BacktestEntry, series map
 				continue
 			}
 			cash = math.Max(0, cash-quantity*price-fee)
-			result.Trades = append(result.Trades, BacktestTrade{Symbol: item.entry.Symbol, SignalTime: item.entry.Timestamp, EntryTime: stamp, Status: "open", Quantity: quantity, EntryPrice: price, EntryCommission: fee})
+			result.Trades = append(result.Trades, BacktestTrade{Symbol: item.entry.Symbol, SignalTime: item.entry.Timestamp, EntryTime: item.fillTime, Status: "open", Quantity: quantity, EntryPrice: price, EntryCommission: fee})
 			active = len(result.Trades) - 1
 			exitIndex = item.index + step - 1
 			mark = price
@@ -322,8 +344,8 @@ func simulateBacktest(config BacktestConfig, entries []BacktestEntry, series map
 		if active >= 0 {
 			trade := &result.Trades[active]
 			candles := series[trade.Symbol]
-			i := sort.Search(len(candles), func(i int) bool { return candles[i].Timestamp >= stamp })
-			if i < len(candles) && candles[i].Timestamp == stamp {
+			i := sort.Search(len(candles), func(i int) bool { return candles[i].Timestamp[:10] >= stamp[:10] })
+			if i < len(candles) && candles[i].Timestamp[:10] == stamp[:10] {
 				mark = candles[i].Close
 				if i == exitIndex {
 					price := mark * (1 - slip)
@@ -331,7 +353,7 @@ func simulateBacktest(config BacktestConfig, entries []BacktestEntry, series map
 					cash += trade.Quantity*price - fee
 					trade.UnrealizedPL = 0
 					trade.Status = "closed"
-					trade.ExitTime = stamp
+					trade.ExitTime = candles[i].Timestamp
 					trade.ExitPrice = &price
 					trade.ExitCommission = fee
 					trade.NetPL = trade.Quantity*(price-trade.EntryPrice) - trade.EntryCommission - fee
@@ -344,6 +366,7 @@ func simulateBacktest(config BacktestConfig, entries []BacktestEntry, series map
 		if active >= 0 {
 			trade := &result.Trades[active]
 			trade.UnrealizedPL = trade.Quantity*(mark-trade.EntryPrice) - trade.EntryCommission
+			trade.ReturnPct = trade.UnrealizedPL / (trade.Quantity*trade.EntryPrice + trade.EntryCommission) * 100
 			equity += trade.Quantity * mark
 		}
 		peak = math.Max(peak, equity)

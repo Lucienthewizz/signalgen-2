@@ -21,7 +21,7 @@ func backtestFixture(t *testing.T) BacktestRequest {
 }
 func nearBacktest(t *testing.T, got, want float64) {
 	t.Helper()
-	if math.Abs(got-want) > 1e-8+math.Abs(want)*1e-12 {
+	if math.IsNaN(got) || math.IsInf(got, 0) || math.IsNaN(want) || math.IsInf(want, 0) || math.Abs(got-want) > 1e-8+math.Abs(want)*1e-12 {
 		t.Fatalf("got %.12f want %.12f", got, want)
 	}
 }

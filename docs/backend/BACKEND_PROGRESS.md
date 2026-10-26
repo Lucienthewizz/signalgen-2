@@ -234,3 +234,10 @@ untuk core/dataset/backtest/compute, alur API backtest dan range cache lulus.
 fungsi Python asli; output native Go/WASM cocok pada fixture rule/manual dan
 marker rule privat absen dari artefak. Ini bukti lokal dengan fixture/test
 doubles; login, data provider dan Postgres produksi tidak diuji pada slice ini.
+
+Audit lanjutan 26 Oktober 2026 menemukan dan memperbaiki reuse modal pada
+tanggal yang sama ketika label jam candle antar saham berbeda, return posisi
+terbuka yang masih nol, export fitur yang menerima intraday, serta kehilangan
+presisi/prioritas timestamp subdetik. Kasus tersebut direproduksi dengan tes
+gagal sebelum perbaikan. Coverage tambahan mencakup konservasi modal pada 100
+skenario harga/biaya, grant lintas pengguna/sesi, suspend, snapshot dan rate limit.

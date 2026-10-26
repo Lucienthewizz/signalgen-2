@@ -67,10 +67,13 @@ jurnal authoritative, intraday, short, target-stop dan exit-rule belum termasuk.
 - Sinyal diketahui setelah close. Entry selalu open candle berikutnya, tidak
   menggunakan harga close/open/high/low candle sinyal sebagai fill. T+1 exit pada
   close candle entry; T+k exit pada close candle ke-k sejak entry.
-- Satu posisi untuk seluruh portfolio. Urutan fill menurut timestamp sesi;
-  jika sama, urutan waktu sinyal lalu simbol alfabetis. Posisi menempati sesi
+- Satu posisi untuk seluruh portfolio. Urutan fill menurut tanggal sesi UTC;
+  jika sama, urutan waktu sinyal lalu simbol alfabetis. Perbedaan jam label
+  candle antar saham tidak membuat sesi baru. Posisi menempati sesi
   sampai close; entry lain pada open sesi itu dilewati, termasuk pada hari exit.
   Setiap horizon menghitung portfolio independen dari modal awal yang sama.
+  Timestamp entry dibandingkan sebagai instant UTC dengan presisi subdetik;
+  format offset yang berbeda boleh merujuk instant yang sama.
 - Alokasi percent equity 0–100% atau fixed amount positif, dibatasi kas. Default
   modal 10.000 (mata uang dataset), sizing 100%, fee/slippage 0%. Tidak ada leverage.
   Quantity pecahan = budget / (open × (1+slippage) × (1+commission)).
@@ -81,6 +84,9 @@ jurnal authoritative, intraday, short, target-stop dan exit-rule belum termasuk.
   peak equity harian, termasuk unrealized. Jika horizon belum tersedia, posisi
   tetap `open`, `exit_price=null`, tanpa fee exit atau exit sintetis. Unrealized
   mencakup fee entry; `net_pl_cash` hanya realized P&L transaksi tertutup.
+  `return_pct` posisi terbuka memakai unrealized P&L dibagi biaya entry total,
+  tanpa fee exit hipotetis. Equity curve memiliki satu titik per tanggal UTC
+  (timestamp tengah malam adalah label tanggal, bukan waktu quote/fill).
 - Win rate hanya transaksi tertutup setelah biaya. Profit factor adalah total
   profit / absolut total loss setelah biaya, `null` jika loss nol. Tidak ada
   Sharpe annualized atau klaim return yang dijamin. `NO_NEXT_CANDLE`,
@@ -126,3 +132,9 @@ Harness API menguji real routing/domain/snapshot/rule store dengan identitas,
 market data dan grant test; tidak mengklaim login/provider/Postgres produksi diuji.
 Harness WASM membandingkan output native pada fixture sama untuk mode rule/manual
 (toleransi absolut 1e-9 + relatif 1e-12) serta memeriksa marker rule privat absen.
+Regresi audit juga memeriksa jam candle antar saham yang berbeda pada tanggal
+yang sama, prioritas sinyal subdetik, return posisi terbuka, dan penolakan
+candle intraday pada export fitur. Tes properti dengan 100 skenario deterministik
+memeriksa final equity = modal awal + realized + unrealized, batas drawdown,
+fee, dan hasil yang stabil saat urutan input dibalik. Tes HTTP secara khusus
+menolak pemakaian grant oleh pengguna lain yang sama-sama memiliki entitlement.
