@@ -1,8 +1,10 @@
 # Backtesting backend/core — 26 Oktober 2026
 
 Status: backend/core slice `backtest-1`, policy `holding-next-open-1`. Ini mengikuti
-analisis T+1…T+n Claudio dengan kebijakan eksekusi baru. UI, penyimpanan history,
-jurnal authoritative, intraday, short, target-stop dan exit-rule belum termasuk.
+analisis T+1…T+n Claudio dengan kebijakan eksekusi baru. UI dasar untuk pengujian
+tersedia di `#app/backtest`; [alur frontend dan tes browser](../../frontend/web/README.md#basic-backtesting-workspace-26-october-2026).
+Penyimpanan history, jurnal authoritative, intraday, short, target-stop dan exit-rule
+belum termasuk.
 
 ## Alur dan kontrak
 

@@ -1,4 +1,11 @@
 import type {
+  BacktestManifest,
+  BacktestScope,
+  BacktestGrant,
+  BacktestCapabilities,
+  BacktestEntry,
+} from "@/analysis/backtest-types";
+import type {
   ApiStatus,
   LoginResponse,
   RegisterResponse,
@@ -578,7 +585,8 @@ export const api = {
   ensureAppSession,
   revokeCurrentAppSession: () =>
     request<void>("/api/v1/sessions/current", { method: "DELETE" }),
-  account: () => request<AccountState>("/api/v1/account/me"),
+  account: (signal?: AbortSignal) =>
+    request<AccountState>("/api/v1/account/me", { signal }),
   getProfile: () => request<EditableProfile>("/api/v1/account/profile"),
   updateProfile: (version: number, displayName: string) =>
     request<EditableProfile>("/api/v1/account/profile", {
@@ -606,7 +614,8 @@ export const api = {
     request<RuleResource>(`/api/v1/rules/${encodeURIComponent(id)}`, {
       signal,
     }),
-  listRules: () => request<RuleListResponse>("/api/v1/rules"),
+  listRules: (signal?: AbortSignal) =>
+    request<RuleListResponse>("/api/v1/rules", { signal }),
   createRule: (definition: UserRuleDefinition) =>
     request<RuleResource>("/api/v1/rules", {
       method: "POST",
@@ -623,8 +632,8 @@ export const api = {
       body: JSON.stringify({ version }),
     }),
   listStocks: () => request<{ items: StockInstrument[] }>("/api/v1/stocks"),
-  listStockUniverses: () =>
-    request<{ items: StockUniverse[] }>("/api/v1/stock-universes"),
+  listStockUniverses: (signal?: AbortSignal) =>
+    request<{ items: StockUniverse[] }>("/api/v1/stock-universes", { signal }),
   createStockUniverse: (name: string, symbols: StockInstrument["symbol"][]) =>
     request<StockUniverse>("/api/v1/stock-universes", {
       method: "POST",
@@ -648,6 +657,67 @@ export const api = {
       method: "DELETE",
       body: JSON.stringify({ version }),
     }),
+  backtestCapabilities: (signal?: AbortSignal) =>
+    request<{ backtest?: BacktestCapabilities }>("/api/v1/capabilities", {
+      signal,
+    }),
+  prepareBacktest: (
+    scope: BacktestScope,
+    universeId: string,
+    signal: AbortSignal,
+  ) =>
+    request<BacktestManifest>("/api/v1/datasets/prepare", {
+      method: "POST",
+      signal,
+      body: JSON.stringify({
+        purpose: "backtest",
+        timeframe: "1d",
+        universe_id: universeId,
+        ...scope,
+      }),
+    }),
+  getBacktestManifest: (id: string, signal: AbortSignal) =>
+    request<BacktestManifest>(
+      `/api/v1/datasets/${encodeURIComponent(id)}/manifest`,
+      { signal },
+    ),
+  createBacktestGrant: (
+    manifest: BacktestManifest,
+    rule: RuleResource,
+    signal: AbortSignal,
+  ) =>
+    request<BacktestGrant>("/api/v1/compute-grants", {
+      method: "POST",
+      signal,
+      body: JSON.stringify({
+        purpose: "backtest",
+        dataset_id: manifest.dataset_id,
+        dataset_version: manifest.version,
+        dataset_checksum: manifest.checksum,
+        rule_id: rule.id,
+        definition_hash: rule.definition_hash,
+        engine_version: rule.engine_version,
+        schema_version: rule.schema_version,
+      }),
+    }),
+  backtestSignals: (
+    grantId: string,
+    candidates: import("@/types").ScreenerFeatureCandidate[],
+    signal: AbortSignal,
+  ) =>
+    request<{ policy_version: string; entries: BacktestEntry[] }>(
+      "/api/v1/backtests/signals",
+      {
+        method: "POST",
+        signal,
+        body: JSON.stringify({
+          compute_grant_id: grantId,
+          feature_schema_version: "screener-features-1",
+          policy_version: "holding-next-open-1",
+          candidates,
+        }),
+      },
+    ),
   prepareDataset: (
     ruleId: string,
     universeId: string,

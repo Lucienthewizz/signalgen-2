@@ -1,0 +1,211 @@
+.backtest-workspace {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.backtest-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: var(--workspace-panel-gutter);
+  min-width: 0;
+}
+.backtest-panel h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  color: var(--text);
+}
+.backtest-panel p,
+.backtest-panel li {
+  font-size: 0.86rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.backtest-panel a {
+  color: var(--green-bright);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.backtest-note {
+  color: var(--muted);
+}
+.backtest-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.backtest-section-heading > span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.backtest-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px 20px;
+  padding: 0;
+  margin: 22px 0 16px;
+  border: 0;
+  min-width: 0;
+}
+.backtest-field {
+  display: grid;
+  gap: 7px;
+  font-size: 0.8rem;
+  color: var(--text);
+  min-width: 0;
+}
+.backtest-panel input,
+.backtest-panel select {
+  color: var(--text);
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  width: 100%;
+  height: 40px;
+  padding: 8px 10px;
+  min-width: 0;
+  font: inherit;
+}
+.backtest-panel select:focus-visible,
+.backtest-panel input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.backtest-panel fieldset:disabled {
+  opacity: 0.65;
+}
+.backtest-panel input[type="date"] {
+  color-scheme: dark;
+}
+[data-theme="light"] .backtest-panel input[type="date"] {
+  color-scheme: light;
+}
+.backtest-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 0;
+  font-size: 0.8rem;
+}
+.backtest-error {
+  color: var(--danger);
+  border-left: 3px solid currentColor;
+  padding-left: 12px;
+}
+.backtest-manual-form {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+.backtest-manual-form .backtest-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex: 1;
+  margin: 10px 0 0;
+}
+.backtest-entry-list {
+  list-style: none;
+  padding: 0;
+}
+.backtest-entry-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 7px 0;
+}
+.backtest-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  margin: 24px 0;
+}
+.backtest-metrics dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.backtest-metrics dd {
+  color: var(--text);
+  font-size: 1.15rem;
+  margin: 6px 0 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.backtest-table-scroll {
+  overflow: auto;
+  max-width: 100%;
+  max-height: 480px;
+}
+.backtest-table-scroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.backtest-panel table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.78rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.backtest-panel caption {
+  text-align: left;
+  color: var(--muted);
+  padding: 10px 0;
+}
+.backtest-panel th,
+.backtest-panel td {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 14px;
+}
+.backtest-panel thead th {
+  background: var(--surface-2);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: var(--muted);
+  font-weight: 600;
+}
+.backtest-panel details {
+  margin-top: 18px;
+  font-size: 0.82rem;
+}
+.backtest-panel summary {
+  cursor: pointer;
+  color: var(--muted);
+  padding: 8px 0;
+}
+@media (max-width: 1100px) {
+  .backtest-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .backtest-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 540px) {
+  .backtest-fields,
+  .backtest-manual-form .backtest-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .backtest-manual-form {
+    display: grid;
+  }
+  .backtest-section-heading {
+    align-items: flex-start;
+  }
+  .backtest-section-heading .backtest-field {
+    width: 100%;
+  }
+  .backtest-metrics {
+    gap: 16px 12px;
+  }
+  .backtest-metrics dd {
+    font-size: 1rem;
+  }
+}

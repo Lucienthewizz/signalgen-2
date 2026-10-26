@@ -496,6 +496,88 @@ test("hybrid screener calls use the implemented Go API contract", async () => {
   });
 });
 
+test("backtest requests preserve manual/rule scope, grant bindings and private headers", async () => {
+  const c = client(() => response({}));
+  c.session.setToken("synthetic-backtest-token");
+  c.session.setAppSession("synthetic-backtest-session");
+  const signal = new AbortController().signal;
+  const scope = {
+    mode: "manual",
+    from: "2026-01-20",
+    to: "2026-01-23",
+    n_steps: 3,
+  };
+  const manifest = {
+    dataset_id: "dataset-a",
+    version: "v1",
+    checksum: "sha256:fixture",
+  };
+  const rule = {
+    id: "rule-a",
+    definition_hash: "sha256:rule",
+    engine_version: "core-0.4.0",
+    schema_version: "signal-baseline-1",
+  };
+  const candidates = [
+    {
+      symbol: "TEST",
+      timestamp: "2026-01-20T00:00:00Z",
+      features: { price: 100, ema9: 99, ema20: 98, rsi14: 50 },
+    },
+  ];
+  await c.api.prepareBacktest(scope, "universe-a", signal);
+  await c.api.prepareBacktest(
+    { ...scope, mode: "rule", rule_id: rule.id },
+    "universe-a",
+    signal,
+  );
+  await c.api.getBacktestManifest("dataset/a", signal);
+  await c.api.createBacktestGrant(manifest, rule, signal);
+  await c.api.backtestSignals("grant-a", candidates, signal);
+  assert.deepEqual(JSON.parse(c.calls[0].init.body), {
+    purpose: "backtest",
+    timeframe: "1d",
+    universe_id: "universe-a",
+    ...scope,
+  });
+  assert.equal(JSON.parse(c.calls[1].init.body).rule_id, rule.id);
+  assert.equal(
+    c.calls[2].url,
+    "https://api.example.test/api/v1/datasets/dataset%2Fa/manifest",
+  );
+  assert.deepEqual(JSON.parse(c.calls[3].init.body), {
+    purpose: "backtest",
+    dataset_id: manifest.dataset_id,
+    dataset_version: manifest.version,
+    dataset_checksum: manifest.checksum,
+    rule_id: rule.id,
+    definition_hash: rule.definition_hash,
+    engine_version: rule.engine_version,
+    schema_version: rule.schema_version,
+  });
+  assert.equal(
+    c.calls[4].url,
+    "https://api.example.test/api/v1/backtests/signals",
+  );
+  assert.deepEqual(JSON.parse(c.calls[4].init.body), {
+    compute_grant_id: "grant-a",
+    feature_schema_version: "screener-features-1",
+    policy_version: "holding-next-open-1",
+    candidates,
+  });
+  for (const call of c.calls) {
+    assert.equal(
+      call.init.headers.get("Authorization"),
+      "Bearer synthetic-backtest-token",
+    );
+    assert.equal(
+      call.init.headers.get("X-App-Session"),
+      "synthetic-backtest-session",
+    );
+    assert.equal(call.init.signal.aborted, false);
+  }
+});
+
 test("dataset manifest URL matches both runtime OpenAPI and registered Go route", async () => {
   // Read the real backend contract instead of duplicating a permissive mock URL.
   const openapi = fs.readFileSync(
@@ -610,7 +692,7 @@ test("worker and socket orchestration use the current private-screener contract"
     path.join(__dirname, "../src/analysis/screener-socket.ts"),
     "utf8",
   );
-  assert.match(worker, /worker-2/);
+  assert.match(fs.readFileSync(path.join(__dirname, "../src/workers/wasm-runtime.ts"), "utf8"), /worker-2/);
   assert.match(worker, /signalgenComputeFeatures/);
   assert.doesNotMatch(worker, /signalgenExtractLatestFeatures/);
   assert.match(orchestration, /screener-private-1/);

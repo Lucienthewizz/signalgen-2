@@ -18,6 +18,7 @@ const modules = [
   "workspace-typography",
   "screening-workflow",
   "workspace-review",
+  "backtesting",
 ];
 
 test("stylesheet entry keeps explicit cascade order and imports each module once", () => {

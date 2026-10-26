@@ -1,5 +1,22 @@
 # Backend progress
 
+## UI pengujian backtest — 26 Oktober 2026
+
+Branch `frontend/backtesting-workspace` menambahkan halaman `#app/backtest` untuk
+rule BUY/manual, historical snapshot, konfigurasi sizing/biaya, hasil T+1…T+n,
+transaksi tertutup/terbuka, skipped entries dan equity. Semua komputasi memakai
+Go/WASM; evaluasi rule privat tetap memakai API backtest. Akses online dan versi
+snapshot diperiksa ulang sebelum run; worker dihentikan saat cancel/unmount.
+Snapshot/hasil hanya di memori halaman. Tidak ada perubahan API, schema database,
+entitlement akun atau penulisan jurnal.
+
+Verifikasi frontend: 179 unit/contract tests, build, Playwright backtest dan
+regresi monitor dengan WASM asli, serta regresi workspace di 1440/390px, kedua
+tema. Akun/data/API browser merupakan fixture sintetis; login/provider akun asli
+belum diuji pada slice UI.
+Runtime Docker Go lokal diselaraskan ke 0.12.0 dan artefak WASM lokal dibangun ulang.
+[Panduan frontend](../../frontend/web/README.md#basic-backtesting-workspace-26-october-2026).
+
 ## Perbaikan readiness dan pengujian demo — 20 Oktober 2026
 
 Branch `frontend/intraday-monitor`: pemeriksaan cloud dingin sebelumnya diputus

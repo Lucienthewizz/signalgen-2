@@ -1,5 +1,45 @@
 # Signalgen Web
 
+## Basic backtesting workspace (26 October 2026)
+
+Open `#app/backtest` or **Analysis → Backtesting** with a signed-in account that
+has the `backtest` entitlement and a saved stock universe. This is a functional
+testing surface using the existing theme and controls; visual polish can follow.
+
+- Rule: select a saved BUY rule, universe, UTC dates, holding period, capital,
+  sizing and costs, then Run backtest.
+- Manual: choose Manual, Prepare data, select a stock and completed signal candle,
+  Add entry, then Run manual backtest. Preparing again replaces the snapshot and
+  clears manual entries. Entry always uses the next candle's open.
+- Select T+1 through T+n to inspect the independent portfolios, metrics, trades,
+  skipped entries and equity values. Open positions show unrealized P&L. Loading,
+  cancellation, empty results, invalid data and denied access have explicit states.
+
+The API must support OpenAPI 0.12.0, `backtest-1` and `holding-next-open-1`.
+Generate the matching WASM assets with the Docker command below before use.
+Client code verifies snapshot bytes/checksum, rechecks online access and snapshot
+version before each run, and sends each symbol's complete indicator history for
+private server scoring. Manual mode skips rule/grant/scoring. Computation runs in
+a cancellable Go/WASM worker. Results remain in memory for this page only.
+No journal entry or broker order is created. [Backend policies and limits](../../docs/backend/BACKTESTING.md).
+
+With Vite running on 5174, run:
+
+```sh
+npm test
+npm run test:backtest
+npm run build
+```
+
+The browser runner prefers `playwright-cli` and falls back to the installed
+`playwright` library. Set `SIGNALGEN_TEST_PLAYWRIGHT_CLI` to an executable wrapper
+path to use a non-global CLI. Set `SIGNALGEN_TEST_BROWSER_EXECUTABLE` if needed.
+The suite uses synthetic accounts and API/provider responses with the real
+Go/WASM engine. It checks next-open P&L, rule/manual flows, open positions,
+no signals, integrity/provider errors, cancellation and denied access at
+1440/390px in both themes. Screenshots go to ignored `output/playwright/backtest-*`.
+It does not verify real login, provider availability or production data.
+
 ## Dashboard and journal review (21 October 2026)
 
 Dashboard resources use larger landing-style boxes. Recent runs include glass
@@ -114,7 +154,8 @@ reduced-motion preference.
 Demo routes:
 
 - `#app/overview` — feature map and integration status
-- `#app/analysis` — screening/backtest configuration, run/cancel and results
+- `#app/analysis` — screener configuration, Start/Stop and results
+- `#app/backtest` — daily rule/manual backtesting, run/cancel and results
 - `#app/rules` — read-only system rules and owner-scoped user-rule CRUD
 - `#app/journal` — draft/manual transactions and example position/P&L
 - `#app/access` — entitlement, devices, revoke and local cache state

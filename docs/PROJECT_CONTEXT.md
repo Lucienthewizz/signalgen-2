@@ -78,7 +78,9 @@ account/session/rules/universe/dataset/compute/screener/backtests/subscription/o
 sudah diimplementasikan di Go. Daftar aktual mengikuti `backend/openapi.yaml`
 (0.12.0), bukan semua endpoint dalam kontrak target. Backtest inti memiliki core
 Go/WASM harian dan API akses/sinyal privat; lihat [kebijakan backtest](backend/BACKTESTING.md).
-UI/history backtest, jurnal dan portfolio tetap pekerjaan terbuka. Runtime aktif tidak dual-write SQLite/Postgres.
+UI dasar backtest untuk pengujian rule/manual tersedia di `#app/backtest`.
+History backtest lintas perangkat, jurnal dan portfolio tetap pekerjaan terbuka.
+Runtime aktif tidak dual-write SQLite/Postgres.
 
 Legacy auth /api/auth/register, /api/auth/login, /api/auth/me tetap kompatibel; field/response tidak diganti diam-diam. Kontrak API dan worker dibekukan M0 lalu diterbitkan OpenAPI/schema. Base URL/version/WASM URL terpusat; FE mengikuti runtime yang benar.
 

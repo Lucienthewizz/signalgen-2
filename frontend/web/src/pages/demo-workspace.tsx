@@ -107,6 +107,11 @@ const WorkspaceScreenerPanel = lazy(() =>
     default: m.WorkspaceScreenerPanel,
   })),
 );
+const WorkspaceBacktestPanel = lazy(() =>
+  import("@/pages/workspace-backtest-panel").then((m) => ({
+    default: m.WorkspaceBacktestPanel,
+  })),
+);
 const WorkspaceOverviewPanel = lazy(() =>
   import("@/pages/workspace-overview-panel").then((m) => ({
     default: m.WorkspaceOverviewPanel,
@@ -134,6 +139,7 @@ const WorkspaceNewsPanel = lazy(() =>
 export type DemoView =
   | "overview"
   | "analysis"
+  | "backtest"
   | "realtime"
   | "news"
   | "rules"
@@ -160,6 +166,12 @@ const viewMeta: Record<
     description:
       "Choose a rule and stock universe, then review the results and evidence.",
     icon: SearchCheck,
+  },
+  backtest: {
+    title: "Backtesting",
+    description:
+      "Test a daily rule or manual entries against historical candles.",
+    icon: CalendarRange,
   },
   realtime: {
     title: "Market monitor",
@@ -220,6 +232,7 @@ const navGroups: Array<{
     label: "Analysis",
     items: [
       { view: "analysis", label: "Screener", icon: SearchCheck },
+      { view: "backtest", label: "Backtesting", icon: CalendarRange },
       { view: "journal", label: "Trade journal", icon: NotebookTabs },
     ],
   },
@@ -2528,6 +2541,13 @@ export function DemoWorkspace({
                         userId={user?.id}
                         authenticated={authenticated}
                         backendOnline={backendOnline}
+                      />
+                    )}
+                    {view === "backtest" && (
+                      <WorkspaceBacktestPanel
+                        authenticated={authenticated}
+                        backendOnline={backendOnline}
+                        userId={user?.id}
                       />
                     )}
                     {view === "realtime" && (

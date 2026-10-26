@@ -510,7 +510,8 @@ async (page) => {
         await toast.hover({ timeout: 5000 });
         const bounds = await page.locator(".notification-viewport").boundingBox();
         if (!bounds || bounds.y > 24 || Math.abs(width - bounds.x - bounds.width - 16) > 2) throw Error("Notification not top-right");
-        await toast.screenshot({ path: `/private/tmp/signalgen-toast-${width}-${theme}-${failure}.png`, animations: "disabled", timeout: 10000 });
+        // Reduced motion is already active; fast-forwarding transitions can dismiss Base UI toasts.
+        await toast.screenshot({ path: `/private/tmp/signalgen-toast-${width}-${theme}-${failure}.png`, timeout: 10000 });
         // Base UI announces the toast through its live region and hides the
         // visual copy from AT until the viewport is keyboard-focused.
         const closeToast = toast.getByRole("button", { name: "Dismiss notification", exact: true, includeHidden: true });

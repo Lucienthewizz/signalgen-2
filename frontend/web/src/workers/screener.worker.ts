@@ -2,30 +2,8 @@
 
 import type { Candle, ScreenerFeatureResult } from "@/types";
 
-type GoRuntime = {
-  importObject: WebAssembly.Imports;
-  run(instance: WebAssembly.Instance): Promise<void>;
-};
-
-type WasmManifest = {
-  engine_version: string;
-  schema_version: string;
-  feature_schema_version: string;
-  capabilities_version: string;
-  worker_protocol: string;
-  wasm_file: string;
-  runtime_file: string;
-  wasm_sha256: string;
-  runtime_sha256: string;
-};
-
-type WorkerScope = typeof globalThis & {
-  Go?: new () => GoRuntime;
-  signalgenComputeFeatures?: (request: string) => string;
-};
-
-const scope = self as WorkerScope;
-let ready: Promise<void> | null = null;
+import { loadEngine, type WorkerScope } from "./wasm-runtime";
+let ready: Promise<WorkerScope> | null = null;
 
 self.onmessage = async (event: MessageEvent) => {
   const message = event.data as {
@@ -38,7 +16,7 @@ self.onmessage = async (event: MessageEvent) => {
   if (!["extract", "extract-batch"].includes(message.type)) return;
   try {
     ready ??= loadEngine();
-    await ready;
+    const scope = await ready;
     const series =
       message.type === "extract"
         ? [{ symbol: message.symbol, candles: message.candles }]
@@ -76,62 +54,5 @@ self.onmessage = async (event: MessageEvent) => {
     });
   }
 };
-
-async function loadEngine(): Promise<void> {
-  const base = new URL("/wasm/", self.location.origin);
-  const manifestResponse = await fetch(
-    new URL("signalgen_core.manifest.json", base),
-  );
-  if (!manifestResponse.ok) throw new Error("WASM manifest not found");
-  const manifest = (await manifestResponse.json()) as WasmManifest;
-  if (
-    manifest.engine_version !== "core-0.4.0" ||
-    manifest.worker_protocol !== "worker-2" ||
-    manifest.feature_schema_version !== "screener-features-1"
-  )
-    throw new Error("Unsupported WASM worker version");
-
-  const [runtimeResponse, wasmResponse] = await Promise.all([
-    fetch(new URL(manifest.runtime_file, base)),
-    fetch(new URL(manifest.wasm_file, base)),
-  ]);
-  if (!runtimeResponse.ok || !wasmResponse.ok)
-    throw new Error("Go/WASM artifacts are incomplete");
-  const runtimeBytes = await runtimeResponse.arrayBuffer();
-  const wasmBytes = await wasmResponse.arrayBuffer();
-  await Promise.all([
-    verifyHash(runtimeBytes, manifest.runtime_sha256),
-    verifyHash(wasmBytes, manifest.wasm_sha256),
-  ]);
-
-  const runtimeURL = URL.createObjectURL(
-    new Blob([runtimeBytes], { type: "text/javascript" }),
-  );
-  try {
-    await import(/* @vite-ignore */ runtimeURL);
-  } finally {
-    URL.revokeObjectURL(runtimeURL);
-  }
-  if (!scope.Go) throw new Error("The Go runtime could not be loaded");
-  const go = new scope.Go();
-  const instantiated = await WebAssembly.instantiate(
-    wasmBytes,
-    go.importObject,
-  );
-  void go.run(instantiated.instance);
-  if (!scope.signalgenComputeFeatures)
-    throw new Error("The WASM feature function could not be initialized");
-}
-
-async function verifyHash(
-  content: ArrayBuffer,
-  expected: string,
-): Promise<void> {
-  const digest = await crypto.subtle.digest("SHA-256", content);
-  const actual = `sha256:${Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("")}`;
-  if (actual !== expected) throw new Error("Go/WASM artifact hash mismatch");
-}
 
 export {};
