@@ -5,7 +5,7 @@ import type {
   DatasetManifest,
 } from "@/types";
 
-export const BACKTEST_SCHEMA = "backtest-1";
+export const BACKTEST_SCHEMA = "backtest-2";
 export const BACKTEST_POLICY = "holding-next-open-1";
 export type BacktestConfig = {
   mode: "rule" | "manual";
@@ -69,21 +69,28 @@ export type BacktestTrade = {
   unrealized_pl: number;
   return_pct: number;
 };
-export type BacktestMetrics = {
-  initial_capital: number;
-  final_equity: number;
+export type BacktestTradeMetrics = {
   net_pl_cash: number;
   unrealized_pl: number;
-  total_return_pct: number;
   closed_trades: number;
   open_trades: number;
   wins: number;
   losses: number;
   flats: number;
-  win_rate: number;
+  win_rate: number | null;
   profit_factor: number | null;
-  max_drawdown_pct: number;
   total_commission: number;
+  expectancy_cash: number | null;
+  avg_win_cash: number | null;
+  avg_loss_cash: number | null;
+  risk_reward: number | null;
+  avg_return_pct: number | null;
+};
+export type BacktestMetrics = BacktestTradeMetrics & {
+  initial_capital: number;
+  final_equity: number;
+  total_return_pct: number;
+  max_drawdown_pct: number;
 };
 export type BacktestHorizon = {
   step: number;
@@ -92,6 +99,9 @@ export type BacktestHorizon = {
   skipped: Array<BacktestEntry & { reason: string }>;
   metrics: BacktestMetrics;
   equity_curve: Array<{ timestamp: string; equity: number }>;
+  by_symbol: Array<
+    BacktestTradeMetrics & { symbol: string; skipped_entries: number }
+  >;
 };
 export type BacktestRequest = {
   schema_version: typeof BACKTEST_SCHEMA;

@@ -1,5 +1,37 @@
 # Backend progress
 
+## Backtest schema 2, analisis dan riwayat lokal — 27 Oktober 2026
+
+Branch `frontend/backtest-analysis` menambahkan statistik closed-trade net
+(expectancy, average profit/loss, average return, rasio average profit/loss) dan
+`by_symbol` dari accepted trades portfolio. Win rate tanpa closed trade menjadi
+null. Schema berubah ke `backtest-2`; policy `holding-next-open-1`, kontrak
+screener, next-open, sizing/fee dan posisi terbuka dipertahankan.
+
+UI membandingkan seluruh horizon (10 baris/halaman), grafik equity SVG dengan
+slider keyboard/touch, ringkasan saham, total biaya, tabel equity 25 baris/halaman,
+CSV seluruh transaksi/horizon dan bulk manual dengan validasi atomik nomor baris.
+Arsip menyimpan hasil/config/currency/provenance tanpa candle/credential/rule privat.
+IndexedDB terpisah mempertahankan maksimal 10 run / 50 MiB per akun, termasuk
+setelah logout sesuai pilihan pengguna; pembukaan memverifikasi akses, tanpa
+provider/scoring ulang. Arsip read-only terpisah dari snapshot aktif, dengan
+hapus satu/semua yang dikonfirmasi. Quota/abort/corrupt storage tidak menghilangkan
+hasil aktif atau mengklaim persistence berhasil.
+
+Verifikasi: seluruh `go test ./...`, 187 tes frontend, typecheck/build,
+fixture formula Claudio, parity native/WASM (rule/manual, biaya, tanpa sinyal,
+jam harian dan presisi subdetik) serta pemeriksaan marker rule privat lulus.
+Playwright memakai aplikasi/WASM dan IndexedDB asli dengan akun/API sintetis:
+bulk atomik, paging, download semua baris CSV, kegagalan save, persistensi
+reload/logout, isolasi akun, late-save cancellation, corrupt archive, batas
+10 run/50 MiB dan rollback quota. Backtest diuji 1440/390 pada kedua tema;
+regresi admin lulus 1440/375 serta 844×390 pada kedua tema.
+
+File yang diubah lulus Prettier; format-check global masih menandai enam file
+lama yang tidak diubah (`screener-engine.ts`, `market-news.ts` dan empat stylesheet
+workspace). Tidak ada migrasi/history server, jurnal authoritative, intraday,
+short, TP/SL, exit-rule atau Sharpe. Bukan bukti akun/provider produksi diuji.
+
 ## UI/UX admin dan penemuan menu — 26 Oktober 2026
 
 Kelanjutan `frontend/admin-access` memakai skill UI/UX Pro Max: directory anggota

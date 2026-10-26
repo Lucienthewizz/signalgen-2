@@ -58,7 +58,7 @@ const config = {
   slippage_pct: 0,
 };
 const versions = {
-  BACKTEST_SCHEMA: "backtest-1",
+  BACKTEST_SCHEMA: "backtest-2",
   BACKTEST_POLICY: "holding-next-open-1",
 };
 
@@ -339,6 +339,44 @@ test("manual mode rereads online access without a rule grant", async () => {
   assert.equal(h.calls.features, 0);
   assert.equal(h.calls.simulations, 1);
   assert.equal(h.calls.checks, 2);
+});
+test("schema mismatch stops before historical fetch and asks for refresh", async () => {
+  const h = harness();
+  h.api.backtestCapabilities = async () => ({
+    backtest: {
+      schema_version: "backtest-1",
+      policy_version: versions.BACKTEST_POLICY,
+    },
+  });
+  await assert.rejects(() => prepare(h), /refresh the app/);
+  assert.equal(h.calls.prepared, 0);
+  assert.equal(h.calls.simulations, 0);
+});
+test("archive provenance receives the rule actually bound to the grant", async () => {
+  const h = harness();
+  const prepared = await prepare(h);
+  let observed;
+  h.api.getRule = async () => ({
+    id: "rule-a",
+    name: "Updated rule",
+    version: 7,
+    definition_hash: "sha256:updated",
+    definition: { signal_type: "BUY" },
+  });
+  await h.module.runBacktest(
+    prepared,
+    config,
+    "rule-a",
+    [],
+    new AbortController().signal,
+    () => {},
+    (rule) => {
+      observed = rule;
+    },
+  );
+  assert.equal(observed.version, 7);
+  assert.equal(observed.definition_hash, "sha256:updated");
+  assert.equal(h.calls.simulations, 1);
 });
 test("backtest worker terminates on success/cancel and ignores late or unrelated jobs", async () => {
   const workers = [];

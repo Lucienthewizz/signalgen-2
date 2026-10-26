@@ -15,10 +15,14 @@ Current scope:
 - a minimal `js/wasm` adapter.
 - versioned capabilities exposed as `signalgenCapabilities()`.
 
-Backtesting adds an independent `backtest-1` / `holding-next-open-1` contract:
+Backtesting adds an independent `backtest-2` / `holding-next-open-1` contract:
 `ComputeBacktestFeatures` computes indicators and `RunBacktest` accepts entry
 references, applies next-open fills, long-only holding horizons, cash-aware sizing,
 fees/slippage, independent portfolios, marked equity and open final positions.
+Schema 2 adds nullable closed-trade expectancy/averages, profit/loss ratio and
+alphabetically ordered per-symbol statistics from accepted portfolio trades.
+`win_rate` is null without closed trades; open positions do not affect closed
+statistics. The execution policy is unchanged.
 Private rule decisions remain server-only. The WASM exports are
 `signalgenComputeFeatures`, `signalgenComputeBacktestFeatures`,
 `signalgenRunBacktest`, and the two capability functions. The WASM boundary check

@@ -44,12 +44,22 @@ fractionalOther.candles[19].timestamp = '2026-01-20T00:00:00.001Z';
 fractionalSignals.series.push(fractionalOther);
 fractionalSignals.entries = [{ symbol: 'AAA', timestamp: fractionalOther.candles[19].timestamp, signal_type: 'BUY' }, fractionalSignals.entries[0]];
 cases.push({ label: 'fractional signal priority', request: fractionalSignals });
+const empty = structuredClone(fixture); empty.entries = [];
+cases.push({ label: 'no signals and nullable statistics', request: empty });
+const fees = structuredClone(fixture); fees.config.commission_pct = 1; fees.config.slippage_pct = 1; fees.config.position_sizing = 'fixed_amount'; fees.config.position_size = 500;
+cases.push({ label: 'costs and per-symbol statistics', request: fees });
 for (const { label, request } of cases) {
   const native = JSON.parse(execFileSync('go', ['run', './cmd/backtest'], { input: JSON.stringify(request), encoding: 'utf8', maxBuffer: 16 << 20 }));
   const wasm = JSON.parse(globalThis.signalgenRunBacktest(JSON.stringify(request)));
   assert.equal(wasm.ok, true, JSON.stringify(wasm.error));
   compare(wasm.result, native);
-  if (request.config.n_steps === 1) {
+  if (!request.entries.length) {
+    assert.equal(wasm.result.horizons[0].metrics.win_rate, null);
+    assert.equal(wasm.result.horizons[0].metrics.expectancy_cash, null);
+  } else if (label === 'costs and per-symbol statistics') {
+    assert.ok(wasm.result.horizons[0].metrics.total_commission > 0);
+    assert.equal(wasm.result.horizons[0].by_symbol[0].net_pl_cash, wasm.result.horizons[0].metrics.net_pl_cash);
+  } else if (request.config.n_steps === 1) {
     assert.equal(wasm.result.horizons[0].trades.length, 1);
     assert.equal(wasm.result.horizons[0].trades[0].symbol, 'TEST');
     assert.equal(wasm.result.horizons[0].skipped[0].reason, 'POSITION_OPEN');
@@ -75,6 +85,7 @@ mismatchedInstant.entries[0].timestamp = '2026-01-20T00:00:00.200Z';
 assert.equal(JSON.parse(globalThis.signalgenRunBacktest(JSON.stringify(mismatchedInstant))).ok, false);
 assert.equal(JSON.parse(globalThis.signalgenRunBacktest('{}')).ok, false);
 assert.equal(JSON.parse(globalThis.signalgenBacktestCapabilities()).policy_version, 'holding-next-open-1');
+assert.equal(JSON.parse(globalThis.signalgenBacktestCapabilities()).schema_version, 'backtest-2');
 assert.deepEqual(JSON.parse(globalThis.signalgenCapabilities()).purposes, ['screen']);
 console.log('Feature export, capabilities, invalid input and SELL rejection verified');
 process.exit(0);

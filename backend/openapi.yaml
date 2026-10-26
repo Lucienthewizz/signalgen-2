@@ -2610,7 +2610,7 @@ components:
       type: object
       required: [schema_version, policy_version, modes, timeframes, signal_types, exit_strategies, max_symbols, max_candles_per_symbol, max_entries, max_horizon, financial_execution, decision_execution]
       properties:
-        schema_version: {type: string, enum: [backtest-1]}
+        schema_version: {type: string, enum: [backtest-2]}
         policy_version: {type: string, enum: [holding-next-open-1]}
         modes: {type: array, items: {type: string, enum: [rule, manual]}}
         timeframes: {type: array, items: {type: string, enum: [1d]}}
@@ -2675,3 +2675,114 @@ components:
             ema9: {type: number, minimum: 0, exclusiveMinimum: true}
             ema20: {type: number, minimum: 0, exclusiveMinimum: true}
             rsi14: {type: number, minimum: 0, maximum: 100}
+
+    BacktestTradeMetrics:
+      type: object
+      description: Portable Go/WASM output; net of entry/exit costs. Closed trades alone determine win rate, expectancy, average return and profit/loss statistics. Average loss is negative. Missing denominators/samples produce null, including win_rate with no closed trades. Not an authoritative server journal.
+      required: [net_pl_cash, unrealized_pl, closed_trades, open_trades, wins, losses, flats, win_rate, profit_factor, total_commission, expectancy_cash, avg_win_cash, avg_loss_cash, risk_reward, avg_return_pct]
+      properties:
+        net_pl_cash: {type: number}
+        unrealized_pl: {type: number}
+        closed_trades: {type: integer, minimum: 0}
+        open_trades: {type: integer, minimum: 0}
+        wins: {type: integer, minimum: 0}
+        losses: {type: integer, minimum: 0}
+        flats: {type: integer, minimum: 0}
+        win_rate: {type: number, nullable: true, minimum: 0, maximum: 100}
+        profit_factor: {type: number, nullable: true}
+        total_commission: {type: number, minimum: 0}
+        expectancy_cash: {type: number, nullable: true}
+        avg_win_cash: {type: number, nullable: true}
+        avg_loss_cash: {type: number, nullable: true}
+        risk_reward: {type: number, nullable: true}
+        avg_return_pct: {type: number, nullable: true}
+    BacktestMetrics:
+      allOf:
+        - {$ref: '#/components/schemas/BacktestTradeMetrics'}
+        - type: object
+          required: [initial_capital, final_equity, total_return_pct, max_drawdown_pct]
+          properties:
+            initial_capital: {type: number}
+            final_equity: {type: number}
+            total_return_pct: {type: number}
+            max_drawdown_pct: {type: number}
+    BacktestSymbolMetrics:
+      description: One row per dataset symbol, alphabetically ordered. Statistics use accepted trades of the shared portfolio, not a separate per-symbol portfolio; skipped_entries counts rejected candidates for this symbol.
+      allOf:
+        - {$ref: '#/components/schemas/BacktestTradeMetrics'}
+        - type: object
+          required: [symbol, skipped_entries]
+          properties:
+            symbol: {type: string}
+            skipped_entries: {type: integer, minimum: 0}
+    BacktestConfig:
+      type: object
+      additionalProperties: false
+      required: [mode, timeframe, from, to, n_steps, exit_strategy, initial_capital, position_sizing, position_size, commission_pct, slippage_pct]
+      properties:
+        mode: {type: string, enum: [rule, manual]}
+        timeframe: {type: string, enum: [1d]}
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        n_steps: {type: integer, minimum: 1, maximum: 100}
+        exit_strategy: {type: string, enum: [holding_period]}
+        initial_capital: {type: number, minimum: 0, exclusiveMinimum: true, maximum: 1000000000000000}
+        position_sizing: {type: string, enum: [percent_equity, fixed_amount]}
+        position_size: {type: number, minimum: 0, exclusiveMinimum: true, description: Percent equity cannot exceed 100.}
+        commission_pct: {type: number, minimum: 0, maximum: 10}
+        slippage_pct: {type: number, minimum: 0, maximum: 10}
+    BacktestTrade:
+      type: object
+      required: [symbol, signal_time, entry_time, status, quantity, entry_price, exit_price, entry_commission, exit_commission, net_pl, unrealized_pl, return_pct]
+      properties:
+        symbol: {type: string}
+        signal_time: {type: string, format: date-time}
+        entry_time: {type: string, format: date-time}
+        exit_time: {type: string, format: date-time}
+        status: {type: string, enum: [open, closed]}
+        quantity: {type: number}
+        entry_price: {type: number}
+        exit_price: {type: number, nullable: true}
+        entry_commission: {type: number}
+        exit_commission: {type: number}
+        net_pl: {type: number}
+        unrealized_pl: {type: number}
+        return_pct: {type: number}
+    BacktestHorizon:
+      type: object
+      required: [step, label, metrics, trades, skipped, equity_curve, by_symbol]
+      properties:
+        step: {type: integer, minimum: 1, maximum: 100}
+        label: {type: string, example: T+1}
+        metrics: {$ref: '#/components/schemas/BacktestMetrics'}
+        trades: {type: array, items: {$ref: '#/components/schemas/BacktestTrade'}}
+        skipped:
+          type: array
+          items:
+            type: object
+            required: [symbol, timestamp, signal_type, reason]
+            properties:
+              symbol: {type: string}
+              timestamp: {type: string, format: date-time}
+              signal_type: {type: string, enum: [BUY]}
+              reason: {type: string, enum: [NO_NEXT_CANDLE, POSITION_OPEN, INSUFFICIENT_CAPITAL]}
+        equity_curve:
+          type: array
+          items:
+            type: object
+            required: [timestamp, equity]
+            properties:
+              timestamp: {type: string, description: Empty initial point or RFC3339 UTC daily label.}
+              equity: {type: number}
+        by_symbol: {type: array, maxItems: 10, items: {$ref: '#/components/schemas/BacktestSymbolMetrics'}}
+    BacktestResult:
+      type: object
+      description: Result of signalgenRunBacktest in Go/WASM; no HTTP compute or history-write endpoint is introduced. Schema 2 changes nullable win_rate and adds closed-trade statistics and by_symbol. Rebuild matching client/WASM/API capabilities together.
+      required: [schema_version, policy_version, execution, config, horizons, warnings]
+      properties:
+        schema_version: {type: string, enum: [backtest-2]}
+        policy_version: {type: string, enum: [holding-next-open-1]}
+        execution: {type: string, enum: [portable_go_backtest]}
+        config: {$ref: '#/components/schemas/BacktestConfig'}
+        horizons: {type: array, minItems: 1, maxItems: 100, items: {$ref: '#/components/schemas/BacktestHorizon'}}
+        warnings: {type: array, items: {type: string}}

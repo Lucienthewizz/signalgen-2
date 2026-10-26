@@ -3,6 +3,13 @@ import { Play, Square, Plus, Trash2, RefreshCw } from "lucide-react";
 import { api, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { BacktestResults } from "./backtest-results";
+import { BacktestHistoryPanel } from "./backtest-history-panel";
+import { parseBacktestEntries } from "@/analysis/backtest-presentation";
+import {
+  saveBacktestArchive,
+  type BacktestArchive,
+} from "@/analysis/backtest-history";
 import {
   prepareBacktest,
   runBacktest,
@@ -36,11 +43,6 @@ function initialConfig(): BacktestConfig {
 }
 const dateLabel = (stamp: string) =>
   stamp ? new Date(stamp).toISOString().slice(0, 10) : "—";
-const skippedLabels: Record<string, string> = {
-  POSITION_OPEN: "Another position was open",
-  NO_NEXT_CANDLE: "No next candle available",
-  INSUFFICIENT_CAPITAL: "Insufficient capital",
-};
 
 export function WorkspaceBacktestPanel({
   authenticated,
@@ -67,11 +69,23 @@ export function WorkspaceBacktestPanel({
   const [error, setError] = useState("");
   const [stage, setStage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [horizonIndex, setHorizonIndex] = useState(0);
-  const [page, setPage] = useState(0);
+  const [resultId, setResultId] = useState("");
+  const [reportCurrency, setReportCurrency] = useState("IDR");
+  const [reportTitle, setReportTitle] = useState("");
+  const [reportSource, setReportSource] = useState<
+    BacktestArchive["source"] | null
+  >(null);
+  const [archived, setArchived] = useState(false);
+  const [owner, setOwner] = useState<{ id: string; revision: number } | null>(
+    null,
+  );
+  const [historyMessage, setHistoryMessage] = useState("");
+  const [bulk, setBulk] = useState("");
+  const [bulkError, setBulkError] = useState("");
+  const bulkRef = useRef<HTMLTextAreaElement>(null);
+  const optionsOperation = useRef<AbortController | null>(null);
   const operation = useRef<AbortController | null>(null);
   const selectedUniverse = universes.find((item) => item.id === universeId);
-  const selectedHorizon = result?.horizons[horizonIndex];
   const currency = prepared?.manifest.currency ?? "IDR";
   const money = (value: number) =>
     new Intl.NumberFormat("en-US", {
@@ -93,36 +107,63 @@ export function WorkspaceBacktestPanel({
     setEntrySymbol("");
     setEntryTime("");
     setResult(null);
+    setReportSource(null);
+    setBulk("");
+    setBulkError("");
+    setHistoryMessage("");
     setError("");
     setStage("");
   }
   useEffect(() => {
-    const unsubscribe = session.onIdentityChange(clearSnapshot);
+    const unsubscribe = session.onIdentityChange(() => {
+      clearSnapshot();
+      optionsOperation.current?.abort();
+      setOwner(null);
+      setRules([]);
+      setUniverses([]);
+    });
     const hide = () => operation.current?.abort();
     window.addEventListener("pagehide", hide);
     return () => {
       unsubscribe();
       window.removeEventListener("pagehide", hide);
       operation.current?.abort();
+      optionsOperation.current?.abort();
     };
   }, []);
   useEffect(() => {
     clearSnapshot();
+    setOwner(null);
     if (!authenticated || !backendOnline) {
       setLoading(false);
       return;
     }
     let ignore = false;
     const controller = new AbortController();
+    optionsOperation.current = controller;
+    const revision = session.getIdentityRevision();
     setLoading(true);
     setLoadError("");
     (async () => {
       await api.ensureAppSession();
       const account = await api.account(controller.signal);
+      if (
+        ignore ||
+        controller.signal.aborted ||
+        session.getIdentityRevision() !== revision
+      )
+        return;
+      if (account.user.id !== userId)
+        throw Error(
+          "Account changed. Refresh the app before using backtesting.",
+        );
       if (!account.features.includes("backtest"))
         throw new Error(
           "Backtesting is not enabled for your account. Check Plan & access.",
         );
+      if (account.user.status !== "active")
+        throw Error("An active account is required for backtesting.");
+      setOwner({ id: account.user.id, revision });
       const [ruleList, universeList, capabilities] = await Promise.all([
         api.listRules(controller.signal),
         api.listStockUniverses(controller.signal),
@@ -130,12 +171,17 @@ export function WorkspaceBacktestPanel({
       ]);
       if (
         capabilities.backtest?.policy_version !== "holding-next-open-1" ||
-        capabilities.backtest.schema_version !== "backtest-1"
+        capabilities.backtest.schema_version !== "backtest-2"
       )
         throw new Error(
-          "This backend does not support the current backtest version. Update the backend before running a backtest.",
+          "Backtest version mismatch. Update the backend and WASM assets, then refresh the app.",
         );
-      if (ignore) return;
+      if (
+        ignore ||
+        controller.signal.aborted ||
+        session.getIdentityRevision() !== revision
+      )
+        return;
       setRules(ruleList.items);
       setUniverses(universeList.items);
       setRuleId((current) =>
@@ -192,7 +238,7 @@ export function WorkspaceBacktestPanel({
     setBusy(true);
     setError("");
     setResult(null);
-    setPage(0);
+    setHistoryMessage("");
     const settings = { ...config };
     try {
       const snapshot =
@@ -214,6 +260,7 @@ export function WorkspaceBacktestPanel({
         setStage("Data ready. Add manual entries below.");
         return;
       }
+      let evaluatedRule: RuleResource | undefined;
       const report = await runBacktest(
         snapshot,
         settings,
@@ -221,12 +268,72 @@ export function WorkspaceBacktestPanel({
         entries,
         controller.signal,
         setStage,
+        (rule) => {
+          evaluatedRule = rule;
+        },
       );
       controller.signal.throwIfAborted();
       if (operation.current !== controller) return;
       setResult(report);
-      setHorizonIndex(report.horizons.length - 1);
+      setReportCurrency(snapshot.manifest.currency);
+      setArchived(false);
+      const id = crypto.randomUUID();
+      setResultId(id);
+      const universe = universes.find((u) => u.id === universeId)!;
+      const rule = evaluatedRule;
+      const title = `${settings.mode === "rule" ? (rule?.name ?? "Rule") : "Manual"} · ${universe.name} · ${settings.from}–${settings.to}`;
+      setReportTitle(title);
       setStage("Backtest complete.");
+      if (owner && owner.revision === snapshot.revision) {
+        const archive: BacktestArchive = {
+          format_version: 1,
+          id,
+          owner_id: owner.id,
+          saved_at: new Date().toISOString(),
+          title,
+          currency: snapshot.manifest.currency,
+          source: {
+            dataset_id: snapshot.manifest.dataset_id,
+            version: snapshot.manifest.version,
+            checksum: snapshot.manifest.checksum,
+            universe: {
+              id: universe.id,
+              name: universe.name,
+              version: universe.version,
+              symbols: [...snapshot.manifest.symbols],
+            },
+            ...(rule
+              ? {
+                  rule: {
+                    id: rule.id,
+                    name: rule.name,
+                    version: rule.version,
+                    definition_hash: rule.definition_hash,
+                  },
+                }
+              : {}),
+          },
+          result: report,
+        };
+        setReportSource(archive.source);
+        try {
+          await saveBacktestArchive(
+            archive,
+            controller.signal,
+            () =>
+              operation.current === controller &&
+              session.getIdentityRevision() === owner.revision &&
+              !!session.getToken(),
+          );
+          if (operation.current === controller && !controller.signal.aborted)
+            setHistoryMessage("Saved to this account's local history.");
+        } catch (cause) {
+          if (operation.current === controller && !controller.signal.aborted)
+            setHistoryMessage(
+              `Result is available, but history was not saved. ${cause instanceof Error ? cause.message : "Check browser storage permissions and retry a new run."}`,
+            );
+        }
+      }
     } catch (cause) {
       if (!controller.signal.aborted && operation.current === controller) {
         setError(cause instanceof Error ? cause.message : "Backtest failed.");
@@ -270,6 +377,29 @@ export function WorkspaceBacktestPanel({
     ]);
     setResult(null);
     setError("");
+  }
+  function addBulk() {
+    if (!prepared) return;
+    try {
+      const added = parseBacktestEntries(
+        bulk,
+        prepared.dataset,
+        config,
+        entries,
+      );
+      setEntries((current) => [...current, ...added]);
+      setBulk("");
+      setBulkError("");
+      setResult(null);
+      setError("");
+    } catch (cause) {
+      setBulkError(
+        cause instanceof Error
+          ? cause.message
+          : "Manual rows could not be added.",
+      );
+      bulkRef.current?.focus();
+    }
   }
 
   if (!authenticated)
@@ -641,6 +771,49 @@ export function WorkspaceBacktestPanel({
               Add entry
             </Button>
           </form>
+          <details>
+            <summary>Add multiple manual entries</summary>
+            <p className="backtest-note" id="bt-bulk-help">
+              One symbol,timestamp per line, optional header. Use exact snapshot
+              timestamps. BUY only; maximum 2,000 entries including the list
+              below.
+              {availableCandles[0] && (
+                <>
+                  {" "}
+                  Example from this snapshot:{" "}
+                  <code>
+                    {entrySymbol},{availableCandles[0].timestamp}
+                  </code>
+                  .
+                </>
+              )}
+            </p>
+            <label htmlFor="bt-bulk">Manual entry rows</label>
+            <textarea
+              ref={bulkRef}
+              id="bt-bulk"
+              rows={6}
+              value={bulk}
+              onChange={(e) => setBulk(e.target.value)}
+              disabled={busy}
+              aria-describedby="bt-bulk-help bt-bulk-error"
+              aria-invalid={!!bulkError}
+            />
+            <p
+              id="bt-bulk-error"
+              className="backtest-error"
+              role={bulkError ? "alert" : undefined}
+            >
+              {bulkError}
+            </p>
+            <Button
+              variant="outline"
+              disabled={busy || !bulk.trim()}
+              onClick={addBulk}
+            >
+              Add all entries
+            </Button>
+          </details>
           <ul className="backtest-entry-list">
             {entries.map((entry, i) => (
               <li key={`${entry.symbol}:${entry.timestamp}`}>
@@ -675,234 +848,40 @@ export function WorkspaceBacktestPanel({
         </section>
       )}
 
-      {result && selectedHorizon && (
-        <section
-          className="backtest-panel"
-          aria-labelledby="backtest-result-heading"
-          data-testid="backtest-results"
-        >
-          <div className="backtest-section-heading">
-            <h3 id="backtest-result-heading">Backtest results</h3>
-            <div className="backtest-field">
-              <label htmlFor="bt-result-horizon">Exit horizon</label>
-              <select
-                id="bt-result-horizon"
-                value={horizonIndex}
-                onChange={(event) => {
-                  setHorizonIndex(Number(event.target.value));
-                  setPage(0);
-                }}
-              >
-                {result.horizons.map((item, i) => (
-                  <option value={i} key={item.step}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <p className="backtest-note">
-            Each horizon uses a separate portfolio. Open positions use the last
-            available close and remain unrealized.
-          </p>
-          <dl className="backtest-metrics">
-            {[
-              ["Final equity", money(selectedHorizon.metrics.final_equity)],
-              ["Realized P&L", money(selectedHorizon.metrics.net_pl_cash)],
-              ["Unrealized P&L", money(selectedHorizon.metrics.unrealized_pl)],
-              [
-                "Total return",
-                `${number(selectedHorizon.metrics.total_return_pct)}%`,
-              ],
-              [
-                "Max drawdown",
-                `${number(selectedHorizon.metrics.max_drawdown_pct)}%`,
-              ],
-              [
-                "Closed / open trades",
-                `${selectedHorizon.metrics.closed_trades} / ${selectedHorizon.metrics.open_trades}`,
-              ],
-              [
-                "Win rate (closed)",
-                selectedHorizon.metrics.closed_trades
-                  ? `${number(selectedHorizon.metrics.win_rate)}%`
-                  : "—",
-              ],
-              [
-                "Profit factor",
-                selectedHorizon.metrics.profit_factor === null
-                  ? "—"
-                  : number(selectedHorizon.metrics.profit_factor),
-              ],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-          {!selectedHorizon.trades.length ? (
-            <p role="status">
-              No trades in this range. Review the rule or manual entries.
-            </p>
-          ) : (
-            <>
-              <div
-                className="backtest-table-scroll"
-                tabIndex={0}
-                role="region"
-                aria-label="Backtest trades"
-              >
-                <table>
-                  <caption>Trades · {selectedHorizon.label}</caption>
-                  <thead>
-                    <tr>
-                      {[
-                        "Stock",
-                        "Signal (UTC)",
-                        "Entry (UTC)",
-                        "Exit (UTC)",
-                        "Quantity",
-                        "Entry price",
-                        "Exit price",
-                        "P&L",
-                        "Return",
-                        "Status",
-                      ].map((title) => (
-                        <th key={title} scope="col">
-                          {title}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedHorizon.trades
-                      .slice(page * 25, (page + 1) * 25)
-                      .map((trade, i) => (
-                        <tr key={`${trade.symbol}:${trade.signal_time}:${i}`}>
-                          <th scope="row">{trade.symbol}</th>
-                          <td>{dateLabel(trade.signal_time)}</td>
-                          <td>{dateLabel(trade.entry_time)}</td>
-                          <td>
-                            {trade.exit_time ? dateLabel(trade.exit_time) : "—"}
-                          </td>
-                          <td>{number(trade.quantity, 6)}</td>
-                          <td>{money(trade.entry_price)}</td>
-                          <td>
-                            {trade.exit_price === null
-                              ? "—"
-                              : money(trade.exit_price)}
-                          </td>
-                          <td>
-                            {money(
-                              trade.status === "open"
-                                ? trade.unrealized_pl
-                                : trade.net_pl,
-                            )}
-                          </td>
-                          <td>{number(trade.return_pct)}%</td>
-                          <td>
-                            {trade.status === "open"
-                              ? "Open · unrealized"
-                              : "Closed"}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="backtest-actions">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page === 0}
-                  onClick={() => setPage((current) => current - 1)}
-                >
-                  Previous trades
-                </Button>
-                <span>
-                  Page {page + 1} of{" "}
-                  {Math.ceil(selectedHorizon.trades.length / 25)}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={(page + 1) * 25 >= selectedHorizon.trades.length}
-                  onClick={() => setPage((current) => current + 1)}
-                >
-                  Next trades
-                </Button>
-              </div>
-            </>
-          )}
-          <details>
-            <summary>
-              Skipped entries ({selectedHorizon.skipped.length})
-            </summary>
-            {selectedHorizon.skipped.length ? (
-              <>
-                <ul>
-                  {selectedHorizon.skipped.slice(0, 50).map((entry, i) => (
-                    <li key={i}>
-                      {entry.symbol} · {dateLabel(entry.timestamp)} ·{" "}
-                      {skippedLabels[entry.reason] ?? entry.reason}
-                    </li>
-                  ))}
-                </ul>
-                {selectedHorizon.skipped.length > 50 && (
-                  <p>Showing the first 50 skipped entries.</p>
-                )}
-              </>
-            ) : (
-              <p>No entries were skipped.</p>
-            )}
-          </details>
-          <details>
-            <summary>Equity values</summary>
-            <div
-              className="backtest-table-scroll"
-              tabIndex={0}
-              role="region"
-              aria-label="Backtest equity"
-            >
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">UTC date</th>
-                    <th scope="col">Equity</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedHorizon.equity_curve.map((point, i) => (
-                    <tr key={i}>
-                      <td>
-                        {point.timestamp
-                          ? dateLabel(point.timestamp)
-                          : "Initial balance"}
-                      </td>
-                      <td>{money(point.equity)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </details>
-          {!!result.warnings.length && (
-            <details>
-              <summary>Simulation assumptions</summary>
-              <ul>
-                {result.warnings.map((warning, i) => (
-                  <li key={i}>{warning}</li>
-                ))}
-              </ul>
-            </details>
-          )}
-          <p className="backtest-note">
-            Hypothetical analysis only. No broker orders, lot-size model or
-            corporate-action adjustment. Results stay in this page and are
-            cleared on sign out.
-          </p>
-        </section>
+      {historyMessage && (
+        <p role="status" className="backtest-note">
+          {historyMessage}
+        </p>
+      )}
+      {result && (
+        <BacktestResults
+          key={resultId}
+          result={result}
+          currency={reportCurrency}
+          title={reportTitle}
+          source={reportSource}
+          archived={archived}
+          onClose={() => setResult(null)}
+        />
+      )}
+      {owner && (
+        <BacktestHistoryPanel
+          key={`${owner.id}:${owner.revision}`}
+          owner={owner.id}
+          revision={owner.revision}
+          onOpen={(archive) => {
+            clearSnapshot();
+            setResult(archive.result);
+            setResultId(archive.id);
+            setReportCurrency(archive.currency);
+            setReportTitle(archive.title);
+            setReportSource(archive.source);
+            setArchived(true);
+            setHistoryMessage("");
+            setError("");
+            setStage("");
+          }}
+        />
       )}
     </div>
   );

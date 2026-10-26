@@ -137,6 +137,7 @@ func TestBacktestNoSignalsAndFiniteNullRatios(t *testing.T) {
 
 func TestBacktestRejectsUnsupportedAndCorruptInputs(t *testing.T) {
 	cases := map[string]func(*BacktestRequest){
+		"schema-1":         func(r *BacktestRequest) { r.SchemaVersion = "backtest-1" },
 		"sell":             func(r *BacktestRequest) { r.Entries[0].SignalType = "SELL" },
 		"intraday":         func(r *BacktestRequest) { r.Config.Timeframe = "5m" },
 		"target-stop":      func(r *BacktestRequest) { r.Config.ExitStrategy = "target_stop" },
@@ -161,7 +162,7 @@ func TestBacktestRejectsUnsupportedAndCorruptInputs(t *testing.T) {
 			}
 		})
 	}
-	for _, raw := range []string{`{"config":{"entry_price_basis":"high"}}`, `{"schema_version":"backtest-1"} {}`, `{"config":{"initial_capital":null}}`} {
+	for _, raw := range []string{`{"config":{"entry_price_basis":"high"}}`, `{"schema_version":"backtest-2"} {}`, `{"config":{"initial_capital":null}}`} {
 		if _, err := DecodeBacktestRequest([]byte(raw)); err == nil {
 			t.Fatalf("accepted %s", raw)
 		}

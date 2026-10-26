@@ -141,7 +141,7 @@ console.log(
   adminOnly
     ? "PASS: verified-role sidebar navigation, admin search/paging, reviewed grant/revoke, validation focus, contrast and 44px controls, denied/forged/suspended roles, 1440/375px and 844x390 landscape, both themes. Synthetic account/API fixtures only."
     : backtestOnly
-      ? "PASS: backtest rule/manual, real Go/WASM, next-open P&L, open positions, cancel, integrity, denied access, 1440/390px, both themes. Synthetic account/API fixtures only."
+      ? "PASS: backtest-2 rule/manual, real Go/WASM, horizon/equity/trade paging, bulk input, full CSV downloads, native IndexedDB persistence/limits/rollback, archive reload/logout/isolation, cancellation/integrity/denial, 1440/390px both themes. Synthetic account/API fixtures only."
       : monitorOnly
         ? "PASS: Start/Stop, real WASM, unchanged-data dedup, new candles, cancellation, navigation, 1440/390px and both themes; synthetic API/socket fixtures only."
         : recoveryOnly

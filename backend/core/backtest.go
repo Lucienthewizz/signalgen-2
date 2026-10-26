@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	BacktestSchemaVersion = "backtest-1"
+	BacktestSchemaVersion = "backtest-2"
 	BacktestPolicyVersion = "holding-next-open-1"
 	MaxBacktestCandles    = 2500
 	MaxBacktestEntries    = 2000
@@ -102,30 +102,46 @@ type BacktestEquity struct {
 	Equity    float64 `json:"equity"`
 }
 
-type BacktestMetrics struct {
-	InitialCapital  float64  `json:"initial_capital"`
-	FinalEquity     float64  `json:"final_equity"`
+type BacktestTradeMetrics struct {
 	NetPLCash       float64  `json:"net_pl_cash"`
 	UnrealizedPL    float64  `json:"unrealized_pl"`
-	TotalReturnPct  float64  `json:"total_return_pct"`
 	ClosedTrades    int      `json:"closed_trades"`
 	OpenTrades      int      `json:"open_trades"`
 	Wins            int      `json:"wins"`
 	Losses          int      `json:"losses"`
 	Flats           int      `json:"flats"`
-	WinRate         float64  `json:"win_rate"`
+	WinRate         *float64 `json:"win_rate"`
 	ProfitFactor    *float64 `json:"profit_factor"`
-	MaxDrawdownPct  float64  `json:"max_drawdown_pct"`
 	TotalCommission float64  `json:"total_commission"`
+	ExpectancyCash  *float64 `json:"expectancy_cash"`
+	AvgWinCash      *float64 `json:"avg_win_cash"`
+	AvgLossCash     *float64 `json:"avg_loss_cash"`
+	RiskReward      *float64 `json:"risk_reward"`
+	AvgReturnPct    *float64 `json:"avg_return_pct"`
+}
+
+type BacktestMetrics struct {
+	BacktestTradeMetrics
+	InitialCapital float64 `json:"initial_capital"`
+	FinalEquity    float64 `json:"final_equity"`
+	TotalReturnPct float64 `json:"total_return_pct"`
+	MaxDrawdownPct float64 `json:"max_drawdown_pct"`
+}
+
+type BacktestSymbolMetrics struct {
+	Symbol         string `json:"symbol"`
+	SkippedEntries int    `json:"skipped_entries"`
+	BacktestTradeMetrics
 }
 
 type BacktestHorizon struct {
-	Step        int               `json:"step"`
-	Label       string            `json:"label"`
-	Trades      []BacktestTrade   `json:"trades"`
-	Skipped     []BacktestSkipped `json:"skipped"`
-	Metrics     BacktestMetrics   `json:"metrics"`
-	EquityCurve []BacktestEquity  `json:"equity_curve"`
+	Step        int                     `json:"step"`
+	Label       string                  `json:"label"`
+	Trades      []BacktestTrade         `json:"trades"`
+	Skipped     []BacktestSkipped       `json:"skipped"`
+	Metrics     BacktestMetrics         `json:"metrics"`
+	EquityCurve []BacktestEquity        `json:"equity_curve"`
+	BySymbol    []BacktestSymbolMetrics `json:"by_symbol"`
 }
 
 type BacktestResult struct {
@@ -379,8 +395,43 @@ func simulateBacktest(config BacktestConfig, entries []BacktestEntry, series map
 	metrics.InitialCapital = config.InitialCapital
 	metrics.FinalEquity = result.EquityCurve[len(result.EquityCurve)-1].Equity
 	metrics.TotalReturnPct = (metrics.FinalEquity/config.InitialCapital - 1) * 100
-	profit, loss := 0.0, 0.0
-	for _, trade := range result.Trades {
+	metrics.BacktestTradeMetrics = summarizeBacktestTrades(result.Trades)
+	symbols := make([]string, 0, len(series))
+	for symbol := range series {
+		symbols = append(symbols, symbol)
+	}
+	sort.Strings(symbols)
+	result.BySymbol = make([]BacktestSymbolMetrics, 0, len(symbols))
+	for _, symbol := range symbols {
+		trades := []BacktestTrade{}
+		for _, trade := range result.Trades {
+			if trade.Symbol == symbol {
+				trades = append(trades, trade)
+			}
+		}
+		skipped := 0
+		for _, entry := range result.Skipped {
+			if entry.Symbol == symbol {
+				skipped++
+			}
+		}
+		result.BySymbol = append(result.BySymbol, BacktestSymbolMetrics{Symbol: symbol, SkippedEntries: skipped, BacktestTradeMetrics: summarizeBacktestTrades(trades)})
+	}
+	return result
+}
+
+func backtestMean(sum float64, count int) *float64 {
+	if count == 0 {
+		return nil
+	}
+	value := sum / float64(count)
+	return &value
+}
+
+func summarizeBacktestTrades(trades []BacktestTrade) BacktestTradeMetrics {
+	metrics := BacktestTradeMetrics{}
+	profit, loss, returns := 0.0, 0.0, 0.0
+	for _, trade := range trades {
 		metrics.TotalCommission += trade.EntryCommission + trade.ExitCommission
 		if trade.Status == "open" {
 			metrics.OpenTrades++
@@ -389,6 +440,7 @@ func simulateBacktest(config BacktestConfig, entries []BacktestEntry, series map
 		}
 		metrics.ClosedTrades++
 		metrics.NetPLCash += trade.NetPL
+		returns += trade.ReturnPct
 		switch {
 		case trade.NetPL > 0:
 			metrics.Wins++
@@ -400,14 +452,20 @@ func simulateBacktest(config BacktestConfig, entries []BacktestEntry, series map
 			metrics.Flats++
 		}
 	}
-	if metrics.ClosedTrades > 0 {
-		metrics.WinRate = float64(metrics.Wins) / float64(metrics.ClosedTrades) * 100
-	}
+	metrics.WinRate = backtestMean(float64(metrics.Wins)*100, metrics.ClosedTrades)
+	metrics.ExpectancyCash = backtestMean(metrics.NetPLCash, metrics.ClosedTrades)
+	metrics.AvgReturnPct = backtestMean(returns, metrics.ClosedTrades)
+	metrics.AvgWinCash = backtestMean(profit, metrics.Wins)
+	metrics.AvgLossCash = backtestMean(-loss, metrics.Losses)
 	if loss > 0 {
 		ratio := profit / loss
 		metrics.ProfitFactor = &ratio
 	}
-	return result
+	if metrics.AvgWinCash != nil && metrics.AvgLossCash != nil {
+		ratio := *metrics.AvgWinCash / math.Abs(*metrics.AvgLossCash)
+		metrics.RiskReward = &ratio
+	}
+	return metrics
 }
 
 type BacktestCapabilities struct {

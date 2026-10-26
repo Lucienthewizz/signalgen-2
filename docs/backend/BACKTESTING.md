@@ -1,10 +1,10 @@
-# Backtesting backend/core — 26 Oktober 2026
+# Backtesting backend/core — 27 Oktober 2026
 
-Status: backend/core slice `backtest-1`, policy `holding-next-open-1`. Ini mengikuti
+Status: backend/core slice `backtest-2`, policy `holding-next-open-1`. Ini mengikuti
 analisis T+1…T+n Claudio dengan kebijakan eksekusi baru. UI dasar untuk pengujian
 tersedia di `#app/backtest`; [alur frontend dan tes browser](../../frontend/web/README.md#basic-backtesting-workspace-26-october-2026).
-Penyimpanan history, jurnal authoritative, intraday, short, target-stop dan exit-rule
-belum termasuk.
+Riwayat hasil sekarang tersedia lokal per akun di browser. History server/lintas
+perangkat, jurnal authoritative, intraday, short, target-stop dan exit-rule belum termasuk.
 
 ## Alur dan kontrak
 
@@ -50,7 +50,7 @@ belum termasuk.
 
 ```json
 {
-  "schema_version":"backtest-1",
+  "schema_version":"backtest-2",
   "config":{"mode":"manual","timeframe":"1d","from":"2026-01-01","to":"2026-06-30","n_steps":3,"exit_strategy":"holding_period","initial_capital":10000,"position_sizing":"percent_equity","position_size":100,"commission_pct":0,"slippage_pct":0},
   "series":[],
   "entries":[{"symbol":"TEST","timestamp":"2026-01-20T00:00:00Z","signal_type":"BUY"}]
@@ -94,6 +94,54 @@ belum termasuk.
   Sharpe annualized atau klaim return yang dijamin. `NO_NEXT_CANDLE`,
   `POSITION_OPEN`, `INSUFFICIENT_CAPITAL` menjelaskan entry yang dilewati.
 
+## Analisis schema 2 dan riwayat lokal
+
+`backtest-2` mempertahankan policy next-open. Client/API capabilities dan WASM harus
+diperbarui bersama; versi yang berbeda meminta refresh/rebuild, tanpa fallback
+diam-diam. Kontrak screener tetap sama. Tipe portable output juga didokumentasikan
+dalam komponen `BacktestResult` pada OpenAPI; bukan endpoint compute server baru.
+
+- `win_rate=null` tanpa closed trade. `expectancy_cash` = realized net P&L / closed
+  trades; `avg_return_pct` = rata-rata aritmetika return net masing-masing closed
+  trade, bukan return portfolio dan bukan annualized.
+- `avg_win_cash` = total profit net / jumlah win; `avg_loss_cash` = total loss net
+  / jumlah loss (negatif). `risk_reward` = avg win / absolut avg loss. Rata-rata
+  tanpa sampel dan rasio tanpa denominator menjadi null. Open trade tidak masuk
+  hitungan ini; fee entry-nya tetap masuk `total_commission`.
+- Setiap horizon mempunyai `by_symbol`, diurutkan alfabetis untuk seluruh simbol
+  dataset, termasuk simbol tanpa trade. Counts/P&L/biaya memakai accepted trades
+  pada portfolio bersama; `skipped_entries` dihitung terpisah. Tidak menyimulasikan
+  modal terpisah per saham dan tidak menjumlahkan persentase return antar saham.
+- UI membandingkan T+1…T+n (10 baris/halaman), menampilkan grafik equity harian,
+  ringkasan saham dan tabel equity (25 baris/halaman). CSV transaksi mengekspor
+  seluruh transaksi horizon terpilih; CSV horizon mengekspor semua horizon.
+- Bulk manual menerima `symbol,timestamp`, header opsional, maksimal 2.000 total
+  entries. Timestamp harus instant snapshot persis, termasuk subdetik; offset
+  ekuivalen diperbolehkan. Duplikat/range/simbol/direction invalid membatalkan
+  seluruh batch dengan nomor baris. Tidak ada override harga atau SELL.
+
+Contoh tambahan metrics pada closed trade net +100 dan -50: expectancy 25,
+average win 100, average loss -50, risk/reward 2, win rate 50. Unrealized P&L tidak
+mengubah expectancy. Fixture runnable dan expected JSON di `backend/core/testdata/`
+memuat respons lengkap yang dihasilkan native/WASM.
+
+Riwayat `signalgen-backtest-history-v1` memakai IndexedDB khusus: metadata ringkas
+terpisah dari JSON hasil lengkap. Menyimpan config, currency, metadata rule/universe,
+dataset ID/version/checksum dan versi schema/policy, tanpa token, grant, private
+rule atau raw candle. Persistensi sengaja bertahan setelah logout sesuai keputusan
+pengguna; cache OHLCV dan key-nya tetap mengikuti cleanup lama. Arsip hanya hasil
+analisis lokal, bukan cache dataset untuk run offline atau bukti jurnal.
+
+Maksimal 10 run / 50 MiB JSON UTF-8 per akun, eviction tertua dalam transaksi yang
+sama dengan insert. Oversize/storage/quota/arsip rusak dilaporkan tanpa menghilangkan
+hasil aktif atau mengklaim save sukses. Logout/account switch membatalkan operasi
+tertunda dan membersihkan tampilan, bukan arsip. Membuka arsip mengecek akses akun
+tanpa fetch provider/scoring ulang; dataset/grant lama tidak digunakan untuk run baru.
+Metadata rule mengikuti versi yang benar-benar dipakai grant, bukan daftar UI lama;
+simbol universe mengikuti snapshot, sedangkan selection version mencatat versi
+universe yang dipilih di UI. Arsip lokal tidak terenkripsi dan dapat dibaca script origin/pemilik profil browser;
+pengguna dapat menghapus satu/semua arsip atau site data. Tidak masuk workspace sync.
+
 ## Data dan batas kepercayaan
 
 Yahoo range history memakai cache bounded/coalescing yang sama dengan screening,
@@ -112,7 +160,7 @@ termodelkan. Kekurangan exit buffer tampak sebagai posisi terbuka.
 Fitur dari client dapat dimodifikasi. Dataset/grant membatasi akses dan konteks,
 bukan membuktikan fitur atau P&L benar. Hasil bukan bukti pembayaran, kompetisi,
 atau jurnal transaksi nyata. Cancel dilakukan dengan menghentikan worker; tidak
-ada background job/server fallback. Tidak ada migrasi atau penyimpanan hasil baru.
+ada background job/server fallback. Tidak ada migrasi atau penyimpanan hasil server baru.
 
 ## Verifikasi lokal
 

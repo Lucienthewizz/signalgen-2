@@ -29,7 +29,9 @@ self.onmessage = async (event: MessageEvent) => {
       version.schema_version !== BACKTEST_SCHEMA ||
       version.policy_version !== BACKTEST_POLICY
     )
-      throw new Error("The backtest engine version is not supported.");
+      throw new Error(
+        "The backtest engine version is not supported. Rebuild the WASM assets and refresh the app.",
+      );
     function decode(encoded: string) {
       const response = JSON.parse(encoded);
       if (!response.ok || !response.result)

@@ -59,7 +59,11 @@ testing surface using the existing theme and controls; visual polish can follow.
   Add entry, then Run manual backtest. Preparing again replaces the snapshot and
   clears manual entries. Entry always uses the next candle's open.
 - Select T+1 through T+n to inspect the independent portfolios, metrics, trades,
-  skipped entries and equity values. Open positions show unrealized P&L. Loading,
+  skipped entries and equity values. The comparison table shows 10 horizons per
+  page; its buttons support keyboard selection. The daily equity chart supports
+  pointer/touch and an accessible slider; the full equity table has 25 rows/page.
+  By-stock statistics describe accepted portfolio trades, with skipped candidates
+  counted separately. Open positions show unrealized P&L. Loading,
   cancellation, empty results, invalid data and denied access have explicit states.
 
 The API must support OpenAPI 0.12.0, `backtest-1` and `holding-next-open-1`.
@@ -67,8 +71,43 @@ Generate the matching WASM assets with the Docker command below before use.
 Client code verifies snapshot bytes/checksum, rechecks online access and snapshot
 version before each run, and sends each symbol's complete indicator history for
 private server scoring. Manual mode skips rule/grant/scoring. Computation runs in
-a cancellable Go/WASM worker. Results remain in memory for this page only.
+a cancellable Go/WASM worker. Schema 2 adds nullable closed-trade statistics,
+expectancy, average profit/loss, average closed return and by-stock summaries.
+An incompatible API/WASM version asks for refresh/rebuild.
 No journal entry or broker order is created. [Backend policies and limits](../../docs/backend/BACKTESTING.md).
+
+**Export:** Export trades CSV downloads every trade for the selected horizon,
+including rows outside the current table page. Export horizons CSV includes all
+horizons, currency, schema and policy. Null metrics export as empty cells. CSV
+quotes and spreadsheet formula text are escaped; numeric losses remain numbers.
+
+**Bulk manual:** expand Add multiple manual entries and paste lines such as:
+
+```csv
+symbol,timestamp
+TEST,2026-01-20T00:00:00Z
+TEST,2026-01-21T00:00:00Z
+```
+
+Use symbols and completed candle timestamps from the prepared snapshot. The header
+is optional. An invalid or duplicate line rejects the entire batch, keeps the old
+list unchanged and focuses the row errors. The combined limit is 2,000 entries.
+
+**History:** each successful run, including no trades, saves automatically to
+IndexedDB on this browser, separately per verified account. Archives retain full
+results, currency, config and source/version metadata; never credentials, grants,
+private rule definitions or raw candle datasets. Logout clears the screen but
+keeps archives for the same account's next login. Archives are local plaintext
+analysis, not encrypted historical-cache snapshots or authoritative records.
+Opening checks current backtest access and needs no market data/scoring fetch.
+It displays the saved result read-only with its saved currency, without restoring
+an expired grant or silently rerunning its settings.
+
+The newest 10 runs, at most 50 MiB JSON UTF-8 per account, are retained; oldest
+archives are removed atomically with a new save. Oversize/quota/blocked storage
+reports failure while the current result and CSV remain usable. Delete one/all
+asks for confirmation and affects only this account's archives. Browser/site-data
+clearing removes local history; it is not synchronized across devices.
 
 With Vite running on 5174, run:
 
@@ -85,6 +124,9 @@ The suite uses synthetic accounts and API/provider responses with the real
 Go/WASM engine. It checks next-open P&L, rule/manual flows, open positions,
 no signals, integrity/provider errors, cancellation and denied access at
 1440/390px in both themes. Screenshots go to ignored `output/playwright/backtest-*`.
+It additionally checks real IndexedDB persistence, count/byte limits, transaction
+rollback on quota errors, corrupt records, account changes during save, reload,
+logout, account isolation, archive deletion, bulk-input atomicity and CSV downloads.
 It does not verify real login, provider availability or production data.
 
 ## Dashboard and journal review (21 October 2026)

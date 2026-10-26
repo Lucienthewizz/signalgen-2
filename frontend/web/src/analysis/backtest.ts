@@ -1,6 +1,7 @@
 import { api, ApiError, session } from "@/api/client";
 import { extractBacktestFeatures, simulateBacktest } from "./backtest-engine";
 import { BACKTEST_POLICY, BACKTEST_SCHEMA } from "./backtest-types";
+import type { RuleResource } from "@/types";
 import type {
   BacktestConfig,
   BacktestDataset,
@@ -102,7 +103,7 @@ async function access(signal: AbortSignal, revision: number) {
     capability.backtest.policy_version !== BACKTEST_POLICY
   )
     throw new ApiError(
-      "This backend does not support the current backtest version. Update the backend before running a backtest.",
+      "Backtest version mismatch. Update the backend and WASM assets, then refresh the app.",
       422,
       "UNSUPPORTED_CAPABILITY",
     );
@@ -229,6 +230,7 @@ export async function runBacktest(
   manualEntries: BacktestEntry[],
   signal: AbortSignal,
   progress: (stage: string) => void,
+  onRuleSnapshot?: (rule: RuleResource) => void,
 ) {
   validateBacktestForm(config);
   check(signal, prepared.revision);
@@ -282,6 +284,7 @@ export async function runBacktest(
       );
     const grant = await api.createBacktestGrant(current, rule, signal);
     check(signal, prepared.revision);
+    onRuleSnapshot?.(rule);
     entries = [];
     for (const group of features) {
       progress(`Evaluating ${group.candidates[0]?.symbol}…`);
@@ -332,6 +335,9 @@ export async function runBacktest(
     result.policy_version !== BACKTEST_POLICY ||
     result.horizons.length !== config.n_steps
   )
-    throw new ApiError("The backtest result version is incompatible.", 409);
+    throw new ApiError(
+      "The backtest result version is incompatible. Refresh the app and update its WASM assets.",
+      409,
+    );
   return result;
 }
