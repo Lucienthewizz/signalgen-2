@@ -6,6 +6,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/account"
 	accountapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/account"
 	authapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/auth"
+	backtestsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/backtests"
 	computeapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/compute"
 	datasetsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/datasets"
 	newsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/news"
@@ -44,6 +45,8 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	systemHandler := &systemapi.Handler{Context: server.Context}
 	universesHandler := &universesapi.Handler{Context: server.Context}
 	router := platformhttp.NewRouter()
+	backtestsHandler := &backtestsapi.Handler{Context: server.Context}
+	router.Handle(http.MethodPost, "/api/v1/backtests/signals", backtestsHandler.Signals)
 	workspaceHandler := &workspaceapi.Handler{Context: server.Context, Store: config.workspaceStore}
 	router.Handle(http.MethodGet, "/api/v1/workspace", workspaceHandler.List)
 	router.Handle(http.MethodPut, "/api/v1/workspace/:kind", workspaceHandler.Put)

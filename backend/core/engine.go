@@ -145,6 +145,22 @@ func ComputeFeatures(request FeatureRequest) (FeatureResult, error) {
 // terhadap kandidat fitur ringkas. Tahap ini dijalankan secara privat di server agar
 // logika strategi pengguna tidak pernah bocor ke publik atau client lain.
 func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
+	return evaluateDecision(request, "", "")
+}
+
+// EvaluateBacktestDecision carries crossover history through warmup without
+// allowing out-of-range matches to consume the entry-period cooldown.
+func EvaluateBacktestDecision(request DecisionRequest, from, to string) (DecisionResult, error) {
+	if _, err := time.Parse("2006-01-02", from); err != nil {
+		return DecisionResult{}, err
+	}
+	if _, err := time.Parse("2006-01-02", to); err != nil || to < from {
+		return DecisionResult{}, fmt.Errorf("invalid backtest entry range")
+	}
+	return evaluateDecision(request, from, to)
+}
+
+func evaluateDecision(request DecisionRequest, from, to string) (DecisionResult, error) {
 	if err := ValidateRule(request.Rule); err != nil {
 		return DecisionResult{}, err
 	}
@@ -171,6 +187,10 @@ func EvaluateDecision(request DecisionRequest) (DecisionResult, error) {
 			return DecisionResult{}, err
 		}
 		prevValues = values
+		day := parsed.UTC().Format("2006-01-02")
+		if from != "" && (day < from || day > to) {
+			continue
+		}
 		if !matched {
 			evaluations = append(evaluations, CandidateEvaluation{
 				Symbol:      candidate.Symbol,

@@ -1,0 +1,59 @@
+[
+  {
+    "step": 1,
+    "metrics": {
+      "initial_capital": 10000,
+      "final_equity": 9075.126262626261,
+      "net_pl_cash": -924.8737373737373,
+      "unrealized_pl": 0,
+      "total_return_pct": -9.24873737373738,
+      "closed_trades": 3,
+      "open_trades": 0,
+      "wins": 2,
+      "losses": 1,
+      "flats": 0,
+      "win_rate": 66.66666666666666,
+      "profit_factor": 0.4692028985507246,
+      "max_drawdown_pct": 16.666666666666682,
+      "total_commission": 0
+    }
+  },
+  {
+    "step": 2,
+    "metrics": {
+      "initial_capital": 10000,
+      "final_equity": 9469.696969696968,
+      "net_pl_cash": -909.090909090909,
+      "unrealized_pl": 378.78787878787875,
+      "total_return_pct": -5.3030303030303205,
+      "closed_trades": 1,
+      "open_trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "flats": 0,
+      "win_rate": 0,
+      "profit_factor": 0,
+      "max_drawdown_pct": 13.043478260869568,
+      "total_commission": 0
+    }
+  },
+  {
+    "step": 3,
+    "metrics": {
+      "initial_capital": 10000,
+      "final_equity": 9469.696969696968,
+      "net_pl_cash": -909.090909090909,
+      "unrealized_pl": 378.78787878787875,
+      "total_return_pct": -5.3030303030303205,
+      "closed_trades": 1,
+      "open_trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "flats": 0,
+      "win_rate": 0,
+      "profit_factor": 0,
+      "max_drawdown_pct": 13.043478260869568,
+      "total_commission": 0
+    }
+  }
+]

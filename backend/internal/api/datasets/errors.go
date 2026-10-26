@@ -44,10 +44,12 @@ func writeDatasetError(writer http.ResponseWriter, request *http.Request, err er
 				status = http.StatusTooManyRequests
 			}
 			shared.WriteError(writer, request, status, "PROVIDER_UNAVAILABLE", "Market data provider is temporarily unavailable. The previous result has not been updated.")
+		case errors.Is(err, marketdata.ErrHistoryUnavailable):
+			shared.WriteError(writer, request, http.StatusUnprocessableEntity, "HISTORY_UNAVAILABLE", "Configured provider does not support historical ranges; no provider fallback was used.")
 		case errors.Is(err, marketdata.ErrIntervalUnavailable):
 			shared.WriteError(writer, request, http.StatusUnprocessableEntity, "INTERVAL_UNAVAILABLE", "The requested candle interval is unavailable. No daily fallback was used.")
 		case errors.Is(err, marketdata.ErrInsufficientCandles):
-			shared.WriteError(writer, request, http.StatusUnprocessableEntity, "INSUFFICIENT_CANDLES", "Fewer than 20 valid closed candles are available after extending the lookback.")
+			shared.WriteError(writer, request, http.StatusUnprocessableEntity, "INSUFFICIENT_CANDLES", "Insufficient valid closed candles in the requested history or warmup.")
 		case errors.Is(err, dataset.ErrUnsupportedPurpose):
 			shared.WriteError(writer, request, http.StatusUnprocessableEntity, "UNSUPPORTED_CAPABILITY", "Purpose dataset belum didukung.")
 		case errors.Is(err, dataset.ErrCapacity):

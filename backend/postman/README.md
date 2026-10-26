@@ -266,3 +266,13 @@ koneksi total dan 2 per pengguna. Kapasitas penuh menghasilkan HTTP 429
 - dataset, compute grant, dan socket ticket saling terikat;
 - ticket private-scoring hanya dapat dipakai sekali;
 - pencabutan sesi berlaku pada request berikutnya.
+
+## Backtesting inti (OpenAPI 0.12.0)
+
+Folder `08 Backtesting handoff` menyediakan prepare rule/manual, compute grant
+backtest, dan template signals. Akun harus punya entitlement backtest. Isi
+`backtest_dataset_id`, `backtest_dataset_version`, `backtest_dataset_checksum`,
+`backtest_compute_grant_id` dari respons, serta rule/hash/universe milik akun.
+Array candidates kosong sengaja ditolak: isi seluruh hasil WASM satu series,
+termasuk warmup/buffer. Perhitungan trade/P&L dilakukan lewat harness Go/WASM;
+lihat [BACKTESTING](../../docs/backend/BACKTESTING.md).

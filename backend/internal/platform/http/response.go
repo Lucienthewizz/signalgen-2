@@ -19,11 +19,16 @@ const MaxJSONBody = 64 << 10
 var ErrJSONBodyTooLarge = errors.New("JSON body exceeds limit")
 
 func DecodeJSON(request *stdhttp.Request, target any) error {
-	raw, err := io.ReadAll(io.LimitReader(request.Body, MaxJSONBody+1))
+	return DecodeJSONLimit(request, target, MaxJSONBody)
+}
+
+// DecodeJSONLimit lets bounded analysis inputs use a larger, endpoint-specific budget.
+func DecodeJSONLimit(request *stdhttp.Request, target any, limit int64) error {
+	raw, err := io.ReadAll(io.LimitReader(request.Body, limit+1))
 	if err != nil {
 		return err
 	}
-	if len(raw) > MaxJSONBody {
+	if int64(len(raw)) > limit {
 		return ErrJSONBodyTooLarge
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))

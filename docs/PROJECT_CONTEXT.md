@@ -74,10 +74,11 @@ FE tidak menentukan izin, memegang server secrets atau mengirim order broker. Co
 ## 4. Migrasi dan kontrak
 
 Satu API boundary `/api`; setiap route punya satu pemilik. Route `/api/v1` untuk
-account/session/rules/universe/dataset/compute/screener/subscription/operator
+account/session/rules/universe/dataset/compute/screener/backtests/subscription/operator
 sudah diimplementasikan di Go. Daftar aktual mengikuti `backend/openapi.yaml`
-(0.11.0), bukan semua endpoint dalam kontrak target. Jurnal/portfolio/backtest
-tetap pekerjaan terbuka. Runtime aktif tidak dual-write SQLite/Postgres.
+(0.12.0), bukan semua endpoint dalam kontrak target. Backtest inti memiliki core
+Go/WASM harian dan API akses/sinyal privat; lihat [kebijakan backtest](backend/BACKTESTING.md).
+UI/history backtest, jurnal dan portfolio tetap pekerjaan terbuka. Runtime aktif tidak dual-write SQLite/Postgres.
 
 Legacy auth /api/auth/register, /api/auth/login, /api/auth/me tetap kompatibel; field/response tidak diganti diam-diam. Kontrak API dan worker dibekukan M0 lalu diterbitkan OpenAPI/schema. Base URL/version/WASM URL terpusat; FE mengikuti runtime yang benar.
 

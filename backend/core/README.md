@@ -15,19 +15,19 @@ Current scope:
 - a minimal `js/wasm` adapter.
 - versioned capabilities exposed as `signalgenCapabilities()`.
 
-It intentionally does **not** define trade fills, exits, P&L, provider data,
-HTTP, persistence, authentication, or entitlement yet. Those policies must be
-frozen separately before they are implemented.
+Backtesting adds an independent `backtest-1` / `holding-next-open-1` contract:
+`ComputeBacktestFeatures` computes indicators and `RunBacktest` accepts entry
+references, applies next-open fills, long-only holding horizons, cash-aware sizing,
+fees/slippage, independent portfolios, marked equity and open final positions.
+Private rule decisions remain server-only. The WASM exports are
+`signalgenComputeFeatures`, `signalgenComputeBacktestFeatures`,
+`signalgenRunBacktest`, and the two capability functions. The WASM boundary check
+rejects known private-decision markers. The screening purpose/version contract
+remains unchanged; use the dedicated backtest entrypoints.
 
-The split is currently an experiment inside one Go package. The existing WASM
-adapter still exposes `RunSignals`, so this refactor alone does **not** hide the
-decision rule from the WASM artifact. Protection begins only after the WASM
-entrypoint uses `ComputeFeatures` exclusively and the server exposes the tested
-decision stage through the reviewed private-scoring contract.
-
-The only accepted purpose is currently `screen`. A request with
-`purpose: "backtest"` fails explicitly until the trade-entry, exit, sizing,
-fee, and slippage policies have a reviewed M0 fixture.
+See [backtest contract](../../docs/backend/BACKTESTING.md) and
+[frozen fixtures](testdata/BACKTEST_BASELINE.md). This is hypothetical analysis,
+not authoritative journal accounting or broker execution.
 
 Run the Go tests through Docker from the repository root:
 

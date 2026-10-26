@@ -147,3 +147,19 @@ func TestIssuanceServicePreservesDependencyErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestBacktestGrantRequiresRuleModeAndExactRule(t *testing.T) {
+	input, store := issuanceFixture()
+	input.Purpose = "backtest"
+	store.manifest.Purpose = "backtest"
+	for _, scope := range []*dataset.BacktestScope{nil, {Mode: "manual"}, {Mode: "rule", RuleID: "other"}} {
+		store.manifest.Backtest = scope
+		if _, err := store.service().Issue(context.Background(), "owner", "session", input); !errors.Is(err, ErrBindingMismatch) {
+			t.Fatalf("accepted scope %+v: %v", scope, err)
+		}
+	}
+	store.manifest.Backtest = &dataset.BacktestScope{Mode: "rule", RuleID: input.RuleID}
+	if _, err := store.service().Issue(context.Background(), "owner", "session", input); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -179,3 +179,11 @@ M0: exact baseline path/strategy/formulas/fills, cost policy, normalized schema,
 Handoff FE: OpenAPI examples, stable errors, capabilities, nullable/enum rules, dataset and worker fixtures, WASM hash/runtime version, local user/grant seed procedure without production credentials. API unavailable means feature blocked/labeled mock, not invented call behavior.
 
 P0 done: parity and screening/backtest client proof, protected fixture, ownership/entitlement, worker handoff, benchmark/threat model. P1 done: all P1 requirements implemented on Go slice, data rights/storage/device/journal validated, migrations/recovery/runbook, integration tests with FE real API and no high-severity security blocker. Realtime/payment/admin suite/installer are P2, not blockers.
+
+## Kebijakan backtest inti yang disetujui — 26 Oktober 2026
+
+Pengguna memilih rule/manual, harian, long-only dan holding period. Next-open
+entry, cash/fee-aware sizing, satu posisi portfolio dan incomplete exit terbuka
+menggantikan perilaku eksekusi legacy. Implementasi portable/client dan layanan
+akses/sinyal privat didokumentasikan di [BACKTESTING](BACKTESTING.md); parity penuh
+legacy, UI, journal dan history server tetap di luar slice ini.

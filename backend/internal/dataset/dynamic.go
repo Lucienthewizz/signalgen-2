@@ -66,6 +66,12 @@ func NewDynamicStoreWithLimits(provider marketdata.Provider, universes universe.
 }
 
 func (store *DynamicStore) Prepare(ctx context.Context, owner string, request PrepareRequest) (Manifest, error) {
+	if request.Purpose == "backtest" {
+		return store.prepareBacktest(ctx, owner, request)
+	}
+	if request.Mode != "" || request.From != "" || request.To != "" || request.NSteps != 0 {
+		return Manifest{}, ErrInvalidRequest
+	}
 	if request.Timeframe == "" {
 		request.Timeframe = "1d"
 	}
@@ -241,6 +247,10 @@ func (store *DynamicStore) hasCapacityLocked(owner string, bytes int) bool {
 }
 
 func cloneManifest(manifest Manifest) Manifest {
+	if manifest.Backtest != nil {
+		copy := *manifest.Backtest
+		manifest.Backtest = &copy
+	}
 	if manifest.AvailableTimestampRange != nil {
 		copy := *manifest.AvailableTimestampRange
 		manifest.AvailableTimestampRange = &copy

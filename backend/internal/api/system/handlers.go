@@ -22,16 +22,17 @@ func (server *Handler) Capabilities(writer http.ResponseWriter, request *http.Re
 	// Portable core still accepts one symbol per invocation. A web screening
 	// batch can contain several series, computed separately by the WASM worker.
 	// Advertise those different limits explicitly instead of changing the frozen
-	// core contract or pretending that backtest/accounting is implemented.
+	// core contract. Backtesting has its own additive policy/version contract.
 	shared.WriteJSON(writer, http.StatusOK, struct {
 		core.Capabilities
-		Screening screeningCapabilities `json:"screening"`
+		Screening screeningCapabilities     `json:"screening"`
+		Backtest  core.BacktestCapabilities `json:"backtest"`
 	}{core.GetCapabilities(), screeningCapabilities{
 		Model: screener.Model, FeatureExecution: "client_wasm",
 		DecisionExecution: "server_private", DatasetContent: "series",
 		RequiresUniverse: true, MaxSymbols: universe.MaxSymbols,
 		MaxCandidates: screener.MaxCandidates, MaxMessageBytes: screener.MaxMessageBytes,
-	}})
+	}, core.GetBacktestCapabilities()})
 }
 
 // Deployment-level orchestration is deliberately outside the portable core.

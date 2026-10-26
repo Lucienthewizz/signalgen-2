@@ -26,14 +26,16 @@ func DefaultCacheOptions() CacheOptions {
 }
 
 type cachedSeries struct {
+	history   History
 	series    Series
 	expiresAt time.Time
 }
 
 type providerFlight struct {
-	done   chan struct{}
-	series Series
-	err    error
+	history History
+	done    chan struct{}
+	series  Series
+	err     error
 }
 
 // CachedProvider coalesces identical per-instrument fetches across users. Each

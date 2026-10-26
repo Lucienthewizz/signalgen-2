@@ -41,7 +41,43 @@ func marshalResponse(result interface{}, message string) string {
 	return string(encoded)
 }
 
+func runBacktest(_ js.Value, args []js.Value) interface{} {
+	if len(args) != 1 || args[0].Type() != js.TypeString {
+		return marshalResponse(nil, "request must be one JSON string")
+	}
+	request, err := core.DecodeBacktestRequest([]byte(args[0].String()))
+	if err != nil {
+		return marshalResponse(nil, err.Error())
+	}
+	result, err := core.RunBacktest(request)
+	if err != nil {
+		return marshalResponse(nil, err.Error())
+	}
+	return marshalResponse(result, "")
+}
+
+func computeBacktestFeatures(_ js.Value, args []js.Value) interface{} {
+	if len(args) != 1 || args[0].Type() != js.TypeString {
+		return marshalResponse(nil, "request must be one JSON string")
+	}
+	var request core.FeatureRequest
+	if err := json.Unmarshal([]byte(args[0].String()), &request); err != nil {
+		return marshalResponse(nil, err.Error())
+	}
+	result, err := core.ComputeBacktestFeatures(request)
+	if err != nil {
+		return marshalResponse(nil, err.Error())
+	}
+	return marshalResponse(result, "")
+}
+
 func main() {
+	js.Global().Set("signalgenRunBacktest", js.FuncOf(runBacktest))
+	js.Global().Set("signalgenComputeBacktestFeatures", js.FuncOf(computeBacktestFeatures))
+	js.Global().Set("signalgenBacktestCapabilities", js.FuncOf(func(_ js.Value, _ []js.Value) interface{} {
+		encoded, _ := json.Marshal(core.GetBacktestCapabilities())
+		return string(encoded)
+	}))
 	js.Global().Set("signalgenComputeFeatures", js.FuncOf(computeFeatures))
 	js.Global().Set("signalgenCapabilities", js.FuncOf(capabilities))
 	select {}

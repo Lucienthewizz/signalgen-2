@@ -1,0 +1,17 @@
+{
+  "source": "legacy/python/app/api/routes/backtests.py: _calculate_trade_pl and _simulate_horizon",
+  "assumptions": [
+    "same entry/exit prices; one completed long; zero costs; fractional shares"
+  ],
+  "entry_price": 100,
+  "exit_price": 110,
+  "initial_capital": 10000,
+  "expected": {
+    "pl": 10,
+    "pl_pct": 10,
+    "final_equity": 11000,
+    "net_pl_cash": 1000,
+    "total_return_pct": 10
+  },
+  "source_sha256": "d06ddf8870ba99db959003d866355e4e412e3ffb1d0853a7ca66d2c34388d6e7"
+}

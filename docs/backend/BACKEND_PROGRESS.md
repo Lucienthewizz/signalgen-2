@@ -213,3 +213,24 @@ berjalan, bukan rekomendasi transaksi atau jaminan keuntungan.
 Panduan kontrak: [Model A handoff](MODEL_A_FRONTEND_HANDOFF.md),
 [refresh](AUTH_REFRESH.md), [session/socket lifecycle](SESSION_AND_SOCKET_LIFECYCLE.md),
 [profile dan legacy](PROFILE_AND_LEGACY.md). Scope produk tetap mengikuti PRD.
+
+## Backtesting core — 26 Oktober 2026
+
+Branch `backend/backtesting-core` dari integration `b9c98d6`. Tahap ini menambahkan
+backtest Go portable/WASM harian untuk rule/manual, long-only, holding period
+T+1…T+n, fee/slippage, sizing, equity/drawdown dan status posisi terbuka. API
+menyiapkan snapshot historis owner-scoped dan mengevaluasi rule privat melalui
+`POST /api/v1/backtests/signals`; financial compute tetap di client. Entitlement
+`backtest`, sesi, rule dan dataset/grant binding diperiksa server.
+
+Acuan Claudio dibekukan terbatas pada struktur horizon dan formula harga/modal;
+next-open entry, satu posisi dan incomplete exit sengaja dikoreksi. Kebijakan,
+kontrak, contoh runnable dan batas bukti ada di [BACKTESTING](BACKTESTING.md).
+UI, intraday, short, target-stop, exit-rule, history server dan jurnal belum masuk.
+
+Verifikasi lokal: seluruh `go test ./...` dan `go vet ./...` lulus; race checks
+untuk core/dataset/backtest/compute, alur API backtest dan range cache lulus.
+172 tes frontend serta build lulus. Fixture formula Claudio dijalankan dari
+fungsi Python asli; output native Go/WASM cocok pada fixture rule/manual dan
+marker rule privat absen dari artefak. Ini bukti lokal dengan fixture/test
+doubles; login, data provider dan Postgres produksi tidak diuji pada slice ini.

@@ -17,7 +17,7 @@ func ReadDeadline(next stdhttp.Handler) stdhttp.Handler {
 func readDeadline(next stdhttp.Handler, budget time.Duration) stdhttp.Handler {
 	return stdhttp.HandlerFunc(func(writer stdhttp.ResponseWriter, request *stdhttp.Request) {
 		isRead := request.Method == stdhttp.MethodGet || request.Method == stdhttp.MethodHead
-		isPrepare := request.Method == stdhttp.MethodPost && request.URL.Path == "/api/v1/datasets/prepare"
+		isPrepare := request.Method == stdhttp.MethodPost && (request.URL.Path == "/api/v1/datasets/prepare" || request.URL.Path == "/api/v1/backtests/signals")
 		if (!isRead && !isPrepare) || request.URL.Path == "/api/v1/screener/ws" {
 			next.ServeHTTP(writer, request)
 			return

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.11.0
+  version: 0.12.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     The Go API performs email/password and recovery flows through Supabase Auth,
@@ -1014,6 +1014,47 @@ paths:
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
         "409": {description: Version conflict.}
+  /api/v1/backtests/signals:
+    post:
+      tags: [Analysis]
+      operationId: evaluateBacktestSignals
+      summary: Evaluate one complete symbol feature series using a private long-only rule
+      description: |
+        Requires a backtest grant and current backtest entitlement. Features must
+        include every eligible snapshot timestamp (candle index 19 onward), in
+        order, for one symbol. Maximum 2500 candidates and 1 MiB JSON. Warmup
+        preserves crossover history but does not consume entry-window cooldown.
+        Only decisions are computed here; fills and P&L execute in client WASM.
+        Client features and results are unverified analysis, not accounting evidence.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BacktestSignalRequest'}
+      responses:
+        '200':
+          description: Entry-window decisions and entries for the portable backtest core.
+          headers:
+            Cache-Control: {$ref: '#/components/headers/PrivateNoStore'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BacktestSignalResult'}
+        '400': {$ref: '#/components/responses/InvalidRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '413':
+          description: JSON exceeds this endpoint's 1 MiB limit.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorEnvelope'}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/RequestTimeout'}
   /api/v1/datasets/prepare:
     post:
       tags: [Analysis]
@@ -1864,7 +1905,7 @@ components:
       required: [name, version, description, docs, status]
       properties:
         name: {type: string}
-        version: {type: string, enum: [0.11.0]}
+        version: {type: string, enum: [0.12.0]}
         description: {type: string}
         docs: {type: string}
         status: {type: string, enum: [ok]}
@@ -2209,6 +2250,7 @@ components:
       type: object
       required: [capabilities_version, engine_version, schema_version, feature_schema_version, decision_version, private_protocol, worker_protocol, purposes, markets, timeframes, indicators, operators, rule_logic, max_candles_per_run, max_symbols_per_run, screening]
       properties:
+        backtest: {$ref: "#/components/schemas/BacktestCapabilities"}
         capabilities_version: {type: string, example: capabilities-3}
         engine_version: {type: string, example: core-0.4.0}
         schema_version: {type: string, example: signal-baseline-1}
@@ -2371,16 +2413,39 @@ components:
     DatasetPrepareRequest:
       type: object
       additionalProperties: false
-      required: [purpose, rule_id, universe_id]
+      required: [purpose, universe_id]
+      description: Screen uses the existing automatic lookback. Backtest requires mode, from/to entry dates and n_steps; only 1d is supported. Dates are UTC session dates, inclusive, at most five years; warmup/exit buffers must also fit the provider's six-year bound. HISTORY_UNAVAILABLE indicates a configured provider without range-history support.
       properties:
-        timeframe:
-          type: string
-          enum: [1m, 5m, 15m, 1h, 1d]
-          default: 1d
-          description: Candle interval. Automatic intraday lookback starts at 3 calendar days, expands only for insufficient closed candles. Existing clients remain daily.
-        purpose: {type: string, enum: [screen]}
+        timeframe: {type: string, enum: [1m, 5m, 15m, 1h, 1d], default: 1d}
+        purpose: {type: string, enum: [screen, backtest]}
         rule_id: {type: string}
-        universe_id: {type: string, pattern: "^univ_"}
+        universe_id: {type: string, pattern: '^univ_'}
+        mode: {type: string, enum: [rule, manual]}
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        n_steps: {type: integer, minimum: 1, maximum: 100}
+      oneOf:
+        - required: [rule_id]
+          properties:
+            purpose: {enum: [screen]}
+          not:
+            anyOf:
+              - required: [mode]
+              - required: [from]
+              - required: [to]
+              - required: [n_steps]
+        - required: [mode, from, to, n_steps, rule_id]
+          properties:
+            purpose: {enum: [backtest]}
+            mode: {enum: [rule]}
+            timeframe: {enum: [1d]}
+        - required: [mode, from, to, n_steps]
+          properties:
+            purpose: {enum: [backtest]}
+            mode: {enum: [manual]}
+            timeframe: {enum: [1d]}
+          not:
+            required: [rule_id]
     DateRange:
       type: object
       required: [from, to]
@@ -2391,7 +2456,7 @@ components:
       type: object
       required: [status, warnings]
       properties:
-        status: {type: string, enum: [complete]}
+        status: {type: string, enum: [complete, partial]}
         warnings:
           type: array
           items: {type: string}
@@ -2399,6 +2464,7 @@ components:
       type: object
       required: [dataset_id, version, schema_version, provider, purpose, market, currency, symbols, timeframe, timezone, requested_range, available_range, warmup_candles, adjustment, candle_count, decoded_bytes, checksum, quality]
       properties:
+        backtest: {$ref: "#/components/schemas/BacktestScope"}
         available_timestamp_range:
           $ref: "#/components/schemas/TimestampRange"
         requested_timestamp_range:
@@ -2411,7 +2477,7 @@ components:
         version: {type: string}
         schema_version: {type: string, enum: [ohlcv-multi-1]}
         provider: {type: string, enum: [yahoo_finance]}
-        purpose: {type: string, enum: [screen]}
+        purpose: {type: string, enum: [screen, backtest]}
         market: {type: string, enum: [IDX, US]}
         currency: {type: string, enum: [IDR, USD]}
         symbols:
@@ -2454,8 +2520,9 @@ components:
       type: object
       required: [schema_version, purpose, market, currency, timeframe, timezone, adjustment, series]
       properties:
+        backtest: {$ref: "#/components/schemas/BacktestScope"}
         schema_version: {type: string, enum: [ohlcv-multi-1]}
-        purpose: {type: string, enum: [screen]}
+        purpose: {type: string, enum: [screen, backtest]}
         market: {type: string, enum: [IDX, US]}
         currency: {type: string, enum: [IDR, USD]}
         timeframe: {type: string, enum: [1m, 5m, 15m, 1h, 1d]}
@@ -2476,7 +2543,8 @@ components:
         candles:
           type: array
           minItems: 20
-          maxItems: 100
+          maxItems: 2500
+          description: Screen snapshots retain their 100-candle bound; backtest allows up to 2500 per symbol.
           items:
             $ref: "#/components/schemas/Candle"
     ComputeGrantRequest:
@@ -2484,7 +2552,7 @@ components:
       additionalProperties: false
       required: [purpose, dataset_id, dataset_version, dataset_checksum, rule_id, definition_hash, engine_version, schema_version]
       properties:
-        purpose: {type: string, enum: [screen]}
+        purpose: {type: string, enum: [screen, backtest]}
         dataset_id: {type: string}
         dataset_version: {type: string}
         dataset_checksum: {type: string, pattern: "^sha256:"}
@@ -2524,3 +2592,82 @@ components:
         protocol: {type: string, enum: [screener-private-1]}
         feature_schema_version: {type: string, enum: [screener-features-1]}
         max_candidates: {type: integer, enum: [1000]}
+
+    BacktestScope:
+      type: object
+      required: [mode, from, to, n_steps]
+      properties:
+        mode: {type: string, enum: [rule, manual]}
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        n_steps: {type: integer, minimum: 1, maximum: 100}
+        rule_id: {type: string, description: Present only for rule mode; binds grant issuance.}
+    BacktestCapabilities:
+      type: object
+      required: [schema_version, policy_version, modes, timeframes, signal_types, exit_strategies, max_symbols, max_candles_per_symbol, max_entries, max_horizon, financial_execution, decision_execution]
+      properties:
+        schema_version: {type: string, enum: [backtest-1]}
+        policy_version: {type: string, enum: [holding-next-open-1]}
+        modes: {type: array, items: {type: string, enum: [rule, manual]}}
+        timeframes: {type: array, items: {type: string, enum: [1d]}}
+        signal_types: {type: array, items: {type: string, enum: [BUY]}}
+        exit_strategies: {type: array, items: {type: string, enum: [holding_period]}}
+        max_symbols: {type: integer, enum: [10]}
+        max_candles_per_symbol: {type: integer, enum: [2500]}
+        max_entries: {type: integer, enum: [2000]}
+        max_horizon: {type: integer, enum: [100]}
+        financial_execution: {type: string, enum: [client_wasm]}
+        decision_execution: {type: string, enum: [server_private]}
+    BacktestEntry:
+      type: object
+      additionalProperties: false
+      required: [symbol, timestamp, signal_type]
+      properties:
+        symbol: {type: string}
+        timestamp: {type: string, format: date-time, description: Exact completed candle timestamp from this snapshot, not a fill timestamp.}
+        signal_type: {type: string, enum: [BUY]}
+    BacktestSignalRequest:
+      type: object
+      additionalProperties: false
+      required: [compute_grant_id, feature_schema_version, policy_version, candidates]
+      properties:
+        compute_grant_id: {type: string}
+        feature_schema_version: {type: string, enum: [screener-features-1]}
+        policy_version: {type: string, enum: [holding-next-open-1]}
+        candidates:
+          type: array
+          minItems: 1
+          maxItems: 2500
+          items: {$ref: '#/components/schemas/BacktestFeatureCandidate'}
+    BacktestSignalResult:
+      type: object
+      required: [decision_version, policy_version, candidate_count, signals, entries]
+      properties:
+        decision_version: {type: string, enum: [decision-1]}
+        policy_version: {type: string, enum: [holding-next-open-1]}
+        candidate_count: {type: integer, description: Includes warmup and exit-buffer candidates.}
+        signals:
+          type: array
+          items: {type: object, description: Same signal shape as private screening; only entry-window matches.}
+        evaluations:
+          type: array
+          items: {type: object, description: Entry-window rule outcome and reason codes.}
+        entries:
+          type: array
+          items: {$ref: '#/components/schemas/BacktestEntry'}
+    BacktestFeatureCandidate:
+      type: object
+      additionalProperties: false
+      required: [symbol, timestamp, features]
+      properties:
+        symbol: {type: string}
+        timestamp: {type: string, format: date-time}
+        features:
+          type: object
+          additionalProperties: false
+          required: [price, ema9, ema20, rsi14]
+          properties:
+            price: {type: number, minimum: 0, exclusiveMinimum: true}
+            ema9: {type: number, minimum: 0, exclusiveMinimum: true}
+            ema20: {type: number, minimum: 0, exclusiveMinimum: true}
+            rsi14: {type: number, minimum: 0, maximum: 100}

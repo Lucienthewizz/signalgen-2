@@ -9,7 +9,7 @@ symbols. `/api/v1/capabilities` declares the Model A orchestration and batch
 limits separately from the single-symbol portable core. See
 [the current frontend handoff](MODEL_A_FRONTEND_HANDOFF.md) for exact calls,
 known connector mismatches, and actual-WASM test commands. Model B is test-only;
-backtest/P&L and journal remain unimplemented pending final financial policy.
+backtest core now implements the daily long-only holding policy in [BACKTESTING](BACKTESTING.md); journal and server-authoritative portfolio accounting remain unimplemented.
 
 Addendum 27 September 2026: bimbingan terbaru meminta pemisahan screener hybrid.
 Kontrak eksperimen socket ticket dan private decision tersedia di

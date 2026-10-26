@@ -827,6 +827,148 @@
       ]
     },
     {
+      "name": "08 Backtesting handoff (requires backtest entitlement)",
+      "description": "Run only with an authorized test account. No backtest compute HTTP fallback. Use the native/WASM harness for trade and P&L outputs.",
+      "item": [
+        {
+          "name": "Prepare manual daily backtest",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-App-Session",
+                "value": "{{app_session_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/datasets/prepare",
+            "description": "No rule or compute grant is required in manual mode. Copy dataset metadata into the local/WASM handoff.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purpose\": \"backtest\",\n  \"mode\": \"manual\",\n  \"universe_id\": \"{{universe_id}}\",\n  \"timeframe\": \"1d\",\n  \"from\": \"2026-01-01\",\n  \"to\": \"2026-06-30\",\n  \"n_steps\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Prepare rule daily backtest",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-App-Session",
+                "value": "{{app_session_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/datasets/prepare",
+            "description": "Save the returned dataset ID, version and checksum as backtest variables; fetch its protected content using existing dataset routes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purpose\": \"backtest\",\n  \"mode\": \"rule\",\n  \"rule_id\": \"{{rule_id}}\",\n  \"universe_id\": \"{{universe_id}}\",\n  \"timeframe\": \"1d\",\n  \"from\": \"2026-01-01\",\n  \"to\": \"2026-06-30\",\n  \"n_steps\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Issue backtest compute grant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-App-Session",
+                "value": "{{app_session_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/compute-grants",
+            "description": "Bind the exact rule-mode snapshot and current rule definition hash. Save the returned id as backtest_compute_grant_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purpose\": \"backtest\",\n  \"dataset_id\": \"{{backtest_dataset_id}}\",\n  \"dataset_version\": \"{{backtest_dataset_version}}\",\n  \"dataset_checksum\": \"{{backtest_dataset_checksum}}\",\n  \"rule_id\": \"{{rule_id}}\",\n  \"definition_hash\": \"{{definition_hash}}\",\n  \"engine_version\": \"core-0.4.0\",\n  \"schema_version\": \"signal-baseline-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Evaluate all features of one backtest symbol",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-App-Session",
+                "value": "{{app_session_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/backtests/signals",
+            "description": "Replace the empty candidates array with ALL candidates from signalgenComputeBacktestFeatures for one full snapshot series, including warmup and exit buffer. Empty arrays are deliberately invalid; do not manufacture example indicators.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"compute_grant_id\": \"{{backtest_compute_grant_id}}\",\n  \"feature_schema_version\": \"screener-features-1\",\n  \"policy_version\": \"holding-next-open-1\",\n  \"candidates\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "99 Logout - run last",
       "item": [
         {

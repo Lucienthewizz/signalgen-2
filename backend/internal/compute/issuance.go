@@ -88,6 +88,9 @@ func (service IssuanceService) Issue(ctx context.Context, ownerID, sessionID str
 	if err != nil {
 		return Grant{}, &IssuanceError{Stage: StageDataset, Err: err}
 	}
+	if input.Purpose == "backtest" && (manifest.Backtest == nil || manifest.Backtest.Mode != "rule" || manifest.Backtest.RuleID != input.RuleID) {
+		return Grant{}, ErrBindingMismatch
+	}
 	expectedRuleHash := core.BaselineRuleHash
 	if input.RuleID != core.BaselineRuleID {
 		rule, err := service.Rules.Get(ctx, ownerID, input.RuleID)

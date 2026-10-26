@@ -54,9 +54,18 @@ func (service AccessService) Prepare(ctx context.Context, owner string, input Pr
 	if err := service.Features.RequireFeature(ctx, owner, feature); err != nil {
 		return Manifest{}, &AccessError{Err: err}
 	}
-	if input.RuleID != core.BaselineRuleID {
-		if _, err := service.Rules.Get(ctx, owner, input.RuleID); err != nil {
+	if input.Purpose == "backtest" {
+		if err := validateBacktestPrepare(input); err != nil {
+			return Manifest{}, err
+		}
+	}
+	if !(input.Purpose == "backtest" && input.Mode == "manual") && input.RuleID != core.BaselineRuleID {
+		rule, err := service.Rules.Get(ctx, owner, input.RuleID)
+		if err != nil {
 			return Manifest{}, &RuleError{Err: err}
+		}
+		if input.Purpose == "backtest" && rule.Definition.SignalType != "BUY" {
+			return Manifest{}, ErrInvalidRequest
 		}
 	}
 	return service.Repository.Prepare(ctx, owner, input)

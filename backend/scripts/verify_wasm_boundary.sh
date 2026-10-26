@@ -12,6 +12,13 @@ if ! rg -a -q "signalgenComputeFeatures" "$artifact"; then
   exit 1
 fi
 
+for required in signalgenRunBacktest signalgenComputeBacktestFeatures signalgenBacktestCapabilities; do
+  if ! rg -a -q "$required" "$artifact"; then
+    echo "missing backtest export marker: $required" >&2
+    exit 1
+  fi
+done
+
 for forbidden in signalgenRunSignals "Default Scalping" RULE_MATCHED; do
   if rg -a -q "$forbidden" "$artifact"; then
     echo "forbidden decision marker found in WASM: $forbidden" >&2
