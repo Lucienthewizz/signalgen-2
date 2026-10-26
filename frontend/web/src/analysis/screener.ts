@@ -11,6 +11,7 @@ import type {
   ScreenerFeatureVector,
   ScreenerResult,
   RuleResource,
+  ScreenerTimeframe,
 } from "@/types";
 
 export type ScreenerStage =
@@ -45,11 +46,17 @@ function ensureNotCancelled(signal: AbortSignal) {
   if (signal.aborted) throw new ApiError("Analysis cancelled.", 0);
 }
 
+export type ScreenerRunOptions = {
+  timeframe?: ScreenerTimeframe;
+  previous?: LiveScreenerRun | null;
+};
+
 export async function runLiveScreener(
   ruleId: string,
   universeId: string,
   signal: AbortSignal,
   onStage: (stage: ScreenerStage) => void,
+  options: ScreenerRunOptions = {},
 ): Promise<LiveScreenerRun> {
   // A logout/clear in this or another tab cancels network/worker/socket continuations.
   const lifetime = new AbortController();
@@ -63,6 +70,7 @@ export async function runLiveScreener(
       universeId,
       lifetime.signal,
       onStage,
+      options,
     );
   } finally {
     signal.removeEventListener("abort", cancel);
@@ -75,6 +83,7 @@ async function runAuthorizedScreener(
   universeId: string,
   signal: AbortSignal,
   onStage: (stage: ScreenerStage) => void,
+  options: ScreenerRunOptions,
 ): Promise<LiveScreenerRun> {
   ensureNotCancelled(signal);
   const start = performance.now();
@@ -83,16 +92,33 @@ async function runAuthorizedScreener(
   ensureNotCancelled(signal);
   onStage("preparing_data");
   const [manifest, rule] = await Promise.all([
-    api.prepareDataset(ruleId, universeId),
-    api.getRule(ruleId),
+    api.prepareDataset(ruleId, universeId, options.timeframe, signal),
+    api.getRule(ruleId, signal),
   ]);
+  ensureNotCancelled(signal);
+  if (options.timeframe && manifest.timeframe !== options.timeframe)
+    throw new ApiError(
+      "Provider returned a different interval.",
+      422,
+      "INTERVAL_UNAVAILABLE",
+    );
+  // Authorization and current rule were reread ONLINE before this optimization.
+  const previous = options.previous;
+  if (
+    previous &&
+    previous.manifest.checksum === manifest.checksum &&
+    previous.manifest.timeframe === manifest.timeframe &&
+    previous.ruleSnapshot?.id === rule.id &&
+    previous.ruleSnapshot.version === rule.version &&
+    previous.ruleSnapshot.definition_hash === rule.definition_hash &&
+    previous.ruleSnapshot.engine_version === rule.engine_version
+  ) {
+    return { ...previous, manifest, ruleSnapshot: rule };
+  }
   const dataset = await loadScreenerDataset(manifest, signal);
   ensureNotCancelled(signal);
   if (!dataset.series.length || dataset.series.length > universeSelectionLimit)
-    throw new ApiError(
-      "The dataset must contain 1–10 stocks for analysis.",
-      0,
-    );
+    throw new ApiError("The dataset must contain 1–10 stocks for analysis.", 0);
 
   onStage("loading_engine");
   const featureStart = performance.now();
@@ -103,9 +129,9 @@ async function runAuthorizedScreener(
   packCandidateBatches(featureRuns, 1000);
   onStage("private_scoring");
   const scoringStart = performance.now();
-  const grant = await api.createComputeGrant(manifest, rule);
+  const grant = await api.createComputeGrant(manifest, rule, signal);
   ensureNotCancelled(signal);
-  let ticket = await api.createScreenerSocketTicket(grant.id);
+  let ticket = await api.createScreenerSocketTicket(grant.id, signal);
   ensureNotCancelled(signal);
   let batches;
   try {
@@ -120,16 +146,14 @@ async function runAuthorizedScreener(
   const results: ScreenerResult[] = [];
   for (const [index, featureResult] of batches.entries()) {
     ensureNotCancelled(signal);
-    if (index > 0) ticket = await api.createScreenerSocketTicket(grant.id);
+    if (index > 0)
+      ticket = await api.createScreenerSocketTicket(grant.id, signal);
     ensureNotCancelled(signal);
     if (
       ticket.feature_schema_version !== featureResult.feature_schema_version ||
       featureResult.candidates.length > ticket.max_candidates
     )
-      throw new ApiError(
-        "WASM results do not match the scoring limits.",
-        0,
-      );
+      throw new ApiError("WASM results do not match the scoring limits.", 0);
     results.push(
       await evaluateOverSocket(
         ticket.websocket_path,

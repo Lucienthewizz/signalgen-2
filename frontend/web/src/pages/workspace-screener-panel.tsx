@@ -5,13 +5,16 @@ import {
   CircleAlert,
   Database,
   ListChecks,
-  LoaderCircle,
   Plus,
   RefreshCw,
   SearchCheck,
   ShieldCheck,
   XCircle,
   Download,
+  Clock3,
+  Activity,
+  ChevronDown,
+  Trash2,
 } from "lucide-react";
 import {
   runLiveScreener,
@@ -19,8 +22,23 @@ import {
   type ScreenerStage,
 } from "@/analysis/screener";
 import { api, ApiError } from "@/api/client";
+import {
+  ScreenerMonitor,
+  screenerIntervals,
+  stoppedMonitor,
+  type MonitorState,
+} from "@/analysis/screener-monitor";
+import { CACHE_RESET_EVENT } from "@/data/historical-cache";
 import { TradingViewChart } from "@/components/tradingview-chart";
-import { candleDate } from "@/lib/data-freshness";
+import { marketCandleDate, marketTimezone } from "@/lib/data-freshness";
+import { ScreeningDataQuality } from "@/components/screening-data-quality";
+import { InfoDialog } from "@/components/ui/info-dialog";
+import { toast } from "@/components/ui/toast";
+import {
+  checkJournalScreening,
+  type JournalScreeningDraft,
+} from "@/lib/journal-screening";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   conditionEvidence,
   decisionLabel,
@@ -31,6 +49,7 @@ import {
 import {
   recordMonitorRun,
   monitorRuns,
+  hideMonitorRun,
   type MonitorRun,
   frozenRule,
   compareMonitorRuns,
@@ -72,7 +91,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { conditionSummary } from "@/lib/rule-workflow";
+import { conditionSummary, operatorSymbols } from "@/lib/rule-workflow";
 import { screeningStatus, screeningStatusLabels } from "@/lib/screening-status";
 import {
   Table,
@@ -82,13 +101,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { AccountState, RuleResource, StockUniverse } from "@/types";
+import type {
+  AccountState,
+  RuleResource,
+  StockUniverse,
+  ScreenerTimeframe,
+} from "@/types";
 
 type Props = {
   authenticated: boolean;
   backendOnline: boolean;
   userId?: string;
-  onDraft: (symbol: string) => void;
+  onDraft: (symbol: string, evidence?: JournalScreeningDraft) => void;
 };
 
 type RunState = "idle" | "loading" | "completed" | "failed";
@@ -123,6 +147,11 @@ export function WorkspaceScreenerPanel({
   const [stage, setStage] = useState("Ready to screen");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [errorOpen, setErrorOpen] = useState(false);
+  const [monitorInfoOpen, setMonitorInfoOpen] = useState(false);
+  const startRef = useRef<HTMLButtonElement>(null);
+  const monitorInfoRef = useRef<HTMLButtonElement>(null);
+  const recoveryFocus = useRef<HTMLElement | null>(null);
   const [run, setRun] = useState<LiveScreenerRun | null>(null);
   const [detailSymbol, setDetailSymbol] = useState<string | null>(null);
   const detailRef = useRef<HTMLElement>(null);
@@ -139,8 +168,14 @@ export function WorkspaceScreenerPanel({
   const detailRow = run?.rows.find(
     (row) => row.decision.symbol === detailSymbol,
   );
-  const controller = useRef<AbortController | null>(null);
-  const running = useRef(false);
+  const [monitor] = useState(() => new ScreenerMonitor<LiveScreenerRun>());
+  const [monitorState, setMonitorState] = useState<MonitorState>({
+    ...stoppedMonitor,
+  });
+  const [timeframe, setTimeframe] = useState<ScreenerTimeframe>("5m");
+  const intervalPolicy = screenerIntervals.find(
+    (item) => item.value === timeframe,
+  )!;
   const mounted = useRef(false);
   const resourceVersion = useRef(0);
   const [failure, setFailure] = useState<ReturnType<
@@ -151,11 +186,27 @@ export function WorkspaceScreenerPanel({
     useState<keyof typeof screeningStatusLabels>("all");
   const [historySearch, setHistorySearch] = useState("");
   const [historyMarket, setHistoryMarket] = useState("all");
+  const [historyTimeframe, setHistoryTimeframe] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<ScreenerPreferences["sort"]>("symbol");
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [history, setHistory] = useState<MonitorRun[]>([]);
+  const [pendingHistoryDelete, setPendingHistoryDelete] =
+    useState<MonitorRun | null>(null);
+  const [deleteAllHistory, setDeleteAllHistory] = useState(false);
+  const [historyDeleteError, setHistoryDeleteError] = useState("");
+  const historyDeleteFocus = useRef<HTMLElement | null>(null);
+  const historySummary = useRef<HTMLElement | null>(null);
+  const filteredHistory = history.filter(
+    (item) =>
+      (historyMarket === "all" || item.run.manifest.market === historyMarket) &&
+      (historyTimeframe === "all" ||
+        item.run.manifest.timeframe === historyTimeframe) &&
+      `${item.rule} ${item.context?.universeName ?? ""} ${item.recordedAt} ${new Date(item.recordedAt).toLocaleString("en-GB")}`
+        .toLowerCase()
+        .includes(historySearch.toLowerCase().trim()),
+  );
   const [historicalRun, setHistoricalRun] = useState<MonitorRun | null>(null);
   const [compareIndex, setCompareIndex] = useState("1");
   const comparison =
@@ -175,6 +226,7 @@ export function WorkspaceScreenerPanel({
     const version = ++resourceVersion.current;
     setLoadingResources(true);
     setError(null);
+    setErrorOpen(false);
     setFailure(null);
     try {
       const [accountResponse, ruleResponse, universeResponse] =
@@ -231,6 +283,7 @@ export function WorkspaceScreenerPanel({
           ? caught.message
           : "Screener resources could not be loaded.",
       );
+      setErrorOpen(true);
     } finally {
       if (mounted.current && version === resourceVersion.current)
         setLoadingResources(false);
@@ -253,9 +306,22 @@ export function WorkspaceScreenerPanel({
     return () => {
       mounted.current = false;
       ++resourceVersion.current;
-      controller.current?.abort();
+      monitor.stop();
     };
   }, [authenticated, backendOnline, userId]);
+
+  useEffect(() => {
+    const stop = () => monitor.stop();
+    window.addEventListener(CACHE_RESET_EVENT, stop);
+    window.addEventListener("pagehide", stop);
+    window.addEventListener("signalgen:unauthorized", stop);
+    return () => {
+      window.removeEventListener(CACHE_RESET_EVENT, stop);
+      window.removeEventListener("pagehide", stop);
+      window.removeEventListener("signalgen:unauthorized", stop);
+      monitor.stop();
+    };
+  }, [monitor]);
 
   useEffect(() => {
     if (!preferencesReady || !account) return;
@@ -295,77 +361,107 @@ export function WorkspaceScreenerPanel({
     setProgress(stages[next][1]);
   }
 
-  async function execute() {
-    if (!selectedRule || !selectedUniverse || !canScreen || running.current)
+  function execute() {
+    if (!selectedRule || !selectedUniverse || !canScreen || monitorState.active)
       return;
-    running.current = true;
-    controller.current?.abort();
-    controller.current = new AbortController();
-    const activeController = controller.current;
-    setFailure(null);
-    setState("loading");
-    setProgress(5);
-    setStage("Starting screening");
-    setError(null);
-    try {
-      const result = await runLiveScreener(
-        selectedRule.id,
-        selectedUniverse.id,
-        activeController.signal,
-        (next) => {
-          if (mounted.current && !activeController.signal.aborted)
-            updateStage(next);
-        },
-      );
-      if (!mounted.current || activeController.signal.aborted) return;
-      setRun(result);
-      setDetailSymbol(null);
-      setRunContext({
-        rule: result.ruleSnapshot ?? selectedRule,
-        universe: selectedUniverse.name,
-        count: selectedUniverse.symbols.length,
-      });
-      setHistoricalRun(null);
-      if (account) {
-        recordMonitorRun(account.user.id, selectedRule.name, result, {
-          ruleId: selectedRule.id,
-          universeId: selectedUniverse.id,
-          universeName: selectedUniverse.name,
-          ruleSnapshot: frozenRule(result.ruleSnapshot ?? selectedRule),
+    let previous: LiveScreenerRun | null = null;
+    let failurePresented = false;
+    monitor.start(intervalPolicy.periodMs, {
+      state: (next) => {
+        if (mounted.current) setMonitorState(next);
+      },
+      task: async (signal) => {
+        setFailure(null);
+        setError(null);
+        setErrorOpen(false);
+        setState("loading");
+        setProgress(5);
+        setStage("Checking completed candles");
+        return runLiveScreener(
+          selectedRule.id,
+          selectedUniverse.id,
+          signal,
+          (next) => {
+            if (mounted.current && !signal.aborted) updateStage(next);
+          },
+          { timeframe, previous },
+        );
+      },
+      result: (result) => {
+        previous = result;
+        setRun(result);
+        setDetailSymbol(null);
+        setRunContext({
+          rule: result.ruleSnapshot ?? selectedRule,
+          universe: selectedUniverse.name,
+          count: selectedUniverse.symbols.length,
         });
-        setHistory(monitorRuns(account.user.id));
-      }
-      setProgress(100);
-      setStage("Screening complete");
-      setState("completed");
-    } catch (caught) {
-      if (!mounted.current || activeController.signal.aborted) return;
-      setFailure(
-        screeningFailure(
-          caught instanceof ApiError
-            ? caught
-            : { message: caught instanceof Error ? caught.message : undefined },
-        ),
-      );
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Screening could not be completed.",
-      );
-      setProgress(0);
-      setStage("Screening failed");
-      setState("failed");
-    } finally {
-      if (controller.current === activeController) running.current = false;
-    }
+        setHistoricalRun(null);
+        if (account) {
+          recordMonitorRun(account.user.id, selectedRule.name, result, {
+            ruleId: selectedRule.id,
+            universeId: selectedUniverse.id,
+            universeName: selectedUniverse.name,
+            universeVersion: selectedUniverse.version,
+            ruleSnapshot: frozenRule(result.ruleSnapshot ?? selectedRule),
+          });
+          setHistory(monitorRuns(account.user.id));
+        }
+        setProgress(100);
+        setStage("Waiting for the next data check");
+        setState("completed");
+      },
+      error: (caught, retrying) => {
+        setFailure(
+          screeningFailure(
+            caught instanceof ApiError
+              ? caught
+              : {
+                  message: caught instanceof Error ? caught.message : undefined,
+                },
+          ),
+        );
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Screening could not be completed.",
+        );
+        setProgress(0);
+        setStage(
+          retrying
+            ? "Data check failed; retry scheduled"
+            : "Monitoring stopped",
+        );
+        setState("failed");
+        // Open once per Start, not on every automatic background retry.
+        if (!failurePresented) {
+          failurePresented = true;
+          recoveryFocus.current = startRef.current;
+          setErrorOpen(true);
+        }
+      },
+    });
   }
 
   function cancel() {
-    controller.current?.abort();
-    running.current = false;
+    monitor.stop();
     setState(run ? "completed" : "idle");
     setProgress(0);
-    setStage("Screening cancelled");
+    setStage("Monitoring stopped");
+  }
+
+  function recover() {
+    setErrorOpen(false);
+    if (failure?.action === "login") location.hash = "login";
+    else if (failure?.action === "subscription")
+      location.hash = "app/subscription";
+    else if (failure?.action === "interval") {
+      cancel();
+      recoveryFocus.current = document.getElementById("screen-interval");
+    } else
+      void (state === "failed" && failure?.action !== "resources"
+        ? execute()
+        : loadResources());
   }
 
   if (!authenticated || !backendOnline) {
@@ -394,7 +490,47 @@ export function WorkspaceScreenerPanel({
   }
 
   return (
-    <div className="screener-workspace">
+    <div className="screener-workspace" tabIndex={-1}>
+      <ConfirmDialog
+        open={Boolean(pendingHistoryDelete) || deleteAllHistory}
+        title={
+          deleteAllHistory
+            ? "Delete all screening history?"
+            : "Delete screening history?"
+        }
+        description={`Remove ${deleteAllHistory ? `all ${history.length} saved screens` : `“${pendingHistoryDelete?.rule ?? ""}”`} from this browser? Account history and backend data stay unchanged.`}
+        confirmLabel={
+          deleteAllHistory ? "Delete all history" : "Delete history"
+        }
+        destructive
+        returnFocus={historyDeleteFocus}
+        onCancel={() => {
+          setPendingHistoryDelete(null);
+          setDeleteAllHistory(false);
+        }}
+        onConfirm={() => {
+          if (!userId) return;
+          const targets = deleteAllHistory
+            ? history
+            : pendingHistoryDelete
+              ? [pendingHistoryDelete]
+              : [];
+          const removed = targets
+            .map((item) => hideMonitorRun(userId, item))
+            .every(Boolean);
+          historyDeleteFocus.current = document.querySelector(
+            ".screener-workspace",
+          );
+          setHistory(monitorRuns(userId));
+          setCompareIndex("1");
+          if (!removed)
+            setHistoryDeleteError(
+              "Some history could not be removed. Allow browser storage and try again.",
+            );
+          setPendingHistoryDelete(null);
+          setDeleteAllHistory(false);
+        }}
+      />
       <section
         className="screener-console"
         aria-labelledby="screener-console-title"
@@ -409,7 +545,7 @@ export function WorkspaceScreenerPanel({
               <p>Choose a rule and universe. Screening results appear below.</p>
             </div>
           </div>
-          <Badge variant="outline">Daily data · Yahoo Finance</Badge>
+          <Badge variant="outline">Closed candles · Yahoo Finance</Badge>
         </header>
 
         {loadingResources ? (
@@ -498,7 +634,7 @@ export function WorkspaceScreenerPanel({
                     label: rule.name,
                   }))}
                   value={ruleId}
-                  disabled={state === "loading"}
+                  disabled={monitorState.active}
                   onValueChange={(value) => setRuleId(value ?? "")}
                 >
                   <SelectTrigger id="screen-rule">
@@ -521,6 +657,37 @@ export function WorkspaceScreenerPanel({
                 </FieldDescription>
               </Field>
               <Field>
+                <FieldLabel htmlFor="screen-interval">
+                  Candle interval
+                </FieldLabel>
+                <Select
+                  items={screenerIntervals.map((item) => ({
+                    value: item.value,
+                    label: item.label,
+                  }))}
+                  value={timeframe}
+                  disabled={monitorState.active}
+                  onValueChange={(value) => {
+                    if (screenerIntervals.some((item) => item.value === value))
+                      setTimeframe(value as ScreenerTimeframe);
+                  }}
+                >
+                  <SelectTrigger id="screen-interval">
+                    <SelectValue>{intervalPolicy.label}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {screenerIntervals.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <FieldDescription>Completed candles only.</FieldDescription>
+              </Field>
+              <Field>
                 <FieldLabel htmlFor="screen-universe">
                   Stock universe
                 </FieldLabel>
@@ -530,7 +697,7 @@ export function WorkspaceScreenerPanel({
                     label: universe.name,
                   }))}
                   value={universeId}
-                  disabled={state === "loading"}
+                  disabled={monitorState.active}
                   onValueChange={(value) => setUniverseId(value ?? "")}
                 >
                   <SelectTrigger id="screen-universe">
@@ -560,81 +727,214 @@ export function WorkspaceScreenerPanel({
                     ))}
                   </ul>
                 )}
-                <FieldDescription>
-                  {selectedUniverse &&
-                    `${selectedUniverse.symbols[0]?.endsWith(".JK") ? "IDX / IDR" : "US / USD"} · Price and EMA thresholds use this currency.`}
-                </FieldDescription>
               </Field>
             </FieldGroup>
 
             <div className="screener-run-summary">
               <div>
                 <div className="screener-run-summary__title">
-                  <strong>{selectedRule?.name}</strong>
-                  <small>
-                    {selectedUniverse?.symbols.length ?? 0} stocks · Daily
-                  </small>
+                  <strong className="workspace-glass-surface screener-rule-name">
+                    {selectedRule?.name}
+                  </strong>
+                  <Badge
+                    className="workspace-glass-surface"
+                    variant={
+                      selectedRule?.definition?.signal_type === "SELL"
+                        ? "destructive"
+                        : selectedRule?.definition?.signal_type === "BUY"
+                          ? "success"
+                          : "outline"
+                    }
+                  >
+                    {selectedRule?.definition?.signal_type ?? "System rule"}
+                  </Badge>
+                  {conditions.length > 0 && (
+                    <Badge
+                      variant="outline"
+                      className="workspace-glass-surface screener-match-mode"
+                    >
+                      Match{" "}
+                      {selectedRule?.definition?.logic === "OR" ? "any" : "all"}{" "}
+                      {conditions.length}{" "}
+                      {conditions.length === 1 ? "condition" : "conditions"}
+                    </Badge>
+                  )}
+                  {conditions.length > 0 && (
+                    <Button
+                      className="workspace-glass-action"
+                      variant="outline"
+                      nativeButton={false}
+                      render={<a href="#app/rules" />}
+                    >
+                      Edit criteria
+                    </Button>
+                  )}
                 </div>
                 {!conditions.length && (
                   <p>System rule conditions are checked automatically.</p>
                 )}
                 {conditions.length > 0 && (
                   <div className="screener-criteria">
-                    <p>
-                      {selectedRule?.definition?.signal_type} · Match{" "}
-                      {selectedRule?.definition?.logic === "OR" ? "any" : "all"}{" "}
-                      {conditions.length}{" "}
-                      {conditions.length === 1 ? "condition" : "conditions"}
-                    </p>
                     <ol>
                       {selectedRule?.definition?.conditions.map(
                         (condition, index) => (
                           <li key={index}>
                             <span>{index + 1}</span>
+                            <span
+                              className="rule-operator-symbol"
+                              aria-hidden="true"
+                            >
+                              {operatorSymbols[condition.op]}
+                            </span>
                             {conditionSummary(condition)}
                           </li>
                         ),
                       )}
                     </ol>
-                    <Button
-                      variant="link"
-                      size="sm"
-                      nativeButton={false}
-                      render={<a href="#app/rules" />}
-                    >
-                      Edit criteria or choose a preset
-                    </Button>
                   </div>
-                )}
-              </div>
-              <div className="screener-run-summary__action">
-                <Button
-                  size="lg"
-                  onClick={() => void execute()}
-                  disabled={
-                    state === "loading" || !selectedRule || !selectedUniverse
-                  }
-                >
-                  {state === "loading" ? (
-                    <LoaderCircle
-                      className="is-spinning"
-                      data-icon="inline-start"
-                    />
-                  ) : (
-                    <BarChart3 data-icon="inline-start" />
-                  )}
-                  {state === "loading" ? "Screening stocks…" : "Run screening"}
-                </Button>
-                {state === "loading" && (
-                  <Button variant="ghost" onClick={cancel}>
-                    <XCircle data-icon="inline-start" /> Cancel
-                  </Button>
                 )}
               </div>
             </div>
           </div>
         )}
 
+        <div
+          className="screener-monitor-status"
+          data-active={monitorState.active || undefined}
+          data-retrying={monitorState.retrying || undefined}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="screener-monitor-status__heading">
+            <span className="screener-monitor-status__icon" aria-hidden="true">
+              <Activity />
+            </span>
+            <div className="screener-monitor-status__copy">
+              <strong>
+                {monitorState.active
+                  ? monitorState.busy
+                    ? "Checking completed candles"
+                    : monitorState.retrying
+                      ? "Retry scheduled"
+                      : "Waiting for new completed candles"
+                  : "Monitoring stopped"}
+              </strong>
+              <Button
+                ref={monitorInfoRef}
+                variant="link"
+                size="sm"
+                onClick={() => setMonitorInfoOpen(true)}
+              >
+                Monitoring details
+              </Button>
+            </div>
+          </div>
+          <div className="screener-monitor-status__times">
+            <Clock3 aria-hidden="true" />
+            <span>
+              Last check{" "}
+              <strong>
+                {monitorState.lastCheckedAt
+                  ? new Date(monitorState.lastCheckedAt).toLocaleTimeString(
+                      "en-GB",
+                    )
+                  : "—"}
+              </strong>
+            </span>
+            <span>
+              Next check{" "}
+              <strong>
+                {monitorState.nextCheckAt
+                  ? new Date(monitorState.nextCheckAt).toLocaleTimeString(
+                      "en-GB",
+                    )
+                  : monitorState.busy
+                    ? "After this check finishes"
+                    : "—"}
+              </strong>
+            </span>
+          </div>
+          <div className="screener-run-summary__action">
+            {monitorState.active ? (
+              <Button
+                variant="destructive"
+                className="screener-stop"
+                onClick={cancel}
+              >
+                <XCircle data-icon="inline-start" />
+                Stop
+              </Button>
+            ) : (
+              <Button
+                ref={startRef}
+                onClick={() => void execute()}
+                disabled={
+                  loadingResources ||
+                  !canScreen ||
+                  !selectedRule ||
+                  !selectedUniverse
+                }
+              >
+                <BarChart3 data-icon="inline-start" />
+                Start screening
+              </Button>
+            )}
+          </div>
+          {run && error && (
+            <p className="screener-monitor-status__retained">
+              Previous result retained. The latest check did not update prices.
+            </p>
+          )}
+        </div>
+        <InfoDialog
+          open={monitorInfoOpen}
+          onOpenChange={setMonitorInfoOpen}
+          title="Monitoring details"
+          description="Periodic Yahoo updates, not a licensed real-time feed. Monitoring ends when you leave this page."
+          returnFocus={monitorInfoRef}
+        >
+          <dl className="screening-info-facts">
+            <div>
+              <dt>Selected candle interval</dt>
+              <dd>{intervalPolicy.label}</dd>
+            </div>
+            <div>
+              <dt>Automatic history</dt>
+              <dd>
+                {intervalPolicy.range}. Up to 100 valid closed candles per
+                stock; at least 20 required.
+              </dd>
+            </div>
+            <div>
+              <dt>Check times</dt>
+              <dd>
+                Your browser timezone. The next check is scheduled after the
+                current check finishes.
+              </dd>
+            </div>
+            {run && (
+              <div>
+                <dt>Actual data ({run.manifest.timeframe}, UTC)</dt>
+                <dd>
+                  {run.manifest.available_timestamp_range?.from ??
+                    run.manifest.available_range.from}{" "}
+                  —{" "}
+                  {run.manifest.available_timestamp_range?.to ??
+                    run.manifest.available_range.to}
+                </dd>
+              </div>
+            )}
+            {run?.manifest.requested_timestamp_range && (
+              <div>
+                <dt>Requested history (UTC)</dt>
+                <dd>
+                  {run.manifest.requested_timestamp_range.from} —{" "}
+                  {run.manifest.requested_timestamp_range.to}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </InfoDialog>
         {state === "loading" && (
           <div className="screener-progress" role="status">
             <span>
@@ -645,24 +945,43 @@ export function WorkspaceScreenerPanel({
           </div>
         )}
         {error && (
-          <Alert variant="destructive">
-            <CircleAlert />
-            <AlertTitle>
+          <div className="screener-error-summary">
+            <span>
+              <CircleAlert aria-hidden="true" />
               {failure?.title || "Resources could not be loaded"}
-            </AlertTitle>
-            <AlertDescription>{failure?.detail || error}</AlertDescription>
+            </span>
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
-                if (failure?.action === "login") location.hash = "login";
-                else if (failure?.action === "subscription")
-                  location.hash = "app/subscription";
-                else
-                  void (state === "failed" && failure?.action !== "resources"
-                    ? execute()
-                    : loadResources());
+                recoveryFocus.current = startRef.current;
+                setErrorOpen(true);
               }}
+            >
+              View error
+            </Button>
+          </div>
+        )}
+        <InfoDialog
+          open={Boolean(error) && errorOpen}
+          onOpenChange={(open) => {
+            if (!open && failure?.action !== "interval")
+              recoveryFocus.current = startRef.current;
+            setErrorOpen(open);
+          }}
+          title={failure?.title || "Resources could not be loaded"}
+          description={failure?.detail || error || ""}
+          returnFocus={recoveryFocus}
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={
+                state === "loading" ||
+                loadingResources ||
+                (monitorState.active && failure?.action === "retry")
+              }
+              onClick={recover}
             >
               <RefreshCw data-icon="inline-start" />{" "}
               {failure?.action === "login"
@@ -671,10 +990,21 @@ export function WorkspaceScreenerPanel({
                   ? "Check access"
                   : failure?.action === "resources"
                     ? "Reload selections"
-                    : "Try again"}
+                    : failure?.action === "interval"
+                      ? "Change interval"
+                      : monitorState.active
+                        ? "Automatic retry scheduled"
+                        : "Try again"}
             </Button>
-          </Alert>
-        )}
+          }
+        >
+          {run && (
+            <p className="screening-info-note">
+              Your previous result is still available below. Its prices have not
+              been updated by this failed check.
+            </p>
+          )}
+        </InfoDialog>
       </section>
 
       {storageUnavailable && (
@@ -686,143 +1016,6 @@ export function WorkspaceScreenerPanel({
             available while this page is open.
           </AlertDescription>
         </Alert>
-      )}
-
-      {history.length > 0 && (
-        <details className="screener-history">
-          <summary>Screening history ({history.length})</summary>
-          <FieldGroup className="screener-history-filters">
-            <Field>
-              <FieldLabel htmlFor="history-search">
-                Find a past screen
-              </FieldLabel>
-              <Input
-                id="history-search"
-                value={historySearch}
-                onChange={(event) => setHistorySearch(event.target.value)}
-                placeholder="Rule, universe or date"
-                maxLength={100}
-              />
-            </Field>
-            <Field>
-              <FieldLabel id="history-market-label">Market</FieldLabel>
-              <ToggleGroup
-                aria-labelledby="history-market-label"
-                value={[historyMarket]}
-                onValueChange={(values) => setHistoryMarket(values[0] || "all")}
-                variant="outline"
-              >
-                <ToggleGroupItem value="all">All markets</ToggleGroupItem>
-                <ToggleGroupItem value="IDX">IDX</ToggleGroupItem>
-                <ToggleGroupItem value="US">US</ToggleGroupItem>
-              </ToggleGroup>
-            </Field>
-          </FieldGroup>
-          <ul>
-            {history
-              .filter(
-                (item) =>
-                  (historyMarket === "all" ||
-                    item.run.manifest.market === historyMarket) &&
-                  `${item.rule} ${item.context?.universeName ?? ""} ${item.recordedAt} ${new Date(item.recordedAt).toLocaleString("en-GB")}`
-                    .toLowerCase()
-                    .includes(historySearch.toLowerCase().trim()),
-              )
-              .map((item) => (
-                <li key={`${item.run.result.request_id}-${item.recordedAt}`}>
-                  <div>
-                    <strong>{item.rule}</strong>
-                    <span>
-                      {item.context?.universeName || "Saved universe"} ·{" "}
-                      {item.run.manifest.market} · {item.run.manifest.currency}
-                    </span>
-                    <time dateTime={item.recordedAt}>
-                      {new Date(item.recordedAt).toLocaleString("en-GB")}
-                    </time>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={state === "loading"}
-                    onClick={() => {
-                      setRun(item.run);
-                      setRunContext(null);
-                      setHistoricalRun(item);
-                      setDetailSymbol(null);
-                      setState("completed");
-                      setFailure(null);
-                      setError(null);
-                    }}
-                  >
-                    Review result
-                  </Button>
-                </li>
-              ))}
-          </ul>
-          {history.length > 1 && (
-            <section
-              className="screener-comparison"
-              aria-label="Compare screening history"
-            >
-              <Field>
-                <FieldLabel htmlFor="compare-run">
-                  Compare the latest result with
-                </FieldLabel>
-                <Select
-                  value={compareIndex}
-                  onValueChange={(value) => setCompareIndex(value ?? "1")}
-                >
-                  <SelectTrigger id="compare-run">
-                    <SelectValue>
-                      {history[Number(compareIndex)]
-                        ? `${history[Number(compareIndex)].rule} · ${new Date(history[Number(compareIndex)].recordedAt).toLocaleString("en-GB")}`
-                        : "Choose a past run"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {history.slice(1).map((item, index) => (
-                        <SelectItem
-                          key={`${item.recordedAt}-${index}`}
-                          value={String(index + 1)}
-                        >
-                          {item.rule} ·{" "}
-                          {new Date(item.recordedAt).toLocaleString("en-GB")}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-              {comparison && (
-                <>
-                  <p>
-                    {comparison.common} stocks appear in both results.{" "}
-                    {!comparison.sameRule &&
-                      "Rule versions differ or were not recorded. This compares results, not signal changes under the same rule."}
-                  </p>
-                  <dl>
-                    {[
-                      ["New matches", comparison.gained],
-                      ["No longer matched", comparison.lost],
-                      ["Still matched", comparison.retained],
-                      ["Not compared", comparison.unpaired],
-                    ].map(([label, symbols]) => (
-                      <div key={String(label)}>
-                        <dt>{label}</dt>
-                        <dd>{(symbols as string[]).join(", ") || "—"}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <p>
-                    Stocks present in only one result are not counted as
-                    failures. Snapshots are not automated signals.
-                  </p>
-                </>
-              )}
-            </section>
-          )}
-        </details>
       )}
 
       <section
@@ -837,16 +1030,32 @@ export function WorkspaceScreenerPanel({
             <div>
               <h3 id="screener-results-title">Screening results</h3>
               <p>
-                Matching stocks, daily prices, and the evidence behind each
+                Matching stocks, candle prices, and the evidence behind each
                 decision.
               </p>
             </div>
           </div>
-          <Badge variant="outline">
-            {run
-              ? `${run.rows.filter((row) => row.decision.matched).length} matched · ${run.rows.filter((row) => !row.decision.matched).length} not matched`
-              : "Not run yet"}
-          </Badge>
+          <div className="screener-results__tools">
+            {run ? (
+              <div
+                className="screener-match-counts"
+                aria-label="Screening match totals"
+              >
+                <Badge variant="success">
+                  <CircleCheck aria-hidden="true" />
+                  {run.rows.filter((row) => row.decision.matched).length}{" "}
+                  matched
+                </Badge>
+                <Badge variant="destructive">
+                  <XCircle aria-hidden="true" />
+                  {run.rows.filter((row) => !row.decision.matched).length} not
+                  matched
+                </Badge>
+              </div>
+            ) : (
+              <Badge variant="outline">Not run yet</Badge>
+            )}
+          </div>
         </header>
         {state === "loading" && !run ? (
           <div
@@ -868,81 +1077,13 @@ export function WorkspaceScreenerPanel({
               </EmptyMedia>
               <EmptyTitle>Start with a rule and stock universe</EmptyTitle>
               <EmptyDescription>
-                Run screening above to see each stock's result and decision
+                Start screening above to see each stock's result and decision
                 evidence.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
           <>
-            <div className="screener-result-toolbar">
-              <div>
-                <strong>{historicalRun?.rule ?? runContext?.rule.name}</strong>
-                <p>
-                  {historicalRun?.context?.universeName ??
-                    runContext?.universe ??
-                    "Saved history"}{" "}
-                  · {run.rows.length} stocks screened.
-                </p>
-                <p>
-                  {state === "loading"
-                    ? "A new screening is running. Your last result is still shown."
-                    : historicalRun
-                      ? `Result saved ${new Date(historicalRun.recordedAt).toLocaleString("en-GB")}. Not live prices.`
-                      : `Daily open and close · ${run.manifest.currency} · not live prices.`}
-                </p>
-                <p>
-                  Daily snapshot · latest candle{" "}
-                  {candleDate(run.latestDecision.timestamp)} · not real-time
-                  prices.
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  downloadCsv("signalgen-screening.csv", [
-                    [
-                      "Stock",
-                      "Decision",
-                      "Market",
-                      "Currency",
-                      `Open ${run.manifest.currency}`,
-                      `Close ${run.manifest.currency}`,
-                      "RSI14",
-                      "EMA9",
-                      "EMA20",
-                      "Candle time",
-                      "Rule",
-                      "Rule version",
-                      "Reason codes",
-                    ],
-                    ...visibleRows
-                      .filter(
-                        (row) =>
-                          signalFilter === "all" ||
-                          screeningStatus(row.decision) === signalFilter,
-                      )
-                      .map((row) => [
-                        row.decision.symbol,
-                        screeningStatusLabels[screeningStatus(row.decision)],
-                        run.manifest.market,
-                        run.manifest.currency,
-                        row.latestOpen,
-                        row.latestClose,
-                        row.features.rsi14,
-                        row.features.ema9,
-                        row.features.ema20,
-                        row.decision.timestamp,
-                        historicalRun?.rule ?? runContext?.rule.name,
-                        evidenceRule?.version,
-                        row.decision.reason_codes.join("; "),
-                      ]),
-                  ])
-                }
-              >
-                <Download data-icon="inline-start" /> Export CSV
-              </Button>
-            </div>
             {detailRow && (
               <section
                 className="stock-detail"
@@ -954,8 +1095,13 @@ export function WorkspaceScreenerPanel({
                   <div>
                     <h3>{detailRow.decision.symbol.replace(".JK", "")}</h3>
                     <p>
-                      Candle {candleDate(detailRow.decision.timestamp)} ·{" "}
-                      {decisionDescription(detailRow.decision)}
+                      Candle{" "}
+                      {marketCandleDate(
+                        detailRow.decision.timestamp,
+                        run.manifest.market,
+                        run.manifest.timeframe,
+                      )}{" "}
+                      · {decisionDescription(detailRow.decision)}
                     </p>
                   </div>
                   <Button
@@ -1043,28 +1189,41 @@ export function WorkspaceScreenerPanel({
                                   </Badge>
                                   <span className="stock-detail__condition">
                                     <strong>{evidence.label}</strong>
-                                    {evidence.previous && (
-                                      <small>
-                                        Previous candle:{" "}
-                                        {new Intl.NumberFormat("en-GB", {
-                                          maximumFractionDigits: 2,
-                                        }).format(evidence.previous.left)}{" "}
-                                        compared with{" "}
-                                        {new Intl.NumberFormat("en-GB", {
-                                          maximumFractionDigits: 2,
-                                        }).format(evidence.previous.right)}
-                                      </small>
-                                    )}
-                                    <small>
-                                      {evidence.previous && "Current candle: "}
-                                      {new Intl.NumberFormat("en-GB", {
-                                        maximumFractionDigits: 2,
-                                      }).format(evidence.left)}{" "}
-                                      compared with{" "}
-                                      {new Intl.NumberFormat("en-GB", {
-                                        maximumFractionDigits: 2,
-                                      }).format(evidence.right)}
-                                    </small>
+                                    <span
+                                      className="crossover-evidence"
+                                      data-crossover={Boolean(
+                                        evidence.previous,
+                                      )}
+                                    >
+                                      {evidence.previous && (
+                                        <span>
+                                          <small>Previous candle</small>
+                                          <span>
+                                            {new Intl.NumberFormat("en-GB", {
+                                              maximumFractionDigits: 2,
+                                            }).format(
+                                              evidence.previous.left,
+                                            )}{" "}
+                                            compared with{" "}
+                                            {new Intl.NumberFormat("en-GB", {
+                                              maximumFractionDigits: 2,
+                                            }).format(evidence.previous.right)}
+                                          </span>
+                                        </span>
+                                      )}
+                                      <span>
+                                        <small>Current candle</small>
+                                        <span>
+                                          {new Intl.NumberFormat("en-GB", {
+                                            maximumFractionDigits: 2,
+                                          }).format(evidence.left)}{" "}
+                                          compared with{" "}
+                                          {new Intl.NumberFormat("en-GB", {
+                                            maximumFractionDigits: 2,
+                                          }).format(evidence.right)}
+                                        </span>
+                                      </span>
+                                    </span>
                                   </span>
                                 </>
                               ) : condition.op === "CROSS_UP" ||
@@ -1164,36 +1323,90 @@ export function WorkspaceScreenerPanel({
                 </Select>
               </Field>
             </FieldGroup>
-            <ToggleGroup
-              className="screener-signal-filters"
-              aria-label="Signal status"
-              variant="outline"
-              value={[signalFilter]}
-              onValueChange={(values) =>
-                setSignalFilter(
-                  (values[0] || "all") as keyof typeof screeningStatusLabels,
-                )
-              }
-            >
-              {(
-                Object.keys(
-                  screeningStatusLabels,
-                ) as (keyof typeof screeningStatusLabels)[]
-              ).map((status) => (
-                <ToggleGroupItem key={status} value={status}>
-                  {screeningStatusLabels[status]}{" "}
-                  <span>
-                    {
-                      run.rows.filter(
-                        (row) =>
-                          status === "all" ||
-                          screeningStatus(row.decision) === status,
-                      ).length
-                    }
-                  </span>
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+            <div className="screener-result-statusbar">
+              <ToggleGroup
+                className="screener-signal-filters"
+                aria-label="Signal status"
+                variant="outline"
+                value={[signalFilter]}
+                onValueChange={(values) =>
+                  setSignalFilter(
+                    (values[0] || "all") as keyof typeof screeningStatusLabels,
+                  )
+                }
+              >
+                {(
+                  Object.keys(
+                    screeningStatusLabels,
+                  ) as (keyof typeof screeningStatusLabels)[]
+                ).map((status) => (
+                  <ToggleGroupItem key={status} value={status}>
+                    {screeningStatusLabels[status]}{" "}
+                    <span>
+                      {
+                        run.rows.filter(
+                          (row) =>
+                            status === "all" ||
+                            screeningStatus(row.decision) === status,
+                        ).length
+                      }
+                    </span>
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              <div className="screener-result-actions">
+                <ScreeningDataQuality
+                  manifest={run.manifest}
+                  timestamps={run.rows.map((row) => row.decision.timestamp)}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    downloadCsv("signalgen-screening.csv", [
+                      [
+                        "Stock",
+                        "Decision",
+                        "Market",
+                        "Currency",
+                        `Open ${run.manifest.currency}`,
+                        `Close ${run.manifest.currency}`,
+                        "RSI14",
+                        "EMA9",
+                        "EMA20",
+                        "Candle time",
+                        "Rule",
+                        "Rule version",
+                        "Reason codes",
+                      ],
+                      ...visibleRows
+                        .filter(
+                          (row) =>
+                            signalFilter === "all" ||
+                            screeningStatus(row.decision) === signalFilter,
+                        )
+                        .map((row) => [
+                          row.decision.symbol,
+                          screeningStatusLabels[screeningStatus(row.decision)],
+                          run.manifest.market,
+                          run.manifest.currency,
+                          row.latestOpen,
+                          row.latestClose,
+                          row.features.rsi14,
+                          row.features.ema9,
+                          row.features.ema20,
+                          row.decision.timestamp,
+                          historicalRun?.rule ?? runContext?.rule.name,
+                          evidenceRule?.version,
+                          row.decision.reason_codes.join("; "),
+                        ]),
+                    ])
+                  }
+                >
+                  <Download data-icon="inline-start" /> Export CSV
+                </Button>
+              </div>
+            </div>
             <p className="screener-result-count" role="status">
               {
                 visibleRows.filter(
@@ -1215,7 +1428,7 @@ export function WorkspaceScreenerPanel({
                     <TableHead>RSI14</TableHead>
                     <TableHead>EMA20</TableHead>
                     <TableHead>Reason</TableHead>
-                    <TableHead />
+                    <TableHead>Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1231,6 +1444,7 @@ export function WorkspaceScreenerPanel({
                           <Button
                             variant="ghost"
                             size="sm"
+                            className="screener-stock-action"
                             aria-expanded={detailSymbol === row.decision.symbol}
                             onClick={() => setDetailSymbol(row.decision.symbol)}
                           >
@@ -1303,6 +1517,7 @@ export function WorkspaceScreenerPanel({
                           <Button
                             variant="link"
                             size="sm"
+                            className="screener-details-action"
                             onClick={() => setDetailSymbol(row.decision.symbol)}
                           >
                             View details
@@ -1312,9 +1527,48 @@ export function WorkspaceScreenerPanel({
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() =>
-                              onDraft(row.decision.symbol.replace(".JK", ""))
-                            }
+                            className="workspace-glass-action screener-journal-action"
+                            onClick={() => {
+                              const evidence: JournalScreeningDraft = {
+                                ownerId: userId ?? "",
+                                symbol: row.decision.symbol,
+                                ruleName:
+                                  historicalRun?.rule ??
+                                  runContext?.rule.name ??
+                                  "Screening result",
+                                ruleSnapshot: evidenceRule
+                                  ? {
+                                      version: evidenceRule.version,
+                                      definition_hash:
+                                        evidenceRule.definition_hash,
+                                      definition: evidenceRule.definition,
+                                    }
+                                  : undefined,
+                                screenedAt:
+                                  history.find(
+                                    (item) =>
+                                      item.run.result.request_id ===
+                                      run.result.request_id,
+                                  )?.recordedAt ?? new Date().toISOString(),
+                                run,
+                              };
+                              const check = checkJournalScreening(
+                                evidence,
+                                userId,
+                              );
+                              if (!check.ok) {
+                                toast.add({
+                                  type: "error",
+                                  title: "Cannot add to journal",
+                                  description: check.reason,
+                                });
+                                return;
+                              }
+                              onDraft(
+                                row.decision.symbol.replace(/\.JK$/, ""),
+                                evidence,
+                              );
+                            }}
                           >
                             Add to journal
                           </Button>
@@ -1348,12 +1602,276 @@ export function WorkspaceScreenerPanel({
           </>
         )}
       </section>
+      {(history.length > 0 || historyDeleteError) && (
+        <details className="screener-history">
+          <summary ref={historySummary}>
+            Screening history ({history.length})
+          </summary>
+          {historyDeleteError && <p role="alert">{historyDeleteError}</p>}
+          <FieldGroup className="screener-history-filters">
+            <Field>
+              <FieldLabel htmlFor="history-search">
+                Find a past screen
+              </FieldLabel>
+              <Input
+                id="history-search"
+                value={historySearch}
+                onChange={(event) => setHistorySearch(event.target.value)}
+                placeholder="Rule, universe or date"
+                maxLength={100}
+              />
+            </Field>
+            <Field>
+              <FieldLabel id="history-market-label">Market</FieldLabel>
+              <ToggleGroup
+                aria-labelledby="history-market-label"
+                value={[historyMarket]}
+                onValueChange={(values) => setHistoryMarket(values[0] || "all")}
+                variant="outline"
+              >
+                <ToggleGroupItem value="all">All markets</ToggleGroupItem>
+                <ToggleGroupItem value="IDX">IDX</ToggleGroupItem>
+                <ToggleGroupItem value="US">US</ToggleGroupItem>
+              </ToggleGroup>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="history-interval">
+                Candle interval
+              </FieldLabel>
+              <Select
+                value={historyTimeframe}
+                onValueChange={(value) => setHistoryTimeframe(value ?? "all")}
+              >
+                <SelectTrigger id="history-interval">
+                  <SelectValue>
+                    {historyTimeframe === "all"
+                      ? "All intervals"
+                      : screenerIntervals.find(
+                          (item) => item.value === historyTimeframe,
+                        )?.label}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  <SelectGroup>
+                    <SelectItem value="all">All intervals</SelectItem>
+                    {screenerIntervals.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+          </FieldGroup>
+          <div className="screener-history-toolbar">
+            <p className="screener-history__count" role="status">
+              {filteredHistory.length} of {history.length} saved screens
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="workspace-glass-action"
+              data-destructive="true"
+              disabled={monitorState.active || !userId || !history.length}
+              onClick={(event) => {
+                historyDeleteFocus.current = event.currentTarget;
+                setHistoryDeleteError("");
+                setDeleteAllHistory(true);
+              }}
+            >
+              <Trash2 data-icon="inline-start" />
+              Delete all
+            </Button>
+          </div>
+          {!filteredHistory.length && (
+            <p className="screener-history__count">
+              No saved screens match these filters.
+            </p>
+          )}
+          <ul className="screener-history-list">
+            {filteredHistory.map((item) => (
+              <li key={`${item.run.result.request_id}-${item.recordedAt}`}>
+                <div>
+                  <strong>{item.rule}</strong>
+                  <dl className="screener-history-facts">
+                    <div>
+                      <dt>Universe</dt>
+                      <dd>{item.context?.universeName || "Saved universe"}</dd>
+                    </div>
+                    <div>
+                      <dt>Market / currency</dt>
+                      <dd>
+                        {item.run.manifest.market} /{" "}
+                        {item.run.manifest.currency}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Interval</dt>
+                      <dd>{item.run.manifest.timeframe}</dd>
+                    </div>
+                    <div>
+                      <dt>Saved</dt>
+                      <dd>
+                        <time dateTime={item.recordedAt}>
+                          {new Date(item.recordedAt).toLocaleString("en-GB")}
+                        </time>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Latest candle</dt>
+                      <dd>
+                        {marketCandleDate(
+                          item.run.latestDecision.timestamp,
+                          item.run.manifest.market,
+                          item.run.manifest.timeframe,
+                        )}
+                        <small>
+                          {marketTimezone(item.run.manifest.market)}
+                        </small>
+                      </dd>
+                    </div>
+                  </dl>
+                  <div
+                    className="screener-history-statuses"
+                    aria-label="Saved decision counts"
+                  >
+                    {Object.entries(
+                      item.run.rows.reduce<Record<string, number>>(
+                        (counts, row) => {
+                          const label =
+                            screeningStatusLabels[
+                              screeningStatus(row.decision)
+                            ];
+                          counts[label] = (counts[label] ?? 0) + 1;
+                          return counts;
+                        },
+                        {},
+                      ),
+                    ).map(([label, count]) => (
+                      <Badge variant="outline" key={label}>
+                        {label} {count}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className="screener-history-actions">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={monitorState.active}
+                    onClick={() => {
+                      setRun(item.run);
+                      setRunContext(null);
+                      setHistoricalRun(item);
+                      setDetailSymbol(null);
+                      setState("completed");
+                      setFailure(null);
+                      setError(null);
+                    }}
+                  >
+                    Review result
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="workspace-glass-action"
+                    data-destructive="true"
+                    aria-label={`Delete history for ${item.rule}`}
+                    disabled={monitorState.active || !userId}
+                    onClick={(event) => {
+                      historyDeleteFocus.current = event.currentTarget;
+                      setHistoryDeleteError("");
+                      setPendingHistoryDelete(item);
+                    }}
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {history.length > 1 && (
+            <section
+              className="screener-comparison"
+              aria-label="Compare screening history"
+            >
+              <Field>
+                <FieldLabel htmlFor="compare-run">
+                  Compare the latest result with
+                </FieldLabel>
+                <Select
+                  value={compareIndex}
+                  onValueChange={(value) => setCompareIndex(value ?? "1")}
+                >
+                  <SelectTrigger id="compare-run">
+                    <SelectValue>
+                      {history[Number(compareIndex)]
+                        ? `${history[Number(compareIndex)].rule} · ${new Date(history[Number(compareIndex)].recordedAt).toLocaleString("en-GB")}`
+                        : "Choose a past run"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {history.slice(1).map((item, index) => (
+                        <SelectItem
+                          key={`${item.recordedAt}-${index}`}
+                          value={String(index + 1)}
+                        >
+                          {item.rule} ·{" "}
+                          {new Date(item.recordedAt).toLocaleString("en-GB")}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+              {comparison && (
+                <>
+                  {!comparison.sameInterval && (
+                    <p role="status">
+                      These results use different candle intervals. Match
+                      changes are not compared.
+                    </p>
+                  )}
+                  <p>
+                    {comparison.common} stocks appear in both results.{" "}
+                    {!comparison.sameRule &&
+                      "Rule versions differ or were not recorded. This compares results, not signal changes under the same rule."}
+                  </p>
+                  <dl>
+                    {[
+                      ["New matches", comparison.gained],
+                      ["No longer matched", comparison.lost],
+                      ["Still matched", comparison.retained],
+                      ["Not compared", comparison.unpaired],
+                    ].map(([label, symbols]) => (
+                      <div key={String(label)}>
+                        <dt>{label}</dt>
+                        <dd>{(symbols as string[]).join(", ") || "—"}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <p>
+                    Stocks present in only one result are not counted as
+                    failures. Snapshots are not automated signals.
+                  </p>
+                </>
+              )}
+            </section>
+          )}
+        </details>
+      )}
+
       {run && (
-        <section
+        <details
           className="screener-technical"
           aria-labelledby="screener-technical-title"
         >
-          <h4 id="screener-technical-title">Data information</h4>
+          <summary id="screener-technical-title">
+            Data information
+            <ChevronDown aria-hidden="true" />
+          </summary>
           <footer className="dataset-provenance">
             <div>
               <span>Provider</span>
@@ -1372,7 +1890,10 @@ export function WorkspaceScreenerPanel({
             </div>
             <div>
               <span>Quality</span>
-              <strong>{run.manifest.quality.status}</strong>
+              <strong>
+                Validated payload · {run.manifest.quality.warnings.length} data
+                notes
+              </strong>
             </div>
             <div>
               <span>Checksum</span>
@@ -1393,7 +1914,7 @@ export function WorkspaceScreenerPanel({
               </>
             )}
           </footer>
-        </section>
+        </details>
       )}
     </div>
   );

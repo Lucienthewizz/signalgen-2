@@ -119,7 +119,7 @@ func TestYahooFinanceSkipsIncompleteCandles(t *testing.T) {
 	}))
 	defer server.Close()
 	provider, _ := NewYahooFinance(server.URL, server.Client())
-	if _, err := provider.Daily(context.Background(), []universe.Instrument{{Symbol: "BBCA.JK", ProviderSymbol: "BBCA.JK"}}, 20); err != ErrInvalidData {
+	if _, err := provider.Daily(context.Background(), []universe.Instrument{{Symbol: "BBCA.JK", ProviderSymbol: "BBCA.JK"}}, 20); !errors.Is(err, ErrInvalidData) || !errors.Is(err, ErrInsufficientCandles) {
 		t.Fatalf("error = %v, want ErrInvalidData", err)
 	}
 }

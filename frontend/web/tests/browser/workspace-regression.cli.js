@@ -6,7 +6,7 @@ async (page) => {
   const now = new Date().toISOString();
   const day = now.slice(0, 10);
   const definition = { name: "Rule fixture", logic: "AND", signal_type: "BUY", cooldown_sec: 0, conditions: [{ left: "PRICE", op: ">", right: "EMA20" }, { left: "EMA9", op: ">", right: "EMA20" }] };
-  const rule = { id: "fixture-rule", name: definition.name, owner_type: "user", read_only: false, version: 2, definition_hash: "fixture-hash", schema_version: "rule-1", engine_version: "core-0.3.0", definition };
+  const rule = { id: "fixture-rule", name: definition.name, owner_type: "user", read_only: false, version: 2, definition_hash: "fixture-hash", schema_version: "rule-1", engine_version: "core-0.4.0", definition };
   const universe = { id: "fixture-universe", name: "Bank pilihan", version: 1, symbols: ["BBCA.JK", "BBRI.JK"] };
   const rows = [true, false].map((matched, i) => ({ decision: { symbol: universe.symbols[i], timestamp: now, matched, reason_codes: [matched ? "RULE_MATCHED" : "CONDITIONS_NOT_MET"] }, features: { price: 100 + i, ema9: matched ? 99 : 95, ema20: 98, rsi14: 60 }, latestOpen: 95, latestClose: 100 + i }));
   const run = { rows, latestDecision: rows[0].decision, features: rows[0].features, latestOpen: 95, latestClose: 100, result: { type: "screener.result", protocol: "screener-private-1", request_id: "fixture-request", decision_version: "fixture-decision", results: rows.map(row => row.decision) }, manifest: { dataset_id: "fixture-dataset", version: "1", schema_version: "ohlcv-multi-1", provider: "yahoo_finance", purpose: "screen", market: "IDX", currency: "IDR", symbols: universe.symbols, timeframe: "1d", timezone: "UTC", requested_range: { from: day, to: day }, available_range: { from: day, to: day }, warmup_candles: 20, adjustment: "split", candle_count: 100, decoded_bytes: 1000, checksum: "fixture-checksum", quality: { status: "complete", warnings: [] } }, execution: "client_wasm+server_private_scoring" };
@@ -21,6 +21,7 @@ async (page) => {
   let failUniverseDelete = false;
   let universeWrite = null;
   let ruleWrite = null;
+  let ruleDeletes = 0;
   let largeUniverse = false;
   let savedCardFixture = false;
   let healthOffline = false;
@@ -65,6 +66,10 @@ async (page) => {
       ruleWrite = route.request().postDataJSON();
       return route.fulfill({ json: { ...rule, name: ruleWrite.definition.name, definition: ruleWrite.definition } });
     }
+    if (p === "/api/v1/rules/fixture-rule" && route.request().method() === "DELETE") {
+      ruleDeletes++;
+      return route.fulfill({ status: 204 });
+    }
     if (p.startsWith("/api/v1/account/sessions/") && route.request().method() !== "GET") sessionMutations++;
     if (p.startsWith("/api/v1/stock-universes") && ["POST", "PATCH"].includes(route.request().method())) {
       universeWrite = { method: route.request().method(), body: route.request().postDataJSON() };
@@ -79,7 +84,7 @@ async (page) => {
     else if (p === "/api/v1/account/me") payload = { user, features: ["screener", "backtest"], session: { id: "fixture", expires_at: subscription.current_period_end }, device: { installation_id: "fixture", label: "Fixture browser", current: true }, capabilities_version: "fixture" };
     else if (p === "/api/v1/account/sessions") payload = { items: sessionFixtures };
     else if (p === "/api/v1/rules") payload = { items: [systemRule ? { ...rule, name: "Default Scalping", owner_type: "system", definition: undefined } : rule], next_cursor: null };
-    else if (p === "/api/v1/stock-universes") payload = { items: [largeUniverse ? { ...universe, symbols: ["BBCA.JK", "BBRI.JK", "AADI.JK", "AALI.JK", "ABBA.JK", "ABDA.JK", "ABMM.JK", "ACES.JK", "ACRO.JK", "ACST.JK"] } : universe, ...(savedCardFixture ? [{ ...universe, id: "fixture-second-universe", name: "Banking watchlist" }] : [])] };
+    else if (p === "/api/v1/stock-universes") payload = { items: [largeUniverse ? { ...universe, symbols: ["BBCA.JK", "BBRI.JK", "AADI.JK", "AALI.JK", "ABBA.JK", "ABDA.JK", "ABMM.JK", "ACES.JK", "ACRO.JK", "ACST.JK"] } : universe, ...(savedCardFixture ? [{ ...universe, id: "fixture-second-universe", name: "Banking watchlist" }, { ...universe, id: "fixture-third-universe", name: "Third universe", symbols: ["BBRI.JK"] }] : [])] };
     else if (p === "/api/v1/stocks") payload = { items: [...universe.symbols.map(symbol => ({ symbol, name: symbol, exchange: "XIDX", currency: "IDR" })), ...["AAPL", "JPM", "XOM", "PG", "PLD", "AGRO", "BBSI", "GOOD"].map(symbol => ({ symbol, name: symbol, exchange: "XNAS", currency: "USD" }))] };
     else if (p === "/api/v1/subscription") payload = { subscription };
     else if (p === "/api/v1/subscription/plans") payload = { items: plans };
@@ -107,8 +112,40 @@ async (page) => {
   const journalKey = `signalgen:journal-drafts:${user.id}`;
   await page.evaluate(key => localStorage.setItem(key, "preserve-existing-drafts"), journalKey);
   await page.getByRole("button", { name: "Add to journal", exact: true }).first().click({ timeout: 5000 });
+  await page.waitForURL('**/#app/journal');
+  const journalVerification = page.getByRole('dialog',{name:'Verify screening details',exact:true});
+  await journalVerification.waitFor();
+  if (!(await journalVerification.innerText()).includes('BBCA') || await journalVerification.locator('tbody tr').count() !== 2) throw Error('Journal verification omitted captured condition evidence');
+  const verificationTheme = await page.evaluate(()=>document.documentElement.dataset.theme);
+  for (const width of [1440,390]) for (const theme of ['dark','light']) {
+    await page.setViewportSize({width,height:1000});
+    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+    const box=await journalVerification.boundingBox();
+    if (!box || box.x<0 || box.x+box.width>width+1) throw Error('Journal verification popup exceeds viewport');
+    await page.screenshot({path:`/private/tmp/signalgen-journal-verification-${width}-${theme}.png`,animations:'disabled'});
+  }
+  await page.evaluate(theme=>document.documentElement.dataset.theme=theme,verificationTheme);
+  await journalVerification.getByRole('button',{name:'Use in journal form',exact:true}).click();
   await page.getByRole("heading", { name: "Record a trade", exact: true }).waitFor({ timeout: 5000 });
   if (await page.locator(".journal-capture input").first().inputValue() !== "BBCA") throw Error("Screener did not prefill journal symbol");
+  await page.getByRole('button',{name:'Close journal form',exact:true}).waitFor();
+  if (await page.getByLabel('Entry price (IDR)',{exact:true}).inputValue() !== '100') throw Error('Journal price differs from screening snapshot');
+  await page.getByText('Screening verified',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Close journal form',exact:true}).click();
+  await page.getByRole('button',{name:'Open journal form',exact:true}).waitFor();
+  await page.getByLabel('Month',{exact:true}).fill('2026-10');
+  await page.getByText('No closed trades in this period',{exact:true}).waitFor();
+  await page.getByText('No closed trades match these filters.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Clear month filter',exact:true}).click();
+  await page.getByText('No closed trades match these filters.',{exact:true}).waitFor({state:'hidden'});
+  if (await page.locator('.journal-ledger tbody tr').count() !== 4) throw Error('Clearing month did not restore table');
+  const summaryText = await page.locator('.journal-performance__summary').innerText();
+  if (!summaryText.includes('326,600') || !summaryText.includes('4 sample closed trades')) throw Error('Journal total does not match visible sample rows');
+  if (!(await page.locator('.journal-pnl-chart svg').textContent()).includes('Cumulative P&L (IDR)')) throw Error('Chart axis labels missing');
+  await page.getByRole('button',{name:'Open journal form',exact:true}).click();
+  const saveBox=await page.getByRole('button',{name:'Saving unavailable',exact:true}).boundingBox();
+  const closeBox=await page.getByRole('button',{name:'Close form',exact:true}).boundingBox();
+  if (!saveBox || !closeBox || Math.abs(saveBox.width-closeBox.width)>1 || Math.abs(saveBox.height-closeBox.height)>1) throw Error('Journal form actions differ in size');
   if (!await page.getByRole("button", { name: "Saving unavailable", exact: true }).isDisabled()) throw Error("Unavailable journal storage must not submit");
   if (await page.locator(".journal-drafts").count()) throw Error("Local draft workflow still visible");
   await page.reload();
@@ -182,6 +219,7 @@ async (page) => {
           document.fonts.load('500 14px "Saira Condensed"'),
           document.fonts.load('13px "Geist Mono Variable"'),
         ]));
+        if (errors.length) throw Error(`Route ${view}: ${errors.join('; ')}`);
         const typography = await page.evaluate(() => ({
           body: getComputedStyle(document.body).fontFamily,
           nav: getComputedStyle(document.querySelector(".nav-group button")).fontFamily,
@@ -222,6 +260,8 @@ async (page) => {
         if (surfaceContrast.min < 4.5) throw Error(`Shared surface text contrast below AA: ${JSON.stringify(surfaceContrast)}`);
         await page.screenshot({ path: `/private/tmp/signalgen-${view}-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
         if (view === "realtime") {
+          if (!await page.locator('.monitor-ledger table th, .monitor-ledger table td').evaluateAll(items=>items.length>0 && items.every(el=>getComputedStyle(el).textAlign==='center'))) throw Error('Every monitor table header and cell must be centered');
+          if (!await page.locator('.monitor-ledger .monitor-result').evaluateAll(items=>items.every(el=>getComputedStyle(el).justifyItems==='center'))) throw Error('Monitor result badges must be centered');
           if (!await page.locator(".monitor-change").first().evaluate(el => getComputedStyle(el).fontFamily.includes("Geist Mono Variable") && document.fonts.check('13px "Geist Mono Variable"'))) throw Error("Market numbers must use loaded Geist Mono");
           const geometry = await page.locator(".monitor-board-grid").evaluate(el => {
             const chart = el.querySelector(".monitor-chart").getBoundingClientRect();
@@ -232,10 +272,25 @@ async (page) => {
           if (width === 1440 && (!geometry.sideBySide || geometry.topOffset > 1 || geometry.bottomOffset > 1)) throw Error(`Chart and detail card edges must align: ${JSON.stringify(geometry)}`);
           if (width === 390 && !geometry.below) throw Error("Stock card must stack below chart on mobile");
           await page.locator(".monitor-ledger").screenshot({ path: `/private/tmp/signalgen-monitor-table-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+          if (!await page.locator('.monitor-ledger time').evaluateAll(items => items.length > 0 && items.every(el => el.textContent.includes('Asia/Jakarta')))) throw Error('Monitor candle dates are not labeled with the snapshot market timezone');
           await page.locator(".market-monitor").screenshot({ path: `/private/tmp/signalgen-monitor-lineup-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
         }
         if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Overflow: ${view} ${width}`);
         if (view === "analysis") {
+          const matchMode = page.locator('.screener-run-summary__title .screener-match-mode');
+          if (await matchMode.innerText() !== 'Match all 2 conditions' || !await matchMode.evaluate(el=>el.previousElementSibling.textContent==='BUY')) throw Error('Match mode must be a card next to the signal badge');
+          if (await page.locator('.screener-criteria > p').count()) throw Error('Match mode remains below the signal badges');
+          const operators = await page.locator('.screener-criteria .rule-operator-symbol').allTextContents();
+          if (operators.join(',')!=='>,>') throw Error(`Screening conditions omit the Rules comparison symbols: ${operators}`);
+          await page.locator('.screener-run-summary').screenshot({path:`/private/tmp/signalgen-criteria-${width}-${theme}.png`,animations:'disabled'});
+          const controlGeometry = await page.locator('.screener-monitor-status').evaluate(el => {
+            const start = el.querySelector('.screener-run-summary__action'), times = el.querySelector('.screener-monitor-status__times');
+            return {left: el.querySelector('.screener-monitor-status__icon').getBoundingClientRect().left, expected: document.querySelector('.screener-pickers').getBoundingClientRect().left + parseFloat(getComputedStyle(document.querySelector('.screener-pickers')).paddingLeft), start: start.getBoundingClientRect().left, times: times.getBoundingClientRect().right};
+          });
+          if (Math.abs(controlGeometry.left - controlGeometry.expected) > 1) throw Error('Monitor status padding is not aligned');
+          if (width === 1440 && controlGeometry.start < controlGeometry.times) throw Error('Start/Stop must be right of check times');
+          const actions = await page.locator('.screener-result-actions > button').evaluateAll(items => items.map(el => el.getBoundingClientRect().height));
+          if (actions.length !== 2 || Math.abs(actions[0] - actions[1]) > 1) throw Error('Quality and CSV buttons do not align');
           const offset = await page.evaluate(() => {
             const note = document.querySelector(".screener-result-count");
             const label = document.querySelector(".screener-result-filters label");
@@ -246,11 +301,13 @@ async (page) => {
           if (offset > 2) throw Error(`Misaligned screener explanation: ${offset}px`);
           if (await page.locator(".screener-results .screener-technical").count()) throw Error("Technical card still nested in results");
           const technical = page.locator(".screener-workspace > .screener-technical");
-          await technical.getByRole("heading", { name: "Data information", exact: true }).waitFor({ timeout: 5000 });
-          if (await technical.locator("summary").count()) throw Error("Technical card still collapsible");
+          await technical.locator("summary").filter({hasText:"Data information"}).waitFor({ timeout: 5000 });
+          if (!await technical.evaluate(el => el instanceof HTMLDetailsElement)) throw Error("Data information must be a dropdown");
+          if (!await technical.evaluate(el => el.open)) await technical.locator("summary").click();
           const layout = await technical.evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), text: parseFloat(getComputedStyle(el.querySelector(".dataset-provenance strong")).fontSize), left: el.getBoundingClientRect().left - document.querySelector(".screener-results").getBoundingClientRect().left }));
-          if (layout.radius < 12 || layout.text > 14 || Math.abs(layout.left) > 1) throw Error(`Technical card layout incorrect: ${JSON.stringify(layout)}`);
+          if (layout.text > 14 || Math.abs(layout.left) > 1) throw Error(`Technical dropdown layout incorrect: ${JSON.stringify(layout)}`);
           await technical.screenshot({ path: `/private/tmp/signalgen-technical-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+          await technical.locator("summary").click();
           await page.getByRole("button", { name: "BBCA", exact: true }).click({ timeout: 5000 });
           const detail = page.locator(".stock-detail");
           await detail.getByRole("heading", { name: /Condition evidence/ }).waitFor({ timeout: 5000 });
@@ -269,14 +326,63 @@ async (page) => {
           await page.locator(".overview-launch").screenshot({ path: `/private/tmp/signalgen-dashboard-gradient-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           const alignment = await page.evaluate(() => {
             const title = document.querySelector(".overview-next h3").getBoundingClientRect();
-            const selection = document.querySelector(".overview-selection").getBoundingClientRect();
             const history = document.querySelector(".overview-activity header h3").getBoundingClientRect();
             const row = document.querySelector(".overview-activity li > div").getBoundingClientRect();
-            return Math.max(Math.abs(title.x - selection.x), Math.abs(title.x - history.x), Math.abs(history.x - row.x));
+            return Math.max(Math.abs(title.x - history.x), Math.abs(history.x - row.x));
           });
           if (alignment > 2) throw Error(`Dashboard gutters inconsistent: ${alignment}px`);
+          if (await page.locator('.overview-selection').count()) throw Error('Rule and universe selection must not clutter dashboard hero');
+          const launchButton = await page.locator('.overview-next .overview-open-screener').evaluate(el => {
+            const css=getComputedStyle(el); return {height:el.getBoundingClientRect().height,font:parseFloat(css.fontSize),glass:css.backdropFilter,background:css.backgroundImage};
+          });
+          if (launchButton.height<52 || launchButton.font<20 || !launchButton.glass.includes('blur') || !launchButton.background.includes('linear-gradient')) throw Error(`Large green glass screener action missing: ${JSON.stringify(launchButton)}`);
+          const resources = page.getByRole('region', {name:'Workspace overview',exact:true});
+          const icons = await resources.locator('.overview-resources__icon > svg').evaluateAll(items => items.map(el => el.getAttribute('class')));
+          if (icons.length !== 4 || new Set(icons).size !== 4 || !['list-checks','boxes','crown','user-round'].every((name,i)=>icons[i].includes(`lucide-${name}`))) throw Error(`Dashboard icons must be distinct and match each resource: ${icons}`);
+          const resourceSizes = await resources.locator('.feature-gallery__item').evaluateAll(items => items.map(el => ({height:el.getBoundingClientRect().height,width:el.getBoundingClientRect().width})));
+          if (resourceSizes.some(size=>size.height>280 || size.height<200 || Math.abs(size.height-resourceSizes[0].height)>1)) throw Error(`Dashboard cards are not compact and equal: ${JSON.stringify(resourceSizes)}`);
+          if (!await resources.locator('.feature-gallery__copy').evaluateAll(items=>items.every(el=>getComputedStyle(el).textAlign==='center' && getComputedStyle(el).justifyItems==='center'))) throw Error('Overview resource copy must be centered');
+          if (width===390 && await resources.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)!==2) throw Error('Compact mobile resources must use two columns');
+          const destinations = await resources.locator('a').evaluateAll(links => links.map(link=>link.getAttribute('href')));
+          if (destinations.join(',') !== '#app/rules,#app/universes,#app/subscription,#app/access') throw Error('Dashboard resource navigation changed');
+          const values = await resources.locator('.overview-resources__value').allTextContents();
+          if (values.join(',') !== '1,1,Pro,Active') throw Error(`Dashboard resource values differ from account data: ${values}`);
+          const chips = await page.locator('.overview-activity li').first().locator('.overview-run-chip').evaluateAll(items => items.map(el => {
+            const rect=el.getBoundingClientRect(), style=getComputedStyle(el);
+            return {width:rect.width,height:rect.height,radius:style.borderRadius,padding:style.padding,overflow:el.scrollWidth>el.clientWidth+1};
+          }));
+          if (chips.length !== 4 || chips.some(chip=>chip.width!==chips[0].width || chip.height!==chips[0].height || chip.radius!==chips[0].radius || chip.padding!==chips[0].padding || chip.overflow)) throw Error(`Recent screening pills must match: ${JSON.stringify(chips)}`);
+          if (await page.locator('.overview-run-meta time[datetime]').count() !== 2) throw Error('Screening date semantics lost');
+          await resources.screenshot({path:`/private/tmp/signalgen-overview-resources-${width}-${theme}.png`,animations:'disabled'});
+          await page.locator('.overview-activity').screenshot({path:`/private/tmp/signalgen-overview-recent-${width}-${theme}.png`,animations:'disabled'});
+          const overviewPanel = await resources.locator('.feature-gallery__item').first().evaluate(el => {
+            const css=getComputedStyle(el);
+            return {background:css.backgroundImage,size:css.backgroundSize,radius:css.borderRadius};
+          });
+          await page.goto(`${origin}/#home`);
+          const landingCard=page.locator('#capabilities .feature-gallery__item').first();
+          await landingCard.waitFor();
+          const landingPanel = await landingCard.evaluate(el => {
+            const css=getComputedStyle(el);
+            return {background:css.backgroundImage,size:css.backgroundSize,radius:css.borderRadius};
+          });
+          if (JSON.stringify(overviewPanel)!==JSON.stringify(landingPanel)) throw Error(`Dashboard panel differs from landing: ${JSON.stringify({overviewPanel,landingPanel})}`);
+          if (width===1440) await landingCard.screenshot({path:`/private/tmp/signalgen-landing-panel-${theme}.png`,animations:'disabled'});
+          await page.goto(`${origin}/#app/overview`);
+          await page.locator('.overview-resources').waitFor();
+          await page.locator('.overview-activity').getByRole('button',{name:'Use selection',exact:true}).first().click();
+          await page.waitForURL('**/#app/analysis');
+          await page.goto(`${origin}/#app/overview`);
+          await page.locator('.overview-resources').waitFor();
         }
         if (view === "rules") {
+          const filters = await page.locator('.rule-library__filters').evaluate(el => {
+            const search = el.querySelector('input').getBoundingClientRect();
+            const buttons = [...el.querySelectorAll('[data-signal]')].map(item => item.getBoundingClientRect().height);
+            return { height: search.height, buttons, misplacedCount: Boolean(el.querySelector('[role="status"]')) };
+          });
+          if (filters.buttons.some(height => Math.abs(height - filters.height) > 1) || filters.misplacedCount) throw Error(`Rule filters must match the search height with count moved beside Your rules: ${JSON.stringify(filters)}`);
+          if (!(await page.locator('.rule-library__list-heading [role="status"]').innerText()).includes('[')) throw Error('Bracketed rule count missing');
           const refresh = page.locator(".rule-library").getByRole("button", { name: "Refresh", exact: true });
           if (!(await refresh.getAttribute("class")).split(" ").includes("bg-primary")) throw Error("Rules refresh not primary");
           if (await page.locator(".rule-library__rows").getByText("v2", { exact: true }).count()) throw Error("Rule version badge still visible");
@@ -423,7 +529,7 @@ async (page) => {
     for (let theme = 0; theme < 2; theme++) {
       await page.locator(".screener-run-summary").screenshot({ path: `/private/tmp/signalgen-summary-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
       if (width >= 900) {
-        const difference = await page.locator(".screener-run-summary").evaluate(el => { const title = el.querySelector("strong").getBoundingClientRect(), button = el.querySelector("button").getBoundingClientRect(); return Math.abs(title.y + title.height / 2 - button.y - button.height / 2); });
+        const difference = await page.locator(".screener-run-summary").evaluate(el => { const title = el.querySelector("strong").getBoundingClientRect(), badge = el.querySelector('[data-slot="badge"]').getBoundingClientRect(); return Math.abs(title.y + title.height / 2 - badge.y - badge.height / 2); });
         if (difference > 2) throw Error(`Misaligned screener title/action: ${difference}px`);
       }
       await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
@@ -494,6 +600,94 @@ async (page) => {
   await page.getByRole("button", { name: "New blank rule", exact: true }).click();
   await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
   const draftInput = page.getByLabel("Rule name", { exact: true });
+  const restoreDraftButton = page.getByRole("button", { name: "Restore draft", exact: true });
+  if (!await restoreDraftButton.isDisabled()) throw Error("Restore enabled without a saved draft");
+  await draftInput.fill("Draft recovery fixture");
+  await page.reload();
+  await page.waitForFunction(() => {
+    const button = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === 'Restore draft');
+    return button && !button.disabled && button.getAttribute('aria-disabled') !== 'true';
+  });
+  if (await page.getByText("Rule draft available", { exact: true }).count()) throw Error("Old draft banner is still rendered");
+  for (const width of [1456, 390]) for (const theme of ["dark", "light"]) {
+    await page.setViewportSize({ width, height: 853 });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    const newBounds = await page.getByRole("button", { name: "New blank rule", exact: true }).boundingBox();
+    const restoreBounds = await restoreDraftButton.boundingBox();
+    if (!newBounds || !restoreBounds || restoreBounds.y < newBounds.y + newBounds.height || Math.abs(restoreBounds.x - newBounds.x) > 1) throw Error("Restore is not aligned below New blank rule");
+    await page.screenshot({ path: `/private/tmp/signalgen-draft-action-${width}-${theme}.png`, animations: "disabled" });
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error("Draft action overflows");
+  }
+  await restoreDraftButton.click();
+  if (await draftInput.inputValue() !== "Draft recovery fixture" || !await restoreDraftButton.isDisabled()) throw Error("Draft restore failed or remained enabled without a pending draft");
+  await draftInput.fill("Bullish EMA cross");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const bearishPreset = page.getByRole("button", { name: "Bearish EMA cross", exact: true });
+  await bearishPreset.click();
+  const presetDialog = page.getByRole("alertdialog", { name: "Replace current criteria?" });
+  await presetDialog.waitFor();
+  await page.waitForFunction(() => document.querySelector('[role="alertdialog"] button') === document.activeElement);
+  if (await draftInput.inputValue() !== "Bullish EMA cross") throw Error("Preset changed before confirmation");
+  if (!await presetDialog.getByRole("button", { name: "Cancel", exact: true }).evaluate(el => el === document.activeElement)) throw Error("Confirmation did not focus safe action");
+  await page.keyboard.press("Escape");
+  await presetDialog.waitFor({ state: "hidden" });
+  await page.waitForFunction(() => document.activeElement?.textContent.includes('Bearish EMA cross'));
+  if (await draftInput.inputValue() !== "Bullish EMA cross") throw Error("Escape replaced current criteria");
+  if (!await bearishPreset.evaluate(el => el === document.activeElement)) throw Error("Confirmation did not restore focus");
+  for (const width of [1440, 1218, 390]) for (const theme of ["dark", "light"]) {
+    await page.setViewportSize({ width, height: 853 });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    await bearishPreset.click();
+    await presetDialog.waitFor();
+    await page.screenshot({ path: `/private/tmp/signalgen-confirm-${width}-${theme}.png`, animations: "disabled" });
+    const bounds = await presetDialog.boundingBox();
+    if (!bounds || bounds.x < 0 || bounds.x + bounds.width > width) throw Error("Confirmation exceeds viewport");
+    await presetDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  }
+  await bearishPreset.click();
+  await presetDialog.getByRole("button", { name: "Replace criteria", exact: true }).click();
+  await presetDialog.waitFor({ state: "hidden" });
+  if (await draftInput.inputValue() !== "Bearish EMA cross" || ruleWrite) throw Error("Preset confirmation failed or saved without permission");
+  await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
+  await presetDialog.getByRole("button", { name: "Replace criteria", exact: true }).click();
+  if (!await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).getByLabel("Selected preset").count()) throw Error("Selected preset has no checkmark");
+  await page.getByText("Draft saved on this device", { exact: true }).waitFor();
+  const library = page.getByRole("region", { name: "Saved rules", exact: true });
+  await page.getByLabel("Search saved rules", { exact: true }).fill("not-a-rule");
+  await library.getByText("No matching rules", { exact: true }).waitFor();
+  await page.getByLabel("Search saved rules", { exact: true }).fill("Rule fixture");
+  const signalFilters = page.getByRole("group", { name: "Filter rules by signal", exact: true });
+  await signalFilters.getByRole("button", { name: "SELL", exact: true }).click();
+  await library.getByText("No matching rules", { exact: true }).waitFor();
+  await signalFilters.getByRole("button", { name: "BUY", exact: true }).click();
+  await library.getByRole("button", { name: "Edit Rule fixture", exact: true }).waitFor();
+  await signalFilters.getByRole("button", { name: "All signals", exact: true }).click();
+  await page.getByLabel("Search saved rules", { exact: true }).fill("");
+  const previewButton = page.getByRole("button", { name: "Preview criteria", exact: true });
+  const preview = page.getByRole("dialog", { name: "Preview criteria", exact: true });
+  for (const width of [1456, 390]) for (const theme of ["dark", "light"]) {
+    await page.setViewportSize({ width, height: 853 });
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    await previewButton.click();
+    await preview.waitFor();
+    if (!(await preview.innerText()).includes("EMA 9 crosses above EMA 20")) throw Error("Preview differs from draft criteria");
+    if (ruleWrite) throw Error("Preview saved the draft");
+    const popupBounds = await preview.boundingBox();
+    if (!popupBounds || Math.abs(popupBounds.x + popupBounds.width / 2 - width / 2) > 2 || popupBounds.x < 0 || popupBounds.y < 0) throw Error("Preview is not centered or exceeds viewport");
+    await page.screenshot({ path: `/private/tmp/signalgen-rule-preview-${width}-${theme}.png`, animations: "disabled" });
+    await page.keyboard.press("Escape");
+    await preview.waitFor({ state: "hidden" });
+    if (!await previewButton.evaluate(el => el === document.activeElement)) throw Error("Preview did not return focus");
+  }
+  await page.getByLabel("Condition reference 1", { exact: true }).click();
+  await page.getByRole("option", { name: "Numeric value", exact: true }).click();
+  await page.getByLabel("Condition value 1", { exact: true }).fill("42");
+  await previewButton.click();
+  if (!(await preview.innerText()).includes("crosses above 42")) throw Error("Numeric reference not reflected in preview");
+  await preview.getByRole("button", { name: "Back to editing", exact: true }).click();
+  await page.getByLabel("Condition reference 1", { exact: true }).click();
+  await page.getByRole("option", { name: "EMA 20", exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await draftInput.fill("Draft stability check");
   const draftNode = await draftInput.elementHandle();
   const initialTimeOrigin = await page.evaluate(() => performance.timeOrigin);
@@ -502,21 +696,30 @@ async (page) => {
   await draftInput.fill("Bullish EMA cross");
   healthOffline = true;
   await page.getByText("Connection interrupted", { exact: true }).waitFor({ timeout: 10000 });
+  if (await page.locator('.workspace-connection').innerText() !== 'Offline') throw Error('Global API status did not reflect the failed probe');
   if (!await draftNode.evaluate(el => el.isConnected)) throw Error("Health interruption replaced the editor DOM");
   await draftInput.fill("Offline draft retained");
   if (!await page.getByRole("button", { name: "Save rule", exact: true }).isDisabled()) throw Error("Offline rule save is enabled");
   healthOffline = false;
   await page.getByText("Connection interrupted", { exact: true }).waitFor({ state: "hidden", timeout: 10000 });
+  if (await page.locator('.workspace-connection').innerText() !== 'Connected') throw Error('Global API status did not recover');
   if (await draftInput.inputValue() !== "Offline draft retained" || !await draftNode.evaluate(el => el.isConnected)) throw Error("Connection recovery resets the draft editor");
   await draftInput.fill("Bullish EMA cross");
   await page.getByRole("button", { name: "Add condition", exact: true }).click();
   await page.getByRole("button", { name: "Add condition", exact: true }).click();
   if (await page.getByLabel("Rule name", { exact: true }).inputValue() !== "Bullish EMA cross") throw Error("Preset did not populate rule name");
-  if (!await page.getByLabel("Rule summary", { exact: true }).innerText().then(text => text.includes("crosses above"))) throw Error("Preset summary missing crossover semantics");
-  await page.getByLabel("Condition value 1", { exact: true }).fill("EMA9");
+  await page.getByRole('button', {name:'Translate', exact:true}).click();
+  const translation = page.getByRole('dialog', {name:'In plain English', exact:true});
+  await translation.waitFor();
+  if (!await translation.getByLabel("Rule summary", { exact: true }).innerText().then(text => text.includes("crosses above"))) throw Error("Preset summary missing crossover semantics");
+  await translation.getByRole('button', {name:'Close', exact:true}).click();
+  await translation.waitFor({state:'hidden'});
+  await page.getByLabel("Condition reference 1", { exact: true }).click();
+  await page.getByRole("option", { name: "EMA 9", exact: true }).click();
   await page.getByRole("button", { name: "Save rule", exact: true }).click();
   if (!await page.getByText("Choose a different reference; an indicator cannot compare with itself.", { exact: true }).count()) throw Error("Self-comparison validation missing");
-  await page.getByLabel("Condition value 1", { exact: true }).fill("EMA20");
+  await page.getByLabel("Condition reference 1", { exact: true }).click();
+  await page.getByRole("option", { name: "EMA 20", exact: true }).click();
   if (ruleWrite) throw Error("Invalid criteria were sent to the API");
   const notifications = await page.getByRole("button", { name: "Dismiss notification", exact: true, includeHidden: true }).elementHandles();
   await Promise.all(notifications.map(close => close.click({ force: true, timeout: 1000 }).catch(() => {})));
@@ -542,6 +745,16 @@ async (page) => {
   await page.getByRole("button", { name: "Save rule", exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#rule-name')?.value === '');
   if (!ruleWrite || ruleWrite.definition.conditions[0].op !== "CROSS_UP" || ruleWrite.definition.signal_type !== "BUY") throw Error("Preset save payload lost crossover or signal action");
+  await page.getByRole("button", { name: "Delete Rule fixture", exact: true }).click();
+  const deleteRuleDialog = page.getByRole("alertdialog", { name: "Delete this rule?" });
+  await deleteRuleDialog.waitFor();
+  if (!(await deleteRuleDialog.innerText()).includes("Rule fixture") || ruleDeletes !== 0) throw Error("Rule deletion lacks protected confirmation");
+  await deleteRuleDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  if (ruleDeletes !== 0) throw Error("Cancel deleted the saved rule");
+  await page.getByRole("button", { name: "Delete Rule fixture", exact: true }).click();
+  await deleteRuleDialog.getByRole("button", { name: "Delete rule", exact: true }).click();
+  await page.waitForResponse(response => response.url().endsWith('/api/v1/rules') && response.request().method() === 'GET');
+  if (ruleDeletes !== 1) throw Error("Rule confirmation did not issue exactly one deletion");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${origin}/#app/universes`);
   const catalog = page.getByRole("table", { name: "Stock catalog", exact: true });
@@ -582,11 +795,12 @@ async (page) => {
       return [...rows.values()].every(row => Math.abs(row[0].left - outer.left) < 1 && Math.abs(row[row.length - 1].right - outer.right) < 1);
     });
     if (!cards) throw Error(`Stock cards do not fill every row: ${width} ${theme}`);
-    if (!await page.locator('.screener-criteria li').evaluateAll(items => items.length === 2 && items.every(el => parseFloat(getComputedStyle(el).borderRadius) >= 12 && parseFloat(getComputedStyle(el).borderTopWidth) >= 1))) throw Error('Rule preview is not presented as rounded cards');
+    if (!await page.locator('.screener-criteria li').evaluateAll(items => items.length === 2 && items.every(el => parseFloat(getComputedStyle(el).borderRadius) >= 10 && parseFloat(getComputedStyle(el).borderTopWidth) >= 1))) throw Error('Rule preview is not presented as rounded cards');
   }
   savedCardFixture = true;
   await page.goto(`${origin}/#app/universes`);
   await page.getByRole('button', { name: 'Edit Banking watchlist', exact:true }).waitFor();
+  if (await page.locator('.universe-library__rows > article').count() !== 2) throw Error('Universe preview must contain only two cards');
   for (const width of [1440, 900, 390]) for (const theme of ['dark', 'light']) {
     await page.setViewportSize({ width, height: 1000 });
     if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole('button', { name: /Switch to .* mode/ }).click();
@@ -594,15 +808,59 @@ async (page) => {
       const css = getComputedStyle(card), r = card.getBoundingClientRect();
       return parseFloat(css.borderRadius) >= 12 && parseFloat(css.paddingLeft) >= 16 && [...card.querySelectorAll('[data-slot="badge"]')].every(badge => {
         const b = badge.getBoundingClientRect(), style = getComputedStyle(badge);
-        return b.left >= r.left + 15 && b.right <= r.right - 15 && b.height >= 40 && parseFloat(style.borderRadius) >= 8 && getComputedStyle(badge, '::before').content === 'none';
+        return b.left >= r.left + 15 && b.right <= r.right - 15 && b.height >= 32 && parseFloat(style.borderRadius) >= 8 && getComputedStyle(badge, '::before').content === 'none';
       });
     }));
     if (!valid) throw Error(`Saved universe cards or ticker cards invalid: ${width} ${theme}`);
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error('Saved card layout overflows');
     await page.locator('.universe-library').screenshot({ path: `/private/tmp/signalgen-saved-universes-${width}-${theme}.png`, animations:'disabled' });
+    await page.getByRole('button', {name:'See all stock universes (3)', exact:true}).click();
+    const directory = page.getByRole('dialog', {name:'Your stock universes', exact:true});
+    await directory.waitFor();
+    if (await directory.locator('.universe-directory > li').count() !== 3) throw Error('All-universes popup omitted a saved universe');
+    const row = directory.locator('.universe-directory > li').last();
+    if (!(await row.innerText()).includes('Third universe') || !(await row.innerText()).includes('BBRI')) throw Error('Universe names or stocks missing');
+    if (width === 1440 && !await row.evaluate(el => el.querySelector('.universe-directory__symbols').getBoundingClientRect().left > el.querySelector('.universe-directory__identity').getBoundingClientRect().right)) throw Error('Universe name and stocks are not side by side');
+    await page.screenshot({path:`/private/tmp/signalgen-universe-directory-${width}-${theme}.png`, animations:'disabled'});
+    await page.keyboard.press('Escape');
+    await directory.waitFor({state:'hidden'});
   }
+  await page.getByRole('button', {name:'See all stock universes (3)', exact:true}).click();
+  await page.getByRole('dialog', {name:'Your stock universes', exact:true}).getByRole('button', {name:'Edit Third universe', exact:true}).click();
+  await page.waitForFunction(() => document.getElementById('universe-name') === document.activeElement).catch(async () => { throw Error(`Universe edit did not restore focus: ${await page.evaluate(() => document.activeElement?.tagName)}`); });
+  if (await page.getByLabel('Universe name', {exact:true}).inputValue() !== 'Third universe') throw Error('Popup did not edit hidden third universe');
   await page.getByRole('button', { name:'Edit Banking watchlist', exact:true }).click();
   if (await page.getByLabel('Universe name', { exact:true }).inputValue() !== 'Banking watchlist') throw Error('Saved universe edit action broken');
+  await page.goto(`${origin}/#app/rules`);
+  const editRule = page.getByRole('button', {name:'Edit Rule fixture', exact:true});
+  if (!(await editRule.innerText()).includes('Edit rules')) throw Error('Edit rules label missing');
+  await editRule.click();
+  const editDialog = page.getByRole('dialog', {name:'Edit rules', exact:true});
+  await editDialog.waitFor();
+  if (await editDialog.getByLabel('Rule name', {exact:true}).inputValue() !== rule.name) throw Error('Editor popup loaded wrong rule');
+  await editDialog.getByLabel('Rule name', {exact:true}).fill('Retained popup draft');
+  for (const width of [1440,390]) {
+    await page.setViewportSize({width,height:1000});
+    const box = await editDialog.boundingBox();
+    if (!box || box.x < 0 || box.x+box.width > width+1) throw Error('Rule editor exceeds viewport');
+    const add = await editDialog.getByRole('button',{name:'Add condition',exact:true}).boundingBox();
+    const section = await editDialog.locator('.rule-condition-section').boundingBox();
+    if (!add || !section || Math.abs(add.width-section.width)>2) throw Error('Add condition is not full width');
+    await page.screenshot({path:`/private/tmp/signalgen-edit-rule-${width}.png`,animations:'disabled'});
+  }
+  await editDialog.getByRole('button',{name:'Translate',exact:true}).click();
+  await page.getByRole('dialog',{name:'In plain English',exact:true}).waitFor();
+  await page.keyboard.press('Escape');
+  await editDialog.waitFor();
+  await editDialog.getByLabel('Condition operator 1',{exact:true}).click();
+  await page.locator('[role="option"] .rule-operator-symbol').first().waitFor();
+  const symbolOptions = await page.locator('[role="option"] .rule-operator-symbol').allTextContents();
+  if (!symbolOptions.some(text=>text.includes('≥')) || !symbolOptions.some(text=>text.includes('↗'))) throw Error('Comparison symbols missing');
+  await page.keyboard.press('Escape');
+  await editDialog.getByRole('button',{name:'Close',exact:true}).click();
+  await page.getByRole('button',{name:'Continue editing',exact:true}).click();
+  if (await editDialog.getByLabel('Rule name',{exact:true}).inputValue() !== 'Retained popup draft') throw Error('Closing popup lost editing draft');
+  await editDialog.getByRole('button',{name:'Close',exact:true}).click();
   await page.goto(`${origin}/#app/analysis`);
   unauthorized = true;
   await page.reload();
@@ -626,6 +884,45 @@ async (page) => {
       }
     }
   }
+  let registrationCalls = 0;
+  let registrationFails = true;
+  await page.route('**/api/auth/register', async route => {
+    registrationCalls++;
+    return registrationFails
+      ? route.fulfill({status:503,json:{error:{code:'SERVICE_UNAVAILABLE',message:'Synthetic registration failure'}}})
+      : route.fulfill({json:{user}});
+  });
+  await page.goto(`${origin}/#register`);
+  await page.getByLabel('Full name', {exact:true}).fill('Synthetic registration');
+  await page.getByLabel('Email', {exact:true}).fill('signup@example.test');
+  await page.getByLabel('Password', {exact:true}).fill('Synthetic-pass-123');
+  await page.getByLabel('Confirm password', {exact:true}).fill('Different-pass-123');
+  await page.getByRole('button', {name:'Create account',exact:true}).click();
+  await page.getByText('The passwords do not match.', {exact:true}).waitFor();
+  if (registrationCalls) throw Error('Mismatched registration was submitted');
+  await page.getByLabel('Confirm password', {exact:true}).fill('Synthetic-pass-123');
+  await page.getByRole('button', {name:'Create account',exact:true}).click();
+  await page.getByText('The service is temporarily unavailable. Try again shortly.', {exact:true}).waitFor();
+  if (await page.getByLabel('Password', {exact:true}).inputValue() !== 'Synthetic-pass-123') throw Error('Failed registration cleared the editable form');
+  registrationFails = false;
+  await page.getByRole('button', {name:'Create account',exact:true}).click();
+  const confirmation = page.getByRole('region', {name:'Registration confirmation',exact:true});
+  await confirmation.waitFor();
+  if (await page.locator('.auth-card input, .auth-card form').count()) throw Error('Registration fields remain after successful account creation');
+  if (await page.getByRole('button', {name:'Create account',exact:true}).count()) throw Error('Registration can be submitted again after success');
+  if (!await confirmation.evaluate(el => el === document.activeElement)) throw Error('Registration confirmation did not receive focus');
+  for (const width of [1440,390]) for (const theme of ['dark','light']) {
+    await page.setViewportSize({width,height:1000});
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole('button',{name:/Switch to .* mode/}).click();
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error('Registration confirmation overflows');
+    await page.locator('.auth-card').screenshot({path:`/private/tmp/signalgen-registration-success-${width}-${theme}.png`,animations:'disabled'});
+  }
+  await page.locator('.auth-registration-success a[href="#login"]').click();
+  await page.getByLabel('Password', {exact:true}).waitFor();
+  if (await page.getByLabel('Password', {exact:true}).inputValue()) throw Error('Registration password leaked into sign in');
+  await page.goto(`${origin}/#register`);
+  await page.getByLabel('Full name', {exact:true}).waitFor();
+  if (await page.getByLabel('Password', {exact:true}).inputValue() || await page.getByLabel('Full name', {exact:true}).inputValue()) throw Error('Registration data survived reopening the form');
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));
 }

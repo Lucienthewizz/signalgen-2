@@ -1,14 +1,17 @@
 package marketdata
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 	_ "time/tzdata" // Exchange timezone/DST rules must also work in the slim Docker image.
 )
 
 type yahooMarketMeta struct {
-	ExchangeTimezoneName string `json:"exchangeTimezoneName"`
-	GMTOffset            *int   `json:"gmtoffset"`
+	DataGranularity      string          `json:"dataGranularity"`
+	TradingPeriods       json.RawMessage `json:"tradingPeriods"`
+	ExchangeTimezoneName string          `json:"exchangeTimezoneName"`
+	GMTOffset            *int            `json:"gmtoffset"`
 	CurrentTradingPeriod struct {
 		Regular struct {
 			Start int64 `json:"start"`

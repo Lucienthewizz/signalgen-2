@@ -101,11 +101,11 @@ export async function runPreflight({ api, web, contract, request = fetch }) {
       await get(web, "/wasm/signalgen_core.manifest.json")
     ).json();
     if (
-      manifest.engine_version !== "core-0.3.0" ||
+      manifest.engine_version !== "core-0.4.0" ||
       manifest.schema_version !== "signal-baseline-1" ||
       manifest.worker_protocol !== "worker-2" ||
       manifest.feature_schema_version !== "screener-features-1" ||
-      manifest.capabilities_version !== "capabilities-2" ||
+      manifest.capabilities_version !== "capabilities-3" ||
       manifest.wasm_file !== "signalgen_core.wasm" ||
       manifest.runtime_file !== "wasm_exec.js"
     )

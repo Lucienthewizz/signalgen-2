@@ -3,9 +3,12 @@ package datasetsapi
 import (
 	"errors"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/api/shared"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/marketdata"
 )
 
 type operation string
@@ -30,7 +33,21 @@ func writeDatasetError(writer http.ResponseWriter, request *http.Request, err er
 		return
 	}
 	if action == operationPrepare {
+		var upstream *marketdata.HTTPError
 		switch {
+		case errors.As(err, &upstream):
+			if upstream.RetryAfter > 0 {
+				writer.Header().Set("Retry-After", strconv.FormatInt(int64((upstream.RetryAfter+time.Second-1)/time.Second), 10))
+			}
+			status := http.StatusServiceUnavailable
+			if upstream.Status == http.StatusTooManyRequests {
+				status = http.StatusTooManyRequests
+			}
+			shared.WriteError(writer, request, status, "PROVIDER_UNAVAILABLE", "Market data provider is temporarily unavailable. The previous result has not been updated.")
+		case errors.Is(err, marketdata.ErrIntervalUnavailable):
+			shared.WriteError(writer, request, http.StatusUnprocessableEntity, "INTERVAL_UNAVAILABLE", "The requested candle interval is unavailable. No daily fallback was used.")
+		case errors.Is(err, marketdata.ErrInsufficientCandles):
+			shared.WriteError(writer, request, http.StatusUnprocessableEntity, "INSUFFICIENT_CANDLES", "Fewer than 20 valid closed candles are available after extending the lookback.")
 		case errors.Is(err, dataset.ErrUnsupportedPurpose):
 			shared.WriteError(writer, request, http.StatusUnprocessableEntity, "UNSUPPORTED_CAPABILITY", "Purpose dataset belum didukung.")
 		case errors.Is(err, dataset.ErrCapacity):

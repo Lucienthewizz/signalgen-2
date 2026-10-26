@@ -1,5 +1,70 @@
 # Signalgen Web
 
+## Dashboard and journal review (21 October 2026)
+
+Dashboard resources use larger landing-style boxes. Recent runs include glass
+interval/time labels and semantic matched counts. Rules place the bracketed
+filtered count beside Your rules, preserving search/filter height and row gutters.
+Shared information dialogs align a larger close action with the title.
+
+Add to journal accepts only a valid matched snapshot from the current account.
+It opens a centered verification dialog **on the journal route**, with frozen
+prices, currency, interval/time, indicators, condition values and crossover history.
+Legacy/private rule definitions remain unavailable rather than being reconstructed.
+Confirmation copies the snapshot price and known signal direction into an
+**unsaved** form. Unknown legacy direction must be selected manually. Toasts
+distinguish verification success from saving a transaction; no journal endpoint,
+local ledger, broker order or account performance is invented.
+
+The journal toolbar toggles Open/Close with a destructive close state. Save/Close
+actions share one aligned footer. Month, instrument and book filters drive the
+same table rows, summary and dated cumulative P&L chart. Chart points expose date,
+closing price and cumulative IDR value on hover/focus; the axis is P&L, not a stock
+quote. **Rows are still explicitly labelled sample records** until the backend
+implements the authoritative journal API. This UI change does not make sample
+performance into account data.
+
+## Workspace refinements (21 October 2026)
+
+Screener keeps rule, universe and candle interval together. Start/Stop and the
+last/next check sit in the aligned bottom control bar; Stop uses the destructive
+surface. Data quality and Export CSV sit after the lower signal-status filters,
+not in the results heading. Data quality and screening failures open centered
+Base UI dialogs with keyboard dismissal and recovery actions. Background retries
+do not repeatedly reopen an acknowledged failure. Data information is a
+full-width disclosure; result data remains timestamped snapshots, not live quotes.
+History follows the results table, with one card per screen, compact metadata
+tiles, adjacent Review/Delete actions and a confirmed Delete all action. Results
+tables use centered cells, subtle column dividers, underlined details and compact
+glass journal actions.
+
+Saved universes show two compact cards, with all groups available in a directory
+dialog (name left, stock symbols right on desktop). The selection card keeps its
+natural content height. Rules signal filters match the search height and use
+neutral/BUY/SELL semantics; workspace navigation is visually uppercase. Edit and
+delete controls share restrained glass surfaces with reduced-transparency support.
+Edit rules opens the composer in a dialog, keeping an unfinished editing draft
+available through Continue editing. Comparison choices include mathematical and
+crossover symbols without changing the saved operators or evaluation logic.
+
+Market Monitor history deletion requires confirmation and hides the entire
+selected run for this browser/account only. Device-only visibility markers are
+also used by the screener history. Market Monitor's Delete all targets the
+screens shown for the selected stock, explicitly including their other stocks.
+Its count and destructive action share the same height. Visibility markers are
+kept outside workspace sync: raw account history is not rewritten, including
+when a later run is saved. Blocked storage reports failure instead of claiming a
+successful deletion. Tests use synthetic account/API boundaries, never cloud
+credential changes or destructive operations against real accounts.
+
+Start–Stop monitoring: choose a rule, universe and interval, then Start. Default
+5m; options 1m/5m/15m/1h/1d. Intraday begins with 3 calendar days and extends
+only when fewer than 20 valid closed candles are available. At most 100 candles
+per stock, 10 stocks. Stop/logout/navigation ends monitoring; reload never
+auto-starts. This is periodic Yahoo historical polling, not a licensed realtime
+feed. `npm run test:monitor` uses synthetic accounts/API/socket with real Go/WASM.
+See [policy, contract, limitations and demo](../../docs/backend/INTRADAY_MONITOR.md).
+
 US stocks: choose the US/Nasdaq/NYSE market in the universe editor, select 1–10
 stocks, then run that universe in the screener. The catalog now imports eligible
 Nasdaq/NYSE stocks from the full official directories: 5,600 at the 19 October
@@ -72,7 +137,7 @@ states, and reduced-motion behavior remain independent of the font selection.
 
 ## Authorization contract
 
-Verified against the Go API `openapi.yaml` version 0.9.0 and private-screener
+Verified against the Go API `openapi.yaml` version 0.11.0 and private-screener
 contract on `feature/hybrid-screener-integration`:
 
 - `POST /api/auth/login`: JSON `{ email, password }`, returns token and public user fields.
@@ -120,7 +185,7 @@ docker build -f backend/Go.Dockerfile --target wasm-artifact \
 
 The generated directory is intentionally ignored by Git. The worker validates
 the runtime and WASM SHA-256 values from `signalgen_core.manifest.json` before
-execution. It requires `core-0.3.0`, `worker-2`, and
+execution. It requires `core-0.4.0`, `worker-2`, and
 `screener-features-1`; the system rule definition remains server-side. A real
 run requires a Supabase user with the `screener` entitlement;
 the guest state directs the user to sign in instead of showing fabricated data.
@@ -233,17 +298,18 @@ Prices and CSV headings use the snapshot's IDR/USD currency without FX conversio
 Run the focused regression against your running Vite instance:
 
 ```sh
-SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5175 npm run test:decisions
+SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5174 npm run test:decisions
 ```
 
 This uses synthetic API/account fixtures and checks BUY/SELL, AND/OR, crossover
 history, reload, details, CSV, legacy missing fields and cooldown at 1440/390px
 in both themes. It does not log into or change a real Supabase account.
 
-If Vite chooses 5175 because 5174 is occupied, the backend's local
-`SIGNALGEN_CORS_ORIGINS` must include that exact browser origin. HTTP proxying
-does not remove the WebSocket Origin check. After changing backend `.env`,
-recreate only `go-api` to reload its environment; do not use a wildcard.
+Vite is pinned to 5174 with `strictPort: true`: it exits if that port is occupied,
+rather than starting a second frontend on 5175. For an intentional port override,
+the backend's `SIGNALGEN_CORS_ORIGINS` must include the exact browser origin.
+HTTP proxying does not remove the WebSocket Origin check. After changing backend
+`.env`, recreate only `go-api` to reload its environment; do not use a wildcard.
 
 Indonesian backend walkthrough: [Match, BUY/SELL and the decision flow](../../docs/backend/SCREENER_DECISIONS.md).
 
@@ -259,9 +325,48 @@ Login, refresh exchange, saves and app-session creation are never replayed for
 transient failures. See [backend limits and safe timing logs](../../docs/backend/SECURITY_HARDENING.md#slow-reads-and-transient-recovery-19-october-2026).
 
 ```sh
-SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5175 npm run test:recovery
+SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5174 npm run test:recovery
 ```
 
 The isolated browser fixture checks automatic recovery, exactly two attempts on
 persistent failure, timeout wording, explicit reload, preserved login and responsive
 overflow at 1440/390px in both themes. It never uses a real account or cloud data.
+
+## Registration confirmation
+
+After a successful registration response, the form is reset and removed; password
+and confirmation state are cleared. When email confirmation is required, the card
+shows inbox guidance and a Continue to sign in link rather than another Create
+account button. A response containing an access token retains the existing app-session
+bootstrap and workspace redirect. Failed registration requests leave the form editable. Switching
+auth views resets the local confirmation state. Browser regression checks use only
+synthetic registration responses; they do not create users or send confirmation email.
+
+## Rules confirmations
+
+Replacing populated criteria with a preset and deleting a saved rule use the
+Signalgen confirmation dialog instead of browser-native prompts. The dialog names
+the preset or rule, focuses Cancel first, supports Escape, and returns focus to the
+initiating control. Cancel leaves the draft and saved data untouched. Replacing
+criteria updates only the editor; saving remains a separate action. The shared
+Base UI AlertDialog supplies modal focus management and accessible title/description;
+its surface uses the existing Signalgen theme tokens in light and dark modes.
+
+Draft recovery is a text action directly below New blank rule, not a page-wide
+alert. Restore draft is disabled when there is no pending saved draft or while
+rules are loading/saving. New blank rule still discards the pending draft;
+restoring retains the existing rule-version validation.
+
+## Rules workflow preview
+
+Selected starting presets show a checkmark. The composer footer distinguishes
+device-only draft storage from saving a rule to the account, including storage
+failure feedback. Indicator references use a dropdown; choosing Numeric value
+reveals a number input. Existing rule validation still applies.
+
+Preview criteria opens a centered, keyboard-accessible dialog showing the current
+draft, signal, logic, conditions and cooldown without saving or running it. This is
+a criteria preview, not market results: the current dataset/compute API requires a
+saved rule ID and definition hash. Save and run the rule in Screener for results.
+Saved rules can be searched by name and filtered by BUY/SELL, with condition counts
+and a separate no-matching-rules state. Filters do not mutate saved rules.

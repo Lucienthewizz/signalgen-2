@@ -14,6 +14,14 @@ export const operatorLabels = {
   CROSS_UP: "crosses above",
   CROSS_DOWN: "crosses below",
 };
+export const operatorSymbols: Record<RuleCondition["op"], string> = {
+  ">": ">",
+  ">=": "≥",
+  "<": "<",
+  "<=": "≤",
+  CROSS_UP: "↗",
+  CROSS_DOWN: "↘",
+};
 export const rulePresets: {
   id: string;
   name: string;

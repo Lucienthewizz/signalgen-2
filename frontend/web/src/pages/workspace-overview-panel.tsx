@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
-  BadgeCheck,
   Boxes,
   Clock3,
+  Crown,
   ListChecks,
   RefreshCw,
   SearchCheck,
   ShieldCheck,
   Activity,
   Newspaper,
+  UserRound,
 } from "lucide-react";
 import { api } from "@/api/client";
 import { monitorRuns, type MonitorRun } from "@/lib/market-monitor";
@@ -101,12 +102,6 @@ export function WorkspaceOverviewPanel({
       active = false;
     };
   }, [authenticated, backendOnline, userId, reload]);
-  const preferences = userId ? readScreenerPreferences(userId) : null;
-  const activeRule =
-    rules.find((rule) => rule.id === preferences?.ruleId) ?? rules[0];
-  const activeUniverse =
-    universes.find((universe) => universe.id === preferences?.universeId) ??
-    universes[0];
   const ready =
     Boolean(account?.features.includes("screener")) &&
     rules.length > 0 &&
@@ -215,25 +210,6 @@ export function WorkspaceOverviewPanel({
                   : "Choose a rule and stock universe, then review the results and evidence."
                 : "You need screener access, a rule, and a stock universe to run an analysis."}
             </p>
-            <dl className="overview-selection">
-              <div>
-                <dt>
-                  <ListChecks aria-hidden="true" />
-                  Rule
-                </dt>
-                <dd>{activeRule?.name ?? "Not selected"}</dd>
-              </div>
-              <div>
-                <dt>
-                  <Boxes aria-hidden="true" />
-                  Stock universe
-                </dt>
-                <dd>{activeUniverse?.name ?? "Not created"}</dd>
-                {activeUniverse && (
-                  <span>{activeUniverse.symbols.length} stocks</span>
-                )}
-              </div>
-            </dl>
             {latest && (
               <div
                 className="overview-last-screen"
@@ -262,6 +238,7 @@ export function WorkspaceOverviewPanel({
           </div>
           <Button
             size="lg"
+            className="workspace-glass-action overview-open-screener"
             onClick={() => (ready ? continueScreen() : go(nextStep))}
           >
             <SearchCheck data-icon="inline-start" />
@@ -294,31 +271,62 @@ export function WorkspaceOverviewPanel({
           </button>
         </nav>
       </div>
-      <section className="overview-counts" aria-label="Workspace overview">
-        <button onClick={() => go("rules")}>
-          <ListChecks aria-hidden="true" />
-          <span>Rules</span>
-          <strong>{rules.length}</strong>
-        </button>
-        <button onClick={() => go("universes")}>
-          <Boxes aria-hidden="true" />
-          <span>Stock universes</span>
-          <strong>{universes.length}</strong>
-        </button>
-        <button onClick={() => go("subscription")}>
-          <BadgeCheck aria-hidden="true" />
-          <span>Plan</span>
-          <strong>{subscription?.plan_name ?? "—"}</strong>
-        </button>
-        <button onClick={() => go("access")}>
-          <ShieldCheck aria-hidden="true" />
-          <span>Account</span>
-          <strong>
-            {account?.user.status === "active"
-              ? "Active"
-              : (account?.user.status ?? "—")}
-          </strong>
-        </button>
+      <section
+        className="overview-resources feature-gallery"
+        aria-label="Workspace overview"
+      >
+        {(
+          [
+            {
+              view: "rules",
+              icon: ListChecks,
+              label: "Rules",
+              value: rules.length,
+              action: "Manage rules",
+            },
+            {
+              view: "universes",
+              icon: Boxes,
+              label: "Stock universes",
+              value: universes.length,
+              action: "Manage universes",
+            },
+            {
+              view: "subscription",
+              icon: Crown,
+              label: "Plan",
+              value: subscription?.plan_name ?? "—",
+              action: "View plan",
+            },
+            {
+              view: "access",
+              icon: UserRound,
+              label: "Account",
+              value:
+                account?.user.status === "active"
+                  ? "Active"
+                  : (account?.user.status ?? "—"),
+              action: "View account",
+            },
+          ] as const
+        ).map(({ icon: Icon, ...resource }) => (
+          <a
+            className="feature-gallery__item"
+            href={`#app/${resource.view}`}
+            key={resource.view}
+          >
+            <div className="feature-gallery__figure overview-resources__icon">
+              <Icon aria-hidden="true" strokeWidth={1.25} />
+            </div>
+            <div className="feature-gallery__copy">
+              <strong>{resource.label}</strong>
+              <p className="overview-resources__value">{resource.value}</p>
+              <span>
+                {resource.action} <ArrowUpRight aria-hidden="true" />
+              </span>
+            </div>
+          </a>
+        ))}
       </section>
       <section
         className="overview-activity"
@@ -348,22 +356,43 @@ export function WorkspaceOverviewPanel({
                         .join(", ")}
                   </p>
                 </div>
-                <time dateTime={item.recordedAt}>
-                  {new Date(item.recordedAt).toLocaleString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </time>
-                <Badge variant="secondary">
-                  {item.run.rows.filter((row) => row.decision.matched).length} /{" "}
-                  {item.run.rows.length} matched
-                </Badge>
-                <Button variant="outline" onClick={() => continueScreen(item)}>
-                  Use selection
-                  <ArrowUpRight data-icon="inline-end" />
-                </Button>
+                <div className="overview-run-meta">
+                  <Badge variant="secondary" className="overview-run-chip">
+                    {item.run.manifest.timeframe} candles
+                  </Badge>
+                  <Badge
+                    variant="secondary"
+                    className="overview-run-chip"
+                    render={<time dateTime={item.recordedAt} />}
+                  >
+                    {new Date(item.recordedAt).toLocaleString("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </Badge>
+                  <Badge
+                    variant={
+                      item.run.rows.some((row) => row.decision.matched)
+                        ? "success"
+                        : "destructive"
+                    }
+                    className="overview-run-chip overview-match-count"
+                  >
+                    {item.run.rows.filter((row) => row.decision.matched).length}{" "}
+                    / {item.run.rows.length} matched
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="overview-run-chip"
+                    onClick={() => continueScreen(item)}
+                  >
+                    Use selection
+                    <ArrowUpRight data-icon="inline-end" />
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>

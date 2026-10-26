@@ -1,5 +1,10 @@
 # Postman test — SignalGen Go API
 
+Kontrak intraday: OpenAPI 0.11.0. Tambahkan field opsional `timeframe` pada
+Prepare dataset: `1m`, `5m`, `15m`, `1h`, `1d`; tidak dikirim berarti harian.
+Contoh `"timeframe":"5m"`. Range ditentukan server. Start–Stop berjalan di
+browser; Postman menguji satu siklus. [Panduan](../../docs/backend/INTRADAY_MONITOR.md).
+
 Koleksi ini mengikuti endpoint yang benar-benar tersedia di `backend/openapi.yaml`.
 Nilai rahasia sengaja dikosongkan agar password dan token tidak masuk Git.
 
@@ -138,7 +143,7 @@ Kirim satu frame:
   "type": "screener.evaluate",
   "protocol": "screener-private-1",
   "request_id": "postman-demo-1",
-  "engine_version": "core-0.3.0",
+  "engine_version": "core-0.4.0",
   "feature_schema_version": "screener-features-1",
   "candidates": [
     {

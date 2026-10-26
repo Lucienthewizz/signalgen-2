@@ -1,5 +1,55 @@
 # Backend progress
 
+## Perbaikan readiness dan pengujian demo — 20 Oktober 2026
+
+Branch `frontend/intraday-monitor`: pemeriksaan cloud dingin sebelumnya diputus
+oleh batas handler/probe 2s dan Docker 3s. Sekarang memakai budget berurutan
+8s / 9s / 10s; request API tetap dibatasi 10s. Pemeriksaan schema, RLS, role,
+grants/policies dan dataset tetap aktif, bukan diganti liveness atau bypass.
+Tidak ada migration/SQL write, perubahan kredensial, role atau entitlement.
+
+Tes regresi mencakup dependensi sehat yang memerlukan >2s, penolakan 503 untuk
+dependensi gagal, deadline parent 504, probe gagal koneksi, dan konsistensi
+budget Docker. Seluruh Go race suite tanpa cache dan `go vet` lolos. Tes cloud
+read-only dari pool dingin memverifikasi schema/RLS/izin runtime dalam 2,657s.
+Backend hasil rebuild healthy, delapan preflight termasuk readiness lolos.
+
+Pengujian akun asli melalui `http://localhost:5174`: rule RSI14 <30 berjalan
+pada 3 saham IDX (300 candle 5m), 10 saham IDX (1.000 candle 5m), dan 10 saham
+AS (880 candle 5m). WebSocket upgrade 101, hasil dikirim (`result_written`).
+Hasil No match sesuai nilai RSI yang ditampilkan, bukan error. Stop mengosongkan
+jadwal berikutnya dan mempertahankan hasil. Pada 10 saham AS interval 1m,
+siklus kedua berjalan otomatis tanpa Start ulang: pemeriksaan 22:26:00 menjadi
+22:27:10 WITA; candle terakhir bergeser dari 14:24 ke 14:25 UTC. Jadwal dihitung
+setelah siklus selesai, bukan jaminan polling tepat pada detik yang sama.
+Rule sistem juga diuji pada 10 saham AS 5m: pemeriksaan 22:28:35 WITA memakai
+890 candle, menghasilkan BUY untuk AMZN/TSLA dan No match untuk delapan lainnya.
+Ini keputusan rule pada snapshot tersebut, bukan transaksi broker atau jaminan
+hasil investasi. Monitoring dihentikan setelah pengujian.
+Tidak mengubah definisi rule atau universe tersimpan; grant/history dari
+pengujian mengikuti alur screening normal.
+Ini bukti demo lokal pada waktu pengujian, bukan jaminan layanan cloud/Yahoo
+selalu tersedia atau uji seluruh ticker/interval/kapasitas produksi.
+
+## Monitoring Start–Stop dan intraday — 20 Oktober 2026
+
+Branch `frontend/intraday-monitor`: Start–Stop selama halaman terbuka, default
+5m, pilihan 1m/5m/15m/1h/1d. Range intraday 3 hari kalender diperluas hanya bila
+candle valid <20, maksimum 100 candle/saham dan 10 saham. Endpoint prepare
+menerima timeframe opsional, default tetap harian bagi klien lama. Snapshot
+intraday 5 menit, reuse owner-scoped dan cache terpisah per interval. Tidak ada
+endpoint background Start/Stop, IBKR, Redis atau migration database.
+
+Verifikasi lokal: 160 tes frontend + build; seluruh Go race suite dan `go vet`;
+actual WASM parity 3 series; OpenAPI validation; browser workspace/catalog/
+BUY-SELL/recovery dan monitor di 1440/390px serta kedua tema; 8 preflight layanan.
+Smoke Yahoo 5m terpisah pada 20 Oktober: BBCA.JK 100 candle selesai, AAPL 78;
+bukan bukti semua ticker/interval tersedia atau feed realtime berlisensi. Akun
+asli end-to-end dan Postgres/RLS opt-in tidak diulang pada slice ini.
+
+Kontrak OpenAPI 0.11.0, core-0.4.0, capabilities-3. API/WASM dibangun ulang
+berpasangan, frontend tetap 5174. [Panduan dan batas](INTRADAY_MONITOR.md).
+
 ## Perbaikan regresi screening — 20 Oktober 2026
 
 - JSON feature wajib lengkap/non-null; RSI 0 sah dibedakan dari RSI yang hilang.

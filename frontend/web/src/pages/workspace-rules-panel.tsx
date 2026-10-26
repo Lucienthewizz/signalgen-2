@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpenCheck,
+  Check,
   CircleAlert,
   CopyPlus,
   ListChecks,
@@ -9,15 +10,19 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Eye,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
+import { Dialog } from "@base-ui/react/dialog";
 import { api, ApiError } from "@/api/client";
 import { ResourceQuota } from "@/components/resource-quota";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useActionNotifications } from "@/components/ui/toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { InfoDialog } from "@/components/ui/info-dialog";
 import {
   Empty,
   EmptyDescription,
@@ -35,7 +40,9 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   indicatorLabels,
+  conditionSummary,
   operatorLabels,
+  operatorSymbols,
   rulePresets,
   ruleSummary,
   validateRule,
@@ -113,6 +120,20 @@ export function ServerRulesPanel({
   const [notice, setNotice] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [translationOpen, setTranslationOpen] = useState(false);
+  const translationTrigger = useRef<HTMLButtonElement | null>(null);
+  const editorTrigger = useRef<HTMLElement | null>(null);
+  const previewTrigger = useRef<HTMLButtonElement>(null);
+  const [ruleSearch, setRuleSearch] = useState("");
+  const [signalFilter, setSignalFilter] = useState<string[]>(["all"]);
+  const [confirmation, setConfirmation] = useState<
+    | { kind: "preset"; preset: (typeof rulePresets)[number] }
+    | { kind: "delete"; rule: RuleResource }
+    | null
+  >(null);
+  const confirmationTrigger = useRef<HTMLElement | null>(null);
   const validation = validateRule(definition);
   useActionNotifications(notice, error);
   const [draftOwner, setDraftOwner] = useState<string | undefined>();
@@ -132,6 +153,12 @@ export function ServerRulesPanel({
     setLoading(false);
     setError(null);
     setNotice(null);
+    setConfirmation(null);
+    setPreviewOpen(false);
+    setEditorOpen(false);
+    setTranslationOpen(false);
+    setRuleSearch("");
+    setSignalFilter(["all"]);
     setDraftStorageFailed(false);
   }, [authenticated, userId]);
 
@@ -161,6 +188,7 @@ export function ServerRulesPanel({
         return;
       }
       setEditing(rule);
+      setEditorOpen(true);
     } else setEditing(null);
     setDefinition(pendingDraft.definition);
     setPendingDraft(null);
@@ -188,16 +216,26 @@ export function ServerRulesPanel({
     void load();
   }, [authenticated, backendOnline, userId]);
 
-  const privateRules = useMemo(
-    () => rules.filter((rule) => rule.owner_type === "user"),
-    [rules],
+  const filteredRules = useMemo(
+    () =>
+      rules.filter(
+        (rule) =>
+          rule.name.toLowerCase().includes(ruleSearch.trim().toLowerCase()) &&
+          (signalFilter[0] === "all" ||
+            rule.definition?.signal_type === signalFilter[0]),
+      ),
+    [rules, ruleSearch, signalFilter],
+  );
+  const privateRules = filteredRules.filter(
+    (rule) => rule.owner_type === "user",
   );
   const systemRules = useMemo(
-    () => rules.filter((rule) => rule.owner_type === "system"),
-    [rules],
+    () => filteredRules.filter((rule) => rule.owner_type === "system"),
+    [filteredRules],
   );
 
   function startNew() {
+    setEditorOpen(false);
     setPresetId([]);
     setSubmitted(false);
     if (userId) saveRuleDraft(userId, null);
@@ -222,7 +260,7 @@ export function ServerRulesPanel({
     });
     setError(null);
     setNotice(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setEditorOpen(true);
   }
 
   function setCondition(index: number, patch: Partial<RuleCondition>) {
@@ -277,7 +315,6 @@ export function ServerRulesPanel({
   }
 
   async function remove(rule: RuleResource) {
-    if (!window.confirm(`Delete rule “${rule.name}”?`)) return;
     setError(null);
     setNotice(null);
     const owner = userId;
@@ -291,6 +328,20 @@ export function ServerRulesPanel({
       if (activeUser.current !== owner) return;
       setError(readableError(caught));
     }
+  }
+
+  function applyPreset(preset: (typeof rulePresets)[number]) {
+    if (!editorOpen) setEditing(null);
+    setPresetId([preset.id]);
+    setSubmitted(false);
+    setError(null);
+    setNotice(null);
+    setDefinition({
+      ...preset.definition,
+      conditions: preset.definition.conditions.map((condition) => ({
+        ...condition,
+      })),
+    });
   }
 
   // A failed health probe must not replace a live editor and drop its focus.
@@ -313,8 +364,101 @@ export function ServerRulesPanel({
     );
   }
 
-  return (
-    <div className="rules-workspace">
+  const editor = (
+    <>
+      <InfoDialog
+        open={translationOpen}
+        onOpenChange={setTranslationOpen}
+        title="In plain English"
+        description="Your current criteria explained in readable language. This does not run or save a rule."
+        returnFocus={translationTrigger}
+      >
+        <section className="rule-explanation" aria-label="Rule summary">
+          <p>{ruleSummary(definition)}</p>
+          <small>
+            Crossovers compare two consecutive daily candles. Cooldown can
+            suppress a repeated signal even when criteria match.
+          </small>
+        </section>
+      </InfoDialog>
+      <Dialog.Root open={previewOpen} onOpenChange={setPreviewOpen}>
+        <Dialog.Portal>
+          <Dialog.Backdrop className="signalgen-confirm__backdrop" />
+          <Dialog.Viewport className="signalgen-confirm__viewport">
+            <Dialog.Popup
+              className="signalgen-confirm rule-preview"
+              finalFocus={previewTrigger}
+            >
+              <Dialog.Title className="signalgen-confirm__title">
+                Preview criteria
+              </Dialog.Title>
+              <Dialog.Description className="signalgen-confirm__description">
+                Review your current draft. This preview does not run a screen or
+                save changes.
+              </Dialog.Description>
+              <h4>{definition.name.trim() || "Untitled rule"}</h4>
+              <div className="rule-preview__meta">
+                <Badge>{definition.signal_type}</Badge>
+                <span>
+                  {definition.logic === "OR"
+                    ? "Match any condition"
+                    : "Match all conditions"}
+                </span>
+                <span>Daily · {definition.cooldown_sec}s cooldown</span>
+              </div>
+              <ol className="rule-preview__conditions">
+                {definition.conditions.map((condition, index) => (
+                  <li key={index}>{conditionSummary(condition)}</li>
+                ))}
+              </ol>
+              {!definition.conditions.length && (
+                <p>Add a condition to preview your criteria.</p>
+              )}
+              {!validation.valid && (
+                <p className="rule-preview__note">
+                  Some fields need attention. Check the rule name, cooldown and
+                  conditions before saving.
+                </p>
+              )}
+              <p className="rule-preview__note">
+                Market results require a saved rule. Save your rule, then choose
+                it in Screener to test against a stock universe.
+              </p>
+              <div className="signalgen-confirm__actions">
+                <Dialog.Close render={<Button variant="outline" />}>
+                  Back to editing
+                </Dialog.Close>
+              </div>
+            </Dialog.Popup>
+          </Dialog.Viewport>
+        </Dialog.Portal>
+      </Dialog.Root>
+      <ConfirmDialog
+        open={confirmation !== null}
+        title={
+          confirmation?.kind === "delete"
+            ? "Delete this rule?"
+            : "Replace current criteria?"
+        }
+        description={
+          confirmation?.kind === "delete"
+            ? `“${confirmation.rule.name}” will be deleted from your account. This cannot be undone.`
+            : `Use “${confirmation?.preset.name ?? "this preset"}” instead of your current criteria. Unsaved edits will be replaced; saved rules stay unchanged until you save.`
+        }
+        confirmLabel={
+          confirmation?.kind === "delete" ? "Delete rule" : "Replace criteria"
+        }
+        destructive={confirmation?.kind === "delete"}
+        returnFocus={confirmationTrigger}
+        onCancel={() => setConfirmation(null)}
+        onConfirm={() => {
+          if (!confirmation) return;
+          const choice = confirmation;
+          setConfirmation(null);
+          if (choice.kind === "preset") applyPreset(choice.preset);
+          else void remove(choice.rule);
+        }}
+      />
       {!backendOnline && (
         <Alert>
           <CircleAlert />
@@ -341,30 +485,19 @@ export function ServerRulesPanel({
               </p>
             </div>
           </div>
-          <Button variant="outline" onClick={startNew} disabled={saving}>
-            <CopyPlus data-icon="inline-start" /> New blank rule
-          </Button>
+          <div className="rule-composer__draft-actions">
+            <Button variant="outline" onClick={startNew} disabled={saving}>
+              <CopyPlus data-icon="inline-start" /> New blank rule
+            </Button>
+            <Button
+              variant="link"
+              onClick={restoreDraft}
+              disabled={!pendingDraft || loading || saving}
+            >
+              Restore draft
+            </Button>
+          </div>
         </header>
-
-        {pendingDraft && (
-          <Alert>
-            <Save />
-            <AlertTitle>Rule draft available</AlertTitle>
-            <AlertDescription>
-              <p>Restore your draft to continue, or start a blank rule.</p>
-              <Button
-                variant="outline"
-                onClick={restoreDraft}
-                disabled={loading}
-              >
-                Restore draft
-              </Button>
-              <Button variant="ghost" onClick={startNew}>
-                Discard draft
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
         {draftStorageFailed && (
           <Alert>
             <CircleAlert />
@@ -408,24 +541,11 @@ export function ServerRulesPanel({
                     (item) => item.id === values[0],
                   );
                   if (!preset) return;
-                  if (
-                    (editing || definition.conditions.length > 0) &&
-                    !window.confirm(
-                      "Replace the current criteria with this preset? Your saved rule will not change until you save.",
-                    )
-                  )
-                    return;
-                  setEditing(null);
-                  setPresetId([preset.id]);
-                  setSubmitted(false);
-                  setError(null);
-                  setNotice(null);
-                  setDefinition({
-                    ...preset.definition,
-                    conditions: preset.definition.conditions.map(
-                      (condition) => ({ ...condition }),
-                    ),
-                  });
+                  if (editing || definition.conditions.length > 0) {
+                    confirmationTrigger.current =
+                      document.activeElement as HTMLElement;
+                    setConfirmation({ kind: "preset", preset });
+                  } else applyPreset(preset);
                 }}
               >
                 {rulePresets.map((preset) => (
@@ -435,7 +555,15 @@ export function ServerRulesPanel({
                     aria-label={preset.name}
                     aria-describedby={`preset-meta-${preset.id}`}
                   >
-                    <strong>{preset.name}</strong>
+                    <strong>
+                      {preset.name}
+                      {presetId[0] === preset.id && (
+                        <Check
+                          aria-label="Selected preset"
+                          className="rule-presets__check"
+                        />
+                      )}
+                    </strong>
                     <small id={`preset-meta-${preset.id}`}>
                       {preset.definition.signal_type} ·{" "}
                       {preset.definition.conditions.length}{" "}
@@ -673,7 +801,10 @@ export function ServerRulesPanel({
                           <Select
                             value={condition.op}
                             items={Object.entries(operatorLabels).map(
-                              ([value, label]) => ({ value, label }),
+                              ([value, label]) => ({
+                                value,
+                                label: `${operatorSymbols[value as RuleCondition["op"]]} ${label}`,
+                              }),
                             )}
                             onValueChange={(value) =>
                               setCondition(index, {
@@ -700,6 +831,12 @@ export function ServerRulesPanel({
                                   ] as const
                                 ).map((value) => (
                                   <SelectItem key={value} value={value}>
+                                    <span
+                                      className="rule-operator-symbol"
+                                      aria-hidden="true"
+                                    >
+                                      {operatorSymbols[value]}
+                                    </span>
                                     {operatorLabels[value]}
                                   </SelectItem>
                                 ))}
@@ -707,30 +844,82 @@ export function ServerRulesPanel({
                             </SelectContent>
                           </Select>
                         </Field>
-                        <Field data-invalid={!!validation.conditions[index]}>
+                        <Field
+                          className="rule-reference-field"
+                          data-numeric={
+                            typeof condition.right === "number" ||
+                            condition.right === "" ||
+                            undefined
+                          }
+                          data-invalid={!!validation.conditions[index]}
+                        >
                           <FieldLabel
                             className="rule-condition-field-label"
                             htmlFor={`condition-reference-${index}`}
                           >
                             Reference
                           </FieldLabel>
-                          <Input
-                            id={`condition-reference-${index}`}
-                            aria-label={`Condition value ${index + 1}`}
-                            value={String(condition.right)}
-                            onChange={(event) =>
+                          <Select
+                            value={
+                              typeof condition.right === "number" ||
+                              condition.right === ""
+                                ? "number"
+                                : condition.right
+                            }
+                            items={[
+                              ...Object.entries(indicatorLabels).map(
+                                ([value, label]) => ({ value, label }),
+                              ),
+                              { value: "number", label: "Numeric value" },
+                            ]}
+                            onValueChange={(value) =>
                               setCondition(index, {
-                                right: rightValue(event.target.value),
+                                right: value === "number" ? 55 : String(value),
                               })
                             }
-                            placeholder="EMA20 or 55"
-                            aria-invalid={!!validation.conditions[index]}
-                            aria-describedby={
-                              validation.conditions[index]
-                                ? `condition-error-${index}`
-                                : undefined
-                            }
-                          />
+                          >
+                            <SelectTrigger
+                              id={`condition-reference-${index}`}
+                              aria-label={`Condition reference ${index + 1}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                {Object.entries(indicatorLabels).map(
+                                  ([value, label]) => (
+                                    <SelectItem key={value} value={value}>
+                                      {label}
+                                    </SelectItem>
+                                  ),
+                                )}
+                                <SelectItem value="number">
+                                  Numeric value
+                                </SelectItem>
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                          {(typeof condition.right === "number" ||
+                            condition.right === "") && (
+                            <Input
+                              type="number"
+                              step="any"
+                              aria-label={`Condition value ${index + 1}`}
+                              value={String(condition.right)}
+                              onChange={(event) =>
+                                setCondition(index, {
+                                  right: rightValue(event.target.value),
+                                })
+                              }
+                              placeholder="Enter a value"
+                              aria-invalid={!!validation.conditions[index]}
+                              aria-describedby={
+                                validation.conditions[index]
+                                  ? `condition-error-${index}`
+                                  : undefined
+                              }
+                            />
+                          )}
                         </Field>
                         <Button
                           type="button"
@@ -779,17 +968,6 @@ export function ServerRulesPanel({
               )}
             </div>
 
-            {definition.conditions.length > 0 && (
-              <section className="rule-explanation" aria-label="Rule summary">
-                <h4>In plain English</h4>
-                <p>{ruleSummary(definition)}</p>
-                <small>
-                  Crossovers compare two consecutive daily candles. Cooldown can
-                  suppress a repeated signal even when criteria match.
-                </small>
-              </section>
-            )}
-
             {error && (
               <Alert variant="destructive">
                 <CircleAlert />
@@ -798,32 +976,97 @@ export function ServerRulesPanel({
               </Alert>
             )}
             <footer className="rule-composer__footer">
-              <span>
-                {definition.conditions.length} / 20 conditions · Daily · IDX or
-                US
-              </span>
-              <Button
-                type="submit"
-                size="lg"
-                disabled={saving || !backendOnline}
-              >
-                {saving ? (
-                  <LoaderCircle
-                    data-icon="inline-start"
-                    className="is-spinning"
-                  />
-                ) : editing ? (
-                  <Pencil data-icon="inline-start" />
-                ) : (
-                  <Save data-icon="inline-start" />
-                )}
-                {editing ? "Update rule" : "Save rule"}
-              </Button>
+              <div className="rule-composer__save-status">
+                <span role="status">
+                  {draftStorageFailed
+                    ? "Draft not saved on this device"
+                    : definition.name || definition.conditions.length
+                      ? "Draft saved on this device"
+                      : "No unsaved draft"}
+                </span>
+                <small>
+                  {definition.conditions.length} / 20 conditions · Daily · IDX
+                  or US · Save to add this rule to your account
+                </small>
+              </div>
+              <div className="rule-composer__save-actions">
+                <Button
+                  ref={translationTrigger}
+                  type="button"
+                  variant="outline"
+                  onClick={() => setTranslationOpen(true)}
+                  disabled={!definition.conditions.length}
+                >
+                  Translate
+                </Button>
+                <Button
+                  ref={previewTrigger}
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPreviewOpen(true)}
+                >
+                  <Eye data-icon="inline-start" /> Preview criteria
+                </Button>
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={saving || !backendOnline}
+                >
+                  {saving ? (
+                    <LoaderCircle
+                      data-icon="inline-start"
+                      className="is-spinning"
+                    />
+                  ) : editing ? (
+                    <Pencil data-icon="inline-start" />
+                  ) : (
+                    <Save data-icon="inline-start" />
+                  )}
+                  {editing ? "Update rule" : "Save rule"}
+                </Button>
+              </div>
             </footer>
           </fieldset>
         </form>
       </section>
-
+    </>
+  );
+  return (
+    <div className="rules-workspace">
+      {editing ? (
+        <>
+          {!editorOpen && (
+            <section className="rule-editor-resume">
+              <div>
+                <strong>{definition.name || editing.name}</strong>
+                <p>
+                  Your editing draft is kept until you save or start a new rule.
+                </p>
+              </div>
+              <Button variant="outline" onClick={() => setEditorOpen(true)}>
+                Continue editing
+              </Button>
+              <Button variant="ghost" onClick={startNew}>
+                New blank rule
+              </Button>
+            </section>
+          )}
+          <InfoDialog
+            open={editorOpen}
+            onOpenChange={(open) => {
+              if (!saving) setEditorOpen(open);
+            }}
+            title="Edit rules"
+            description="Update your criteria, then save the changes to your account."
+            returnFocus={editorTrigger}
+            wide
+          >
+            {editor}
+          </InfoDialog>
+        </>
+      ) : (
+        editor
+      )}
       <section className="rule-library" aria-labelledby="rule-library-title">
         <header className="resource-library__header">
           <div>
@@ -847,6 +1090,43 @@ export function ServerRulesPanel({
             </Button>
           </div>
         </header>
+        <div className="rule-library__filters">
+          <Field>
+            <FieldLabel htmlFor="saved-rule-search">
+              Search saved rules
+            </FieldLabel>
+            <Input
+              id="saved-rule-search"
+              value={ruleSearch}
+              onChange={(event) => setRuleSearch(event.target.value)}
+              placeholder="Search by rule name"
+            />
+          </Field>
+          <ToggleGroup
+            aria-label="Filter rules by signal"
+            value={signalFilter}
+            onValueChange={(values) =>
+              setSignalFilter(values.length ? values : ["all"])
+            }
+            variant="outline"
+          >
+            <ToggleGroupItem value="all" data-signal="all">
+              All signals
+            </ToggleGroupItem>
+            <ToggleGroupItem value="BUY" data-signal="buy">
+              BUY
+            </ToggleGroupItem>
+            <ToggleGroupItem value="SELL" data-signal="sell">
+              SELL
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+        <div className="rule-library__list-heading">
+          <span>Your rules</span>
+          <Badge variant="outline" role="status">
+            [ {filteredRules.length} of {rules.length} rules ]
+          </Badge>
+        </div>
         {loading && !rules.length ? (
           <div className="resource-loading">
             <Skeleton />
@@ -859,9 +1139,13 @@ export function ServerRulesPanel({
               <EmptyMedia variant="icon">
                 <ListChecks />
               </EmptyMedia>
-              <EmptyTitle>No saved rules yet</EmptyTitle>
+              <EmptyTitle>
+                {rules.length ? "No matching rules" : "No saved rules yet"}
+              </EmptyTitle>
               <EmptyDescription>
-                Create a blank rule above and add your conditions.
+                {rules.length
+                  ? "Try another name or signal filter."
+                  : "Create a blank rule above and add your conditions."}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -869,30 +1153,42 @@ export function ServerRulesPanel({
           <div className="rule-library__groups">
             {privateRules.length > 0 && (
               <div>
-                <span className="rule-library__eyebrow">Your rules</span>
                 <div className="rule-library__rows">
                   {privateRules.map((rule) => (
                     <article key={rule.id}>
                       <div>
                         <strong>{rule.name}</strong>
+                        <small className="rule-library__condition-count">
+                          {rule.definition?.conditions.length ?? 0} conditions ·{" "}
+                          {rule.definition?.signal_type || "No direction"}
+                        </small>
                         <p>{summary(rule.definition)}</p>
                       </div>
                       <div>
                         <Button
                           variant="ghost"
-                          size="icon"
-                          onClick={() => edit(rule)}
+                          size="sm"
+                          onClick={(event) => {
+                            editorTrigger.current = event.currentTarget;
+                            edit(rule);
+                          }}
                           disabled={saving}
                           aria-label={`Edit ${rule.name}`}
+                          className="workspace-glass-action"
                         >
-                          <Pencil />
+                          <Pencil data-icon="inline-start" /> Edit rules
                         </Button>
                         <Button
                           variant="destructive"
                           size="icon"
-                          onClick={() => void remove(rule)}
+                          onClick={(event) => {
+                            confirmationTrigger.current = event.currentTarget;
+                            setConfirmation({ kind: "delete", rule });
+                          }}
                           disabled={saving || !backendOnline}
                           aria-label={`Delete ${rule.name}`}
+                          className="workspace-glass-action"
+                          data-destructive="true"
                         >
                           <Trash2 />
                         </Button>
@@ -912,6 +1208,10 @@ export function ServerRulesPanel({
                     <article key={rule.id}>
                       <div>
                         <strong>{rule.name}</strong>
+                        <small className="rule-library__condition-count">
+                          {rule.definition?.conditions.length ?? 0} conditions ·{" "}
+                          {rule.definition?.signal_type || "No direction"}
+                        </small>
                         <p>{summary(rule.definition)}</p>
                       </div>
                       <Badge variant="secondary">System</Badge>

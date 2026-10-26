@@ -36,7 +36,8 @@ COPY backend/core/testdata/default_scalping_v1.json /usr/share/signalgen/fixture
 
 USER signalgen
 EXPOSE 8080
-HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=5 CMD ["signalgen-healthcheck"]
+# Handler 8s < probe client 9s < Docker 10s; keep the cold-cloud checks bounded.
+HEALTHCHECK --interval=10s --timeout=10s --start-period=5s --retries=5 CMD ["signalgen-healthcheck"]
 CMD ["signalgen-api"]
 
 

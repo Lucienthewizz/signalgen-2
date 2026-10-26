@@ -258,7 +258,7 @@
           "event": [{"listen": "test", "script": {"exec": [
             "pm.test('status 200', () => pm.response.to.have.status(200));",
             "const body = pm.response.json();",
-            "pm.test('hybrid core is advertised', () => { pm.expect(body.engine_version).to.eql('core-0.3.0'); pm.expect(body.feature_schema_version).to.eql('screener-features-1'); pm.expect(body.private_protocol).to.eql('screener-private-1'); pm.expect(body.purposes).to.include('screen'); });",
+            "pm.test('hybrid core is advertised', () => { pm.expect(body.engine_version).to.eql('core-0.4.0'); pm.expect(body.feature_schema_version).to.eql('screener-features-1'); pm.expect(body.private_protocol).to.eql('screener-private-1'); pm.expect(body.purposes).to.include('screen'); });",
             "pm.environment.set('engine_version', body.engine_version);",
             "pm.environment.set('schema_version', body.schema_version);",
             "pm.environment.set('feature_schema_version', body.feature_schema_version);",
@@ -588,7 +588,7 @@
           "event": [{"listen": "test", "script": {"exec": [
             "pm.test('status 201', () => pm.response.to.have.status(201));",
             "const body = pm.response.json();",
-            "pm.test('universe has at most three symbols', () => pm.expect(body.symbols.length).to.be.within(1, 3));",
+            "pm.test('universe has at most ten symbols', () => pm.expect(body.symbols.length).to.be.within(1, 10));",
             "pm.environment.set('universe_id', body.id);",
             "pm.environment.set('universe_version', String(body.version));"
           ], "type": "text/javascript"}}]
@@ -608,7 +608,7 @@
           "event": [{"listen": "test", "script": {"exec": [
             "pm.test('status 200', () => pm.response.to.have.status(200));",
             "const body = pm.response.json();",
-            "pm.test('Yahoo Finance provider is explicit', () => { pm.expect(body.provider).to.eql('yahoo_finance'); pm.expect(body.symbols.length).to.be.within(1, 3); });",
+            "pm.test('Yahoo Finance provider is explicit', () => { pm.expect(body.provider).to.eql('yahoo_finance'); pm.expect(body.symbols.length).to.be.within(1, 10); });",
             "pm.environment.set('dataset_id', body.dataset_id);",
             "pm.environment.set('dataset_version', body.version);",
             "pm.environment.set('dataset_checksum', body.checksum);"
@@ -643,7 +643,7 @@
           "event": [{"listen": "test", "script": {"exec": [
             "pm.test('status 200', () => pm.response.to.have.status(200));",
             "const body = pm.response.json();",
-            "pm.test('multi-symbol OHLCV is complete', () => { pm.expect(body.schema_version).to.eql('ohlcv-multi-1'); pm.expect(body.series.length).to.be.within(1, 3); body.series.forEach(series => { pm.expect(series.timezone).to.eql('UTC'); pm.expect(series.candles.length).to.be.within(20, 100); }); });",
+            "pm.test('multi-symbol OHLCV is complete', () => { pm.expect(body.schema_version).to.eql('ohlcv-multi-1'); pm.expect(body.series.length).to.be.within(1, 10); body.series.forEach(series => { pm.expect(series.timezone).to.eql('UTC'); pm.expect(series.candles.length).to.be.within(20, 100); }); });",
             "if (body.series && body.series[0]) { const series = body.series[0]; pm.environment.set('dataset_symbol', series.symbol); pm.environment.set('dataset_latest_timestamp', series.candles[series.candles.length - 1].timestamp); }",
             "pm.test('content is private and versioned', () => { pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'); pm.expect(pm.response.headers.get('ETag')).to.include(pm.environment.get('dataset_checksum')); });"
           ], "type": "text/javascript"}}]

@@ -56,6 +56,16 @@ func NewCachedProvider(upstream Provider, options CacheOptions) (*CachedProvider
 }
 
 func (provider *CachedProvider) Daily(ctx context.Context, instruments []universe.Instrument, outputSize int) ([]Series, error) {
+	return provider.Candles(ctx, instruments, outputSize, "1d")
+}
+
+func (provider *CachedProvider) Candles(ctx context.Context, instruments []universe.Instrument, outputSize int, timeframe string) ([]Series, error) {
+	if timeframe == "" {
+		timeframe = "1d"
+	}
+	if _, err := Policy(timeframe); err != nil {
+		return nil, err
+	}
 	if len(instruments) < 1 || len(instruments) > universe.MaxSymbols || outputSize < 20 || outputSize > 5000 {
 		return nil, ErrInvalidData
 	}
@@ -81,7 +91,7 @@ func (provider *CachedProvider) Daily(ctx context.Context, instruments []univers
 		go func() {
 			defer group.Done()
 			for index := offset; index < len(instruments); index += workers {
-				series, err := provider.dailyOne(ctx, instruments[index], outputSize)
+				series, err := provider.candleOne(ctx, instruments[index], outputSize, timeframe)
 				if err != nil {
 					firstFailure.Do(func() { batchErr = err; cancel() })
 					return
@@ -102,11 +112,12 @@ func (provider *CachedProvider) Daily(ctx context.Context, instruments []univers
 	return result, nil
 }
 
-func (provider *CachedProvider) dailyOne(ctx context.Context, instrument universe.Instrument, outputSize int) (Series, error) {
+func (provider *CachedProvider) candleOne(ctx context.Context, instrument universe.Instrument, outputSize int, timeframe string) (Series, error) {
 	if err := ctx.Err(); err != nil {
 		return Series{}, err
 	}
-	key := instrument.Symbol + "\x00" + instrument.ProviderSymbol + "\x00" + strconv.Itoa(outputSize)
+	policy, _ := Policy(timeframe)
+	key := instrument.Symbol + "\x00" + instrument.ProviderSymbol + "\x00" + instrument.Exchange + "\x00" + instrument.Currency + "\x00" + timeframe + "\x00" + fmt.Sprint(policy.LookbackDays) + "\x00" + strconv.Itoa(outputSize)
 	provider.mu.Lock()
 	provider.pruneExpiredLocked()
 	if entry, ok := provider.entries[key]; ok {
@@ -124,7 +135,7 @@ func (provider *CachedProvider) dailyOne(ctx context.Context, instrument univers
 		provider.flights[key] = flight
 		// A cancelled browser only stops its own wait. Shared provider work has
 		// an independent timeout, so it can still serve other waiting users.
-		go provider.fetch(key, flight, instrument, outputSize)
+		go provider.fetch(key, flight, instrument, outputSize, timeframe)
 	}
 	provider.mu.Unlock()
 	select {
@@ -135,11 +146,11 @@ func (provider *CachedProvider) dailyOne(ctx context.Context, instrument univers
 	}
 }
 
-func (provider *CachedProvider) fetch(key string, flight *providerFlight, instrument universe.Instrument, outputSize int) {
+func (provider *CachedProvider) fetch(key string, flight *providerFlight, instrument universe.Instrument, outputSize int, timeframe string) {
 	ctx, cancel := context.WithTimeout(context.Background(), provider.options.FetchTimeout)
 	defer cancel()
 	instruments := []universe.Instrument{instrument}
-	series, err := provider.upstream.Daily(ctx, instruments, outputSize)
+	series, err := ReadCandles(ctx, provider.upstream, instruments, outputSize, timeframe)
 	if err == nil {
 		err = ValidateSeries(series, instruments, outputSize)
 	}
@@ -153,7 +164,9 @@ func (provider *CachedProvider) fetch(key string, flight *providerFlight, instru
 			for len(provider.entries) >= provider.options.MaxEntries || provider.candles+count > provider.options.MaxCandles {
 				provider.evictOldestLocked()
 			}
-			provider.entries[key] = cachedSeries{series: cloneSeries(flight.series), expiresAt: provider.now().Add(provider.options.TTL)}
+			policy, _ := Policy(timeframe)
+			ttl := min(provider.options.TTL, policy.CacheTTL)
+			provider.entries[key] = cachedSeries{series: cloneSeries(flight.series), expiresAt: provider.now().Add(ttl)}
 			provider.candles += count
 		}
 	}

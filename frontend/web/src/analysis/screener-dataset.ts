@@ -15,8 +15,8 @@ export async function loadScreenerDataset(
   };
   check();
   const [user, manifest] = await Promise.all([
-    api.me(),
-    api.getDatasetManifest(prepared.dataset_id),
+    api.me(signal),
+    api.getDatasetManifest(prepared.dataset_id, signal),
   ]);
   check();
   if (
@@ -37,7 +37,7 @@ export async function loadScreenerDataset(
     manifest,
     async () => {
       check();
-      const text = await api.getDatasetContentText(manifest.dataset_id);
+      const text = await api.getDatasetContentText(manifest.dataset_id, signal);
       check();
       return text;
     },

@@ -65,7 +65,11 @@ export type StockMarket = "IDX" | "US";
 export type StockCurrency = "IDR" | "USD";
 export type StockExchange = "XIDX" | "XNAS" | "XNYS";
 
+export type ScreenerTimeframe = "1m" | "5m" | "15m" | "1h" | "1d";
+
 export type DatasetManifest = {
+  available_timestamp_range?: { from: string; to: string };
+  requested_timestamp_range?: { from: string; to: string };
   dataset_id: string;
   version: string;
   expires_at?: string;
@@ -76,7 +80,7 @@ export type DatasetManifest = {
   currency: StockCurrency;
   symbols: string[];
   exchanges?: StockExchange[];
-  timeframe: "1d";
+  timeframe: ScreenerTimeframe;
   timezone: "UTC";
   requested_range: { from: string; to: string };
   available_range: { from: string; to: string };
@@ -102,7 +106,7 @@ export type DatasetContent = {
   purpose: "screen";
   market: StockMarket;
   currency: StockCurrency;
-  timeframe: "1d";
+  timeframe: ScreenerTimeframe;
   timezone: "UTC";
   adjustment: string;
   series: Array<{
@@ -243,7 +247,7 @@ export type ScreenerFeatureCandidate = {
 };
 
 export type ScreenerFeatureResult = {
-  engine_version: "core-0.3.0";
+  engine_version: "core-0.4.0";
   feature_schema_version: "screener-features-1";
   execution: "client_go_features";
   candidates: ScreenerFeatureCandidate[];

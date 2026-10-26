@@ -21,6 +21,20 @@ export function screeningFailure(error: {
       detail: "Check your plan or ask an operator to restore screening access.",
       action: "subscription",
     };
+  if (error.code === "INTERVAL_UNAVAILABLE")
+    return {
+      title: "Candle interval unavailable",
+      detail:
+        "The provider cannot supply this interval for the selected stocks. Choose another interval; no daily fallback was used.",
+      action: "interval",
+    };
+  if (error.code === "INSUFFICIENT_CANDLES")
+    return {
+      title: "Not enough completed candles",
+      detail:
+        "Fewer than 20 valid closed candles are available after extending the lookback. Choose another interval or stock universe. This is not a No match result.",
+      action: "interval",
+    };
   if (error.status === 429)
     return {
       title: "Too many requests",

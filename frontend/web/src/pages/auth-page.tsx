@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -49,6 +49,18 @@ export function AuthPage({
   const [notice, setNotice] = useState<Notice>(null);
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerConfirmation, setRegisterConfirmation] = useState("");
+  const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState(true);
+  const successRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    setNotice(null);
+    setRegistrationComplete(false);
+    setRegisterPassword("");
+    setRegisterConfirmation("");
+  }, [view]);
+  useEffect(() => {
+    if (registrationComplete) successRef.current?.focus();
+  }, [registrationComplete]);
   const recovery = useMemo(() => {
     const hashParams = new URLSearchParams(location.hash.replace(/^#/, ""));
     const searchParams = new URLSearchParams(location.search);
@@ -66,7 +78,9 @@ export function AuthPage({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
+    if (loading || registrationComplete) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
     const email = String(data.get("email") ?? "").trim();
     const password = String(data.get("password") ?? "");
     setLoading(true);
@@ -114,6 +128,11 @@ export function AuthPage({
           email,
           password,
         );
+        form.reset();
+        setRegisterPassword("");
+        setRegisterConfirmation("");
+        setConfirmEmail(!result.access_token);
+        setRegistrationComplete(true);
         if (result.access_token) {
           session.setAuth({ ...result, access_token: result.access_token });
           await api.ensureAppSession();
@@ -121,7 +140,7 @@ export function AuthPage({
         } else {
           setNotice({
             kind: "success",
-            title: "Account created",
+            title: "Registration received",
             detail: "Confirm your email, then sign in to the workspace.",
           });
         }
@@ -254,114 +273,166 @@ export function AuthPage({
             )}
           </div>
           <div className="auth-heading">
-            <h2>{copy[0]}</h2>
-            <p>{copy[1]}</p>
+            <h2>
+              {view === "register" && registrationComplete
+                ? confirmEmail
+                  ? "Check your email"
+                  : "Account created"
+                : copy[0]}
+            </h2>
+            <p>
+              {view === "register" && registrationComplete
+                ? confirmEmail
+                  ? "Confirm your email to continue to Signalgen."
+                  : "Your account is ready. Continue to sign in."
+                : copy[1]}
+            </p>
           </div>
-          <form className="auth-form" onSubmit={submit}>
-            <FieldGroup className="auth-fields">
-              {view === "register" && (
-                <AuthField
-                  label="Full name"
-                  name="fullName"
-                  type="text"
-                  placeholder="Your name"
-                  minLength={2}
-                  autoComplete="name"
-                />
-              )}
-              {view !== "reset-password" && (
-                <AuthField
-                  label="Email"
-                  name="email"
-                  type="email"
-                  placeholder="name@email.com"
-                  autoComplete="email"
-                />
-              )}
-              {view === "register" && (
-                <PasswordField
-                  aria-describedby="password-guidance"
-                  autoComplete="new-password"
-                  label="Password"
-                  minLength={8}
-                  name="password"
-                  onChange={(event) => setRegisterPassword(event.target.value)}
-                  placeholder="Create a password"
-                  value={registerPassword}
-                >
-                  <PasswordStrengthIndicator value={registerPassword} />
-                  <FieldDescription className="sr-only">
-                    Use at least 8 characters.
-                  </FieldDescription>
-                </PasswordField>
-              )}
-              {(view === "login" || view === "reset-password") && (
-                <PasswordField
-                  label={
-                    view === "reset-password" ? "New password" : "Password"
-                  }
-                  name="password"
-                  placeholder={
-                    view === "login" ? "Your password" : "At least 8 characters"
-                  }
-                  minLength={view === "login" ? 1 : 8}
-                  autoComplete={
-                    view === "login" ? "current-password" : "new-password"
-                  }
-                />
-              )}
-              {(view === "register" || view === "reset-password") && (
-                <PasswordField
-                  aria-invalid={
-                    view === "register" &&
-                    registerConfirmation.length > 0 &&
-                    registerConfirmation !== registerPassword
-                  }
-                  label="Confirm password"
-                  name="confirmation"
-                  onChange={(event) =>
-                    view === "register" &&
-                    setRegisterConfirmation(event.target.value)
-                  }
-                  placeholder="Repeat your password"
-                  minLength={8}
-                  autoComplete="new-password"
-                  value={view === "register" ? registerConfirmation : undefined}
-                />
-              )}
-            </FieldGroup>
-            {view === "login" && (
-              <a className="forgot-link" href="#forgot-password">
-                Forgot your password?
-              </a>
-            )}
-            {notice && (
-              <Alert
-                className={`auth-alert is-${notice.kind}`}
-                variant={notice.kind === "error" ? "destructive" : "default"}
-              >
-                {notice.kind === "error" ? <X /> : <Check />}
-                <AlertTitle>{notice.title}</AlertTitle>
-                <AlertDescription>{notice.detail}</AlertDescription>
-              </Alert>
-            )}
-            <Button
-              className="ui-button ui-button--primary auth-submit"
-              disabled={loading || !backendOnline}
-              type="submit"
+          {view === "register" && registrationComplete ? (
+            <section
+              className="auth-registration-success"
+              ref={successRef}
+              tabIndex={-1}
+              aria-label="Registration confirmation"
             >
-              {loading
-                ? "Processing…"
-                : view === "login"
-                  ? "Sign in to workspace"
-                  : view === "register"
-                    ? "Create account"
-                    : view === "forgot-password"
-                      ? "Send reset link"
-                      : "Save new password"}
-              <ArrowRight />
-            </Button>
-          </form>
+              <Alert
+                className={`auth-alert is-${notice?.kind ?? "success"}`}
+                variant={notice?.kind === "error" ? "destructive" : "default"}
+                role={notice?.kind === "error" ? "alert" : "status"}
+              >
+                {notice?.kind === "error" ? <X /> : <Check />}
+                <AlertTitle>{notice?.title ?? "Account created"}</AlertTitle>
+                <AlertDescription>
+                  {notice?.detail ?? "Continue to sign in to your workspace."}
+                </AlertDescription>
+              </Alert>
+              {confirmEmail && (
+                <p className="auth-note">
+                  Open the confirmation link in your inbox before signing in. If
+                  the email has not arrived, check your spam folder.
+                </p>
+              )}
+              <Button
+                className="ui-button ui-button--primary auth-submit"
+                nativeButton={false}
+                render={<a href="#login" />}
+              >
+                Continue to sign in <ArrowRight data-icon="inline-end" />
+              </Button>
+            </section>
+          ) : (
+            <form className="auth-form" onSubmit={submit}>
+              <FieldGroup className="auth-fields">
+                {view === "register" && (
+                  <AuthField
+                    label="Full name"
+                    name="fullName"
+                    type="text"
+                    placeholder="Your name"
+                    minLength={2}
+                    autoComplete="name"
+                  />
+                )}
+                {view !== "reset-password" && (
+                  <AuthField
+                    label="Email"
+                    name="email"
+                    type="email"
+                    placeholder="name@email.com"
+                    autoComplete="email"
+                  />
+                )}
+                {view === "register" && (
+                  <PasswordField
+                    aria-describedby="password-guidance"
+                    autoComplete="new-password"
+                    label="Password"
+                    minLength={8}
+                    name="password"
+                    onChange={(event) =>
+                      setRegisterPassword(event.target.value)
+                    }
+                    placeholder="Create a password"
+                    value={registerPassword}
+                  >
+                    <PasswordStrengthIndicator value={registerPassword} />
+                    <FieldDescription className="sr-only">
+                      Use at least 8 characters.
+                    </FieldDescription>
+                  </PasswordField>
+                )}
+                {(view === "login" || view === "reset-password") && (
+                  <PasswordField
+                    label={
+                      view === "reset-password" ? "New password" : "Password"
+                    }
+                    name="password"
+                    placeholder={
+                      view === "login"
+                        ? "Your password"
+                        : "At least 8 characters"
+                    }
+                    minLength={view === "login" ? 1 : 8}
+                    autoComplete={
+                      view === "login" ? "current-password" : "new-password"
+                    }
+                  />
+                )}
+                {(view === "register" || view === "reset-password") && (
+                  <PasswordField
+                    aria-invalid={
+                      view === "register" &&
+                      registerConfirmation.length > 0 &&
+                      registerConfirmation !== registerPassword
+                    }
+                    label="Confirm password"
+                    name="confirmation"
+                    onChange={(event) =>
+                      view === "register" &&
+                      setRegisterConfirmation(event.target.value)
+                    }
+                    placeholder="Repeat your password"
+                    minLength={8}
+                    autoComplete="new-password"
+                    value={
+                      view === "register" ? registerConfirmation : undefined
+                    }
+                  />
+                )}
+              </FieldGroup>
+              {view === "login" && (
+                <a className="forgot-link" href="#forgot-password">
+                  Forgot your password?
+                </a>
+              )}
+              {notice && (
+                <Alert
+                  className={`auth-alert is-${notice.kind}`}
+                  variant={notice.kind === "error" ? "destructive" : "default"}
+                >
+                  {notice.kind === "error" ? <X /> : <Check />}
+                  <AlertTitle>{notice.title}</AlertTitle>
+                  <AlertDescription>{notice.detail}</AlertDescription>
+                </Alert>
+              )}
+              <Button
+                className="ui-button ui-button--primary auth-submit"
+                disabled={loading || !backendOnline}
+                type="submit"
+              >
+                {loading
+                  ? "Processing…"
+                  : view === "login"
+                    ? "Sign in to workspace"
+                    : view === "register"
+                      ? "Create account"
+                      : view === "forgot-password"
+                        ? "Send reset link"
+                        : "Save new password"}
+                <ArrowRight />
+              </Button>
+            </form>
+          )}
           {!backendOnline && (
             <p className="auth-note">
               The backend is unavailable. This form will reactivate when the

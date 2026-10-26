@@ -33,3 +33,29 @@ export function journalPerformance(records: ClosedTrade[]) {
 export function localJournalDate(now = new Date()) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
+
+export function filterJournalMonth<T extends { closedAt: string }>(
+  records: T[],
+  month: string,
+): T[] {
+  if (!month) return records;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return [];
+  return records.filter((record) => record.closedAt.slice(0, 7) === month);
+}
+
+export function journalTimeline<T extends { closedAt: string; pnl: number }>(
+  records: T[],
+) {
+  const ordered = [...records]
+    .filter(
+      (record) =>
+        Number.isFinite(record.pnl) &&
+        Number.isFinite(Date.parse(record.closedAt)),
+    )
+    .sort((a, b) => Date.parse(a.closedAt) - Date.parse(b.closedAt));
+  let value = 0;
+  return [
+    { value: 0, record: null as T | null },
+    ...ordered.map((record) => ({ record, value: (value += record.pnl) })),
+  ];
+}

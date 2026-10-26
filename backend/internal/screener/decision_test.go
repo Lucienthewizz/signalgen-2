@@ -15,6 +15,20 @@ func screeningCandidate(symbol, stamp string) core.FeatureCandidate {
 	return core.FeatureCandidate{Symbol: symbol, Timestamp: stamp, Features: core.FeatureVector{Price: 128, EMA9: 125, EMA20: 121, RSI14: 72}}
 }
 
+func TestIntradayCandidateMustBeInsideExactTimestampScope(t *testing.T) {
+	scope := DatasetScope{Symbols: []string{"AAPL"}, From: "2026-10-19", To: "2026-10-19", TimestampFrom: "2026-10-19T13:30:00Z", TimestampTo: "2026-10-19T19:55:00Z"}
+	for _, stamp := range []string{scope.TimestampFrom, scope.TimestampTo} {
+		if _, err := EvaluateBatch(screeningRule(), []core.FeatureCandidate{screeningCandidate("AAPL", stamp)}, scope); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, stamp := range []string{"2026-10-19T13:29:59Z", "2026-10-19T19:55:01Z"} {
+		if _, err := EvaluateBatch(screeningRule(), []core.FeatureCandidate{screeningCandidate("AAPL", stamp)}, scope); err == nil {
+			t.Fatal("out-of-snapshot timestamp was authorized")
+		}
+	}
+}
+
 func TestEvaluateBatchKeepsCooldownPerSymbol(t *testing.T) {
 	stamp := "2026-01-01T00:00:00Z"
 	second := "2026-01-01T00:00:30Z"

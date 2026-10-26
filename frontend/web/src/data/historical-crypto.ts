@@ -190,6 +190,7 @@ export async function decodeDataset(
     data.timeframe !== manifest.timeframe ||
     data.timezone !== manifest.timezone ||
     data.adjustment !== manifest.adjustment ||
+    !["1m", "5m", "15m", "1h", "1d"].includes(data.timeframe) ||
     !Array.isArray(data.series) ||
     data.series.length < 1 ||
     data.series.length > 10 ||

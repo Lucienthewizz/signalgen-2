@@ -7,6 +7,10 @@ const path = require("node:path");
 function load(name) { const exports = {}; vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, `../src/lib/${name}.ts`), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports, TextEncoder }); return exports; }
 const workflow = load("rule-workflow");
 const status = load("screening-status");
+test("rules and screener share all six comparison symbols", () => {
+  assert.deepEqual(Object.keys(workflow.operatorSymbols).sort(), Object.keys(workflow.operatorLabels).sort());
+  for (const [op, symbol] of Object.entries({ ">": ">", ">=": "≥", "<": "<", "<=": "≤", CROSS_UP: "↗", CROSS_DOWN: "↘" })) assert.equal(workflow.operatorSymbols[op], symbol);
+});
 test("all six presets are supported, valid editable rules", () => {
   assert.equal(workflow.rulePresets.length, 6);
   for (const preset of workflow.rulePresets) assert.equal(workflow.validateRule(preset.definition).valid, true, preset.name);
