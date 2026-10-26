@@ -853,7 +853,7 @@ test("operator account search encodes filters and preserves private request head
   const url = new URL(c.calls[0].url);
   assert.equal(url.pathname, "/api/v1/operator/accounts");
   assert.equal(url.searchParams.get("q"), "member+demo@example.test");
-  assert.equal(url.searchParams.get("limit"), "25");
+  assert.equal(url.searchParams.get("limit"), "10");
   assert.equal(
     url.searchParams.get("after"),
     "11111111-1111-1111-1111-111111111111",

@@ -1,5 +1,24 @@
 # Backend progress
 
+## UI/UX admin dan penemuan menu — 26 Oktober 2026
+
+Kelanjutan `frontend/admin-access` memakai skill UI/UX Pro Max: directory anggota
+dan pengaturan akses berdampingan pada desktop, lalu ditumpuk pada layar kecil.
+Daftar anggota 10 per halaman dan ringkasan grant menggantikan tabel yang perlu
+digeser di ponsel. Kontrol 44px, token tema, fokus validasi, dan urutan kerja
+pemilihan anggota → pengaturan → review dipertahankan.
+
+Menu **Administration → Admin Panel** memakai role/status dari account API.
+Sebelumnya sidebar memakai respons identity login yang tidak memuat role aplikasi,
+sehingga operator sah dapat kehilangan menu. State terikat user/session, respons
+lama diabaikan, dan role dicek ulang pada navigasi/focus/perubahan role sendiri.
+Menu mobile menutup setelah navigasi atau Escape. Endpoint dan izin backend tetap.
+
+Verifikasi frontend mencakup 181 tes + build, Playwright admin melalui sidebar
+dengan identity tanpa role, penolakan metadata role palsu/akun suspended, fokus
+validasi, kontras token, kontrol 44px, serta desktop 1440, ponsel 375 dan landscape
+844×390 pada kedua tema. Fixtures akun/API sintetis; bukan grant akun cloud nyata.
+
 ## Kemudahan pemberian akses admin — 26 Oktober 2026
 
 Branch `frontend/admin-access`: panel admin yang ada kini mempunyai directory

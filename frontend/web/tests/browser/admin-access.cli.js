@@ -23,22 +23,23 @@ async (page) => {
     const request = route.request(), url = new URL(request.url()), p = url.pathname;
     if (p !== "/api" && !p.startsWith("/api/") && p !== "/ready") return url.origin === origin ? route.continue() : route.abort();
     const respond = (json) => route.fulfill({json});
-    const actor = {...user, role: mode === "denied" ? "user" : "operator"};
+    const actor = {...user, role: ["denied","forged"].includes(mode) ? "user" : "operator", status: mode === "suspended" ? "suspended" : "active"};
     if (p === "/api" || p === "/ready") return respond({status:"ready", name:"Synthetic admin API", version:"0.12.0"});
-    if (p === "/api/auth/me") return respond(actor);
+    if (p === "/api/auth/me") return respond({id:user.id,email:user.email,full_name:user.full_name,...(mode === "forged" ? {role:"operator"} : {})});
     if (p === "/api/v1/account/me") return respond({user:actor, features:["screener","backtest"]});
     if (p === "/api/v1/sessions") return respond({session_token:"synthetic-admin-session", session:{id:"qa",installation_id:user.id,created_at:now,expires_at:new Date(Date.now()+86400000).toISOString(),last_seen_at:now}});
     if (p === "/api/v1/subscription/plans") return respond({items:[{code:"analyst",name:"Analyst",features:["screener","backtest"]}]});
     if (p === "/api/v1/subscription") return respond({subscription:null});
     if (p === "/api/v1/operator/accounts") {
       accountReads++;
-      if (mode === "denied") throw Error("A non-operator fetched the account directory");
+      if (actor.role !== "operator" || actor.status !== "active") throw Error("A non-operator fetched the account directory");
       if (mode === "read-error") return route.fulfill({status:503,json:{error:{code:"SERVICE_UNAVAILABLE",message:"Account directory unavailable."}}});
       const q = url.searchParams.get("q") ?? "", after = url.searchParams.get("after") ?? "", status = url.searchParams.get("status");
       queries.push({q,after,status});
       const filtered = members.filter(item => item.user_id > after && (!status || item.status === status) && `${item.email} ${item.user_id}`.toLowerCase().includes(q.toLowerCase()));
-      const items = filtered.slice(0,25);
-      return respond({items,...(filtered.length > 25 ? {next_cursor:items.at(-1).user_id} : {})});
+      const limit=Number(url.searchParams.get("limit"));
+      const items = filtered.slice(0,limit);
+      return respond({items,...(filtered.length > limit ? {next_cursor:items.at(-1).user_id} : {})});
     }
     if (p === "/api/v1/operator/grants") {
       if (request.method() === "GET") return respond({items:[...grants.values()].filter(item => item.user_id === url.searchParams.get("user_id"))});
@@ -62,21 +63,33 @@ async (page) => {
     return respond({items:[]});
   });
   async function ready() {
-    await page.goto(`${origin}/#app/admin`); await page.reload();
-    await page.getByRole("table",{name:"Registered accounts",exact:true}).waitFor({timeout:15000});
+    await page.goto(`${origin}/#app/overview`); await page.reload();
+    if (page.viewportSize().width <= 860) {
+      await page.getByRole("button",{name:"Open workspace menu",exact:true}).click();
+      await page.keyboard.press("Escape");
+      await page.waitForFunction(()=>document.querySelector('.menu-button')?.getAttribute('aria-expanded')==='false');
+      await page.getByRole("button",{name:"Open workspace menu",exact:true}).click();
+    }
+    const admin = page.getByRole("navigation",{name:"Workspace navigation",exact:true}).getByRole("button",{name:"Admin Panel",exact:true});
+    await admin.waitFor({timeout:15000});
+    await admin.focus(); await admin.press("Enter");
+    await page.waitForURL("**/#app/operator");
+    if (page.viewportSize().width <= 860 && await page.getByRole("button",{name:"Open workspace menu",exact:true}).getAttribute("aria-expanded") !== "false") throw Error("Mobile navigation stayed open after selecting Admin Panel");
+    if (await admin.getAttribute("aria-current") !== "page") throw Error("Admin sidebar lacks its active page state");
+    await page.getByRole("list",{name:"Registered accounts",exact:true}).waitFor({timeout:15000});
   }
   async function search(text) {
     await page.getByLabel("Search by email or User ID",{exact:true}).fill(text);
     await page.getByRole("button",{name:"Search accounts",exact:true}).click();
-    await page.getByRole("table",{name:"Registered accounts",exact:true}).waitFor();
+    await page.getByRole("list",{name:"Registered accounts",exact:true}).waitFor();
   }
-  for (const width of [1440,390]) for (const theme of ["dark","light"]) {
+  for (const width of [1440,375,844]) for (const theme of ["dark","light"]) {
     mode="healthy"; grants.clear();
-    await page.setViewportSize({width,height:1000}); await ready();
+    await page.setViewportSize({width,height:width === 844 ? 390 : 1000}); await ready();
     if (await page.locator("html").getAttribute("data-theme") !== theme) await page.getByRole("button",{name:/Switch to .* mode/}).click();
     if (width===1440 && theme==="dark") {
       await page.getByRole("button",{name:"Next accounts",exact:true}).click();
-      await page.getByRole("button",{name:"Select member35@example.test",exact:true}).waitFor();
+      await page.getByRole("button",{name:"Select member11@example.test",exact:true}).waitFor();
       await page.getByRole("button",{name:"Previous accounts",exact:true}).click();
       await page.getByRole("button",{name:"Select member1@example.test",exact:true}).waitFor();
     }
@@ -100,15 +113,29 @@ async (page) => {
     if (writes.length!==before) throw Error("Cancelling a review mutated access");
     await page.getByRole("button",{name:"Review access grant",exact:true}).click();
     await page.getByRole("button",{name:"Confirm change",exact:true}).dblclick();
-    await page.locator(".admin-ledger").getByRole("cell",{name:"Active",exact:true}).waitFor();
+    await page.locator(".admin-ledger").getByText("Active",{exact:true}).waitFor();
     if (writes.length!==before+1) throw Error("Confirm submitted a duplicate grant");
+    const quality = await page.evaluate(() => {
+      const root=getComputedStyle(document.documentElement), canvas=document.createElement("canvas"), ctx=canvas.getContext("2d");
+      canvas.width=canvas.height=1;
+      const luminance=(color)=>{ ctx.clearRect(0,0,1,1);ctx.fillStyle=color;ctx.fillRect(0,0,1,1);const values=[...ctx.getImageData(0,0,1,1).data].slice(0,3).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return values[0]*.2126+values[1]*.7152+values[2]*.0722; };
+      const ratio=(a,b)=>{const x=luminance(a),y=luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);};
+      const surfaces=["--surface","--surface-2"].map(token=>root.getPropertyValue(token).trim());
+      const colors=[getComputedStyle(document.querySelector(".admin-member-copy strong")).color,getComputedStyle(document.querySelector(".admin-directory .admin-help")).color];
+      return {
+        contrast:Math.min(...surfaces.flatMap(bg=>colors.map(fg=>ratio(fg,bg)))),
+        controls:[...document.querySelectorAll(".admin-duration-presets button,.admin-member-list button,.admin-directory-search input")].every(el=>el.getBoundingClientRect().height>=44),
+        fits:[...document.querySelectorAll(".admin-directory,.admin-console,.admin-review")].every(el=>el.scrollWidth<=el.clientWidth+1),
+      };
+    });
+    if (quality.contrast<4.5 || !quality.controls || !quality.fits) throw Error(`Admin UI quality check failed: ${JSON.stringify(quality)}`);
     if (await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)) throw Error(`Page overflow at ${width}px`);
     await page.evaluate(()=>{ window.getSelection()?.removeAllRanges(); document.querySelectorAll('[data-slot="table-container"]').forEach(el=>el.scrollLeft=0); window.scrollTo(0,0); });
     await page.screenshot({path:`output/playwright/admin-access-${width}-${theme}.png`,fullPage:true});
     await page.getByLabel("Reason for this change",{exact:true}).fill("End synthetic test access");
     await page.getByRole("button",{name:"Review revocation",exact:true}).click();
     await page.getByRole("button",{name:"Confirm change",exact:true}).click();
-    await page.getByRole("cell",{name:"Revoked",exact:true}).waitFor();
+    await page.locator(".admin-ledger").getByText("Revoked",{exact:true}).waitFor();
     if (writes.at(-1).method!=="DELETE") throw Error("Revocation used the wrong endpoint");
   }
   mode="healthy"; await ready();
@@ -123,9 +150,19 @@ async (page) => {
   await page.getByText("No accounts found. Try a different email or status.",{exact:true}).waitFor();
   await search("member35@");
   await page.getByRole("button",{name:"Select member35@example.test",exact:true}).click();
-  await page.getByRole("cell",{name:"Revoked",exact:true}).waitFor();
+  await page.locator(".admin-ledger").getByText("Revoked",{exact:true}).waitFor();
   await page.getByLabel("Feature",{exact:true}).click();
   await page.getByRole("option",{name:"Backtest",exact:true}).click();
+  await page.getByLabel("Reason for this change",{exact:true}).fill("Synthetic failed write");
+  await page.getByLabel("Access expires",{exact:true}).fill("2020-01-01T00:00");
+  const beforeValidation = writes.length;
+  await page.getByRole("button",{name:"Review access grant",exact:true}).click();
+  await page.waitForFunction(()=>document.activeElement?.id==="admin-grant-expiry");
+  await page.getByRole("button",{name:"7 days",exact:true}).click();
+  await page.getByLabel("Reason for this change",{exact:true}).fill("");
+  await page.getByRole("button",{name:"Review access grant",exact:true}).click();
+  await page.waitForFunction(()=>document.activeElement?.id==="admin-reason");
+  if(writes.length!==beforeValidation) throw Error("Invalid form wrote a grant");
   await page.getByLabel("Reason for this change",{exact:true}).fill("Synthetic failed write");
   mode="write-error";
   const beforeFailure = writes.length;
@@ -143,12 +180,17 @@ async (page) => {
   await page.getByRole("button",{name:"Retry account list",exact:true}).waitFor();
   mode="healthy";
   await page.getByRole("button",{name:"Retry account list",exact:true}).click();
-  await page.getByRole("table",{name:"Registered accounts",exact:true}).waitFor();
+  await page.getByRole("list",{name:"Registered accounts",exact:true}).waitFor();
   mode="denied"; const beforeDenied=accountReads; await page.reload();
   await page.getByRole("alert").filter({hasText:"This account does not have active operator access."}).waitFor();
   if (accountReads!==beforeDenied || await page.getByRole("region",{name:"Account directory",exact:true}).count()) throw Error("Non-operator access exposed the directory");
   if (!(await page.getByRole("button",{name:"Review access grant",exact:true}).isDisabled())) throw Error("A non-operator can grant access");
+  for (const deniedMode of ["forged","suspended"]) {
+    mode=deniedMode; await page.reload();
+    await page.getByRole("alert").filter({hasText:"This account does not have active operator access."}).waitFor();
+    if (await page.getByRole("button",{name:"Admin Panel",exact:true}).count()) throw Error("Identity metadata exposed operator navigation");
+  }
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(()=>document.body.setAttribute("data-signalgen-admin-tests","complete"));
-  return {synthetic:true,queries:queries.length,writes:writes.length,widths:[1440,390],themes:["dark","light"]};
+  return {synthetic:true,queries:queries.length,writes:writes.length,widths:[1440,375,844],themes:["dark","light"]};
 }

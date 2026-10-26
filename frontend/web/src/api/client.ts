@@ -797,7 +797,7 @@ export const api = {
     } = {},
     signal?: AbortSignal,
   ) => {
-    const query = new URLSearchParams({ limit: "25" });
+    const query = new URLSearchParams({ limit: "10" });
     if (filters.q?.trim()) query.set("q", filters.q.trim());
     if (filters.after) query.set("after", filters.after);
     if (filters.status) query.set("status", filters.status);

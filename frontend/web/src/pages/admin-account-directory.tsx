@@ -10,14 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Check, UserRound } from "lucide-react";
 import type { ManagedAccount, OperatorAccountPage } from "@/types";
 
 export function AdminAccountDirectory({
@@ -140,8 +133,8 @@ export function AdminAccountDirectory({
         </Button>
       </form>
       <p className="admin-help">
-        {query.q ? `Results for “${query.q}”. ` : ""}Registered application
-        profiles only. Ask new members to sign in once if they are missing.
+        {query.q ? `Results for “${query.q}”. ` : ""}Search all members. New
+        members appear after their first sign-in.
       </p>
       {loading ? (
         <p role="status">Loading accounts…</p>
@@ -159,31 +152,19 @@ export function AdminAccountDirectory({
         <p role="status">No accounts found. Try a different email or status.</p>
       ) : (
         <>
-          <Table aria-label="Registered accounts">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Email / User ID</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {result.items.map((item) => (
-                <TableRow
-                  key={item.user_id}
-                  data-state={
-                    selectedId === item.user_id ? "selected" : undefined
-                  }
-                >
-                  <TableCell>
-                    <strong>{item.email || "Email unavailable"}</strong>
-                    <small>{item.user_id}</small>
-                  </TableCell>
-                  <TableCell>
-                    {item.role === "operator" ? "Operator" : "User"}
-                  </TableCell>
-                  <TableCell>
+          <ul className="admin-member-list" aria-label="Registered accounts">
+            {result.items.map((item) => (
+              <li
+                key={item.user_id}
+                data-selected={selectedId === item.user_id || undefined}
+              >
+                <div className="admin-member-copy">
+                  <strong>{item.email || "Email unavailable"}</strong>
+                  <span className="admin-member-meta">
+                    <span>
+                      <UserRound aria-hidden="true" />
+                      {item.role === "operator" ? "Operator" : "Member"}
+                    </span>
                     <Badge
                       variant={
                         item.status === "active" ? "secondary" : "outline"
@@ -191,46 +172,46 @@ export function AdminAccountDirectory({
                     >
                       {item.status === "active" ? "Active" : "Suspended"}
                     </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      type="button"
-                      variant={
-                        selectedId === item.user_id ? "secondary" : "outline"
-                      }
-                      disabled={disabled}
-                      aria-label={`Select ${item.email || item.user_id}`}
-                      aria-pressed={selectedId === item.user_id}
-                      onClick={() => onSelect(item)}
-                    >
-                      {selectedId === item.user_id
-                        ? "Selected"
-                        : "Select account"}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </span>
+                  <small>{item.user_id}</small>
+                </div>
+                <Button
+                  type="button"
+                  variant={
+                    selectedId === item.user_id ? "secondary" : "outline"
+                  }
+                  disabled={disabled}
+                  aria-label={`Select ${item.email || item.user_id}`}
+                  aria-pressed={selectedId === item.user_id}
+                  onClick={() => onSelect(item)}
+                >
+                  {selectedId === item.user_id && <Check aria-hidden="true" />}
+                  {selectedId === item.user_id ? "Selected" : "Select"}
+                </Button>
+              </li>
+            ))}
+          </ul>
           <div className="admin-directory-pages">
             <Button
               variant="outline"
+              aria-label="Previous accounts"
               disabled={disabled || cursors.length === 1}
               onClick={() => setCursors((items) => items.slice(0, -1))}
             >
-              Previous accounts
+              Previous
             </Button>
             <span>
               Page {cursors.length} · {result.items.length} accounts shown
             </span>
             <Button
               variant="outline"
+              aria-label="Next accounts"
               disabled={disabled || !result.next_cursor}
               onClick={() =>
                 setCursors((items) => [...items, result.next_cursor!])
               }
             >
-              Next accounts
+              Next
             </Button>
           </div>
         </>

@@ -1,5 +1,105 @@
+.admin-workspace {
+  gap: 24px;
+}
+.admin-workspace .admin-session-bar {
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+.admin-management-layout,
+.admin-editor-column {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+  align-items: start;
+}
+.admin-workspace .admin-account,
+.admin-workspace .admin-review {
+  padding: 24px;
+  gap: 20px;
+  border-radius: 12px;
+}
+.admin-account .admin-section-title > svg {
+  width: 40px;
+  height: 40px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.admin-eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.admin-editor-heading h3 {
+  margin: 0;
+  font-size: 24px;
+}
+.admin-editor-heading p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.admin-workspace :is(button, input, [data-slot="select-trigger"]) {
+  min-height: 44px;
+}
+.admin-workspace :is(input, textarea, [data-slot="select-trigger"]) {
+  scroll-margin-block: 100px;
+}
+.admin-workspace :is(button, summary) {
+  touch-action: manipulation;
+}
+.admin-workspace :is(button, summary, input, textarea):focus-visible,
+.workspace-admin-nav:focus-visible,
+#admin-controls-title:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.admin-workspace .admin-console {
+  overflow: hidden;
+  border-radius: 12px;
+}
+.admin-workspace .admin-console [data-slot="tabs-list"] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+  height: auto;
+  padding: 8px;
+  overflow: visible;
+}
+.admin-workspace .admin-console [data-slot="tabs-trigger"] {
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  white-space: normal;
+  font-size: 14px;
+}
+.admin-workspace .admin-console [data-slot="tabs-trigger"]::after {
+  display: none;
+}
+.admin-workspace
+  .admin-console
+  [data-slot="tabs-trigger"][aria-selected="true"] {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+.admin-workspace .admin-console [data-slot="tabs-content"] {
+  padding: 24px;
+}
 .admin-directory {
-  margin-top: 24px;
   min-width: 0;
 }
 .admin-directory-search {
@@ -14,84 +114,229 @@
   min-width: 0;
 }
 .admin-directory-search > div:first-child {
-  flex: 1 1 280px;
+  flex-basis: 100%;
+}
+.admin-directory-search > div:nth-child(2) {
+  flex: 1 1 150px;
 }
 .admin-directory-search label {
-  font-size: 0.86rem;
+  font-size: 14px;
   font-weight: 500;
 }
-.admin-directory-search [data-slot="select-trigger"] {
-  min-width: 170px;
+.admin-member-list {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
 }
-.admin-directory [data-slot="table-container"] {
-  margin-top: 20px;
+.admin-member-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--line);
 }
-.admin-ledger [data-slot="table"] {
-  min-width: 560px;
+.admin-member-list li[data-selected="true"] {
+  background: var(--surface-2);
+  box-shadow: inset 3px 0 var(--green);
 }
-.admin-directory [data-slot="table-cell"]:first-child {
-  white-space: normal;
+.admin-member-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
   overflow-wrap: anywhere;
-  min-width: 240px;
 }
-.admin-directory [data-slot="table-cell"] small {
-  display: block;
+.admin-member-copy strong {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.admin-member-copy small {
   color: var(--muted);
-  font-size: 0.73rem;
-  margin-top: 5px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.admin-member-meta,
+.admin-member-meta > span:first-child {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.admin-member-meta {
+  gap: 12px;
+}
+.admin-member-meta svg {
+  width: 14px;
+  height: 14px;
+}
+.admin-member-list button {
+  min-width: 88px;
+  padding: 8px 12px;
 }
 .admin-directory-pages,
 .admin-duration-presets {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   margin-top: 16px;
 }
-.admin-directory-pages span {
+.admin-directory-pages > span {
+  order: -1;
+  flex-basis: 100%;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 13px;
+}
+.admin-directory-pages button {
+  flex: 1;
 }
 .admin-selected-account {
   display: grid;
-  gap: 6px;
-  margin: 20px 0;
+  gap: 8px;
   padding: 16px;
   border: 1px solid var(--line);
   border-left: 3px solid var(--green);
-  border-radius: 6px;
+  border-radius: 8px;
   overflow-wrap: anywhere;
 }
 .admin-selected-account code {
-  font-size: 0.8rem;
+  font-size: 12px;
   color: var(--muted);
 }
 .admin-selected-account p {
   margin: 0;
-  font-size: 0.86rem;
-}
-.admin-manual-target {
-  margin-top: 20px;
+  font-size: 14px;
 }
 .admin-manual-target summary {
   cursor: pointer;
   color: var(--muted);
-  padding: 10px 0;
+  padding: 12px 0;
+  font-size: 14px;
 }
 .admin-manual-target .admin-account-form {
+  grid-template-columns: minmax(0, 1fr);
   margin-top: 16px;
 }
+.admin-manual-target .admin-account-actions {
+  padding-top: 0;
+}
+.admin-inline-error {
+  border-left: 3px solid var(--danger);
+  padding: 8px 12px;
+  color: var(--danger);
+  font-size: 14px;
+}
+.admin-grant-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.admin-grant-list > li {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.admin-grant-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.admin-grant-heading strong {
+  font-size: 16px;
+}
+.admin-grant-list dl {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 0;
+}
+.admin-grant-list dl > div {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  gap: 12px;
+  font-size: 14px;
+}
+.admin-grant-list dt {
+  color: var(--muted);
+}
+.admin-grant-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+#workspace-route-heading,
+#admin-controls-title {
+  scroll-margin-block-start: 100px;
+}
+.admin-workspace .admin-activity {
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.demo-workbench .nav-group button.workspace-admin-nav {
+  min-height: 60px;
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+.workspace-admin-nav > span {
+  display: grid;
+  gap: 4px;
+}
+.workspace-admin-nav small {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.demo-workbench
+  .nav-group
+  button.workspace-admin-nav:is(:hover, [aria-current="page"]) {
+  border-color: var(--green);
+  background: var(--surface-2);
+}
+@media (min-width: 1250px) {
+  .admin-management-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  }
+  .admin-workspace .admin-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 @media (max-width: 600px) {
+  .admin-workspace .admin-account,
+  .admin-workspace .admin-review,
+  .admin-workspace .admin-console [data-slot="tabs-content"] {
+    padding: 20px;
+  }
   .admin-directory-search > div {
     width: 100%;
-  }
-  .admin-directory-search > div:first-child {
-    flex-basis: 100%;
   }
   .admin-directory-search > button {
     flex: 1 1 auto;
   }
-  .admin-directory-pages {
-    gap: 8px;
+  .admin-workspace .admin-help,
+  .admin-workspace .admin-section-title p {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  .admin-member-list li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding-inline: 8px;
+  }
+  .admin-member-list button {
+    width: 100%;
+  }
+  .admin-directory-search :is(input, [data-slot="select-trigger"]) {
+    font-size: 16px;
   }
 }

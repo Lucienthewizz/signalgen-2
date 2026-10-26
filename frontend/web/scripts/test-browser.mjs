@@ -139,7 +139,7 @@ if (usedCli) {
 
 console.log(
   adminOnly
-    ? "PASS: admin email search/paging, account selection, expiry presets, reviewed grant/revoke, failed writes, non-operator denial, 1440/390px, both themes. Synthetic account/API fixtures only."
+    ? "PASS: verified-role sidebar navigation, admin search/paging, reviewed grant/revoke, validation focus, contrast and 44px controls, denied/forged/suspended roles, 1440/375px and 844x390 landscape, both themes. Synthetic account/API fixtures only."
     : backtestOnly
       ? "PASS: backtest rule/manual, real Go/WASM, next-open P&L, open positions, cancel, integrity, denied access, 1440/390px, both themes. Synthetic account/API fixtures only."
       : monitorOnly

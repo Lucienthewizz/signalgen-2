@@ -40,14 +40,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+
 import {
   accessExpiry,
   validateAdminChange,
@@ -273,11 +266,23 @@ export function AdminPage({
     const invalid = validateAdminChange(target, reason, action, until);
     if (invalid) {
       setError(invalid);
-      if (!uuidValid) document.getElementById("admin-target")?.focus();
-      else {
+      if (!uuidValid) {
+        const fallback = document.querySelector<HTMLDetailsElement>(
+          ".admin-manual-target",
+        );
+        if (fallback) fallback.open = true;
+        document.getElementById("admin-target")?.focus();
+      } else if (validateAdminChange(target, reason, "role", "")) {
         showReview();
         document.getElementById("admin-reason")?.focus({ preventScroll: true });
-      }
+      } else
+        document
+          .getElementById(
+            action === "subscription"
+              ? "admin-period-end"
+              : "admin-grant-expiry",
+          )
+          ?.focus();
       return;
     }
     if (
@@ -376,6 +381,7 @@ export function AdminPage({
         change.userId === account?.user.id &&
         change.value === "user"
       ) {
+        window.dispatchEvent(new Event("signalgen:account-role"));
         setPermissionAttempt((value) => value + 1);
       } else if (change.action === "grant" || change.action === "revoke") {
         try {
@@ -473,551 +479,591 @@ export function AdminPage({
           aria-label="Checking access"
         />
       )}
-      <section className="admin-account" aria-labelledby="admin-account-title">
-        <div className="admin-section-title">
-          <UsersRound aria-hidden="true" />
-          <div>
-            <h3 id="admin-account-title">Choose an account</h3>
+      <div className="admin-management-layout">
+        <section
+          className="admin-account"
+          aria-labelledby="admin-account-title"
+        >
+          <div className="admin-section-title">
+            <UsersRound aria-hidden="true" />
+            <div>
+              <span className="admin-eyebrow">01 / Member selection</span>
+              <h3 id="admin-account-title">Member directory</h3>
+              <p>
+                Find a member by email, select their account, then choose a
+                feature and access duration below.
+              </p>
+            </div>
+          </div>
+          {authorized && (
+            <AdminAccountDirectory
+              key={account.user.id}
+              selectedId={target}
+              disabled={!editable}
+              onSelect={async (item) => {
+                changeTarget(item.user_id, item);
+                await inspect(item.user_id);
+                if (
+                  alive.current &&
+                  window.matchMedia("(max-width: 1100px)").matches
+                )
+                  document.getElementById("admin-controls-title")?.focus();
+              }}
+            />
+          )}
+          {target && (
+            <div className="admin-selected-account" role="status">
+              <strong>{targetAccount?.email || "Selected User ID"}</strong>
+              <code>{target}</code>
+              {targetAccount?.status === "suspended" && (
+                <p>
+                  This account is suspended and cannot use analysis features. A
+                  grant does not reactivate it.
+                </p>
+              )}
+            </div>
+          )}
+          <details className="admin-manual-target">
+            <summary>Use a User ID instead</summary>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void inspect();
+              }}
+              className="admin-account-form"
+            >
+              <FieldGroup>
+                <Field data-invalid={Boolean(target && !uuidValid)}>
+                  <FieldLabel htmlFor="admin-target">
+                    Account User ID
+                  </FieldLabel>
+                  <Input
+                    id="admin-target"
+                    value={target}
+                    disabled={!editable}
+                    onChange={(event) => changeTarget(event.target.value)}
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    aria-invalid={Boolean(target && !uuidValid)}
+                    aria-describedby="admin-target-hint"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <FieldDescription id="admin-target-hint">
+                    Use this fallback if you already know the member's
+                    application User ID.
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+              <div className="admin-account-actions">
+                <Button type="submit" disabled={!editable || !uuidValid}>
+                  {busy ? (
+                    <LoaderCircle data-icon="inline-start" />
+                  ) : (
+                    <RefreshCw data-icon="inline-start" />
+                  )}
+                  Inspect access
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!editable || !account}
+                  onClick={() => changeTarget(account?.user.id ?? "")}
+                >
+                  Use my account
+                </Button>
+              </div>
+            </form>
+          </details>
+        </section>
+        <div className="admin-editor-column">
+          <div className="admin-editor-heading">
+            <span className="admin-eyebrow">02 / Access settings</span>
+            <h3 id="admin-controls-title" tabIndex={-1}>
+              Manage member access
+            </h3>
             <p>
-              Find a member by email, select their account, then choose a
-              feature and access duration below.
+              {targetAccount?.email ||
+                (target
+                  ? "Managing the selected User ID"
+                  : "Select a member to configure their access.")}
             </p>
           </div>
-        </div>
-        {authorized && (
-          <AdminAccountDirectory
-            key={account.user.id}
-            selectedId={target}
-            disabled={!editable}
-            onSelect={(item) => {
-              changeTarget(item.user_id, item);
-              void inspect(item.user_id);
-            }}
-          />
-        )}
-        {target && (
-          <div className="admin-selected-account" role="status">
-            <strong>{targetAccount?.email || "Selected User ID"}</strong>
-            <code>{target}</code>
-            {targetAccount?.status === "suspended" && (
-              <p>
-                This account is suspended and cannot use analysis features. A
-                grant does not reactivate it.
-              </p>
-            )}
-          </div>
-        )}
-        <details className="admin-manual-target">
-          <summary>Use a User ID instead</summary>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void inspect();
-            }}
-            className="admin-account-form"
+          <Tabs
+            defaultValue="grants"
+            className="admin-console"
+            onValueChange={() => setPending(null)}
           >
-            <FieldGroup>
-              <Field data-invalid={Boolean(target && !uuidValid)}>
-                <FieldLabel htmlFor="admin-target">Account User ID</FieldLabel>
-                <Input
-                  id="admin-target"
-                  value={target}
-                  disabled={!editable}
-                  onChange={(event) => changeTarget(event.target.value)}
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  aria-invalid={Boolean(target && !uuidValid)}
-                  aria-describedby="admin-target-hint"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <FieldDescription id="admin-target-hint">
-                  Use this fallback if you already know the member's application
-                  User ID.
-                </FieldDescription>
-              </Field>
-            </FieldGroup>
-            <div className="admin-account-actions">
-              <Button type="submit" disabled={!editable || !uuidValid}>
-                {busy ? (
-                  <LoaderCircle data-icon="inline-start" />
-                ) : (
-                  <RefreshCw data-icon="inline-start" />
-                )}
-                Inspect access
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!editable || !account}
-                onClick={() => changeTarget(account?.user.id ?? "")}
-              >
-                Use my account
-              </Button>
-            </div>
-          </form>
-        </details>
-      </section>
-      <Tabs
-        defaultValue="grants"
-        className="admin-console"
-        onValueChange={() => setPending(null)}
-      >
-        <TabsList variant="line" aria-label="Administration sections">
-          <TabsTrigger value="grants">
-            <ListChecks />
-            Feature access
-          </TabsTrigger>
-          <TabsTrigger value="subscription">
-            <BadgeCheck />
-            Subscription
-          </TabsTrigger>
-          <TabsTrigger value="role">
-            <ShieldCheck />
-            Account role
-          </TabsTrigger>
-          <TabsTrigger value="system">
-            <Activity />
-            System status
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="grants">
-          <div className="admin-section-title">
-            <div>
-              <h3>Feature access</h3>
-              <p>
-                Give temporary access or revoke a direct grant. Subscription
-                access is managed separately.
-              </p>
-            </div>
-          </div>
-          <FieldGroup className="admin-fields">
-            <Field>
-              <FieldLabel htmlFor="admin-feature">Feature</FieldLabel>
-              <Select
-                value={feature}
-                disabled={!editable}
-                onValueChange={(value) => {
-                  setFeature(value as FeatureGrant["feature"]);
-                  setPending(null);
-                }}
-              >
-                <SelectTrigger id="admin-feature">
-                  <SelectValue>{featureNames[feature]}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="screener">Screener</SelectItem>
-                    <SelectItem value="backtest">Backtest</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <FieldDescription>
-                Granting access does not change the account role.
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="admin-grant-expiry">
-                Access expires
-              </FieldLabel>
-              <Input
-                id="admin-grant-expiry"
-                type="datetime-local"
-                value={grantUntil}
-                disabled={!editable}
-                onChange={(event) => {
-                  setGrantUntil(event.target.value);
-                  setPending(null);
-                }}
-              />
-              <FieldDescription>
-                Choose a future date in your local timezone.
-              </FieldDescription>
-              <div
-                className="admin-duration-presets"
-                role="group"
-                aria-label="Access duration presets"
-              >
-                {[7, 30, 90].map((days) => (
-                  <Button
-                    key={days}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={!editable}
-                    onClick={() => {
-                      setGrantUntil(accessExpiry(days));
+            <TabsList variant="line" aria-label="Administration sections">
+              <TabsTrigger value="grants">
+                <ListChecks />
+                Feature access
+              </TabsTrigger>
+              <TabsTrigger value="subscription">
+                <BadgeCheck />
+                Subscription
+              </TabsTrigger>
+              <TabsTrigger value="role">
+                <ShieldCheck />
+                Account role
+              </TabsTrigger>
+              <TabsTrigger value="system">
+                <Activity />
+                System status
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="grants">
+              <div className="admin-section-title">
+                <div>
+                  <h3>Feature access</h3>
+                  <p>
+                    Give temporary access or revoke a direct grant. Subscription
+                    access is managed separately.
+                  </p>
+                </div>
+              </div>
+              <FieldGroup className="admin-fields">
+                <Field>
+                  <FieldLabel htmlFor="admin-feature">Feature</FieldLabel>
+                  <Select
+                    value={feature}
+                    disabled={!editable || !uuidValid}
+                    onValueChange={(value) => {
+                      setFeature(value as FeatureGrant["feature"]);
                       setPending(null);
                     }}
                   >
-                    {days} days
-                  </Button>
-                ))}
-              </div>
-            </Field>
-          </FieldGroup>
-          <div className="admin-actions">
-            <Button
-              disabled={!editable || !uuidValid}
-              onClick={() => review("grant")}
-            >
-              Review access grant
-            </Button>
-            <Button
-              variant="outline"
-              disabled={!editable || !uuidValid}
-              onClick={() => review("revoke")}
-            >
-              Review revocation
-            </Button>
-          </div>
-          <div className="admin-ledger">
-            <h4>Direct feature grants</h4>
-            {busy && grants === null ? (
-              <Skeleton className="admin-ledger-skeleton" />
-            ) : grants === null ? (
-              <Empty>
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <ListChecks />
-                  </EmptyMedia>
-                  <EmptyTitle>No account inspected</EmptyTitle>
-                  <EmptyDescription>
-                    Select a member above to load their direct feature grants.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            ) : grants.length === 0 ? (
-              <Empty>
-                <EmptyHeader>
-                  <EmptyTitle>No direct feature grants</EmptyTitle>
-                  <EmptyDescription>
-                    This account may still have access through a subscription.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Feature</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Expires</TableHead>
-                    <TableHead>Reason</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {grants.map((grant) => (
-                    <TableRow key={grant.feature}>
-                      <TableCell>{featureNames[grant.feature]}</TableCell>
-                      <TableCell>
-                        <Badge variant={grant.active ? "secondary" : "outline"}>
-                          {grant.active
-                            ? "Active"
-                            : grant.revoked_at
-                              ? "Revoked"
-                              : "Expired"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{dateLabel(grant.valid_until)}</TableCell>
-                      <TableCell>
-                        {grant.reason || "No reason recorded"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-        </TabsContent>
-        <TabsContent value="subscription">
-          <div className="admin-section-title">
-            <div>
-              <h3>Activate a subscription</h3>
-              <p>
-                Assign a backend plan and its period end. This is manual
-                activation, not a payment or checkout.
-              </p>
-            </div>
-          </div>
-          {planError && (
-            <Alert variant="destructive">
-              <CircleAlert />
-              <AlertTitle>Plans could not be loaded</AlertTitle>
-              <AlertDescription>
-                {planError}
-                <Button
-                  variant="outline"
-                  onClick={() => setPermissionAttempt((value) => value + 1)}
-                >
-                  Retry
-                </Button>
-              </AlertDescription>
-            </Alert>
-          )}
-          <FieldGroup className="admin-fields">
-            <Field>
-              <FieldLabel htmlFor="admin-plan">Subscription plan</FieldLabel>
-              <Select
-                value={plan}
-                disabled={!editable || !plans.length}
-                onValueChange={(value) => {
-                  setPlan(value ?? "");
-                  setPending(null);
-                }}
-              >
-                <SelectTrigger id="admin-plan">
-                  <SelectValue placeholder="Select a plan">
-                    {plans.find((item) => item.code === plan)?.name}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {plans.map((item) => (
-                      <SelectItem key={item.code} value={item.code}>
-                        {item.name}
-                      </SelectItem>
+                    <SelectTrigger id="admin-feature">
+                      <SelectValue>{featureNames[feature]}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="screener">Screener</SelectItem>
+                        <SelectItem value="backtest">Backtest</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>
+                    Granting access does not change the account role.
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="admin-grant-expiry">
+                    Access expires
+                  </FieldLabel>
+                  <Input
+                    id="admin-grant-expiry"
+                    type="datetime-local"
+                    value={grantUntil}
+                    disabled={!editable || !uuidValid}
+                    onChange={(event) => {
+                      setGrantUntil(event.target.value);
+                      setPending(null);
+                      setError(null);
+                    }}
+                  />
+                  <FieldDescription>
+                    Choose a future date in your local timezone.
+                  </FieldDescription>
+                  <div
+                    className="admin-duration-presets"
+                    role="group"
+                    aria-label="Access duration presets"
+                  >
+                    {[7, 30, 90].map((days) => (
+                      <Button
+                        key={days}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!editable}
+                        onClick={() => {
+                          setGrantUntil(accessExpiry(days));
+                          setPending(null);
+                          setError(null);
+                        }}
+                      >
+                        {days} days
+                      </Button>
                     ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <FieldDescription>
-                {plans.find((item) => item.code === plan)?.description ??
-                  "Plans are loaded from the backend."}
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="admin-period-end">
-                Subscription period ends
-              </FieldLabel>
-              <Input
-                id="admin-period-end"
-                type="datetime-local"
-                value={periodEnd}
-                disabled={!editable}
-                onChange={(event) => {
-                  setPeriodEnd(event.target.value);
-                  setPending(null);
-                }}
-              />
-            </Field>
-          </FieldGroup>
-          <div className="admin-plan-features">
-            {plans
-              .find((item) => item.code === plan)
-              ?.features.map((item) => (
-                <Badge variant="outline" key={item}>
-                  {featureNames[item]}
-                </Badge>
-              ))}
-          </div>
-          <div className="admin-actions">
-            <Button
-              disabled={!editable || !plans.length}
-              onClick={() => review("subscription")}
-            >
-              Review activation
-            </Button>
-          </div>
-          <p className="admin-help">
-            The current subscription for another account cannot be read through
-            the available operator API. Only the activation result is confirmed
-            here.
-          </p>
-        </TabsContent>
-        <TabsContent value="role">
-          <div className="admin-section-title">
-            <div>
-              <h3>Account role</h3>
-              <p>
-                Operator access allows account administration. It is separate
-                from access to paid analysis features.
-              </p>
-            </div>
-          </div>
-          <FieldGroup className="admin-fields">
-            <Field>
-              <FieldLabel htmlFor="admin-role">New role</FieldLabel>
-              <Select
-                value={role}
-                disabled={!editable}
-                onValueChange={(value) => {
-                  setRole(value as "user" | "operator");
-                  setPending(null);
-                }}
-              >
-                <SelectTrigger id="admin-role">
-                  <SelectValue>
-                    {role === "operator" ? "Operator" : "User"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="user">User</SelectItem>
-                    <SelectItem value="operator">Operator</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <FieldDescription>
-                This is the role to assign, not the account's current role.
-              </FieldDescription>
-            </Field>
-          </FieldGroup>
-          <Alert>
-            <ShieldCheck />
-            <AlertTitle>The last active operator is protected</AlertTitle>
-            <AlertDescription>
-              The backend prevents demoting the last active operator. Changing
-              your own role may remove access to this page.
-            </AlertDescription>
-          </Alert>
-          <div className="admin-actions">
-            <Button disabled={!editable} onClick={() => review("role")}>
-              Review role change
-            </Button>
-          </div>
-        </TabsContent>
-        <TabsContent value="system">
-          <div className="admin-section-title">
-            <div>
-              <h3>System status</h3>
-              <p>
-                Run a live check of the API and its dependency readiness. No
-                user totals or usage estimates are inferred.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              disabled={systemBusy}
-              onClick={() => void checkSystem()}
-            >
-              <RefreshCw data-icon="inline-start" />
-              {systemBusy ? "Checking…" : "Check now"}
-            </Button>
-          </div>
-          {systemBusy ? (
-            <Skeleton className="admin-ledger-skeleton" />
-          ) : (
-            <dl className="admin-system-list">
-              <div>
-                <dt>API connection</dt>
-                <dd>
-                  {system
-                    ? system.api
-                      ? "Available"
-                      : "Unavailable"
-                    : "Not checked"}
-                </dd>
-              </div>
-              <div>
-                <dt>Service readiness</dt>
-                <dd>
-                  {system
-                    ? system.ready
-                      ? "Ready"
-                      : "Not ready"
-                    : "Not checked"}
-                </dd>
-              </div>
-              <div>
-                <dt>API version</dt>
-                <dd>{system?.version ?? "Not checked"}</dd>
-              </div>
-              <div>
-                <dt>Last checked</dt>
-                <dd>{system ? dateLabel(system.checkedAt) : "Not checked"}</dd>
-              </div>
-            </dl>
-          )}
-        </TabsContent>
-      </Tabs>
-      <section
-        className="admin-review"
-        aria-labelledby="admin-review-title"
-        ref={reviewSection}
-      >
-        <div className="admin-section-title">
-          <div>
-            <h3 id="admin-review-title">Reason & review</h3>
-            <p>
-              Every access change requires a reason, recorded by the backend
-              with the operator identity.
-            </p>
-          </div>
-        </div>
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="admin-reason">
-              Reason for this change
-            </FieldLabel>
-            <Textarea
-              id="admin-reason"
-              value={reason}
-              disabled={!editable}
-              maxLength={500}
-              rows={2}
-              onChange={(event) => {
-                setReason(event.target.value);
-                setPending(null);
-              }}
-              placeholder="For example: activate access for the approved trial period."
-            />
-            <FieldDescription>
-              No change is sent until you confirm below.
-            </FieldDescription>
-          </Field>
-        </FieldGroup>
-        {pending && (
-          <Alert>
-            <ShieldCheck />
-            <AlertTitle>{pending.title}</AlertTitle>
-            <AlertDescription>
-              <dl className="admin-confirm-details">
-                <div>
-                  <dt>Account</dt>
-                  <dd>
-                    {pending.userLabel && (
-                      <strong>
-                        {pending.userLabel}
-                        <br />
-                      </strong>
-                    )}
-                    {pending.userId}
-                  </dd>
-                </div>
-                {pending.until && (
-                  <div>
-                    <dt>Valid until</dt>
-                    <dd>{dateLabel(pending.until)}</dd>
                   </div>
-                )}
-                <div>
-                  <dt>Reason</dt>
-                  <dd>{pending.reason}</dd>
-                </div>
-              </dl>
+                </Field>
+              </FieldGroup>
               <div className="admin-actions">
                 <Button
-                  variant={
-                    pending.action === "revoke" ? "destructive" : "default"
-                  }
-                  disabled={!editable}
-                  onClick={() => void confirm()}
+                  disabled={!editable || !uuidValid}
+                  onClick={() => review("grant")}
                 >
-                  {busy && <LoaderCircle data-icon="inline-start" />}Confirm
-                  change
+                  Review access grant
                 </Button>
                 <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => setPending(null)}
+                  variant="destructive"
+                  disabled={!editable || !uuidValid}
+                  onClick={() => review("revoke")}
                 >
-                  Cancel
+                  Review revocation
                 </Button>
               </div>
-            </AlertDescription>
-          </Alert>
-        )}
-      </section>
+              <div className="admin-ledger">
+                <h4>Direct feature grants</h4>
+                {busy && grants === null ? (
+                  <Skeleton className="admin-ledger-skeleton" />
+                ) : grants === null ? (
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <ListChecks />
+                      </EmptyMedia>
+                      <EmptyTitle>No account inspected</EmptyTitle>
+                      <EmptyDescription>
+                        Select a member above to load their direct feature
+                        grants.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                ) : grants.length === 0 ? (
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyTitle>No direct feature grants</EmptyTitle>
+                      <EmptyDescription>
+                        This account may still have access through a
+                        subscription.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                ) : (
+                  <ul
+                    className="admin-grant-list"
+                    aria-label="Direct feature grants"
+                  >
+                    {grants.map((grant) => (
+                      <li key={grant.feature}>
+                        <div className="admin-grant-heading">
+                          <strong>{featureNames[grant.feature]}</strong>
+                          <Badge
+                            variant={grant.active ? "secondary" : "outline"}
+                          >
+                            {grant.active
+                              ? "Active"
+                              : grant.revoked_at
+                                ? "Revoked"
+                                : "Expired"}
+                          </Badge>
+                        </div>
+                        <dl>
+                          <div>
+                            <dt>Expires</dt>
+                            <dd>{dateLabel(grant.valid_until)}</dd>
+                          </div>
+                          <div>
+                            <dt>Reason</dt>
+                            <dd>{grant.reason || "No reason recorded"}</dd>
+                          </div>
+                        </dl>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </TabsContent>
+            <TabsContent value="subscription">
+              <div className="admin-section-title">
+                <div>
+                  <h3>Activate a subscription</h3>
+                  <p>
+                    Assign a backend plan and its period end. This is manual
+                    activation, not a payment or checkout.
+                  </p>
+                </div>
+              </div>
+              {planError && (
+                <Alert variant="destructive">
+                  <CircleAlert />
+                  <AlertTitle>Plans could not be loaded</AlertTitle>
+                  <AlertDescription>
+                    {planError}
+                    <Button
+                      variant="outline"
+                      onClick={() => setPermissionAttempt((value) => value + 1)}
+                    >
+                      Retry
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+              <FieldGroup className="admin-fields">
+                <Field>
+                  <FieldLabel htmlFor="admin-plan">
+                    Subscription plan
+                  </FieldLabel>
+                  <Select
+                    value={plan}
+                    disabled={!editable || !plans.length}
+                    onValueChange={(value) => {
+                      setPlan(value ?? "");
+                      setPending(null);
+                    }}
+                  >
+                    <SelectTrigger id="admin-plan">
+                      <SelectValue placeholder="Select a plan">
+                        {plans.find((item) => item.code === plan)?.name}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {plans.map((item) => (
+                          <SelectItem key={item.code} value={item.code}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>
+                    {plans.find((item) => item.code === plan)?.description ??
+                      "Plans are loaded from the backend."}
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="admin-period-end">
+                    Subscription period ends
+                  </FieldLabel>
+                  <Input
+                    id="admin-period-end"
+                    type="datetime-local"
+                    value={periodEnd}
+                    disabled={!editable}
+                    onChange={(event) => {
+                      setPeriodEnd(event.target.value);
+                      setPending(null);
+                    }}
+                  />
+                </Field>
+              </FieldGroup>
+              <div className="admin-plan-features">
+                {plans
+                  .find((item) => item.code === plan)
+                  ?.features.map((item) => (
+                    <Badge variant="outline" key={item}>
+                      {featureNames[item]}
+                    </Badge>
+                  ))}
+              </div>
+              <div className="admin-actions">
+                <Button
+                  disabled={!editable || !plans.length}
+                  onClick={() => review("subscription")}
+                >
+                  Review activation
+                </Button>
+              </div>
+              <p className="admin-help">
+                The current subscription for another account cannot be read
+                through the available operator API. Only the activation result
+                is confirmed here.
+              </p>
+            </TabsContent>
+            <TabsContent value="role">
+              <div className="admin-section-title">
+                <div>
+                  <h3>Account role</h3>
+                  <p>
+                    Operator access allows account administration. It is
+                    separate from access to paid analysis features.
+                  </p>
+                </div>
+              </div>
+              <FieldGroup className="admin-fields">
+                <Field>
+                  <FieldLabel htmlFor="admin-role">New role</FieldLabel>
+                  <Select
+                    value={role}
+                    disabled={!editable}
+                    onValueChange={(value) => {
+                      setRole(value as "user" | "operator");
+                      setPending(null);
+                    }}
+                  >
+                    <SelectTrigger id="admin-role">
+                      <SelectValue>
+                        {role === "operator" ? "Operator" : "User"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="operator">Operator</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>
+                    This is the role to assign, not the account's current role.
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+              <Alert>
+                <ShieldCheck />
+                <AlertTitle>The last active operator is protected</AlertTitle>
+                <AlertDescription>
+                  The backend prevents demoting the last active operator.
+                  Changing your own role may remove access to this page.
+                </AlertDescription>
+              </Alert>
+              <div className="admin-actions">
+                <Button disabled={!editable} onClick={() => review("role")}>
+                  Review role change
+                </Button>
+              </div>
+            </TabsContent>
+            <TabsContent value="system">
+              <div className="admin-section-title">
+                <div>
+                  <h3>System status</h3>
+                  <p>
+                    Run a live check of the API and its dependency readiness. No
+                    user totals or usage estimates are inferred.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  disabled={systemBusy}
+                  onClick={() => void checkSystem()}
+                >
+                  <RefreshCw data-icon="inline-start" />
+                  {systemBusy ? "Checking…" : "Check now"}
+                </Button>
+              </div>
+              {systemBusy ? (
+                <Skeleton className="admin-ledger-skeleton" />
+              ) : (
+                <dl className="admin-system-list">
+                  <div>
+                    <dt>API connection</dt>
+                    <dd>
+                      {system
+                        ? system.api
+                          ? "Available"
+                          : "Unavailable"
+                        : "Not checked"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Service readiness</dt>
+                    <dd>
+                      {system
+                        ? system.ready
+                          ? "Ready"
+                          : "Not ready"
+                        : "Not checked"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>API version</dt>
+                    <dd>{system?.version ?? "Not checked"}</dd>
+                  </div>
+                  <div>
+                    <dt>Last checked</dt>
+                    <dd>
+                      {system ? dateLabel(system.checkedAt) : "Not checked"}
+                    </dd>
+                  </div>
+                </dl>
+              )}
+            </TabsContent>
+          </Tabs>
+          <section
+            className="admin-review"
+            aria-labelledby="admin-review-title"
+            ref={reviewSection}
+          >
+            <div className="admin-section-title">
+              <div>
+                <h3 id="admin-review-title">Reason & review</h3>
+                <p>
+                  Every access change requires a reason, recorded by the backend
+                  with the operator identity.
+                </p>
+              </div>
+            </div>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="admin-reason">
+                  Reason for this change
+                </FieldLabel>
+                <Textarea
+                  id="admin-reason"
+                  value={reason}
+                  disabled={!editable}
+                  aria-describedby="admin-reason-help"
+                  required
+                  maxLength={500}
+                  rows={2}
+                  onChange={(event) => {
+                    setReason(event.target.value);
+                    setPending(null);
+                    setError(null);
+                  }}
+                  placeholder="For example: activate access for the approved trial period."
+                />
+                <FieldDescription id="admin-reason-help">
+                  No change is sent until you confirm below.
+                </FieldDescription>
+              </Field>
+            </FieldGroup>
+            {error && <p className="admin-inline-error">{error}</p>}
+            {pending && (
+              <Alert>
+                <ShieldCheck />
+                <AlertTitle>{pending.title}</AlertTitle>
+                <AlertDescription>
+                  <dl className="admin-confirm-details">
+                    <div>
+                      <dt>Account</dt>
+                      <dd>
+                        {pending.userLabel && (
+                          <strong>
+                            {pending.userLabel}
+                            <br />
+                          </strong>
+                        )}
+                        {pending.userId}
+                      </dd>
+                    </div>
+                    {pending.until && (
+                      <div>
+                        <dt>Valid until</dt>
+                        <dd>{dateLabel(pending.until)}</dd>
+                      </div>
+                    )}
+                    <div>
+                      <dt>Reason</dt>
+                      <dd>{pending.reason}</dd>
+                    </div>
+                  </dl>
+                  <div className="admin-actions">
+                    <Button
+                      variant={
+                        pending.action === "revoke" ? "destructive" : "default"
+                      }
+                      disabled={!editable}
+                      onClick={() => void confirm()}
+                    >
+                      {busy && <LoaderCircle data-icon="inline-start" />}Confirm
+                      change
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => setPending(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+          </section>
+        </div>
+      </div>
       <section
         className="admin-activity"
         aria-labelledby="admin-activity-title"

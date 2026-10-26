@@ -469,6 +469,10 @@ async (page) => {
     }
     await page.getByRole("button", { name: "Open workspace menu", exact: true }).click({ timeout: 5000 });
     await page.getByRole("button", { name: "Rules", exact: true }).click({ timeout: 5000 });
+    if (width <= 860) {
+      await page.waitForFunction(()=>document.querySelector('.menu-button')?.getAttribute('aria-expanded')==='false');
+      await page.getByRole("button", { name: "Open workspace menu", exact: true }).click({ timeout: 5000 });
+    }
     const stillOpen = await page.getByRole("button", { name: "Close menu", exact: true }).boundingBox();
     if (!stillOpen || stillOpen.x < 0) throw Error(`Navigation collapsed sidebar at ${width}`);
     await page.getByRole("button", { name: "Close menu", exact: true }).click({ timeout: 5000 });
@@ -844,9 +848,12 @@ async (page) => {
     await page.setViewportSize({width,height:1000});
     const box = await editDialog.boundingBox();
     if (!box || box.x < 0 || box.x+box.width > width+1) throw Error('Rule editor exceeds viewport');
-    const add = await editDialog.getByRole('button',{name:'Add condition',exact:true}).boundingBox();
-    const section = await editDialog.locator('.rule-condition-section').boundingBox();
-    if (!add || !section || Math.abs(add.width-section.width)>2) throw Error('Add condition is not full width');
+    // Read both widths in one frame after the responsive dialog settles.
+    await page.waitForFunction(() => {
+      const section=document.querySelector('[role="dialog"] .rule-condition-section');
+      const add=section?.querySelector('.rule-add-condition');
+      return add && Math.abs(add.getBoundingClientRect().width-section.getBoundingClientRect().width)<=2;
+    });
     await page.screenshot({path:`/private/tmp/signalgen-edit-rule-${width}.png`,animations:'disabled'});
   }
   await editDialog.getByRole('button',{name:'Translate',exact:true}).click();

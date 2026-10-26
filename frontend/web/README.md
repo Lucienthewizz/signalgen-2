@@ -2,14 +2,16 @@
 
 ## Admin access management (26 October 2026)
 
-Open `#app/admin` (alias of `#app/operator`) or **Administration → Admin**.
+Open the workspace sidebar and choose **Administration → Admin Panel**. On mobile,
+open the workspace menu first. The current menu is marked as selected; Escape
+closes the mobile menu. `#app/admin` remains an alias of `#app/operator` for links.
 An active backend `operator` account is required. The browser cannot grant itself
 this role. [Initial operator setup](../../backend/README.md) remains an out-of-band
 step for a new installation.
 
 1. Search the registered application profiles by email or User ID, optionally
    filter by account status, and Select account. Search covers the full directory;
-   Previous/Next traverse pages of 25 matching accounts.
+   Previous/Next traverse pages of 10 matching accounts.
 2. Feature access loads the selected member's direct grants. Choose Screener or
    Backtest and a 7/30/90-day duration, or edit the expiry in your local timezone.
 3. Add a reason, Review access grant, verify the recipient and expiry, then Confirm
@@ -29,9 +31,20 @@ Members appear after their application profile exists; signing in once normally
 creates it. The directory does not enumerate all Supabase Auth identities.
 The User ID fallback remains under a disclosure.
 
+The sidebar verifies role/status through `/api/v1/account/me`; login identity
+responses do not contain the application role. It rechecks on navigation, window
+focus and a self-role change. A missing, suspended or unverified operator role
+does not expose the admin entry. API authorization remains authoritative.
+
+UI/UX Pro Max guidance informs the paired member/access columns, compact member
+rows and grant summaries, visible labels, validation focus, 44px controls and
+theme-token contrast. The columns stack on smaller screens; grant data and tabs
+fit the viewport without horizontal scrolling.
+
 Run `npm run test:admin` against Vite on 5174 for isolated Playwright checks of
 search/paging, status filtering, keyboard selection, durations, reviewed grants,
-revocation, failed requests, and non-operator denial at 1440/390px in both themes.
+revocation, failed requests, and non-operator/forged/suspended-role denial at
+1440/375px and 844×390 landscape in both themes, with reduced motion.
 All account/API fixtures are synthetic; this test never grants real users access.
 
 ## Basic backtesting workspace (26 October 2026)

@@ -83,7 +83,7 @@ import {
   type LiveScreenerRun,
   type ScreenerStage,
 } from "@/analysis/screener";
-import { api } from "@/api/client";
+import { api, session } from "@/api/client";
 import { useWorkspaceSync } from "@/lib/use-workspace-sync";
 import type { AccountDevice, AccountSession, AccountState } from "@/types";
 import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
@@ -257,7 +257,7 @@ const navGroups: Array<{
     items: [
       {
         view: "operator",
-        label: "Admin",
+        label: "Admin Panel",
         icon: ShieldCheck,
         operatorOnly: true,
       },
@@ -2325,6 +2325,74 @@ export function DemoWorkspace({
   const workspaceRef = useRef<HTMLElement>(null);
   const workspaceMotion = useRef<Animation | null>(null);
   const previousWorkspaceLeft = useRef<number | null>(null);
+  const [operatorViewer, setOperatorViewer] = useState<string | null>(null);
+  const operatorVerified =
+    authenticated && backendOnline && operatorViewer === user?.id;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      setMenuOpen(false);
+      document.querySelector<HTMLButtonElement>(".menu-button")?.focus();
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (view === "operator")
+      document.getElementById("workspace-route-heading")?.focus();
+  }, [view]);
+
+  useEffect(() => {
+    let active = true;
+    let request = 0;
+    setOperatorViewer(null);
+    if (!authenticated || !backendOnline || !user?.id) return;
+    const viewer = user.id;
+    const refresh = async () => {
+      const current = ++request;
+      if (!session.getToken()) {
+        setOperatorViewer(null);
+        return;
+      }
+      const revision = session.getIdentityRevision();
+      try {
+        const account = await api.account();
+        if (
+          active &&
+          current === request &&
+          revision === session.getIdentityRevision()
+        )
+          setOperatorViewer(
+            account.user.id === viewer &&
+              account.user.role === "operator" &&
+              account.user.status === "active"
+              ? viewer
+              : null,
+          );
+      } catch {
+        if (active && current === request) setOperatorViewer(null);
+      }
+    };
+    const identityChanged = () => {
+      request++;
+      setOperatorViewer(null);
+    };
+    const unsubscribe = session.onIdentityChange(identityChanged);
+    void refresh();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("hashchange", refresh);
+    window.addEventListener("signalgen:account-role", refresh);
+    return () => {
+      active = false;
+      unsubscribe();
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("hashchange", refresh);
+      window.removeEventListener("signalgen:account-role", refresh);
+    };
+  }, [authenticated, backendOnline, user?.id]);
 
   function rememberWorkspacePosition() {
     if (
@@ -2361,6 +2429,7 @@ export function DemoWorkspace({
   const meta = viewMeta[view];
   const PageIcon = meta.icon;
   function go(next: DemoView) {
+    if (window.matchMedia("(max-width: 860px)").matches) setMenuOpen(false);
     location.hash = `app/${next}`;
   }
   function draft(symbol: string, evidence?: JournalScreeningDraft) {
@@ -2373,6 +2442,7 @@ export function DemoWorkspace({
       className={`workbench demo-workbench ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${menuOpen ? "is-menu-open" : ""}`}
     >
       <aside
+        id="workspace-sidebar"
         className={`sidebar ${menuOpen ? "is-open" : ""} ${sidebarCollapsed ? "is-collapsed" : ""}`}
       >
         <div className="sidebar__brand">
@@ -2393,10 +2463,7 @@ export function DemoWorkspace({
         <nav aria-label="Workspace navigation">
           {navGroups.map((group, index) => {
             const visibleItems = group.items.filter(
-              (item) =>
-                !item.operatorOnly ||
-                user?.role === "operator" ||
-                user?.role === "admin",
+              (item) => !item.operatorOnly || operatorVerified,
             );
             if (!visibleItems.length) return null;
             return (
@@ -2410,11 +2477,18 @@ export function DemoWorkspace({
                   return (
                     <button
                       key={item.view}
-                      className={view === item.view ? "active" : ""}
+                      className={`${view === item.view ? "active" : ""}${item.operatorOnly ? " workspace-admin-nav" : ""}`}
+                      aria-label={item.operatorOnly ? "Admin Panel" : undefined}
+                      aria-current={view === item.view ? "page" : undefined}
                       onClick={() => go(item.view)}
                     >
                       <Icon aria-hidden="true" />
-                      <span>{item.label}</span>
+                      <span>
+                        {item.label}
+                        {item.operatorOnly && (
+                          <small>Members &amp; access</small>
+                        )}
+                      </span>
                     </button>
                   );
                 })}
@@ -2432,7 +2506,15 @@ export function DemoWorkspace({
           )}
         </div>
       </aside>
-      {menuOpen && <div className="backdrop" aria-hidden="true" />}
+      {menuOpen && (
+        <button
+          type="button"
+          className="backdrop"
+          aria-label="Close workspace menu"
+          tabIndex={-1}
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
       <section className="workspace" ref={workspaceRef}>
         <header className="topbar">
           <div className="topbar__inner">
@@ -2444,6 +2526,8 @@ export function DemoWorkspace({
                   setMenuOpen(true);
                 }}
                 aria-label="Open workspace menu"
+                aria-controls="workspace-sidebar"
+                aria-expanded={menuOpen}
               >
                 <Menu />
               </button>
@@ -2479,7 +2563,9 @@ export function DemoWorkspace({
                 <PageIcon />
               </span>
               <div>
-                <h2>{meta.title}</h2>
+                <h2 id="workspace-route-heading" tabIndex={-1}>
+                  {meta.title}
+                </h2>
                 <p>{meta.description}</p>
               </div>
             </div>
