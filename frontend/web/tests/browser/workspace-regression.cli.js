@@ -521,6 +521,7 @@ async (page) => {
     }
     const stillOpen = await page.getByRole("button", { name: "Close menu", includeHidden: true, exact: true }).boundingBox();
     if (!stillOpen || stillOpen.x < 0) throw Error(`Navigation collapsed sidebar at ${width}`);
+    const expandedIcons=width>860 ? await page.locator('#workspace-sidebar nav button > svg').evaluateAll(icons=>icons.map(icon=>{const box=icon.getBoundingClientRect();return{x:box.x,y:box.y};})) : [];
     await page.getByRole("button", { name: "Close menu", includeHidden: true, exact: true }).click({ timeout: 5000 });
     if(width>860) {
       await page.waitForFunction(()=>{const box=document.querySelector('#workspace-sidebar').getBoundingClientRect();return box.width>=60 && box.width<=90;});
@@ -529,15 +530,68 @@ async (page) => {
       if(!box || box.x<0 || box.width<60 || box.width>90) throw Error('Collapsed sidebar must retain an icon rail');
       if(!await sidebar.locator('.sidebar__brand-link .brand__mark').isVisible()) throw Error('Collapsed sidebar lost the logo');
       if(await page.locator('.topbar .menu-button').count()) throw Error('Desktop must have only one sidebar toggle');
+      const railGeometry=await sidebar.locator('nav').evaluate(nav=>({
+        overflow:nav.scrollWidth-nav.clientWidth,
+        groups:[...nav.querySelectorAll('.nav-group')].map(group=>({
+          dividerGap:group.querySelector('button').getBoundingClientRect().top-group.getBoundingClientRect().top-11,
+          margin:parseFloat(getComputedStyle(group).marginBottom),
+          buttons:[...group.querySelectorAll('button')].map(button=>{
+            const b=button.getBoundingClientRect(),s=button.querySelector('svg').getBoundingClientRect(),n=nav.getBoundingClientRect();
+            return {width:b.width,height:b.height,inside:b.left>=n.left && b.right<=n.right,offset:Math.max(Math.abs(s.x+s.width/2-b.x-b.width/2),Math.abs(s.y+s.height/2-b.y-b.height/2))};
+          })
+        }))
+      }));
+      if(railGeometry.overflow>1 || railGeometry.groups.some((group,index)=>group.margin<12 || (index>0 && group.dividerGap<12) || group.buttons.some(button=>button.width<44 || button.height<44 || !button.inside || button.offset>1))) throw Error('Sidebar icons are clipped, off-center or touch a divider: '+JSON.stringify(railGeometry));
+      const collapsedIcons=await page.locator('#workspace-sidebar nav button > svg').evaluateAll(icons=>icons.map(icon=>{const box=icon.getBoundingClientRect();return{x:box.x,y:box.y};}));
+      if(collapsedIcons.some((icon,index)=>Math.abs(icon.x-expandedIcons[index].x)>1 || Math.abs(icon.y-expandedIcons[index].y)>1)) throw Error('Sidebar icons move when toggling the panel');
       const rules=sidebar.getByRole('button',{name:'Rules',exact:true});
       await rules.hover();
       const tooltip=page.getByRole('tooltip').filter({hasText:'Rules'});
       await tooltip.waitFor();
+      const tipBox=await tooltip.boundingBox();
+      if(tipBox.x<box.x+box.width || await tooltip.evaluate(el=>parseFloat(getComputedStyle(el).borderLeftWidth))<2) throw Error('Sidebar tooltip overlaps the rail or lost its outline');
       await page.screenshot({path:'/private/tmp/signalgen-icon-rail.png',animations:'disabled'});
       await page.keyboard.press('Escape');
       await rules.press('Tab'); await page.keyboard.press('Shift+Tab');
       await tooltip.waitFor();
       await page.keyboard.press('Escape');
+      await page.emulateMedia({reducedMotion:'no-preference'});
+      const motion=await page.evaluate(async()=>{
+        const sidebar=document.querySelector('#workspace-sidebar'),workspace=document.querySelector('.workspace'),toggle=document.querySelector('.sidebar-boundary-toggle');
+        const icons=[...sidebar.querySelectorAll('nav button > svg, .sidebar__brand-link .brand__mark, .account-menu__trigger [data-slot="avatar"]')],origin=icons.map(icon=>icon.getBoundingClientRect());
+        const frames=[],start=performance.now();let reversed=false;toggle.click();
+        while(performance.now()-start<650){
+          await new Promise(requestAnimationFrame);const time=performance.now()-start;
+          if(!reversed&&time>90){toggle.click();reversed=true;}
+          frames.push({width:sidebar.getBoundingClientRect().width,left:workspace.getBoundingClientRect().left,accountWidth:sidebar.querySelector('.account-menu__trigger').getBoundingClientRect().width,delta:Math.max(...icons.map((icon,i)=>{const r=icon.getBoundingClientRect();return Math.max(Math.abs(r.x-origin[i].x),Math.abs(r.y-origin[i].y),Math.abs(r.width-origin[i].width),Math.abs(r.height-origin[i].height));}))});
+        }
+        return {frames:frames.length,moving:frames.some(frame=>frame.width>80&&frame.width<260),delta:Math.max(...frames.map(frame=>frame.delta)),alignment:Math.max(...frames.map(frame=>Math.abs(frame.width-frame.left))),accountAlignment:Math.max(...frames.map(frame=>Math.abs(frame.accountWidth-frame.width+28)))};
+      });
+      if(motion.frames<2 || !motion.moving || motion.delta>1 || motion.alignment>2 || motion.accountAlignment>1) throw Error('Sidebar animation jumps or fails to reverse smoothly: '+JSON.stringify(motion));
+      await page.emulateMedia({reducedMotion:'reduce'});
+      const accountTrigger=sidebar.getByRole('button',{name:'Open Akun pengujian menu',exact:true});
+      const accountShape=await accountTrigger.evaluate(button=>{
+        const b=button.getBoundingClientRect(),a=button.querySelector('[data-slot="avatar"]').getBoundingClientRect();
+        const padding=[a.left-b.left,b.right-a.right,a.top-b.top,b.bottom-a.bottom];
+        return {width:b.width,height:b.height,paddingDifference:Math.max(...padding)-Math.min(...padding),padding:Math.min(...padding)};
+      });
+      if(accountShape.width<44 || Math.abs(accountShape.width-accountShape.height)>1 || accountShape.paddingDifference>1 || accountShape.padding<4) throw Error('Collapsed account button is not square with balanced avatar padding: '+JSON.stringify(accountShape));
+      await accountTrigger.click();
+      const accountPopup=page.getByRole('menu',{name:'Open Akun pengujian menu',exact:true});
+      await accountPopup.waitFor();
+      const popupBox=await accountPopup.boundingBox();
+      if(popupBox.x<box.x+box.width || popupBox.width<280 || popupBox.x+popupBox.width>width || popupBox.y<0 || popupBox.y+popupBox.height>1001) throw Error('Collapsed account popup is clipped or not beside the icon');
+      for(const text of [user.full_name,user.email,'Pro · Active','Profile, plan & devices']) if(!(await accountPopup.innerText()).includes(text)) throw Error('Collapsed account popup omitted '+text);
+      if(await accountPopup.getByRole('menuitem').count()!==2) throw Error('Account actions changed');
+      await page.screenshot({path:'/private/tmp/signalgen-account-rail-popup.png',animations:'disabled'});
+      await page.keyboard.press('Escape');
+      await accountPopup.waitFor({state:'hidden'});
+      if(!await accountTrigger.evaluate(el=>el===document.activeElement)) throw Error('Account popup did not return focus to the icon');
+      await accountTrigger.press('Enter');await accountPopup.waitFor();
+      const outside=await page.getByRole('heading',{name:'Manage rules',exact:true}).boundingBox();
+      await page.mouse.click(outside.x+outside.width/2,outside.y+outside.height/2);
+      await accountPopup.waitFor({state:'hidden'});
+      if(!await page.evaluate(()=>sessionStorage.getItem('signalgen.access-token'))) throw Error('Dismissing account popup signed the user out');
     }
   }
   await page.goto(`${origin}/#account`);
@@ -675,6 +729,7 @@ async (page) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${origin}/#app/rules`);
   await page.getByRole("button", { name: "New blank rule", exact: true }).click();
+  if(await page.getByRole('button',{name:'Blank rule',exact:true}).getAttribute('aria-pressed')!=='true') throw Error('Blank rule does not show its selected starting mode');
   await page.getByRole("button", { name: /Add the first condition/ }).click();
   if (await page.getByRole("group", { name: "Condition 1", exact: true }).count() !== 1 || ruleWrite) throw Error("First condition did not start a blank draft without saving");
   await page.getByRole("button", { name: "New blank rule", exact: true }).click();
@@ -692,6 +747,7 @@ async (page) => {
   for (const width of [1456, 390]) for (const theme of ["dark"]) {
     await page.setViewportSize({ width, height: 853 });
     if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
+    await page.getByRole("button", { name: "New blank rule", exact: true }).click({trial:true});
     const newBounds = await page.getByRole("button", { name: "New blank rule", exact: true }).boundingBox();
     const restoreBounds = await restoreDraftButton.boundingBox();
     if (!newBounds || !restoreBounds || restoreBounds.y < newBounds.y + newBounds.height || Math.abs(restoreBounds.x - newBounds.x) > 1) throw Error("Restore is not aligned below New blank rule");
@@ -744,6 +800,10 @@ async (page) => {
   await choosePreset("Bullish EMA cross");
   await presetDialog.getByRole("button", { name: "Replace criteria", exact: true }).click();
   if (!(await page.getByRole("combobox", {name:"Rule preset",exact:true}).textContent()).includes("Bullish EMA cross")) throw Error("Selected preset is not shown in the dropdown");
+  await page.getByRole('button',{name:'Blank rule',exact:true}).click();
+  await presetDialog.waitFor();
+  await presetDialog.getByRole('button',{name:'Cancel',exact:true}).click();
+  if(await draftInput.inputValue()!=='Bullish EMA cross' || await page.getByRole('button',{name:'Preset',exact:true}).getAttribute('aria-pressed')!=='true') throw Error('Cancelling Blank rule replacement changed the preset draft');
   await page.getByText("Draft saved on this device", { exact: true }).waitFor();
   const library = page.getByRole("region", { name: "Saved rules", exact: true });
   await page.getByLabel("Search saved rules", { exact: true }).fill("not-a-rule");
@@ -821,6 +881,11 @@ async (page) => {
     if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: `/private/tmp/signalgen-preset-workflow-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
+    const modeGeometry=await page.getByRole('group',{name:'Rule starting point',exact:true}).evaluate(group=>{
+      const buttons=[...group.querySelectorAll('button')].map(button=>button.getBoundingClientRect());
+      return {width:Math.abs(buttons[0].width-buttons[1].width),top:Math.abs(buttons[0].top-buttons[1].top),height:Math.min(...buttons.map(b=>b.height)),overflow:group.scrollWidth-group.clientWidth,icons:group.querySelectorAll('svg').length};
+    });
+    if(modeGeometry.width>1 || modeGeometry.top>1 || modeGeometry.height<44 || modeGeometry.overflow>1 || modeGeometry.icons!==2) throw Error('Preset and Blank rule are not balanced, accessible controls: '+JSON.stringify(modeGeometry));
     const presetContrast = await page.locator('[aria-label="Rule starting point"] [aria-pressed="true"]').evaluate(el => {
       const luminance = color => color.match(/[\d.]+/g).slice(0, 3).map(value => { const c = Number(value) / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
       const a = luminance(getComputedStyle(el).backgroundColor), b = luminance(getComputedStyle(el).color);

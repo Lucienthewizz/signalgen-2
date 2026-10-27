@@ -163,6 +163,7 @@ export function ServerRulesPanel({
     setPendingDraft(owner ? readRuleDraft(owner) : null);
     setDefinition(blankDefinition());
     setStartMode(null);
+    setPresetId([]);
     setEditing(null);
     setRules([]);
     setSaving(false);
@@ -321,6 +322,7 @@ export function ServerRulesPanel({
       setEditing(null);
       setDefinition(blankDefinition());
       setPresetId([]);
+      setStartMode(null);
       setSubmitted(false);
       if (userId) saveRuleDraft(userId, null);
       setPendingDraft(null);
@@ -545,14 +547,16 @@ export function ServerRulesPanel({
             >
               <div>
                 <h4 id="rule-presets-title">How would you like to start?</h4>
-                <p>
+                <p id="rule-start-description">
                   Use a preset as a starting point, or build a rule manually.
                 </p>
               </div>
               <ToggleGroup
+                className="rule-start-choices"
                 aria-label="Rule starting point"
+                aria-describedby="rule-start-description"
                 value={startMode ? [startMode] : []}
-                variant="outline"
+                variant="default"
                 onValueChange={(values) => {
                   if (values[0] === "preset") setStartMode("preset");
                   else if (values[0] === "blank") {
@@ -568,8 +572,14 @@ export function ServerRulesPanel({
                   }
                 }}
               >
-                <ToggleGroupItem value="preset">Preset</ToggleGroupItem>
-                <ToggleGroupItem value="blank">Blank rule</ToggleGroupItem>
+                <ToggleGroupItem value="preset">
+                  <BookOpenCheck data-icon="inline-start" aria-hidden="true" />
+                  Preset
+                </ToggleGroupItem>
+                <ToggleGroupItem value="blank">
+                  <CopyPlus data-icon="inline-start" aria-hidden="true" />
+                  Blank rule
+                </ToggleGroupItem>
               </ToggleGroup>
               {startMode === "preset" && (
                 <Field className="rule-preset-picker">
