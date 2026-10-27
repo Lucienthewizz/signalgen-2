@@ -558,18 +558,24 @@ async (page) => {
       await page.emulateMedia({reducedMotion:'no-preference'});
       const motion=await page.evaluate(async()=>{
         const sidebar=document.querySelector('#workspace-sidebar'),workspace=document.querySelector('.workspace'),toggle=document.querySelector('.sidebar-boundary-toggle');
-        const icons=[...sidebar.querySelectorAll('nav button > svg')],origin=icons.map(icon=>icon.getBoundingClientRect());
+        const icons=[...sidebar.querySelectorAll('nav button > svg, .sidebar__brand-link .brand__mark, .account-menu__trigger [data-slot="avatar"]')],origin=icons.map(icon=>icon.getBoundingClientRect());
         const frames=[],start=performance.now();let reversed=false;toggle.click();
         while(performance.now()-start<650){
           await new Promise(requestAnimationFrame);const time=performance.now()-start;
           if(!reversed&&time>90){toggle.click();reversed=true;}
-          frames.push({width:sidebar.getBoundingClientRect().width,left:workspace.getBoundingClientRect().left,delta:Math.max(...icons.map((icon,i)=>{const r=icon.getBoundingClientRect();return Math.max(Math.abs(r.x-origin[i].x),Math.abs(r.y-origin[i].y));}))});
+          frames.push({width:sidebar.getBoundingClientRect().width,left:workspace.getBoundingClientRect().left,delta:Math.max(...icons.map((icon,i)=>{const r=icon.getBoundingClientRect();return Math.max(Math.abs(r.x-origin[i].x),Math.abs(r.y-origin[i].y),Math.abs(r.width-origin[i].width),Math.abs(r.height-origin[i].height));}))});
         }
         return {frames:frames.length,moving:frames.some(frame=>frame.width>80&&frame.width<260),delta:Math.max(...frames.map(frame=>frame.delta)),alignment:Math.max(...frames.map(frame=>Math.abs(frame.width-frame.left)))};
       });
       if(motion.frames<2 || !motion.moving || motion.delta>1 || motion.alignment>2) throw Error('Sidebar animation jumps or fails to reverse smoothly: '+JSON.stringify(motion));
       await page.emulateMedia({reducedMotion:'reduce'});
       const accountTrigger=sidebar.getByRole('button',{name:'Open Akun pengujian menu',exact:true});
+      const accountShape=await accountTrigger.evaluate(button=>{
+        const b=button.getBoundingClientRect(),a=button.querySelector('[data-slot="avatar"]').getBoundingClientRect();
+        const padding=[a.left-b.left,b.right-a.right,a.top-b.top,b.bottom-a.bottom];
+        return {width:b.width,height:b.height,paddingDifference:Math.max(...padding)-Math.min(...padding),padding:Math.min(...padding)};
+      });
+      if(accountShape.width<44 || Math.abs(accountShape.width-accountShape.height)>1 || accountShape.paddingDifference>1 || accountShape.padding<4) throw Error('Collapsed account button is not square with balanced avatar padding: '+JSON.stringify(accountShape));
       await accountTrigger.click();
       const accountPopup=page.getByRole('menu',{name:'Open Akun pengujian menu',exact:true});
       await accountPopup.waitFor();
