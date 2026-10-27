@@ -357,8 +357,15 @@ async (page) => {
     if(await config.locator("legend").allTextContents().then(items=>items.join("|")) !== "Entry setup|Test period|Capital & position|Trading costs") throw Error("Configuration grouping is incomplete");
     const controls=await config.locator("input, select").evaluateAll(items=>items.map(item=>({height:item.getBoundingClientRect().height,width:item.getBoundingClientRect().width})));
     if(controls.some(item=>item.height<44 || item.width<100)) throw Error("Configuration controls lost their usable sizing");
-    const checks=await page.locator(".backtest-panel thead th").evaluateAll(items=>items.map(item=>{const style=getComputedStyle(item);return {bg:style.backgroundColor,color:style.color,align:style.textAlign,radius:style.borderStartStartRadius};}));
-    if(checks.some(item=>item.bg!=="rgb(245, 247, 245)" || item.color!=="rgb(24, 35, 28)" || item.align!=="center") || !checks.some(item=>parseFloat(item.radius)>0)) throw Error("Rounded white table headers are missing");
+    const checks=await page.locator(".backtest-panel thead th").evaluateAll(items=>items.map(item=>{const style=getComputedStyle(item); const probe=document.createElement("span"); probe.style.backgroundColor="var(--accent-surface)"; probe.style.color="var(--text)"; item.append(probe); const expected=getComputedStyle(probe); const result={bg:style.backgroundColor,color:style.color,expectedBg:expected.backgroundColor,expectedColor:expected.color,align:style.textAlign,radius:style.borderStartStartRadius}; probe.remove(); return result;}));
+    if(checks.some(item=>item.bg!==item.expectedBg || item.color!==item.expectedColor || item.align!=="center") || !checks.some(item=>parseFloat(item.radius)>0)) throw Error("Rounded green table headers are missing");
+    const history=page.getByRole("region",{name:"Backtest history",exact:true});
+    const firstRun=history.locator("li").first();
+    await firstRun.locator("h4").waitFor();
+    if((await firstRun.locator("h4").textContent()).includes("2026-01-20–2026-01-23")) throw Error("History title still contains the unformatted date range");
+    if((await firstRun.locator("dt").allTextContents()).join("|")!=="Test period|Saved (UTC)|Currency|File size") throw Error("History metadata fields are incomplete");
+    if(!(await firstRun.locator("time").getAttribute("datetime")) || !(await firstRun.getByText("Server synced",{exact:true}).count())) throw Error("History lost saved time or sync status");
+    await firstRun.screenshot({path:`output/playwright/backtest-history-${width}-${theme}.png`});
     const tones=await page.locator(".backtest-panel [data-value-tone]").evaluateAll(items=>items.map(item=>({tone:item.getAttribute("data-value-tone"),color:getComputedStyle(item).color,text:item.textContent})));
     if(!tones.some(item=>item.tone==="positive") || !tones.some(item=>item.tone==="negative")) throw Error("Fixture did not cover both performance signs");
     for(const item of tones) {

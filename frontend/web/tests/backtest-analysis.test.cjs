@@ -36,6 +36,7 @@ const {
   backtestTradesCSV,
   backtestHorizonsCSV,
   backtestValueTone,
+  backtestHistoryTitle,
 } = load("backtest-presentation");
 const { validBacktestResult } = load("backtest-history");
 const fixture = JSON.parse(
@@ -48,6 +49,24 @@ const fixture = JSON.parse(
   ),
 );
 const dataset = { series: fixture.series };
+test("history separates the exact date suffix without guessing rule or universe names", () => {
+  const details = backtestHistoryTitle(
+    "Rule · with separators · Universe · 2026-04-26–2026-10-26",
+  );
+  assert.equal(details.name, "Rule · with separators · Universe");
+  assert.match(details.period, /26 Apr/);
+  assert.match(details.period, /26 Oct 2026/);
+  for (const title of [
+    "Legacy run",
+    "Rule · Universe · 2026-02-31–2026-10-26",
+    "Rule · Universe · 2026-12-01–2026-01-01",
+    "Rule · Universe · 2026-99-01–2026-10-26",
+  ]) {
+    const result = backtestHistoryTitle(title);
+    assert.equal(result.name, title);
+    assert.equal(result.period, null);
+  }
+});
 test("backtest performance tones follow numeric signs and keep zero or unavailable values neutral", () => {
   assert.equal(backtestValueTone(1.63), "positive");
   assert.equal(backtestValueTone(-0.83), "negative");

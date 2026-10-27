@@ -14,6 +14,35 @@ export function backtestValueTone(
   return value > 0 ? "positive" : "negative";
 }
 
+export function backtestHistoryTitle(title: string): {
+  name: string;
+  period: string | null;
+} {
+  // Older archives only have a title; extract the known date suffix, never
+  // guess where a rule or universe name containing separators begins or ends.
+  const match = /^(.*) · (\d{4}-\d{2}-\d{2})–(\d{4}-\d{2}-\d{2})$/.exec(title);
+  if (!match || !match[1]) return { name: title, period: null };
+  const from = new Date(`${match[2]}T00:00:00Z`);
+  const to = new Date(`${match[3]}T00:00:00Z`);
+  if (
+    !Number.isFinite(from.getTime()) ||
+    !Number.isFinite(to.getTime()) ||
+    from.toISOString().slice(0, 10) !== match[2] ||
+    to.toISOString().slice(0, 10) !== match[3] ||
+    from > to
+  )
+    return { name: title, period: null };
+  return {
+    name: match[1],
+    period: new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    }).formatRange(from, to),
+  };
+}
+
 function instantKey(timestamp: string): string | null {
   const match = timestamp?.match(
     /^(\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d)(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/,

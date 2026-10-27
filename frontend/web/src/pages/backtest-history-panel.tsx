@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { api, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Cloud, HardDrive } from "lucide-react";
+import { backtestHistoryTitle } from "@/analysis/backtest-presentation";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   BACKTEST_HISTORY_EVENT,
@@ -272,50 +275,88 @@ export function BacktestHistoryPanel({
         <p>No saved backtests for this account yet.</p>
       )}
       <ul className="backtest-history-list">
-        {items.map((item) => (
-          <li key={item.id}>
-            <div>
-              <strong>{item.title}</strong>
-              <span>
-                {item.serverVersion ? "Server synced" : "Device only"} ·{" "}
-                {new Date(item.saved_at).toLocaleString("en-US", {
-                  timeZone: "UTC",
-                })}{" "}
-                UTC · {item.currency} · {(item.bytes / 1024).toFixed(1)} KiB
-              </span>
-            </div>
-            <div className="backtest-actions">
-              {!item.serverVersion && item.local && (
+        {items.map((item) => {
+          const details = backtestHistoryTitle(item.title);
+          return (
+            <li key={item.id}>
+              <div className="backtest-history-info">
+                <div className="backtest-history-title">
+                  <h4>{details.name}</h4>
+                  <Badge variant={item.serverVersion ? "success" : "outline"}>
+                    {item.serverVersion ? (
+                      <Cloud data-icon="inline-start" aria-hidden="true" />
+                    ) : (
+                      <HardDrive data-icon="inline-start" aria-hidden="true" />
+                    )}
+                    {item.serverVersion ? "Server synced" : "Device only"}
+                  </Badge>
+                </div>
+                <dl className="backtest-history-meta">
+                  {details.period && (
+                    <div>
+                      <dt>Test period</dt>
+                      <dd>{details.period}</dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt>Saved (UTC)</dt>
+                    <dd>
+                      <time dateTime={item.saved_at}>
+                        {new Date(item.saved_at).toLocaleString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: false,
+                          timeZone: "UTC",
+                        })}
+                      </time>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Currency</dt>
+                    <dd>{item.currency}</dd>
+                  </div>
+                  <div>
+                    <dt>File size</dt>
+                    <dd>{(item.bytes / 1024).toFixed(1)} KiB</dd>
+                  </div>
+                </dl>
+              </div>
+              <div className="backtest-actions">
+                {!item.serverVersion && item.local && (
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => void sync(item.id)}
+                  >
+                    Sync to server
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   disabled={busy}
-                  onClick={() => void sync(item.id)}
+                  onClick={() => void open(item.id)}
+                  aria-label={`Open saved run ${item.title}`}
                 >
-                  Sync to server
+                  Open result
                 </Button>
-              )}
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => void open(item.id)}
-                aria-label={`Open saved run ${item.title}`}
-              >
-                Open result
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={busy}
-                onClick={(e) => {
-                  returnFocus.current = e.currentTarget;
-                  setPending({ id: item.id });
-                }}
-                aria-label={`Delete saved run ${item.title}`}
-              >
-                Delete
-              </Button>
-            </div>
-          </li>
-        ))}
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={(e) => {
+                    returnFocus.current = e.currentTarget;
+                    setPending({ id: item.id });
+                  }}
+                  aria-label={`Delete saved run ${item.title}`}
+                >
+                  Delete
+                </Button>
+              </div>
+            </li>
+          );
+        })}
       </ul>
       <ConfirmDialog
         open={pending !== null}
