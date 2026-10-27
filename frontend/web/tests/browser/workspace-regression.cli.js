@@ -612,6 +612,9 @@ async (page) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${origin}/#app/rules`);
   await page.getByRole("button", { name: "New blank rule", exact: true }).click();
+  await page.getByRole("button", { name: /Add the first condition/ }).click();
+  if (await page.getByRole("group", { name: "Condition 1", exact: true }).count() !== 1 || ruleWrite) throw Error("First condition did not start a blank draft without saving");
+  await page.getByRole("button", { name: "New blank rule", exact: true }).click();
   await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
   const draftInput = page.getByLabel("Rule name", { exact: true });
   const restoreDraftButton = page.getByRole("button", { name: "Restore draft", exact: true });
@@ -631,6 +634,19 @@ async (page) => {
     if (!newBounds || !restoreBounds || restoreBounds.y < newBounds.y + newBounds.height || Math.abs(restoreBounds.x - newBounds.x) > 1) throw Error("Restore is not aligned below New blank rule");
     await page.screenshot({ path: `/private/tmp/signalgen-draft-action-${width}-${theme}.png`, animations: "disabled" });
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error("Draft action overflows");
+    const firstCondition = page.getByRole("button", { name: /Add the first condition/ });
+    if (!await firstCondition.isEnabled() || !await draftInput.isDisabled()) throw Error("Pending draft locks the first-condition action or unlocks protected fields");
+    if (width === 390) {
+      await firstCondition.focus();
+      await firstCondition.press("Enter");
+    } else await firstCondition.click();
+    if (await page.getByRole("group", { name: "Condition 1", exact: true }).count() !== 1 || await draftInput.inputValue() !== "" || !await restoreDraftButton.isDisabled() || ruleWrite) throw Error("First condition did not initialize an editable blank rule");
+    await draftInput.fill("Draft recovery fixture");
+    await page.reload();
+    await page.waitForFunction(() => {
+      const button = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === 'Restore draft');
+      return button && !button.disabled && button.getAttribute('aria-disabled') !== 'true';
+    });
   }
   await restoreDraftButton.click();
   if (await draftInput.inputValue() !== "Draft recovery fixture" || !await restoreDraftButton.isDisabled()) throw Error("Draft restore failed or remained enabled without a pending draft");

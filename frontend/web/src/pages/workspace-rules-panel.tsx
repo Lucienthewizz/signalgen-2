@@ -85,6 +85,15 @@ const blankCondition = (): RuleCondition => ({
   right: "EMA20",
 });
 
+const formSectionStyle = {
+  border: 0,
+  padding: 0,
+  margin: 0,
+  minWidth: 0,
+  display: "grid",
+  gap: "inherit",
+};
+
 function readableError(error: unknown) {
   if (error instanceof ApiError && error.code === "VERSION_CONFLICT")
     return "This rule changed in another session. Reload and try again.";
@@ -514,14 +523,7 @@ export function ServerRulesPanel({
         <form className="rule-composer__form" onSubmit={save}>
           <fieldset
             disabled={saving || !!pendingDraft}
-            style={{
-              border: 0,
-              padding: 0,
-              margin: 0,
-              minWidth: 0,
-              display: "grid",
-              gap: "inherit",
-            }}
+            style={formSectionStyle}
           >
             <section
               className="rule-presets"
@@ -700,7 +702,9 @@ export function ServerRulesPanel({
                 )}
               </Field>
             </FieldGroup>
+          </fieldset>
 
+          <fieldset disabled={saving} style={formSectionStyle}>
             <div className="rule-condition-section">
               <div className="rule-condition-section__heading">
                 <div>
@@ -718,17 +722,22 @@ export function ServerRulesPanel({
                 <button
                   type="button"
                   className="rule-empty-condition"
-                  onClick={() =>
+                  onClick={() => {
+                    if (pendingDraft) startNew();
                     setDefinition((current) => ({
                       ...current,
                       conditions: [blankCondition()],
-                    }))
-                  }
+                    }));
+                  }}
                 >
                   <Plus />
                   <span>
                     <strong>Add the first condition</strong>
-                    <small>Start from a blank rule.</small>
+                    <small>
+                      {pendingDraft
+                        ? "Start a new blank rule instead of restoring the saved draft."
+                        : "Start from a blank rule."}
+                    </small>
                   </span>
                 </button>
               ) : (
@@ -967,7 +976,12 @@ export function ServerRulesPanel({
                 <FieldError>{validation.count}</FieldError>
               )}
             </div>
+          </fieldset>
 
+          <fieldset
+            disabled={saving || !!pendingDraft}
+            style={formSectionStyle}
+          >
             {error && (
               <Alert variant="destructive">
                 <CircleAlert />
