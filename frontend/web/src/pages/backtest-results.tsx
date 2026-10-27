@@ -1,5 +1,14 @@
 import { useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+} from "@/components/ui/select";
 import type { BacktestArchive } from "@/analysis/backtest-history";
 import type {
   BacktestResult,
@@ -9,6 +18,7 @@ import {
   backtestTradesCSV,
   backtestHorizonsCSV,
   downloadBacktestCSV,
+  backtestValueTone,
 } from "@/analysis/backtest-presentation";
 const dateLabel = (stamp: string) =>
   stamp ? new Date(stamp).toISOString().slice(0, 10) : "—";
@@ -39,6 +49,15 @@ export function BacktestResults({
   );
   const [equityPage, setEquityPage] = useState(0);
   const selectedHorizon = result.horizons[horizonIndex];
+  const signedMetrics: Record<string, number | null> = {
+    "Realized P&L": selectedHorizon.metrics.net_pl_cash,
+    "Unrealized P&L": selectedHorizon.metrics.unrealized_pl,
+    "Total return": selectedHorizon.metrics.total_return_pct,
+    "Expectancy / closed trade": selectedHorizon.metrics.expectancy_cash,
+    "Average profit": selectedHorizon.metrics.avg_win_cash,
+    "Average loss": selectedHorizon.metrics.avg_loss_cash,
+    "Average closed return": selectedHorizon.metrics.avg_return_pct,
+  };
   const money = (value: number | null) =>
     value === null
       ? "—"
@@ -74,22 +93,39 @@ export function BacktestResults({
             {archived ? "Saved result · read-only" : "Completed run"} · {title}
           </p>
         </div>
-        <div className="backtest-field">
-          <label htmlFor="bt-result-horizon">Exit horizon</label>
-          <select
-            id="bt-result-horizon"
-            value={horizonIndex}
-            onChange={(event) => {
-              selectHorizon(Number(event.target.value));
+        <Field className="backtest-horizon-picker">
+          <FieldLabel htmlFor="bt-result-horizon">Exit horizon</FieldLabel>
+          <Select
+            value={String(horizonIndex)}
+            items={result.horizons.map((h, i) => ({
+              value: String(i),
+              label: h.label,
+            }))}
+            onValueChange={(value) => {
+              if (value !== null) selectHorizon(Number(value));
             }}
           >
-            {result.horizons.map((item, i) => (
-              <option value={i} key={item.step}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </div>
+            <SelectTrigger id="bt-result-horizon">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end" alignItemWithTrigger={false}>
+              <SelectGroup>
+                {result.horizons.map((h, i) => (
+                  <SelectItem
+                    key={h.step}
+                    value={String(i)}
+                    aria-label={h.label}
+                  >
+                    <strong>{h.label}</strong>
+                    <span className="backtest-horizon-option">
+                      {h.step} {h.step === 1 ? "candle" : "candles"}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
       </div>
       <div className="backtest-actions">
         <Button
@@ -201,13 +237,33 @@ export function BacktestResults({
                   <td>
                     {h.metrics.closed_trades} / {h.metrics.open_trades}
                   </td>
-                  <td>{percent(h.metrics.total_return_pct)}</td>
-                  <td>{money(h.metrics.net_pl_cash)}</td>
-                  <td>{money(h.metrics.unrealized_pl)}</td>
+                  <td
+                    data-value-tone={backtestValueTone(
+                      h.metrics.total_return_pct,
+                    )}
+                  >
+                    {percent(h.metrics.total_return_pct)}
+                  </td>
+                  <td
+                    data-value-tone={backtestValueTone(h.metrics.net_pl_cash)}
+                  >
+                    {money(h.metrics.net_pl_cash)}
+                  </td>
+                  <td
+                    data-value-tone={backtestValueTone(h.metrics.unrealized_pl)}
+                  >
+                    {money(h.metrics.unrealized_pl)}
+                  </td>
                   <td>{percent(h.metrics.max_drawdown_pct)}</td>
                   <td>{percent(h.metrics.win_rate)}</td>
                   <td>{number(h.metrics.profit_factor)}</td>
-                  <td>{money(h.metrics.expectancy_cash)}</td>
+                  <td
+                    data-value-tone={backtestValueTone(
+                      h.metrics.expectancy_cash,
+                    )}
+                  >
+                    {money(h.metrics.expectancy_cash)}
+                  </td>
                 </tr>
               ))}
           </tbody>
@@ -276,7 +332,11 @@ export function BacktestResults({
         ].map(([label, value]) => (
           <div key={label}>
             <dt>{label}</dt>
-            <dd>{value}</dd>
+            <dd
+              data-value-tone={backtestValueTone(signedMetrics[label] ?? null)}
+            >
+              {value}
+            </dd>
           </div>
         ))}
       </dl>
@@ -322,9 +382,15 @@ export function BacktestResults({
                 </td>
                 <td>{s.skipped_entries}</td>
                 <td>{percent(s.win_rate)}</td>
-                <td>{money(s.net_pl_cash)}</td>
-                <td>{money(s.unrealized_pl)}</td>
-                <td>{percent(s.avg_return_pct)}</td>
+                <td data-value-tone={backtestValueTone(s.net_pl_cash)}>
+                  {money(s.net_pl_cash)}
+                </td>
+                <td data-value-tone={backtestValueTone(s.unrealized_pl)}>
+                  {money(s.unrealized_pl)}
+                </td>
+                <td data-value-tone={backtestValueTone(s.avg_return_pct)}>
+                  {percent(s.avg_return_pct)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -382,14 +448,22 @@ export function BacktestResults({
                           ? "—"
                           : money(trade.exit_price)}
                       </td>
-                      <td>
+                      <td
+                        data-value-tone={backtestValueTone(
+                          trade.status === "open"
+                            ? trade.unrealized_pl
+                            : trade.net_pl,
+                        )}
+                      >
                         {money(
                           trade.status === "open"
                             ? trade.unrealized_pl
                             : trade.net_pl,
                         )}
                       </td>
-                      <td>{number(trade.return_pct)}%</td>
+                      <td data-value-tone={backtestValueTone(trade.return_pct)}>
+                        {number(trade.return_pct)}%
+                      </td>
                       <td>
                         {trade.status === "open"
                           ? "Open · unrealized"

@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Play, Square, Plus, Trash2, RefreshCw } from "lucide-react";
+import {
+  Play,
+  Square,
+  Plus,
+  Trash2,
+  RefreshCw,
+  SlidersHorizontal,
+} from "lucide-react";
 import { api, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { BacktestResults } from "./backtest-results";
 import { BacktestHistoryPanel } from "./backtest-history-panel";
 import { uploadArchive } from "@/analysis/backtest-sync";
@@ -463,17 +472,24 @@ export function WorkspaceBacktestPanel({
   return (
     <div className="backtest-workspace">
       <section
-        className="backtest-panel"
+        className="backtest-panel backtest-config"
         aria-labelledby="backtest-config-heading"
       >
-        <div className="backtest-section-heading">
-          <h3 id="backtest-config-heading">Configuration</h3>
-          <span>Daily · Long only</span>
+        <div className="backtest-section-heading backtest-config-heading">
+          <div className="resource-title-lockup">
+            <span aria-hidden="true">
+              <SlidersHorizontal />
+            </span>
+            <div>
+              <h3 id="backtest-config-heading">Configuration</h3>
+              <p className="backtest-note">
+                Signals use completed candles. Entry is at the next candle's
+                open; one position at a time.
+              </p>
+            </div>
+          </div>
+          <Badge variant="outline">Daily · Long only</Badge>
         </div>
-        <p className="backtest-note">
-          Signals use completed candles. Entry is at the next candle's open; one
-          position at a time.
-        </p>
         {!universes.length ? (
           <p role="status">
             Create a <a href="#app/universes">stock universe</a> before running
@@ -486,190 +502,227 @@ export function WorkspaceBacktestPanel({
               void execute(config.mode === "manual");
             }}
           >
-            <fieldset disabled={busy} className="backtest-fields">
-              <div className="backtest-field">
-                <label htmlFor="bt-mode">Entry mode</label>
-                <select
-                  id="bt-mode"
-                  value={config.mode}
-                  onChange={(event) =>
-                    update("mode", event.target.value as BacktestConfig["mode"])
-                  }
+            <fieldset disabled={busy} className="backtest-config-fields">
+              <fieldset className="backtest-config-section">
+                <legend>Entry setup</legend>
+                <FieldGroup
+                  className="backtest-fields"
+                  data-columns={config.mode === "rule" ? 3 : 2}
                 >
-                  <option value="rule">Rule</option>
-                  <option value="manual">Manual</option>
-                </select>
-              </div>
-              <div className="backtest-field">
-                <label htmlFor="bt-universe">Stock universe</label>
-                <select
-                  id="bt-universe"
-                  required
-                  value={universeId}
-                  onChange={(event) => {
-                    clearSnapshot();
-                    setUniverseId(event.target.value);
-                  }}
-                >
-                  {universes.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} ({item.symbols.length} stocks)
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {config.mode === "rule" && (
-                <div className="backtest-field">
-                  <label htmlFor="bt-rule">Entry rule</label>
-                  <select
-                    id="bt-rule"
-                    required
-                    value={ruleId}
-                    onChange={(event) => {
-                      clearSnapshot();
-                      setRuleId(event.target.value);
-                    }}
-                  >
-                    <option value="" disabled>
-                      Choose a BUY rule
-                    </option>
-                    {rules.map((item) => (
-                      <option
-                        key={item.id}
-                        value={item.id}
-                        disabled={item.definition?.signal_type === "SELL"}
+                  <Field className="backtest-field">
+                    <FieldLabel htmlFor="bt-mode">Entry mode</FieldLabel>
+                    <select
+                      id="bt-mode"
+                      value={config.mode}
+                      onChange={(event) =>
+                        update(
+                          "mode",
+                          event.target.value as BacktestConfig["mode"],
+                        )
+                      }
+                    >
+                      <option value="rule">Rule</option>
+                      <option value="manual">Manual</option>
+                    </select>
+                  </Field>
+                  <Field className="backtest-field">
+                    <FieldLabel htmlFor="bt-universe">
+                      Stock universe
+                    </FieldLabel>
+                    <select
+                      id="bt-universe"
+                      required
+                      value={universeId}
+                      onChange={(event) => {
+                        clearSnapshot();
+                        setUniverseId(event.target.value);
+                      }}
+                    >
+                      {universes.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} ({item.symbols.length} stocks)
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  {config.mode === "rule" && (
+                    <Field className="backtest-field">
+                      <FieldLabel htmlFor="bt-rule">Entry rule</FieldLabel>
+                      <select
+                        id="bt-rule"
+                        required
+                        value={ruleId}
+                        onChange={(event) => {
+                          clearSnapshot();
+                          setRuleId(event.target.value);
+                        }}
                       >
-                        {item.name}
-                        {item.definition?.signal_type === "SELL"
-                          ? " (SELL unsupported)"
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="backtest-field">
-                <label htmlFor="bt-from">From date (UTC)</label>
-                <Input
-                  id="bt-from"
-                  type="date"
-                  required
-                  max={config.to}
-                  value={config.from}
-                  onChange={(event) => update("from", event.target.value)}
-                />
-              </div>
-              <div className="backtest-field">
-                <label htmlFor="bt-to">To date (UTC)</label>
-                <Input
-                  id="bt-to"
-                  type="date"
-                  required
-                  min={config.from}
-                  max={new Date().toISOString().slice(0, 10)}
-                  value={config.to}
-                  onChange={(event) => update("to", event.target.value)}
-                />
-              </div>
-              <div className="backtest-field">
-                <label htmlFor="bt-horizon">Holding period (candles)</label>
-                <Input
-                  id="bt-horizon"
-                  type="number"
-                  required
-                  min="1"
-                  max="100"
-                  step="1"
-                  value={config.n_steps}
-                  onChange={(event) =>
-                    update("n_steps", Number(event.target.value))
-                  }
-                />
-              </div>
-              <div className="backtest-field">
-                <label htmlFor="bt-capital">Initial capital</label>
-                <Input
-                  id="bt-capital"
-                  type="number"
-                  required
-                  min="0.01"
-                  max="1000000000000000"
-                  step="any"
-                  value={config.initial_capital}
-                  onChange={(event) =>
-                    update("initial_capital", Number(event.target.value))
-                  }
-                />
-              </div>
-              <div className="backtest-field">
-                <label htmlFor="bt-sizing">Position sizing</label>
-                <select
-                  id="bt-sizing"
-                  value={config.position_sizing}
-                  onChange={(event) =>
-                    update(
-                      "position_sizing",
-                      event.target.value as BacktestConfig["position_sizing"],
-                    )
-                  }
-                >
-                  <option value="percent_equity">Percent of equity</option>
-                  <option value="fixed_amount">Fixed amount</option>
-                </select>
-              </div>
-              <div className="backtest-field">
-                <label htmlFor="bt-size">
-                  {config.position_sizing === "percent_equity"
-                    ? "Position size (%)"
-                    : "Position amount"}
-                </label>
-                <Input
-                  id="bt-size"
-                  type="number"
-                  required
-                  min="0.01"
-                  max={
-                    config.position_sizing === "percent_equity"
-                      ? "100"
-                      : "1000000000000000"
-                  }
-                  step="any"
-                  value={config.position_size}
-                  onChange={(event) =>
-                    update("position_size", Number(event.target.value))
-                  }
-                />
-              </div>
-              <div className="backtest-field">
-                <label htmlFor="bt-fee">Commission per side (%)</label>
-                <Input
-                  id="bt-fee"
-                  type="number"
-                  required
-                  min="0"
-                  max="10"
-                  step="any"
-                  value={config.commission_pct}
-                  onChange={(event) =>
-                    update("commission_pct", Number(event.target.value))
-                  }
-                />
-              </div>
-              <div className="backtest-field">
-                <label htmlFor="bt-slip">Slippage per side (%)</label>
-                <Input
-                  id="bt-slip"
-                  type="number"
-                  required
-                  min="0"
-                  max="10"
-                  step="any"
-                  value={config.slippage_pct}
-                  onChange={(event) =>
-                    update("slippage_pct", Number(event.target.value))
-                  }
-                />
-              </div>
+                        <option value="" disabled>
+                          Choose a BUY rule
+                        </option>
+                        {rules.map((item) => (
+                          <option
+                            key={item.id}
+                            value={item.id}
+                            disabled={item.definition?.signal_type === "SELL"}
+                          >
+                            {item.name}
+                            {item.definition?.signal_type === "SELL"
+                              ? " (SELL unsupported)"
+                              : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  )}
+                </FieldGroup>
+              </fieldset>
+              <fieldset className="backtest-config-section">
+                <legend>Test period</legend>
+                <FieldGroup className="backtest-fields">
+                  <Field className="backtest-field">
+                    <FieldLabel htmlFor="bt-from">From date (UTC)</FieldLabel>
+                    <Input
+                      id="bt-from"
+                      type="date"
+                      required
+                      max={config.to}
+                      value={config.from}
+                      onChange={(event) => update("from", event.target.value)}
+                    />
+                  </Field>
+                  <Field className="backtest-field">
+                    <FieldLabel htmlFor="bt-to">To date (UTC)</FieldLabel>
+                    <Input
+                      id="bt-to"
+                      type="date"
+                      required
+                      min={config.from}
+                      max={new Date().toISOString().slice(0, 10)}
+                      value={config.to}
+                      onChange={(event) => update("to", event.target.value)}
+                    />
+                  </Field>
+                  <Field className="backtest-field">
+                    <FieldLabel htmlFor="bt-horizon">
+                      Holding period (candles)
+                    </FieldLabel>
+                    <Input
+                      id="bt-horizon"
+                      type="number"
+                      required
+                      min="1"
+                      max="100"
+                      step="1"
+                      value={config.n_steps}
+                      onChange={(event) =>
+                        update("n_steps", Number(event.target.value))
+                      }
+                    />
+                  </Field>
+                </FieldGroup>
+              </fieldset>
+              <fieldset className="backtest-config-section">
+                <legend>Capital & position</legend>
+                <FieldGroup className="backtest-fields">
+                  <Field className="backtest-field">
+                    <FieldLabel htmlFor="bt-capital">
+                      Initial capital
+                    </FieldLabel>
+                    <Input
+                      id="bt-capital"
+                      type="number"
+                      required
+                      min="0.01"
+                      max="1000000000000000"
+                      step="any"
+                      value={config.initial_capital}
+                      onChange={(event) =>
+                        update("initial_capital", Number(event.target.value))
+                      }
+                    />
+                  </Field>
+                  <Field className="backtest-field">
+                    <FieldLabel htmlFor="bt-sizing">Position sizing</FieldLabel>
+                    <select
+                      id="bt-sizing"
+                      value={config.position_sizing}
+                      onChange={(event) =>
+                        update(
+                          "position_sizing",
+                          event.target
+                            .value as BacktestConfig["position_sizing"],
+                        )
+                      }
+                    >
+                      <option value="percent_equity">Percent of equity</option>
+                      <option value="fixed_amount">Fixed amount</option>
+                    </select>
+                  </Field>
+                  <Field className="backtest-field">
+                    <FieldLabel htmlFor="bt-size">
+                      {config.position_sizing === "percent_equity"
+                        ? "Position size (%)"
+                        : "Position amount"}
+                    </FieldLabel>
+                    <Input
+                      id="bt-size"
+                      type="number"
+                      required
+                      min="0.01"
+                      max={
+                        config.position_sizing === "percent_equity"
+                          ? "100"
+                          : "1000000000000000"
+                      }
+                      step="any"
+                      value={config.position_size}
+                      onChange={(event) =>
+                        update("position_size", Number(event.target.value))
+                      }
+                    />
+                  </Field>
+                </FieldGroup>
+              </fieldset>
+              <fieldset className="backtest-config-section">
+                <legend>Trading costs</legend>
+                <FieldGroup className="backtest-fields" data-columns={2}>
+                  <Field className="backtest-field">
+                    <FieldLabel htmlFor="bt-fee">
+                      Commission per side (%)
+                    </FieldLabel>
+                    <Input
+                      id="bt-fee"
+                      type="number"
+                      required
+                      min="0"
+                      max="10"
+                      step="any"
+                      value={config.commission_pct}
+                      onChange={(event) =>
+                        update("commission_pct", Number(event.target.value))
+                      }
+                    />
+                  </Field>
+                  <Field className="backtest-field">
+                    <FieldLabel htmlFor="bt-slip">
+                      Slippage per side (%)
+                    </FieldLabel>
+                    <Input
+                      id="bt-slip"
+                      type="number"
+                      required
+                      min="0"
+                      max="10"
+                      step="any"
+                      value={config.slippage_pct}
+                      onChange={(event) =>
+                        update("slippage_pct", Number(event.target.value))
+                      }
+                    />
+                  </Field>
+                </FieldGroup>
+              </fieldset>
             </fieldset>
             {config.mode === "rule" && !ruleId && (
               <p role="status">

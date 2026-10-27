@@ -31,9 +31,12 @@ function load(name) {
   });
   return exports;
 }
-const { parseBacktestEntries, backtestTradesCSV, backtestHorizonsCSV } = load(
-  "backtest-presentation",
-);
+const {
+  parseBacktestEntries,
+  backtestTradesCSV,
+  backtestHorizonsCSV,
+  backtestValueTone,
+} = load("backtest-presentation");
 const { validBacktestResult } = load("backtest-history");
 const fixture = JSON.parse(
   fs.readFileSync(
@@ -45,6 +48,13 @@ const fixture = JSON.parse(
   ),
 );
 const dataset = { series: fixture.series };
+test("backtest performance tones follow numeric signs and keep zero or unavailable values neutral", () => {
+  assert.equal(backtestValueTone(1.63), "positive");
+  assert.equal(backtestValueTone(-0.83), "negative");
+  for (const value of [0, -0, null, NaN, Infinity, -Infinity]) {
+    assert.equal(backtestValueTone(value), undefined);
+  }
+});
 test("bulk input is atomic, validates exact candle scope, canonical offsets and duplicates", () => {
   const text =
     "symbol,timestamp\nTEST,2026-01-20T08:00:00+08:00\nTEST,2026-01-21T00:00:00Z";

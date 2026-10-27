@@ -348,6 +348,35 @@ async (page) => {
         throw Error("Trade table escaped its scroll region");
     }
   }
+  async function chooseHorizon(label) {
+    await page.getByRole("combobox", {name:"Exit horizon",exact:true}).click();
+    await page.getByRole("option", {name:label,exact:true}).click();
+  }
+  async function assertBacktestPolish(width, theme) {
+    const config=page.locator(".backtest-config");
+    if(await config.locator("legend").allTextContents().then(items=>items.join("|")) !== "Entry setup|Test period|Capital & position|Trading costs") throw Error("Configuration grouping is incomplete");
+    const controls=await config.locator("input, select").evaluateAll(items=>items.map(item=>({height:item.getBoundingClientRect().height,width:item.getBoundingClientRect().width})));
+    if(controls.some(item=>item.height<44 || item.width<100)) throw Error("Configuration controls lost their usable sizing");
+    const checks=await page.locator(".backtest-panel thead th").evaluateAll(items=>items.map(item=>{const style=getComputedStyle(item);return {bg:style.backgroundColor,color:style.color,align:style.textAlign,radius:style.borderStartStartRadius};}));
+    if(checks.some(item=>item.bg!=="rgb(245, 247, 245)" || item.color!=="rgb(24, 35, 28)" || item.align!=="center") || !checks.some(item=>parseFloat(item.radius)>0)) throw Error("Rounded white table headers are missing");
+    const tones=await page.locator(".backtest-panel [data-value-tone]").evaluateAll(items=>items.map(item=>({tone:item.getAttribute("data-value-tone"),color:getComputedStyle(item).color,text:item.textContent})));
+    if(!tones.some(item=>item.tone==="positive") || !tones.some(item=>item.tone==="negative")) throw Error("Fixture did not cover both performance signs");
+    for(const item of tones) {
+      const rgb=item.color.match(/\d+/g).map(Number);
+      if(item.tone==="positive" ? rgb[1]<=rgb[0] : rgb[0]<=rgb[1]) throw Error(`Incorrect ${item.tone} performance color: ${item.color}`);
+    }
+    await page.evaluate(() => window.scrollTo(0,0));
+    await page.screenshot({path:`output/playwright/backtest-config-${width}-${theme}.png`,fullPage:false});
+    await page.getByRole("region",{name:"Backtest trades",exact:true}).screenshot({path:`output/playwright/backtest-table-${width}-${theme}.png`});
+    const trigger=page.getByRole("combobox",{name:"Exit horizon",exact:true});
+    await trigger.focus(); await page.keyboard.press("ArrowDown");
+    await page.getByRole("option",{name:"T+2",exact:true}).waitFor();
+    await page.screenshot({path:`output/playwright/backtest-horizon-${width}-${theme}.png`});
+    await page.keyboard.press("Escape");
+    await chooseHorizon("T+2");
+    if(!(await trigger.textContent()).includes("T+2")) throw Error("Horizon menu did not select T+2");
+    await chooseHorizon("T+1");
+  }
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const theme of ["dark", "light"]) {
@@ -373,7 +402,7 @@ async (page) => {
       if (await comparison.locator("tbody tr").count() !== 3) throw Error("Missing horizon comparison");
       await comparison.getByRole("button", {name:"T+1",exact:true}).focus();
       await page.keyboard.press("Enter");
-      if (await page.getByLabel("Exit horizon", {exact:true}).inputValue() !== "0") throw Error("Keyboard horizon selection failed");
+      if (!(await page.getByLabel("Exit horizon", {exact:true}).textContent()).includes("T+1")) throw Error("Keyboard horizon selection failed");
       await page.getByRole("region",{name:"Results by stock",exact:true}).waitFor();
       const slider = page.getByLabel("Inspect daily equity",{exact:true});
       await slider.focus(); await page.keyboard.press("End");
@@ -386,6 +415,7 @@ async (page) => {
         if(text.split("\r\n").length!==4 || !text.includes('"T+3"') || !text.includes('"USD"')) throw Error("Horizon CSV is incomplete");
       }
       await assertLayout(width);
+      await assertBacktestPolish(width, theme);
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({
         path: `output/playwright/backtest-rule-${width}-${theme}.png`,
@@ -553,13 +583,13 @@ async (page) => {
   await page.getByRole("button",{name:"Run backtest",exact:true}).click();await result();
   await page.getByText(/Result is available, but history was not saved/).waitFor();
   await page.evaluate(()=>{IDBObjectStore.prototype.put=window.__btPut;delete window.__btPut;});
-  await page.getByLabel("Exit horizon",{exact:true}).selectOption("0");
+  await chooseHorizon("T+1");
   const horizonTable=page.getByRole("region",{name:"Holding period comparison",exact:true});
   if(await horizonTable.locator("tbody tr").count()!==10)throw Error("Horizon pagination is not bounded to ten");
   await page.getByRole("button",{name:"Next horizons",exact:true}).click();
   await horizonTable.getByRole("button",{name:"T+12",exact:true}).click();
-  if(await page.getByLabel("Exit horizon",{exact:true}).inputValue()!=="11")throw Error("Second-page horizon selection failed");
-  await page.getByLabel("Exit horizon",{exact:true}).selectOption("0");
+  if(!(await page.getByLabel("Exit horizon",{exact:true}).textContent()).includes("T+12"))throw Error("Second-page horizon selection failed");
+  await chooseHorizon("T+1");
   await page.getByRole("button",{name:"Next trades",exact:true}).click();
   if(await page.getByRole("region",{name:"Backtest trades",exact:true}).locator("tbody tr").count()!==3)throw Error("Trade pagination lost rows");
   const tradeDownload=page.waitForEvent("download");await page.getByRole("button",{name:"Export trades CSV",exact:true}).click();
