@@ -22,11 +22,11 @@ async (page) => {
   if (await page.locator(".news-feed li").count() !== 3) throw Error("Reset failed");
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    const close = page.getByRole("button", { name: "Close menu" });
-    const bounds = await close.boundingBox();
+    const close = page.getByRole("button", { name: "Close menu", includeHidden: true });
+    const bounds = await close.count() ? await close.boundingBox() : null;
     if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
-    for (let theme = 0; theme < 2; theme++) {
-      await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
+    for (let theme = 0; theme < 1; theme++) {
+      if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
       await page.locator(".news-feed").screenshot({ path: `/private/tmp/signalgen-news-${width}-${theme}.png`, animations: "disabled", timeout: 5000 });
       if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error("News page overflow");
     }

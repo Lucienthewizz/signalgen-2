@@ -1,5 +1,10 @@
 // prettier-ignore
 async (page) => {
+  async function choosePreset(name) {
+    await page.getByRole("button", {name:"Preset",exact:true}).click();
+    await page.getByRole("combobox", {name:"Rule preset",exact:true}).click();
+    await page.getByRole("option", {name,exact:true}).click();
+  }
   const origin = new URL(page.url()).origin;
   // All API responses and account state are synthetic. Never call a real account.
   const user = { id: "11111111-1111-4111-8111-111111111111", full_name: "Akun pengujian", email: "fixture@example.test", role: "operator", status: "active" };
@@ -130,7 +135,7 @@ async (page) => {
   await journalVerification.waitFor();
   if (!(await journalVerification.innerText()).includes('BBCA') || await journalVerification.locator('tbody tr').count() !== 2) throw Error('Journal verification omitted captured condition evidence');
   const verificationTheme = await page.evaluate(()=>document.documentElement.dataset.theme);
-  for (const width of [1440,390]) for (const theme of ['dark','light']) {
+  for (const width of [1440,390]) for (const theme of ["dark"]) {
     await page.setViewportSize({width,height:1000});
     await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
     const box=await journalVerification.boundingBox();
@@ -256,7 +261,7 @@ async (page) => {
   const routes = ["overview", "analysis", "rules", "universes", "journal", "realtime", "news", "access", "subscription", "operator"];
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (let theme = 0; theme < 2; theme++) {
+    for (let theme = 0; theme < 1; theme++) {
       for (const view of routes) {
         await page.goto(`${origin}/#app/${view}`);
         await page.locator(".demo-workbench").waitFor({ timeout: 10000 });
@@ -275,8 +280,8 @@ async (page) => {
           loaded: document.fonts.check('14px "Saira Variable"') && document.fonts.check('500 14px "Saira Condensed"') && document.fonts.check('600 28px "Saira Condensed"'),
         }));
         if (!typography.body.includes("Saira Variable") || !typography.nav.includes("Saira Condensed") || !typography.heading.includes("Saira Condensed") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
-        const close = page.getByRole("button", { name: "Close menu" });
-        const bounds = await close.boundingBox();
+        const close = page.getByRole("button", { name: "Close menu", includeHidden: true });
+        const bounds = await close.count() ? await close.boundingBox() : null;
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
         const surfaceSelector = {
           overview: ".overview-launch", analysis: ".screener-console", rules: ".rule-composer",
@@ -506,7 +511,7 @@ async (page) => {
         if (await page.getByText("This page could not be loaded", { exact: false }).count()) throw Error(`Route boundary: ${view}`);
         if (await page.getByText(/^(Tersimpan di akun|Saved to your account)$/).count()) throw Error("Saved-account status still visible");
       }
-      await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
+      if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     }
     await page.getByRole("button", { name: "Open workspace menu", exact: true }).click({ timeout: 5000 });
     await page.getByRole("button", { name: "Rules", exact: true }).click({ timeout: 5000 });
@@ -514,9 +519,26 @@ async (page) => {
       await page.waitForFunction(()=>document.querySelector('.menu-button')?.getAttribute('aria-expanded')==='false');
       await page.getByRole("button", { name: "Open workspace menu", exact: true }).click({ timeout: 5000 });
     }
-    const stillOpen = await page.getByRole("button", { name: "Close menu", exact: true }).boundingBox();
+    const stillOpen = await page.getByRole("button", { name: "Close menu", includeHidden: true, exact: true }).boundingBox();
     if (!stillOpen || stillOpen.x < 0) throw Error(`Navigation collapsed sidebar at ${width}`);
-    await page.getByRole("button", { name: "Close menu", exact: true }).click({ timeout: 5000 });
+    await page.getByRole("button", { name: "Close menu", includeHidden: true, exact: true }).click({ timeout: 5000 });
+    if(width>860) {
+      await page.waitForFunction(()=>{const box=document.querySelector('#workspace-sidebar').getBoundingClientRect();return box.width>=60 && box.width<=90;});
+      const sidebar=page.locator('#workspace-sidebar');
+      const box=await sidebar.boundingBox();
+      if(!box || box.x<0 || box.width<60 || box.width>90) throw Error('Collapsed sidebar must retain an icon rail');
+      if(!await sidebar.locator('.sidebar__brand-link .brand__mark').isVisible()) throw Error('Collapsed sidebar lost the logo');
+      if(await page.locator('.topbar .menu-button').count()) throw Error('Desktop must have only one sidebar toggle');
+      const rules=sidebar.getByRole('button',{name:'Rules',exact:true});
+      await rules.hover();
+      const tooltip=page.getByRole('tooltip').filter({hasText:'Rules'});
+      await tooltip.waitFor();
+      await page.screenshot({path:'/private/tmp/signalgen-icon-rail.png',animations:'disabled'});
+      await page.keyboard.press('Escape');
+      await rules.press('Tab'); await page.keyboard.press('Shift+Tab');
+      await tooltip.waitFor();
+      await page.keyboard.press('Escape');
+    }
   }
   await page.goto(`${origin}/#account`);
   await page.locator("main").waitFor({ timeout: 10000 });
@@ -542,7 +564,7 @@ async (page) => {
   await page.evaluate(() => { window.confirm = () => true; });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (let theme = 0; theme < 2; theme++) {
+    for (let theme = 0; theme < 1; theme++) {
       for (const failure of [false, true]) {
         await page.mouse.move(1, 900);
         failUniverseDelete = failure;
@@ -563,7 +585,7 @@ async (page) => {
         await closeToast.click({ timeout: 5000 });
         await toast.waitFor({ state: "detached", timeout: 5000 });
       }
-      await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
+      if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     }
   }
   failUniverseDelete = false;
@@ -572,13 +594,13 @@ async (page) => {
   await page.getByText("System rule conditions are checked automatically.", { exact: true }).waitFor({ timeout: 10000 });
   for (const width of [1440, 900, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (let theme = 0; theme < 2; theme++) {
+    for (let theme = 0; theme < 1; theme++) {
       await page.locator(".screener-run-summary").screenshot({ path: `/private/tmp/signalgen-summary-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
       if (width >= 900) {
         const difference = await page.locator(".screener-run-summary").evaluate(el => { const title = el.querySelector("strong").getBoundingClientRect(), badge = el.querySelector('[data-slot="badge"]').getBoundingClientRect(); return Math.abs(title.y + title.height / 2 - badge.y - badge.height / 2); });
         if (difference > 2) throw Error(`Misaligned screener title/action: ${difference}px`);
       }
-      await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
+      if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     }
   }
   await page.goto(`${origin}/#app/subscription`);
@@ -600,7 +622,7 @@ async (page) => {
   await manage.locator("summary").click({ timeout: 5000 });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (let theme = 0; theme < 2; theme++) {
+    for (let theme = 0; theme < 1; theme++) {
       const question = page.getByRole("button", { name: "What happens when my plan changes?", exact: true });
       if (await question.getAttribute("aria-expanded") !== "false") throw Error("Package FAQ should start collapsed");
       await question.focus();
@@ -629,7 +651,7 @@ async (page) => {
       });
       if (planAlignment.inset < 16 || planAlignment.edges > 1) throw Error(`Plan heading, cards and FAQ gutters differ: ${JSON.stringify(planAlignment)}`);
       await page.locator('.plan-ledger').screenshot({ path: `/private/tmp/signalgen-plan-alignment-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
-      await page.getByRole("button", { name: /Switch to .* mode/ }).click({ timeout: 5000 });
+      if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     }
   }
   unauthorized = true;
@@ -656,7 +678,7 @@ async (page) => {
   await page.getByRole("button", { name: /Add the first condition/ }).click();
   if (await page.getByRole("group", { name: "Condition 1", exact: true }).count() !== 1 || ruleWrite) throw Error("First condition did not start a blank draft without saving");
   await page.getByRole("button", { name: "New blank rule", exact: true }).click();
-  await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
+  await choosePreset("Bullish EMA cross");
   const draftInput = page.getByLabel("Rule name", { exact: true });
   const restoreDraftButton = page.getByRole("button", { name: "Restore draft", exact: true });
   if (!await restoreDraftButton.isDisabled()) throw Error("Restore enabled without a saved draft");
@@ -667,9 +689,9 @@ async (page) => {
     return button && !button.disabled && button.getAttribute('aria-disabled') !== 'true';
   });
   if (await page.getByText("Rule draft available", { exact: true }).count()) throw Error("Old draft banner is still rendered");
-  for (const width of [1456, 390]) for (const theme of ["dark", "light"]) {
+  for (const width of [1456, 390]) for (const theme of ["dark"]) {
     await page.setViewportSize({ width, height: 853 });
-    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     const newBounds = await page.getByRole("button", { name: "New blank rule", exact: true }).boundingBox();
     const restoreBounds = await restoreDraftButton.boundingBox();
     if (!newBounds || !restoreBounds || restoreBounds.y < newBounds.y + newBounds.height || Math.abs(restoreBounds.x - newBounds.x) > 1) throw Error("Restore is not aligned below New blank rule");
@@ -693,8 +715,8 @@ async (page) => {
   if (await draftInput.inputValue() !== "Draft recovery fixture" || !await restoreDraftButton.isDisabled()) throw Error("Draft restore failed or remained enabled without a pending draft");
   await draftInput.fill("Bullish EMA cross");
   await page.setViewportSize({ width: 1440, height: 1000 });
-  const bearishPreset = page.getByRole("button", { name: "Bearish EMA cross", exact: true });
-  await bearishPreset.click();
+  const bearishPreset = page.getByRole("combobox", { name: "Rule preset", exact: true });
+  await choosePreset("Bearish EMA cross");
   const presetDialog = page.getByRole("alertdialog", { name: "Replace current criteria?" });
   await presetDialog.waitFor();
   await page.waitForFunction(() => document.querySelector('[role="alertdialog"] button') === document.activeElement);
@@ -702,26 +724,26 @@ async (page) => {
   if (!await presetDialog.getByRole("button", { name: "Cancel", exact: true }).evaluate(el => el === document.activeElement)) throw Error("Confirmation did not focus safe action");
   await page.keyboard.press("Escape");
   await presetDialog.waitFor({ state: "hidden" });
-  await page.waitForFunction(() => document.activeElement?.textContent.includes('Bearish EMA cross'));
+  await page.waitForFunction(() => document.activeElement?.id === 'rule-preset');
   if (await draftInput.inputValue() !== "Bullish EMA cross") throw Error("Escape replaced current criteria");
   if (!await bearishPreset.evaluate(el => el === document.activeElement)) throw Error("Confirmation did not restore focus");
-  for (const width of [1440, 1218, 390]) for (const theme of ["dark", "light"]) {
+  for (const width of [1440, 1218, 390]) for (const theme of ["dark"]) {
     await page.setViewportSize({ width, height: 853 });
-    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
-    await bearishPreset.click();
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
+    await choosePreset("Bearish EMA cross");
     await presetDialog.waitFor();
     await page.screenshot({ path: `/private/tmp/signalgen-confirm-${width}-${theme}.png`, animations: "disabled" });
     const bounds = await presetDialog.boundingBox();
     if (!bounds || bounds.x < 0 || bounds.x + bounds.width > width) throw Error("Confirmation exceeds viewport");
     await presetDialog.getByRole("button", { name: "Cancel", exact: true }).click();
   }
-  await bearishPreset.click();
+  await choosePreset("Bearish EMA cross");
   await presetDialog.getByRole("button", { name: "Replace criteria", exact: true }).click();
   await presetDialog.waitFor({ state: "hidden" });
   if (await draftInput.inputValue() !== "Bearish EMA cross" || ruleWrite) throw Error("Preset confirmation failed or saved without permission");
-  await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).click();
+  await choosePreset("Bullish EMA cross");
   await presetDialog.getByRole("button", { name: "Replace criteria", exact: true }).click();
-  if (!await page.getByRole("button", { name: "Bullish EMA cross", exact: true }).getByLabel("Selected preset").count()) throw Error("Selected preset has no checkmark");
+  if (!(await page.getByRole("combobox", {name:"Rule preset",exact:true}).textContent()).includes("Bullish EMA cross")) throw Error("Selected preset is not shown in the dropdown");
   await page.getByText("Draft saved on this device", { exact: true }).waitFor();
   const library = page.getByRole("region", { name: "Saved rules", exact: true });
   await page.getByLabel("Search saved rules", { exact: true }).fill("not-a-rule");
@@ -736,9 +758,9 @@ async (page) => {
   await page.getByLabel("Search saved rules", { exact: true }).fill("");
   const previewButton = page.getByRole("button", { name: "Preview criteria", exact: true });
   const preview = page.getByRole("dialog", { name: "Preview criteria", exact: true });
-  for (const width of [1456, 390]) for (const theme of ["dark", "light"]) {
+  for (const width of [1456, 390]) for (const theme of ["dark"]) {
     await page.setViewportSize({ width, height: 853 });
-    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     await previewButton.click();
     await preview.waitFor();
     if (!(await preview.innerText()).includes("EMA 9 crosses above EMA 20")) throw Error("Preview differs from draft criteria");
@@ -794,14 +816,14 @@ async (page) => {
   if (ruleWrite) throw Error("Invalid criteria were sent to the API");
   const notifications = await page.getByRole("button", { name: "Dismiss notification", exact: true, includeHidden: true }).elementHandles();
   await Promise.all(notifications.map(close => close.click({ force: true, timeout: 1000 }).catch(() => {})));
-  for (const width of [1440, 390]) for (const theme of ["dark", "light"]) {
+  for (const width of [1440, 390]) for (const theme of ["dark"]) {
     await page.setViewportSize({ width, height: 1000 });
-    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: `/private/tmp/signalgen-preset-workflow-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
-    const presetContrast = await page.locator('.rule-presets__choices [aria-pressed="true"]').evaluate(el => {
+    const presetContrast = await page.locator('[aria-label="Rule starting point"] [aria-pressed="true"]').evaluate(el => {
       const luminance = color => color.match(/[\d.]+/g).slice(0, 3).map(value => { const c = Number(value) / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
-      const a = luminance(getComputedStyle(el).backgroundColor), b = luminance(getComputedStyle(el.querySelector('strong')).color);
+      const a = luminance(getComputedStyle(el).backgroundColor), b = luminance(getComputedStyle(el).color);
       return (Math.max(a,b)+0.05)/(Math.min(a,b)+0.05);
     });
     if (presetContrast < 4.5) throw Error(`Selected preset contrast too low: ${presetContrast}`);
@@ -839,9 +861,9 @@ async (page) => {
     if (category === "Banks" && /AGRO|BBSI/.test(await catalog.innerText())) throw Error('IDX ticker collisions leaked into US banks');
   }
   await usGroups.getByRole("button", { name: "All stocks", exact: true }).click();
-  for (const width of [1440, 390]) for (const theme of ["dark", "light"]) {
+  for (const width of [1440, 390]) for (const theme of ["dark"]) {
     await page.setViewportSize({ width, height: 1000 });
-    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: `/private/tmp/signalgen-us-categories-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
   }
@@ -855,9 +877,9 @@ async (page) => {
   await page.getByRole("group", { name: "Signal status", exact: true }).getByRole("button", { name: /^SELL/ }).click();
   if (!await page.getByText("No stocks match these filters.", { exact: false }).count()) throw Error("SELL filter did not exclude BUY and rejected rows");
   await page.getByRole("button", { name: "Reset filters", exact: true }).click();
-  for (const width of [1440, 390]) for (const theme of ["dark", "light"]) {
+  for (const width of [1440, 390]) for (const theme of ["dark"]) {
     await page.setViewportSize({ width, height: 1000 });
-    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: `/private/tmp/signalgen-screening-workflow-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
     const cards = await page.locator('.screener-universe-stocks').evaluate(el => {
@@ -872,9 +894,9 @@ async (page) => {
   await page.goto(`${origin}/#app/universes`);
   await page.getByRole('button', { name: 'Edit Banking watchlist', exact:true }).waitFor();
   if (await page.locator('.universe-library__rows > article').count() !== 2) throw Error('Universe preview must contain only two cards');
-  for (const width of [1440, 900, 390]) for (const theme of ['dark', 'light']) {
+  for (const width of [1440, 900, 390]) for (const theme of ["dark"]) {
     await page.setViewportSize({ width, height: 1000 });
-    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole('button', { name: /Switch to .* mode/ }).click();
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     const valid = await page.locator('.universe-library__rows').evaluate(el => [...el.children].every(card => {
       const css = getComputedStyle(card), r = card.getBoundingClientRect();
       return parseFloat(css.borderRadius) >= 12 && parseFloat(css.paddingLeft) >= 16 && [...card.querySelectorAll('[data-slot="badge"]')].every(badge => {
@@ -943,9 +965,13 @@ async (page) => {
   for (const view of ['login', 'register', 'forgot-password', 'reset-password']) {
     await page.goto(`${origin}/#${view}`);
     await page.locator('.auth-card').waitFor();
-    for (const width of [1440, 900, 390, 320]) for (const theme of ['dark', 'light']) {
+    if (view === 'login') {
+      const register = page.locator('.auth-register-link').getByRole('link', {name:'Register',exact:true});
+      if (await register.getAttribute('href') !== '#register') throw Error('Login registration link is missing');
+    }
+    for (const width of [1440, 900, 390, 320]) for (const theme of ["dark"]) {
       await page.setViewportSize({ width, height: 1000 });
-      if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole('button', { name: /Switch to .* mode/ }).click();
+      if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
       const geometry = await page.locator('.auth-card').evaluate(el => {
         const r = el.getBoundingClientRect(), css = getComputedStyle(el), form = el.querySelector('form').getBoundingClientRect(), heading = el.querySelector('.auth-heading').getBoundingClientRect(), toggle = document.querySelector('.auth-theme-toggle').getBoundingClientRect();
         return { radius: parseFloat(css.borderRadius), padding: parseFloat(css.paddingLeft), left: r.left, right:r.right, alignment:Math.abs(form.left-heading.left), overlap: toggle.bottom > r.top && toggle.left < r.right && toggle.right > r.left, viewport: innerWidth };
@@ -985,9 +1011,9 @@ async (page) => {
   if (await page.locator('.auth-card input, .auth-card form').count()) throw Error('Registration fields remain after successful account creation');
   if (await page.getByRole('button', {name:'Create account',exact:true}).count()) throw Error('Registration can be submitted again after success');
   if (!await confirmation.evaluate(el => el === document.activeElement)) throw Error('Registration confirmation did not receive focus');
-  for (const width of [1440,390]) for (const theme of ['dark','light']) {
+  for (const width of [1440,390]) for (const theme of ["dark"]) {
     await page.setViewportSize({width,height:1000});
-    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) await page.getByRole('button',{name:/Switch to .* mode/}).click();
+    if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error('Registration confirmation overflows');
     await page.locator('.auth-card').screenshot({path:`/private/tmp/signalgen-registration-success-${width}-${theme}.png`,animations:'disabled'});
   }

@@ -6,6 +6,7 @@ import {
   Trash2,
   RefreshCw,
   SlidersHorizontal,
+  RotateCcw,
 } from "lucide-react";
 import { api, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -752,10 +753,11 @@ export function WorkspaceBacktestPanel({
               )}
               <Button
                 type="button"
-                variant="ghost"
+                variant="destructive"
                 disabled={busy}
                 onClick={clearSnapshot}
               >
+                <RotateCcw data-icon="inline-start" />
                 Reset results
               </Button>
             </div>

@@ -344,6 +344,28 @@
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
+.backtest-skipped {
+  max-height: 360px;
+}
+.backtest-skipped [data-slot="table-container"] {
+  overflow: visible;
+}
+.backtest-skipped table {
+  table-layout: fixed;
+  caption-side: top;
+}
+.backtest-skipped thead th:first-child {
+  width: 24%;
+}
+.backtest-skipped thead th:nth-child(2) {
+  width: 32%;
+}
+.backtest-skipped tbody td:last-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+  line-height: 1.6;
+}
 .backtest-panel table {
   border-collapse: separate;
   border-spacing: 0;

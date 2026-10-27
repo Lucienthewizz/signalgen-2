@@ -11,6 +11,7 @@ import {
   Suspense,
 } from "react";
 import type { BackendConnection } from "@/api/backend-status";
+import { Tooltip } from "@base-ui/react/tooltip";
 import {
   Activity,
   BadgeCheck,
@@ -29,7 +30,6 @@ import {
   KeyRound,
   LineChart,
   ListChecks,
-  Menu,
   NotebookTabs,
   Newspaper,
   Pencil,
@@ -232,8 +232,6 @@ const navGroups: Array<{
     items: [
       { view: "rules", label: "Rules", icon: ListChecks },
       { view: "universes", label: "Stock universes", icon: Boxes },
-      { view: "access", label: "Account & devices", icon: SlidersHorizontal },
-      { view: "subscription", label: "Plan & access", icon: BadgeCheck },
     ],
   },
   {
@@ -241,17 +239,6 @@ const navGroups: Array<{
     items: [
       { view: "realtime", label: "Market monitor", icon: Activity },
       { view: "news", label: "News", icon: Newspaper },
-    ],
-  },
-  {
-    label: "Administration",
-    items: [
-      {
-        view: "operator",
-        label: "Admin Panel",
-        icon: ShieldCheck,
-        operatorOnly: true,
-      },
     ],
   },
 ];
@@ -1297,7 +1284,7 @@ function RulesPanel({
   );
 }
 
-function AccessPanel({
+export function AccessPanel({
   backendOnline,
   authenticated,
 }: {
@@ -1731,6 +1718,50 @@ function formatDeviceTime(value: string): string {
   }).format(parsed);
 }
 
+function SidebarToggleIcon({
+  open,
+  panel = false,
+}: {
+  open: boolean;
+  panel?: boolean;
+}) {
+  return (
+    <svg
+      className={`sidebar-toggle-icon${panel ? " sidebar-toggle-icon--panel" : ""}`}
+      data-open={open || undefined}
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+    >
+      {panel ? (
+        <>
+          <rect x="3" y="4" width="18" height="16" rx="3" />
+          <path d="M10 5v14" />
+          <rect
+            className="sidebar-toggle-icon__pane"
+            x="5.5"
+            y="7"
+            width="2"
+            height="10"
+            rx="1"
+            fill="currentColor"
+            stroke="none"
+          />
+        </>
+      ) : (
+        <>
+          <path d="M4 6h16" />
+          <path d="M4 12h16" />
+          <path d="M4 18h16" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 export function DemoWorkspace({
   connection = "checking",
   view,
@@ -1747,6 +1778,18 @@ export function DemoWorkspace({
   onLogout: () => void | Promise<void>;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileViewport, setMobileViewport] = useState(
+    () => window.matchMedia("(max-width: 860px)").matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 860px)");
+    const change = () => {
+      setMobileViewport(query.matches);
+      setMenuOpen(false);
+    };
+    query.addEventListener("change", change);
+    return () => query.removeEventListener("change", change);
+  }, []);
   const sync = useWorkspaceSync(authenticated ? user?.id : undefined);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const workspaceRef = useRef<HTMLElement>(null);
@@ -1841,7 +1884,7 @@ export function DemoWorkspace({
     if (Math.abs(delta) < 1) return;
     workspaceMotion.current = element.animate(
       [{ transform: `translateX(${delta}px)` }, { transform: "translateX(0)" }],
-      { duration: 520, easing: "cubic-bezier(0.22, 0.61, 0.36, 1)" },
+      { duration: 240, easing: "cubic-bezier(0, 0, 0.58, 1)" },
     );
   }, [menuOpen, sidebarCollapsed]);
 
@@ -1873,56 +1916,106 @@ export function DemoWorkspace({
         className={`sidebar ${menuOpen ? "is-open" : ""} ${sidebarCollapsed ? "is-collapsed" : ""}`}
       >
         <div className="sidebar__brand">
-          <a className="sidebar__brand-link" href="#home">
+          <a
+            className="sidebar__brand-link"
+            href="#home"
+            aria-label="Signalgen home"
+          >
             <Brand compact />
           </a>
-          <button
-            onClick={() => {
-              rememberWorkspacePosition();
-              setMenuOpen(false);
-              setSidebarCollapsed(true);
-            }}
-            aria-label="Close menu"
-          >
-            <X />
-          </button>
+          <Tooltip.Root disabled={mobileViewport}>
+            <Tooltip.Trigger
+              render={
+                <button
+                  type="button"
+                  className="sidebar-boundary-toggle"
+                  aria-label={
+                    mobileViewport || !sidebarCollapsed
+                      ? "Close menu"
+                      : "Open workspace menu"
+                  }
+                  aria-controls="workspace-sidebar"
+                  aria-expanded={mobileViewport ? menuOpen : !sidebarCollapsed}
+                  onClick={() => {
+                    rememberWorkspacePosition();
+                    if (mobileViewport) setMenuOpen(false);
+                    else setSidebarCollapsed((current) => !current);
+                  }}
+                />
+              }
+            >
+              <SidebarToggleIcon
+                open={mobileViewport ? menuOpen : !sidebarCollapsed}
+                panel={!mobileViewport}
+              />
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Positioner side="bottom" sideOffset={10}>
+                <Tooltip.Popup role="tooltip" className="workspace-nav-tooltip">
+                  {sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                </Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
         </div>
-        <nav aria-label="Workspace navigation">
-          {navGroups.map((group, index) => {
-            const visibleItems = group.items.filter(
-              (item) => !item.operatorOnly || operatorVerified,
-            );
-            if (!visibleItems.length) return null;
-            return (
-              <div
-                className="nav-group"
-                key={group.label ?? `primary-${index}`}
-              >
-                {group.label && <span>{group.label}</span>}
-                {visibleItems.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.view}
-                      className={`${view === item.view ? "active" : ""}${item.operatorOnly ? " workspace-admin-nav" : ""}`}
-                      aria-label={item.operatorOnly ? "Admin Panel" : undefined}
-                      aria-current={view === item.view ? "page" : undefined}
-                      onClick={() => go(item.view)}
-                    >
-                      <Icon aria-hidden="true" />
-                      <span>
-                        {item.label}
-                        {item.operatorOnly && (
-                          <small>Members &amp; access</small>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </nav>
+        <Tooltip.Provider delay={250}>
+          <nav aria-label="Workspace navigation">
+            {navGroups.map((group, index) => {
+              const visibleItems = group.items.filter(
+                (item) => !item.operatorOnly || operatorVerified,
+              );
+              if (!visibleItems.length) return null;
+              return (
+                <div
+                  className="nav-group"
+                  key={group.label ?? `primary-${index}`}
+                >
+                  {group.label && <span>{group.label}</span>}
+                  {visibleItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <Tooltip.Root
+                        key={item.view}
+                        disabled={!sidebarCollapsed || mobileViewport}
+                      >
+                        <Tooltip.Trigger
+                          render={
+                            <button
+                              className={`${view === item.view ? "active" : ""}${item.operatorOnly ? " workspace-admin-nav" : ""}`}
+                              aria-label={item.label}
+                              aria-current={
+                                view === item.view ? "page" : undefined
+                              }
+                              onClick={() => go(item.view)}
+                            />
+                          }
+                        >
+                          <Icon aria-hidden="true" />
+                          <span>
+                            {item.label}
+                            {item.operatorOnly && (
+                              <small>Members &amp; access</small>
+                            )}
+                          </span>
+                        </Tooltip.Trigger>
+                        <Tooltip.Portal>
+                          <Tooltip.Positioner side="right" sideOffset={20}>
+                            <Tooltip.Popup
+                              role="tooltip"
+                              className="workspace-nav-tooltip"
+                            >
+                              {item.label}
+                            </Tooltip.Popup>
+                          </Tooltip.Positioner>
+                        </Tooltip.Portal>
+                      </Tooltip.Root>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </nav>
+        </Tooltip.Provider>
         <div className="sidebar__footer">
           {authenticated && user ? (
             <AccountMenu user={user} onLogout={onLogout} variant="sidebar" />
@@ -1946,18 +2039,34 @@ export function DemoWorkspace({
         <header className="topbar">
           <div className="topbar__inner">
             <div className="topbar__title">
-              <button
-                className="menu-button"
-                onClick={() => {
-                  rememberWorkspacePosition();
-                  setMenuOpen(true);
-                }}
-                aria-label="Open workspace menu"
-                aria-controls="workspace-sidebar"
-                aria-expanded={menuOpen}
-              >
-                <Menu />
-              </button>
+              {mobileViewport && (
+                <button
+                  className="menu-button"
+                  onClick={() => {
+                    rememberWorkspacePosition();
+                    if (mobileViewport) setMenuOpen((current) => !current);
+                    else {
+                      setMenuOpen(false);
+                      setSidebarCollapsed((current) => !current);
+                    }
+                  }}
+                  aria-label={
+                    mobileViewport
+                      ? menuOpen
+                        ? "Close workspace menu"
+                        : "Open workspace menu"
+                      : sidebarCollapsed
+                        ? "Open workspace menu"
+                        : "Collapse sidebar"
+                  }
+                  aria-controls="workspace-sidebar"
+                  aria-expanded={mobileViewport ? menuOpen : !sidebarCollapsed}
+                >
+                  <SidebarToggleIcon
+                    open={mobileViewport ? menuOpen : !sidebarCollapsed}
+                  />
+                </button>
+              )}
               <h1>
                 {view === "operator" ? "Administration" : "Trading workspace"}
               </h1>

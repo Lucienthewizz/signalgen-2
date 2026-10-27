@@ -341,7 +341,7 @@ async (page) => {
   if (socketCount !== 2) throw Error("Unexpected scoring socket count");
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (let theme = 0; theme < 2; theme++) {
+    for (let theme = 0; theme < 1; theme++) {
       await page.getByRole("button", { name: "Ganti tema" }).click();
       if (
         await page.evaluate(
@@ -359,7 +359,7 @@ async (page) => {
   await page.getByRole("button", { name: "Edit US fixture" }).click();
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (let theme = 0; theme < 2; theme++) {
+    for (let theme = 0; theme < 1; theme++) {
       await page.getByRole("button", { name: "Ganti tema" }).click();
       if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1))
         throw Error(`Catalog overflow at ${width}`);

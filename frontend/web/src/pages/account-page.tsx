@@ -1,10 +1,17 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  type FormEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowLeft,
+  BadgeCheck,
   Bell,
   ChevronRight,
   KeyRound,
-  Link2,
   LogOut,
   MonitorSmartphone,
   Pencil,
@@ -27,9 +34,21 @@ import {
 } from "@/lib/profile-avatar";
 import { api, ApiError } from "@/api/client";
 import type { EditableProfile, User } from "@/types";
+import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
+
+const AccessPanel = lazy(() =>
+  import("./demo-workspace").then((module) => ({
+    default: module.AccessPanel,
+  })),
+);
+const SubscriptionPanel = lazy(() =>
+  import("./workspace-resource-panels").then((module) => ({
+    default: module.SubscriptionPanel,
+  })),
+);
 
 type AccountSection =
-  "profile" | "password" | "notifications" | "privacy" | "devices";
+  "profile" | "password" | "notifications" | "privacy" | "devices" | "plan";
 
 const settingItems: Array<{
   id: AccountSection;
@@ -40,15 +59,18 @@ const settingItems: Array<{
   { id: "password", label: "Password", Icon: KeyRound },
   { id: "notifications", label: "Notifications", Icon: Bell },
   { id: "privacy", label: "Privacy and access", Icon: ShieldCheck },
-  { id: "devices", label: "Linked devices", Icon: MonitorSmartphone },
+  { id: "devices", label: "Account & devices", Icon: MonitorSmartphone },
+  { id: "plan", label: "Plan & access", Icon: BadgeCheck },
 ];
 
 export function AccountPage({
   user,
   onLogout,
+  backendOnline,
 }: {
   user: User;
   onLogout: () => void;
+  backendOnline: boolean;
 }) {
   const fallbackName = user.full_name?.trim() || user.email.split("@")[0];
   const [activeSection, setActiveSection] = useState<AccountSection>("profile");
@@ -381,13 +403,33 @@ export function AccountPage({
             />
           )}
           {activeSection === "devices" && (
-            <SettingsNotice
-              title="Linked devices"
-              description="Manage the devices that can use this workspace session."
-              action="Open linked devices"
-              href="#app/access"
-              Icon={Link2}
-            />
+            <section
+              className="account-workspace-settings demo-workbench demo-content"
+              aria-label="Account & devices"
+            >
+              <h2>Account & devices</h2>
+              <RouteBoundary>
+                <Suspense fallback={<RouteLoading />}>
+                  <AccessPanel authenticated backendOnline={backendOnline} />
+                </Suspense>
+              </RouteBoundary>
+            </section>
+          )}
+          {activeSection === "plan" && (
+            <section
+              className="account-workspace-settings demo-workbench demo-content"
+              aria-label="Plan & access"
+            >
+              <h2>Plan & access</h2>
+              <RouteBoundary>
+                <Suspense fallback={<RouteLoading />}>
+                  <SubscriptionPanel
+                    authenticated
+                    backendOnline={backendOnline}
+                  />
+                </Suspense>
+              </RouteBoundary>
+            </section>
           )}
         </section>
       </section>

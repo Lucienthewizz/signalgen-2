@@ -314,7 +314,7 @@ async (page) => {
     throw Error("Data quality does not explain candle totals");
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (let theme = 0; theme < 2; theme++) {
+    for (let theme = 0; theme < 1; theme++) {
       const bounds = await qualityDialog.boundingBox();
       if (
         !bounds ||
@@ -340,7 +340,7 @@ async (page) => {
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.clock.runFor(300);
-    for (let theme = 0; theme < 2; theme++) {
+    for (let theme = 0; theme < 1; theme++) {
       if (
         await page.evaluate(
           () => document.documentElement.scrollWidth > innerWidth + 1,
@@ -353,7 +353,7 @@ async (page) => {
       });
       await resultBar.screenshot({path:`output/playwright/screener-result-actions-${width}-${theme}.png`});
       await page.locator('.screener-monitor-status').screenshot({path:`output/playwright/screener-controls-${width}-${theme}.png`});
-      await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+      if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     }
   }
   hold = true;
@@ -396,7 +396,7 @@ async (page) => {
   if (prepares !== beforeBackoff) throw Error("Retry-After was not respected");
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (let theme = 0; theme < 2; theme++) {
+    for (let theme = 0; theme < 1; theme++) {
       await page.screenshot({
         path: `output/playwright/intraday-retry-${width}-${theme}.png`,
         fullPage: true,
@@ -469,7 +469,7 @@ async (page) => {
   if (await historyCards.count() !== beforeDelete-1) throw Error('Screener history did not respect local deletions');
   const card = historyCards.first();
   if (await card.locator('.screener-history-facts > div').count() !== 5) throw Error('History metadata tiles missing');
-  for (const width of [1440,390]) for (const theme of ['dark','light']) {
+  for (const width of [1440,390]) for (const theme of ["dark"]) {
     await page.setViewportSize({width,height:1000});
     await page.evaluate(theme => document.documentElement.dataset.theme=theme,theme);
     await card.screenshot({path:`output/playwright/history-card-${width}-${theme}.png`});

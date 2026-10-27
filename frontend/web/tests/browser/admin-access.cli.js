@@ -74,18 +74,11 @@ async (page) => {
   });
   async function ready() {
     await page.goto(`${origin}/#app/overview`); await page.reload();
-    if (page.viewportSize().width <= 860) {
-      await page.getByRole("button",{name:"Open workspace menu",exact:true}).click();
-      await page.keyboard.press("Escape");
-      await page.waitForFunction(()=>document.querySelector('.menu-button')?.getAttribute('aria-expanded')==='false');
-      await page.getByRole("button",{name:"Open workspace menu",exact:true}).click();
-    }
-    const admin = page.getByRole("navigation",{name:"Workspace navigation",exact:true}).getByRole("button",{name:"Admin Panel",exact:true});
-    await admin.waitFor({timeout:15000});
-    await admin.focus(); await admin.press("Enter");
+    await page.getByRole("heading",{name:"Trading workspace",exact:true}).waitFor();
+    const admin = page.getByRole("navigation",{name:"Workspace navigation",exact:true,includeHidden:true}).getByRole("button",{name:"Admin Panel",exact:true,includeHidden:true});
+    if(await admin.count()) throw Error("Admin menu is still exposed in the sidebar");
+    await page.goto(`${origin}/#app/operator`);
     await page.waitForURL("**/#app/operator");
-    if (page.viewportSize().width <= 860 && await page.getByRole("button",{name:"Open workspace menu",exact:true}).getAttribute("aria-expanded") !== "false") throw Error("Mobile navigation stayed open after selecting Admin Panel");
-    if (await admin.getAttribute("aria-current") !== "page") throw Error("Admin sidebar lacks its active page state");
     await page.getByRole("list",{name:"Registered accounts",exact:true}).waitFor({timeout:15000});
   }
   async function search(text) {
@@ -93,10 +86,10 @@ async (page) => {
     await page.getByRole("button",{name:"Search accounts",exact:true}).click();
     await page.getByRole("list",{name:"Registered accounts",exact:true}).waitFor();
   }
-  for (const width of [1440,375,844]) for (const theme of ["dark","light"]) {
+  for (const width of [1440,375,844]) for (const theme of ["dark"]) {
     mode="healthy"; grants.clear();
     await page.setViewportSize({width,height:width === 844 ? 390 : 1000}); await ready();
-    if (await page.locator("html").getAttribute("data-theme") !== theme) await page.getByRole("button",{name:/Switch to .* mode/}).click();
+    if (await page.locator("html").getAttribute("data-theme") !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     if (width===1440 && theme==="dark") {
       await page.getByRole("button",{name:"Next accounts",exact:true}).click();
       await page.getByRole("button",{name:"Select member11@example.test",exact:true}).waitFor();
@@ -175,7 +168,7 @@ async (page) => {
   await page.getByRole('button',{name:'Confirm change',exact:true}).click();
   await page.getByText('Reactivate account: saved.',{exact:true}).waitFor();
   if(members[34].status!=='active'||writes.at(-1).body.expected_status!=='suspended')throw Error('Reactivation lacks compare-and-set');
-  for(const width of [1440,390])for(const theme of ['dark','light']){
+  for(const width of [1440,390])for(const theme of ["dark"]){
     await page.setViewportSize({width,height:1000});await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
     await page.getByRole('tabpanel',{name:'Account status',exact:true}).screenshot({path:`/private/tmp/signalgen-status-${width}-${theme}.png`});
     await audit.screenshot({path:`/private/tmp/signalgen-audit-${width}-${theme}.png`});
@@ -236,5 +229,5 @@ async (page) => {
   }
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(()=>document.body.setAttribute("data-signalgen-admin-tests","complete"));
-  return {synthetic:true,queries:queries.length,writes:writes.length,widths:[1440,375,844],themes:["dark","light"]};
+  return {synthetic:true,queries:queries.length,writes:writes.length,widths:[1440,375,844],themes:["dark"]};
 }

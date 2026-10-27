@@ -38,7 +38,7 @@ async (page) => {
   });
   for(const width of [1440,390]) {
     await page.setViewportSize({width,height:1000});
-    for(let theme=0;theme<2;theme++) {
+    for(let theme=0;theme < 1;theme++) {
       mode="transient"; reads=0;
       await page.goto(`${origin}/#app/analysis`);
       await page.reload();
@@ -61,7 +61,7 @@ async (page) => {
         if(reads !== 3) throw Error("Explicit recovery did not issue one fresh read");
       }
       if(width === 1440 && theme === 0) await page.screenshot({path:"output/playwright/resource-recovery-fixture.png"});
-      await page.getByRole("button",{name:/Switch to .* mode/}).click();
+      if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     }
   }
   if(errors.length) throw Error(errors.join("; "));

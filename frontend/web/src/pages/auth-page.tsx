@@ -433,6 +433,11 @@ export function AuthPage({
               </Button>
             </form>
           )}
+          {view === "login" && (
+            <p className="auth-register-link">
+              Don’t have an account? <a href="#register">Register</a>
+            </p>
+          )}
           {!backendOnline && (
             <p className="auth-note">
               The backend is unavailable. This form will reactivate when the

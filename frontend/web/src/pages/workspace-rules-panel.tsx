@@ -1,7 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpenCheck,
-  Check,
   CircleAlert,
   CopyPlus,
   ListChecks,
@@ -128,6 +127,7 @@ export function ServerRulesPanel({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [presetId, setPresetId] = useState<string[]>([]);
+  const [startMode, setStartMode] = useState<"preset" | "blank" | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -140,10 +140,16 @@ export function ServerRulesPanel({
   const [confirmation, setConfirmation] = useState<
     | { kind: "preset"; preset: (typeof rulePresets)[number] }
     | { kind: "delete"; rule: RuleResource }
+    | { kind: "blank" }
     | null
   >(null);
   const confirmationTrigger = useRef<HTMLElement | null>(null);
   const validation = validateRule(definition);
+  const criteriaReady =
+    !!editing ||
+    startMode === "blank" ||
+    presetId.length > 0 ||
+    definition.conditions.length > 0;
   useActionNotifications(notice, error);
   const [draftOwner, setDraftOwner] = useState<string | undefined>();
   const [pendingDraft, setPendingDraft] = useState<RuleDraft | null>(null);
@@ -156,6 +162,7 @@ export function ServerRulesPanel({
     setDraftOwner(owner);
     setPendingDraft(owner ? readRuleDraft(owner) : null);
     setDefinition(blankDefinition());
+    setStartMode(null);
     setEditing(null);
     setRules([]);
     setSaving(false);
@@ -200,6 +207,7 @@ export function ServerRulesPanel({
       setEditorOpen(true);
     } else setEditing(null);
     setDefinition(pendingDraft.definition);
+    setStartMode("blank");
     setPendingDraft(null);
     setNotice("Draft restored. Check the conditions before saving.");
   }
@@ -244,6 +252,7 @@ export function ServerRulesPanel({
   );
 
   function startNew() {
+    setStartMode("blank");
     setEditorOpen(false);
     setPresetId([]);
     setSubmitted(false);
@@ -257,6 +266,7 @@ export function ServerRulesPanel({
 
   function edit(rule: RuleResource) {
     if (!rule.definition) return;
+    setStartMode("blank");
     setPresetId([]);
     setSubmitted(false);
     setEditing(rule);
@@ -340,6 +350,7 @@ export function ServerRulesPanel({
   }
 
   function applyPreset(preset: (typeof rulePresets)[number]) {
+    setStartMode("preset");
     if (!editorOpen) setEditing(null);
     setPresetId([preset.id]);
     setSubmitted(false);
@@ -452,7 +463,9 @@ export function ServerRulesPanel({
         description={
           confirmation?.kind === "delete"
             ? `“${confirmation.rule.name}” will be deleted from your account. This cannot be undone.`
-            : `Use “${confirmation?.preset.name ?? "this preset"}” instead of your current criteria. Unsaved edits will be replaced; saved rules stay unchanged until you save.`
+            : confirmation?.kind === "preset"
+              ? `Use “${confirmation.preset.name}” instead of your current criteria. Unsaved edits will be replaced; saved rules stay unchanged until you save.`
+              : "Start a blank rule instead of your current criteria. Unsaved edits will be replaced; saved rules stay unchanged."
         }
         confirmLabel={
           confirmation?.kind === "delete" ? "Delete rule" : "Replace criteria"
@@ -465,6 +478,7 @@ export function ServerRulesPanel({
           const choice = confirmation;
           setConfirmation(null);
           if (choice.kind === "preset") applyPreset(choice.preset);
+          else if (choice.kind === "blank") startNew();
           else void remove(choice.rule);
         }}
       />
@@ -489,8 +503,8 @@ export function ServerRulesPanel({
                 {editing ? `Edit ${editing.name}` : "Create a screening rule"}
               </h3>
               <p>
-                Start with a preset, then adjust the criteria to fit your
-                analysis.
+                Choose a preset or start with a blank rule, then build your
+                criteria.
               </p>
             </div>
           </div>
@@ -530,52 +544,87 @@ export function ServerRulesPanel({
               aria-labelledby="rule-presets-title"
             >
               <div>
-                <h4 id="rule-presets-title">Start with a preset</h4>
-                <p>Editable starting points, not investment recommendations.</p>
+                <h4 id="rule-presets-title">How would you like to start?</h4>
+                <p>
+                  Use a preset as a starting point, or build a rule manually.
+                </p>
               </div>
               <ToggleGroup
-                aria-label="Rule presets"
-                className="rule-presets__choices"
-                value={presetId}
+                aria-label="Rule starting point"
+                value={startMode ? [startMode] : []}
                 variant="outline"
                 onValueChange={(values) => {
-                  const preset = rulePresets.find(
-                    (item) => item.id === values[0],
-                  );
-                  if (!preset) return;
-                  if (editing || definition.conditions.length > 0) {
-                    confirmationTrigger.current =
-                      document.activeElement as HTMLElement;
-                    setConfirmation({ kind: "preset", preset });
-                  } else applyPreset(preset);
+                  if (values[0] === "preset") setStartMode("preset");
+                  else if (values[0] === "blank") {
+                    if (
+                      editing ||
+                      definition.name ||
+                      definition.conditions.length
+                    ) {
+                      confirmationTrigger.current =
+                        document.activeElement as HTMLElement;
+                      setConfirmation({ kind: "blank" });
+                    } else startNew();
+                  }
                 }}
               >
-                {rulePresets.map((preset) => (
-                  <ToggleGroupItem
-                    key={preset.id}
-                    value={preset.id}
-                    aria-label={preset.name}
-                    aria-describedby={`preset-meta-${preset.id}`}
-                  >
-                    <strong>
-                      {preset.name}
-                      {presetId[0] === preset.id && (
-                        <Check
-                          aria-label="Selected preset"
-                          className="rule-presets__check"
-                        />
-                      )}
-                    </strong>
-                    <small id={`preset-meta-${preset.id}`}>
-                      {preset.definition.signal_type} ·{" "}
-                      {preset.definition.conditions.length}{" "}
-                      {preset.definition.conditions.length === 1
-                        ? "condition"
-                        : "conditions"}
-                    </small>
-                  </ToggleGroupItem>
-                ))}
+                <ToggleGroupItem value="preset">Preset</ToggleGroupItem>
+                <ToggleGroupItem value="blank">Blank rule</ToggleGroupItem>
               </ToggleGroup>
+              {startMode === "preset" && (
+                <Field className="rule-preset-picker">
+                  <FieldLabel htmlFor="rule-preset">Rule preset</FieldLabel>
+                  <Select
+                    value={presetId[0] ?? null}
+                    items={rulePresets.map((preset) => ({
+                      value: preset.id,
+                      label: preset.name,
+                    }))}
+                    onValueChange={(value) => {
+                      const preset = rulePresets.find(
+                        (item) => item.id === value,
+                      );
+                      if (!preset || preset.id === presetId[0]) return;
+                      if (
+                        editing ||
+                        definition.name ||
+                        definition.conditions.length
+                      ) {
+                        confirmationTrigger.current =
+                          document.getElementById("rule-preset");
+                        setConfirmation({ kind: "preset", preset });
+                      } else applyPreset(preset);
+                    }}
+                  >
+                    <SelectTrigger id="rule-preset">
+                      <SelectValue placeholder="Choose a preset" />
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      <SelectGroup>
+                        {rulePresets.map((preset) => (
+                          <SelectItem
+                            key={preset.id}
+                            value={preset.id}
+                            aria-label={preset.name}
+                          >
+                            {preset.name}
+                            <span className="rule-preset-meta">
+                              {preset.definition.signal_type} ·{" "}
+                              {preset.definition.conditions.length}{" "}
+                              {preset.definition.conditions.length === 1
+                                ? "condition"
+                                : "conditions"}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>
+                    Editable starting points, not investment recommendations.
+                  </FieldDescription>
+                </Field>
+              )}
               {presetId[0] && (
                 <p className="rule-presets__description">
                   {
@@ -585,123 +634,129 @@ export function ServerRulesPanel({
                 </p>
               )}
             </section>
-            <FieldGroup className="rule-basics">
-              <Field data-invalid={submitted && !!validation.name}>
-                <FieldLabel htmlFor="rule-name">Rule name</FieldLabel>
-                <Input
-                  id="rule-name"
-                  value={definition.name}
-                  onChange={(event) =>
-                    setDefinition((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                  placeholder="Example: Daily bank momentum"
-                  maxLength={100}
-                  aria-invalid={submitted && !!validation.name}
-                  aria-describedby={
-                    submitted && validation.name ? "rule-name-error" : undefined
-                  }
-                />
-                <FieldDescription>
-                  This name appears in the screener.
-                </FieldDescription>
-                {submitted && validation.name && (
-                  <FieldError id="rule-name-error">
-                    {validation.name}
-                  </FieldError>
-                )}
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="rule-signal-type">
-                  Signal action
-                </FieldLabel>
-                <Select
-                  value={definition.signal_type}
-                  onValueChange={(value) =>
-                    setDefinition((current) => ({
-                      ...current,
-                      signal_type: (value as "BUY" | "SELL") || "BUY",
-                    }))
-                  }
-                >
-                  <SelectTrigger id="rule-signal-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="BUY">BUY (Entry)</SelectItem>
-                      <SelectItem value="SELL">SELL (Exit)</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <FieldDescription>
-                  Direction of the signal when this rule matches; not an
-                  automatic order.
-                </FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="rule-logic">Rule logic</FieldLabel>
-                <Select
-                  value={definition.logic}
-                  onValueChange={(value) =>
-                    setDefinition((current) => ({
-                      ...current,
-                      logic: (value as "AND" | "OR") || "AND",
-                    }))
-                  }
-                >
-                  <SelectTrigger id="rule-logic">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="AND">
-                        AND (All conditions met)
-                      </SelectItem>
-                      <SelectItem value="OR">OR (Any condition met)</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <FieldDescription>
-                  Combine conditions using AND or OR.
-                </FieldDescription>
-              </Field>
-              <Field data-invalid={submitted && !!validation.cooldown}>
-                <FieldLabel htmlFor="rule-cooldown">
-                  Cooldown (seconds)
-                </FieldLabel>
-                <Input
-                  id="rule-cooldown"
-                  type="number"
-                  min={0}
-                  max={86400}
-                  step={1}
-                  aria-invalid={submitted && !!validation.cooldown}
-                  aria-describedby={
-                    submitted && validation.cooldown
-                      ? "rule-cooldown-error"
-                      : undefined
-                  }
-                  value={definition.cooldown_sec}
-                  onChange={(event) =>
-                    setDefinition((current) => ({
-                      ...current,
-                      cooldown_sec: Number(event.target.value),
-                    }))
-                  }
-                />
-                <FieldDescription>
-                  Sets the minimum interval between repeated signals.
-                </FieldDescription>
-                {submitted && validation.cooldown && (
-                  <FieldError id="rule-cooldown-error">
-                    {validation.cooldown}
-                  </FieldError>
-                )}
-              </Field>
-            </FieldGroup>
+            <fieldset disabled={!criteriaReady} style={formSectionStyle}>
+              <FieldGroup className="rule-basics">
+                <Field data-invalid={submitted && !!validation.name}>
+                  <FieldLabel htmlFor="rule-name">Rule name</FieldLabel>
+                  <Input
+                    id="rule-name"
+                    value={definition.name}
+                    onChange={(event) =>
+                      setDefinition((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                    placeholder="Example: Daily bank momentum"
+                    maxLength={100}
+                    aria-invalid={submitted && !!validation.name}
+                    aria-describedby={
+                      submitted && validation.name
+                        ? "rule-name-error"
+                        : undefined
+                    }
+                  />
+                  <FieldDescription>
+                    This name appears in the screener.
+                  </FieldDescription>
+                  {submitted && validation.name && (
+                    <FieldError id="rule-name-error">
+                      {validation.name}
+                    </FieldError>
+                  )}
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="rule-signal-type">
+                    Signal action
+                  </FieldLabel>
+                  <Select
+                    value={definition.signal_type}
+                    onValueChange={(value) =>
+                      setDefinition((current) => ({
+                        ...current,
+                        signal_type: (value as "BUY" | "SELL") || "BUY",
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="rule-signal-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="BUY">BUY (Entry)</SelectItem>
+                        <SelectItem value="SELL">SELL (Exit)</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>
+                    Direction of the signal when this rule matches; not an
+                    automatic order.
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="rule-logic">Rule logic</FieldLabel>
+                  <Select
+                    value={definition.logic}
+                    onValueChange={(value) =>
+                      setDefinition((current) => ({
+                        ...current,
+                        logic: (value as "AND" | "OR") || "AND",
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="rule-logic">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="AND">
+                          AND (All conditions met)
+                        </SelectItem>
+                        <SelectItem value="OR">
+                          OR (Any condition met)
+                        </SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>
+                    Combine conditions using AND or OR.
+                  </FieldDescription>
+                </Field>
+                <Field data-invalid={submitted && !!validation.cooldown}>
+                  <FieldLabel htmlFor="rule-cooldown">
+                    Cooldown (seconds)
+                  </FieldLabel>
+                  <Input
+                    id="rule-cooldown"
+                    type="number"
+                    min={0}
+                    max={86400}
+                    step={1}
+                    aria-invalid={submitted && !!validation.cooldown}
+                    aria-describedby={
+                      submitted && validation.cooldown
+                        ? "rule-cooldown-error"
+                        : undefined
+                    }
+                    value={definition.cooldown_sec}
+                    onChange={(event) =>
+                      setDefinition((current) => ({
+                        ...current,
+                        cooldown_sec: Number(event.target.value),
+                      }))
+                    }
+                  />
+                  <FieldDescription>
+                    Sets the minimum interval between repeated signals.
+                  </FieldDescription>
+                  {submitted && validation.cooldown && (
+                    <FieldError id="rule-cooldown-error">
+                      {validation.cooldown}
+                    </FieldError>
+                  )}
+                </Field>
+              </FieldGroup>
+            </fieldset>
           </fieldset>
 
           <fieldset disabled={saving} style={formSectionStyle}>
@@ -723,6 +778,7 @@ export function ServerRulesPanel({
                   type="button"
                   className="rule-empty-condition"
                   onClick={() => {
+                    setStartMode("blank");
                     if (pendingDraft) startNew();
                     setDefinition((current) => ({
                       ...current,
@@ -979,7 +1035,7 @@ export function ServerRulesPanel({
           </fieldset>
 
           <fieldset
-            disabled={saving || !!pendingDraft}
+            disabled={saving || !!pendingDraft || !criteriaReady}
             style={formSectionStyle}
           >
             {error && (

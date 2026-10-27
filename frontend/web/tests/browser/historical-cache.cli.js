@@ -202,7 +202,7 @@ async (page) => {
 
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    for (let theme = 0; theme < 2; theme++) {
+    for (let theme = 0; theme < 1; theme++) {
       await page.getByRole("button", { name: "Ganti tema" }).click();
       if (
         await page.evaluate(

@@ -92,8 +92,8 @@ async (page) => {
   await search.fill("");
   for (const width of [1440, 900, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (let theme = 0; theme < 2; theme++) {
-      await page.getByRole("button", { name: "Toggle theme" }).click();
+    for (let theme = 0; theme < 1; theme++) {
+      if(await page.getByRole("button", { name: "Toggle theme" }).count()) throw Error("Theme toggle must be hidden in dark-only mode");
       if (
         await page.evaluate(
           () => document.documentElement.scrollWidth > innerWidth + 1,
@@ -114,6 +114,6 @@ async (page) => {
     document.body.setAttribute("data-signalgen-catalog-tests", "complete"),
   );
   console.log(
-    "PASS: categories, search, bounded DOM, 10 selections, limit, paging, keyboard, empty/loading, 1440/900/390px and both themes.",
+    "PASS: categories, search, bounded DOM, 10 selections, limit, paging, keyboard, empty/loading, 1440/900/390px and dark theme.",
   );
 }

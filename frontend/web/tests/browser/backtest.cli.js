@@ -2,6 +2,7 @@
 // prettier-ignore
 async (page) => {
   const origin = new URL(page.url()).origin;
+  await page.addInitScript(() => localStorage.setItem("signalgen.theme", "light"));
   await page.emulateMedia({ reducedMotion: "reduce" });
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -207,7 +208,9 @@ async (page) => {
     if (pathname === "/api/v1/stock-universes")
       return respond({ items: [universe] });
     if (pathname === "/api/v1/subscription")
-      return respond({ subscription: null });
+      return respond({ subscription: {id:"qa-plan",user_id:user.id,plan_code:"pro",plan_name:"QA Pro",status:"active",features:["screener","backtest"],current_period_start:"2026-01-01T00:00:00Z",current_period_end:"2027-12-31T00:00:00Z",cancel_at_period_end:false,source:"manual",created_at:"2026-01-01T00:00:00Z",updated_at:"2026-01-01T00:00:00Z"} });
+    if(pathname==="/api/v1/subscription/usage") return respond({limits:{custom_rules:50,stock_universes:20},used:{custom_rules:2,stock_universes:1}});
+    if (["/api/v1/subscription/plans", "/api/v1/account/devices", "/api/v1/account/sessions"].includes(pathname)) return respond({items:[]});
     if (pathname === "/api/v1/workspace") return respond({ items: [] });
     if (
       pathname.startsWith("/api/v1/workspace/") &&
@@ -317,6 +320,7 @@ async (page) => {
     await page
       .getByLabel("Entry mode", { exact: true })
       .waitFor({ timeout: 20000 });
+    if(await page.locator("html").getAttribute("data-theme")!=="dark" || await page.getByRole("button",{name:/Switch to .* mode/}).count()) throw Error("Saved light preference must not enable light mode");
   }
   async function dates() {
     await page
@@ -367,6 +371,9 @@ async (page) => {
     if((await firstRun.locator("h4").textContent()).includes("2026-01-20–2026-01-23")) throw Error("History title still contains the unformatted date range");
     if((await firstRun.locator("dt").allTextContents()).join("|")!=="Test period|Saved (UTC)|Currency|File size") throw Error("History metadata fields are incomplete");
     if(!(await firstRun.locator("time").getAttribute("datetime")) || !(await firstRun.getByText("Server synced",{exact:true}).count())) throw Error("History lost saved time or sync status");
+    for(const button of [firstRun.getByRole("button",{name:/Delete saved run/}),page.getByRole("button",{name:"Reset results",exact:true})]) {
+      if(!(await button.getAttribute("class")).includes("text-destructive")) throw Error("Backtest clear/delete action lost its destructive color");
+    }
     await firstRun.screenshot({path:`output/playwright/backtest-history-${width}-${theme}.png`});
     const tones=await page.locator(".backtest-panel [data-value-tone]").evaluateAll(items=>items.map(item=>({tone:item.getAttribute("data-value-tone"),color:getComputedStyle(item).color,text:item.textContent})));
     if(!tones.some(item=>item.tone==="positive") || !tones.some(item=>item.tone==="negative")) throw Error("Fixture did not cover both performance signs");
@@ -384,16 +391,27 @@ async (page) => {
     await page.keyboard.press("Escape");
     await chooseHorizon("T+2");
     if(!(await trigger.textContent()).includes("T+2")) throw Error("Horizon menu did not select T+2");
+    await chooseHorizon("T+3");
+    const skippedSummary=page.locator("summary").filter({hasText:/^Skipped entries \(/});
+    await skippedSummary.click();
+    const skipped=page.getByRole("region",{name:"Skipped backtest entries",exact:true});
+    await skipped.waitFor();
+    if((await skipped.locator("thead th").allTextContents()).join("|")!=="Stock|Signal (UTC)|Reason skipped") throw Error("Skipped entries are not organized into columns");
+    if(!await skipped.locator("tbody tr").count() || !(await skipped.locator("tbody td").last().textContent()).includes("Another position was open")) throw Error("Skipped entry reasons were lost");
+    if(await skipped.locator("time").first().getAttribute("datetime")===null) throw Error("Skipped entry timestamp is missing");
+    await assertLayout(width);
+    await skipped.screenshot({path:`output/playwright/backtest-skipped-${width}-${theme}.png`});
+    await skippedSummary.click();
     await chooseHorizon("T+1");
   }
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (const theme of ["dark", "light"]) {
+    for (const theme of ["dark"]) {
       mode = "healthy";
       await ready();
       await dates();
       if ((await page.locator("html").getAttribute("data-theme")) !== theme)
-        await page.getByRole("button", { name: /Switch to .* mode/ }).click();
+        if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
       if (
         !(await page.locator("#bt-rule option[value='sell-rule']").isDisabled())
       )
@@ -677,6 +695,31 @@ async (page) => {
   await page.getByText("No saved backtests for this account yet.",{exact:true}).waitFor();
   user.id=previousId;await ready();
   if(await page.getByRole("button",{name:/Open saved run/}).count()!==storageChecks.rows-1)throw Error("Account switch lost owner history");
+  for(const width of [1440,390]) for(const theme of ["dark"]) {
+    await page.setViewportSize({width,height:1000});
+    if(await page.locator("html").getAttribute("data-theme")!==theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
+    const navigation=page.getByRole("navigation",{name:"Workspace navigation",includeHidden:true});
+    if(await navigation.getByRole("button",{name:/^(Account & devices|Plan & access)$/,includeHidden:true}).count()) throw Error("Account settings still appear in workspace sidebar");
+    if(width===1440) {
+      await page.getByRole("button",{name:"Open Backtest QA fixture menu",exact:true}).click();
+      await page.getByRole("menuitem",{name:"Account",exact:true}).click();
+    } else await page.goto(`${origin}/#account`);
+    const settings=page.getByRole("navigation",{name:"Account settings navigation",exact:true});
+    await settings.getByRole("button",{name:"Plan & access",exact:true}).click();
+    await page.getByRole("heading",{name:"Your plan",exact:true}).waitFor();
+    await page.getByRole("heading",{name:"QA Pro",exact:true}).waitFor();
+    if(await page.getByRole("link",{name:"Open plan & access",exact:true}).count()) throw Error("Plan settings still require an intermediate link");
+    await assertLayout(width);
+    await page.screenshot({path:`output/playwright/account-plan-${width}-${theme}.png`,fullPage:true});
+    await settings.getByRole("button",{name:"Account & devices",exact:true}).click();
+    await page.getByRole("heading",{name:"Analysis access",exact:true}).waitFor();
+    await page.getByRole("heading",{name:"Account devices",exact:true}).waitFor();
+    await page.getByText("No devices yet",{exact:true}).waitFor();
+    if(await page.getByRole("link",{name:"Open account & devices",exact:true}).count()) throw Error("Device settings still require an intermediate link");
+    await page.screenshot({path:`output/playwright/account-devices-${width}-${theme}.png`,fullPage:true});
+    await assertLayout(width);
+    await ready();
+  }
   await page.getByRole("button",{name:"Delete all history",exact:true}).click();await page.getByRole("button",{name:"Delete all backtests",exact:true}).click();
   await page.getByText("No saved backtests for this account yet.",{exact:true}).waitFor();
   mode = "denied";
@@ -700,7 +743,7 @@ async (page) => {
     synthetic: true,
     wasm: "real",
     widths: [1440, 390],
-    themes: ["dark", "light"],
+    themes: ["dark"],
     rule: true,
     manual: true,
     cancelled: true,

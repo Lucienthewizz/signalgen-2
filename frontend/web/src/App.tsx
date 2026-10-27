@@ -182,7 +182,13 @@ function RoutedApp() {
     );
   }
   if (route === "account" && user)
-    return <AccountPage user={user} onLogout={logout} />;
+    return (
+      <AccountPage
+        user={user}
+        onLogout={logout}
+        backendOnline={backendOnline}
+      />
+    );
   if (route === "account")
     return (
       <AuthPage

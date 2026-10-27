@@ -68,7 +68,7 @@ async (page) => {
   await page.emulateMedia({reducedMotion:"reduce"});
   for(const width of [1440,390]) {
     await page.setViewportSize({width,height:1000});
-    for(let theme=0; theme<2; theme++) {
+    for(let theme=0; theme < 1; theme++) {
       const summary=page.locator(".screener-history > summary");
       if(!await page.locator(".screener-history").evaluate(el=>el.open)) await summary.click();
       for(const item of cases) {
@@ -122,7 +122,7 @@ async (page) => {
         }
         if(await page.evaluate(()=>document.documentElement.scrollWidth > innerWidth+1)) throw Error(`Horizontal overflow ${width}: ${item.name}`);
       }
-      await page.getByRole("button",{name:/Switch to .* mode/}).click();
+      if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     }
   }
   if(renderErrors.length) throw Error(renderErrors.join("; "));

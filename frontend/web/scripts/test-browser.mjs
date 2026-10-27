@@ -139,16 +139,16 @@ if (usedCli) {
 
 console.log(
   adminOnly
-    ? "PASS: verified-role sidebar navigation, admin search/paging, reviewed grant/revoke, validation focus, contrast and 44px controls, denied/forged/suspended roles, 1440/375px and 844x390 landscape, both themes. Synthetic account/API fixtures only."
+    ? "PASS: verified-role sidebar navigation, admin search/paging, reviewed grant/revoke, validation focus, contrast and 44px controls, denied/forged/suspended roles, 1440/375px and 844x390 landscape, dark theme. Synthetic account/API fixtures only."
     : backtestOnly
-      ? "PASS: backtest-2 rule/manual, real Go/WASM, horizon/equity/trade paging, bulk input, full CSV downloads, native IndexedDB persistence/limits/rollback, archive reload/logout/isolation, cancellation/integrity/denial, 1440/390px both themes. Synthetic account/API fixtures only."
+      ? "PASS: backtest-2 rule/manual, real Go/WASM, horizon/equity/trade paging, bulk input, full CSV downloads, native IndexedDB persistence/limits/rollback, archive reload/logout/isolation, cancellation/integrity/denial, 1440/390px dark theme. Synthetic account/API fixtures only."
       : monitorOnly
-        ? "PASS: Start/Stop, real WASM, unchanged-data dedup, new candles, cancellation, navigation, 1440/390px and both themes; synthetic API/socket fixtures only."
+        ? "PASS: Start/Stop, real WASM, unchanged-data dedup, new candles, cancellation, navigation, 1440/390px and dark theme; synthetic API/socket fixtures only."
         : recoveryOnly
-          ? "PASS: transient resource recovery, bounded retries, persistent outage, explicit reload, session preservation, 1440/390px and both themes. Synthetic API/account data only."
+          ? "PASS: transient resource recovery, bounded retries, persistent outage, explicit reload, session preservation, 1440/390px and dark theme. Synthetic API/account data only."
           : decisionsOnly
-            ? "PASS: BUY/SELL, AND/OR, crossover history/reload/evidence/CSV, legacy unknown direction, cooldown, IDR/USD, 1440/390px and both themes. Synthetic API/account data only."
+            ? "PASS: BUY/SELL, AND/OR, crossover history/reload/evidence/CSV, legacy unknown direction, cooldown, IDR/USD, 1440/390px and dark theme. Synthetic API/account data only."
             : catalogOnly
-              ? "PASS: categories, search, 10-stock limit, paging, keyboard, empty/loading, 1440/900/390px and both themes. Synthetic catalog fixture only."
-              : "PASS: 10 workspace routes × 2 viewport sizes × 2 themes; public/account routes; history/evidence/CSV; monitor sorting; sidebar navigation; expired-session cleanup. API/account fixtures only.",
+              ? "PASS: categories, search, 10-stock limit, paging, keyboard, empty/loading, 1440/900/390px and dark theme. Synthetic catalog fixture only."
+              : "PASS: 10 workspace routes × 2 viewport sizes × dark theme; public/account routes; history/evidence/CSV; monitor sorting; sidebar navigation; expired-session cleanup. API/account fixtures only.",
 );

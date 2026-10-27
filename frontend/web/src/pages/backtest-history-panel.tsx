@@ -343,7 +343,7 @@ export function BacktestHistoryPanel({
                   Open result
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="destructive"
                   disabled={busy}
                   onClick={(e) => {
                     returnFocus.current = e.currentTarget;

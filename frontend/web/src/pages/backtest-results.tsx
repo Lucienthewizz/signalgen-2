@@ -2,6 +2,15 @@ import { useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableCaption,
+} from "@/components/ui/table";
+import {
   Select,
   SelectTrigger,
   SelectValue,
@@ -501,14 +510,40 @@ export function BacktestResults({
         <summary>Skipped entries ({selectedHorizon.skipped.length})</summary>
         {selectedHorizon.skipped.length ? (
           <>
-            <ul>
-              {selectedHorizon.skipped.slice(0, 50).map((entry, i) => (
-                <li key={i}>
-                  {entry.symbol} · {dateLabel(entry.timestamp)} ·{" "}
-                  {skippedLabels[entry.reason] ?? entry.reason}
-                </li>
-              ))}
-            </ul>
+            <div
+              className="backtest-table-scroll backtest-skipped"
+              tabIndex={0}
+              role="region"
+              aria-label="Skipped backtest entries"
+            >
+              <Table>
+                <TableCaption>
+                  Entries not opened · {selectedHorizon.label}
+                </TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col">Stock</TableHead>
+                    <TableHead scope="col">Signal (UTC)</TableHead>
+                    <TableHead scope="col">Reason skipped</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedHorizon.skipped.slice(0, 50).map((entry, i) => (
+                    <TableRow key={i}>
+                      <TableHead scope="row">{entry.symbol}</TableHead>
+                      <TableCell>
+                        <time dateTime={entry.timestamp}>
+                          {dateLabel(entry.timestamp)}
+                        </time>
+                      </TableCell>
+                      <TableCell>
+                        {skippedLabels[entry.reason] ?? entry.reason}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
             {selectedHorizon.skipped.length > 50 && (
               <p>Showing the first 50 skipped entries.</p>
             )}
