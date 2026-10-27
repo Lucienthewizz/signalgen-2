@@ -347,6 +347,8 @@
 .backtest-panel table {
   border-collapse: separate;
   border-spacing: 0;
+  border: 2px solid var(--control-border);
+  border-radius: 12px;
   width: 100%;
   font-size: 0.78rem;
   text-align: left;
@@ -371,6 +373,15 @@
 }
 .backtest-panel tbody tr:hover {
   background: var(--surface-2);
+}
+.backtest-panel tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.backtest-panel tbody tr:last-child > :first-child {
+  border-end-start-radius: 10px;
+}
+.backtest-panel tbody tr:last-child > :last-child {
+  border-end-end-radius: 10px;
 }
 .backtest-workspace .backtest-panel thead th {
   background: var(--accent-surface);
