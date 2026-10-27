@@ -4,9 +4,22 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const ts = require("typescript");
 const path = require("node:path");
-function load(name) { const exports = {}; vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, `../src/lib/${name}.ts`), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports, TextEncoder }); return exports; }
+function load(name) { const exports = {}; vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, `../src/lib/${name}.ts`), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports, TextEncoder, require: name => load(name.replace("./", "")) }); return exports; }
 const workflow = load("rule-workflow");
 const status = load("screening-status");
+test("all Claudio operands and canonical periods/history validate", () => {
+  const indicators = require("./helpers/indicator-loader.cjs");
+  const base = workflow.rulePresets[0].definition;
+  assert.equal(Object.keys(indicators.indicatorLabels).length, 78);
+  for (const name of [...Object.keys(indicators.indicatorLabels), "EMA250_PREV_250", "RSI7", "ADX250", "REL_VOLUME_8", "MACD_PREV_5"]) {
+    assert.equal(indicators.isIndicator(name), true, name);
+    const right = name === "PRICE" ? "EMA9" : "PRICE";
+    assert.equal(workflow.validateRule({...base, conditions:[{left:name, op:">", right}]}).valid, true, name);
+  }
+  for (const name of ["EMA0","EMA251","EMA01","EMA20_PREV_251","EMA20_PREV_2_PREV_2","__proto__"]) assert.equal(indicators.isIndicator(name), false, name);
+  assert.equal(workflow.validateRule({...base, conditions:[{left:"MACD",op:"<",right:-0.5}]}).valid, true);
+  assert.equal(workflow.validateRule({...base, conditions:[{left:"PATTERN_CDLDOJI",op:">",right:0}]}).valid, true);
+});
 test("rules and screener share all six comparison symbols", () => {
   assert.deepEqual(Object.keys(workflow.operatorSymbols).sort(), Object.keys(workflow.operatorLabels).sort());
   for (const [op, symbol] of Object.entries({ ">": ">", ">=": "≥", "<": "<", "<=": "≤", CROSS_UP: "↗", CROSS_DOWN: "↘" })) assert.equal(workflow.operatorSymbols[op], symbol);

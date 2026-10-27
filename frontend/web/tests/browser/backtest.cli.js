@@ -20,7 +20,7 @@ async (page) => {
     read_only: false,
     version: 1,
     definition_hash: "sha256:qa-rule",
-    engine_version: "core-0.4.0",
+    engine_version: "core-0.5.0",
     schema_version: "signal-baseline-1",
     definition: {
       name: "QA BUY rule",
@@ -109,6 +109,8 @@ async (page) => {
       text,
     );
     const manifest = {
+      required_operands: ["MACD", "MACD_SIGNAL", "EMA37_PREV_3", "PATTERN_CDLDOJI"],
+      indicator_catalog_version: "claudio-indicators-1",
       dataset_id: `backtest-${prepares}`,
       version: String(prepares),
       expires_at: new Date(Date.now() + 900000).toISOString(),
@@ -290,6 +292,8 @@ async (page) => {
         )
       )
         throw Error("WASM did not send the complete feature history");
+      const last = body.candidates.at(-1).features.values;
+      if (!last || !Number.isFinite(last.MACD) || !Number.isFinite(last.EMA37_PREV_3) || ![0,1].includes(last.PATTERN_CDLDOJI)) throw Error("Claudio indicators did not reach private scoring from WASM");
       const scope = [...snapshots.values()].at(-1).manifest.backtest;
       return respond({
         policy_version: "holding-next-open-1",
@@ -406,7 +410,7 @@ async (page) => {
   }
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (const theme of ["dark"]) {
+    for (const theme of ["light", "dark"]) {
       mode = "healthy";
       await ready();
       await dates();
@@ -695,7 +699,7 @@ async (page) => {
   await page.getByText("No saved backtests for this account yet.",{exact:true}).waitFor();
   user.id=previousId;await ready();
   if(await page.getByRole("button",{name:/Open saved run/}).count()!==storageChecks.rows-1)throw Error("Account switch lost owner history");
-  for(const width of [1440,390]) for(const theme of ["dark"]) {
+  for(const width of [1440,390]) for(const theme of ["light", "dark"]) {
     await page.setViewportSize({width,height:1000});
     if(await page.locator("html").getAttribute("data-theme")!==theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     const navigation=page.getByRole("navigation",{name:"Workspace navigation",includeHidden:true});

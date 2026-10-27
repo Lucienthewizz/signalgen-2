@@ -36,6 +36,8 @@ COPY --from=api-build /out/signalgen-admin /usr/local/bin/signalgen-admin
 COPY --from=api-build /out/signalgen-healthcheck /usr/local/bin/signalgen-healthcheck
 COPY backend/core/testdata/default_scalping_v1.json /usr/share/signalgen/fixtures/default_scalping_v1.json
 
+COPY backend/core/licenses /usr/share/licenses/signalgen
+
 USER signalgen
 EXPOSE 8080
 # Handler 8s < probe client 9s < Docker 10s; keep the cold-cloud checks bounded.

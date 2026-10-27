@@ -1,5 +1,15 @@
 # Backend progress
 
+## 27 October 2026 — Claudio indicator catalog
+
+Added all 78 archived rule operands, dynamic 1–250 periods and previous-candle
+offsets to portable Go/WASM, private rule validation, rule-derived dataset warmup,
+and the web composer/evidence. Engine core-0.5.0 / capabilities-4 / API 0.14.0;
+legacy feature fields, private scoring split and backtest execution policy stay
+compatible. Existing valid rule definitions project the new execution version
+without a database rewrite. [Formula and verification details](CLAUDIO_INDICATORS.md).
+
+
 ## Pemeriksaan demo dengan akun asli — 27 Oktober 2026
 
 Uji browser langsung memakai akun yang diloginkan pengguna pada aplikasi lokal,

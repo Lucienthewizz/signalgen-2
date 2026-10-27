@@ -160,7 +160,7 @@ function harness() {
     extractBacktestFeatures: async () => {
       calls.features++;
       return dataset.series.map((series) => ({
-        engine_version: "core-0.4.0",
+        engine_version: "core-0.5.0",
         feature_schema_version: "screener-features-1",
         candidates: series.candles.slice(19).map((candle) => ({
           symbol: series.symbol,

@@ -10,7 +10,7 @@ import (
 const (
 	Model           = "A"
 	MaxCandidates   = 1000
-	MaxMessageBytes = 256 << 10
+	MaxMessageBytes = 2 << 20
 )
 
 var (

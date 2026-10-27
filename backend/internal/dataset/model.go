@@ -10,14 +10,15 @@ var (
 )
 
 type PrepareRequest struct {
-	Mode       string `json:"mode,omitempty"`
-	From       string `json:"from,omitempty"`
-	To         string `json:"to,omitempty"`
-	NSteps     int    `json:"n_steps,omitempty"`
-	Timeframe  string `json:"timeframe,omitempty"`
-	Purpose    string `json:"purpose"`
-	RuleID     string `json:"rule_id"`
-	UniverseID string `json:"universe_id"`
+	RequiredOperands []string `json:"-"` // derived from the authorized rule, never client-controlled
+	Mode             string   `json:"mode,omitempty"`
+	From             string   `json:"from,omitempty"`
+	To               string   `json:"to,omitempty"`
+	NSteps           int      `json:"n_steps,omitempty"`
+	Timeframe        string   `json:"timeframe,omitempty"`
+	Purpose          string   `json:"purpose"`
+	RuleID           string   `json:"rule_id"`
+	UniverseID       string   `json:"universe_id"`
 }
 
 type Range struct {
@@ -39,6 +40,8 @@ type BacktestScope struct {
 }
 
 type Manifest struct {
+	RequiredOperands        []string       `json:"required_operands,omitempty"`
+	IndicatorCatalogVersion string         `json:"indicator_catalog_version,omitempty"`
 	Backtest                *BacktestScope `json:"backtest,omitempty"`
 	AvailableTimestampRange *Range         `json:"available_timestamp_range,omitempty"`
 	RequestedTimestampRange *Range         `json:"requested_timestamp_range,omitempty"`

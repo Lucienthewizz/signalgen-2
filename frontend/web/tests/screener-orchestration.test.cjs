@@ -32,7 +32,7 @@ function screener(options = {}) {
               features: { price: 100 + index, ema9: 90, ema20: 80, rsi14: 55 },
             }));
       return {
-              engine_version: "core-0.4.0",
+              engine_version: "core-0.5.0",
               feature_schema_version:
                 symbol === options.badSchemaSymbol
                   ? "unsupported"

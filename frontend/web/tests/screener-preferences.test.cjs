@@ -7,7 +7,7 @@ function preferences(storage = new Map()) {
   const exports = {};
   const localStorage = {getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value)};
   const workspace = {};
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(`${__dirname}/../src/lib/workspace-storage.ts`, "utf8"), {compilerOptions: {module: ts.ModuleKind.CommonJS}}).outputText, {exports: workspace, window: {localStorage}, TextEncoder});
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(`${__dirname}/../src/lib/workspace-storage.ts`, "utf8"), {compilerOptions: {module: ts.ModuleKind.CommonJS}}).outputText, {exports: workspace, require: () => require("./helpers/indicator-loader.cjs"), window: {localStorage}, TextEncoder});
   vm.runInNewContext(
     ts.transpileModule(
       fs.readFileSync(

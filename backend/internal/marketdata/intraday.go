@@ -106,7 +106,11 @@ func (provider *YahooFinance) intradayOne(ctx context.Context, instrument univer
 			}
 			candles = append(candles, core.Candle{Timestamp: stamp.Format(time.RFC3339), Open: *quote.Open[i], High: *quote.High[i], Low: *quote.Low[i], Close: *quote.Close[i], Volume: *quote.Volume[i]})
 		}
-		if len(candles) < 20 {
+		minimum := 20
+		if size > 100 {
+			minimum = size - 80
+		}
+		if len(candles) < minimum {
 			continue
 		}
 		if len(candles) > size {

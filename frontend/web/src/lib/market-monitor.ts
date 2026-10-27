@@ -1,5 +1,6 @@
 import type { LiveScreenerRun } from "@/analysis/screener";
 import type { RuleResource, UserRuleDefinition } from "@/types";
+import { isIndicator } from "./indicators";
 import {
   readWorkspaceData,
   hasWorkspaceData,
@@ -137,6 +138,9 @@ const fields = new Set([
   "ema9",
   "ema20",
   "rsi14",
+  "values",
+  "required_operands",
+  "indicator_catalog_version",
   "dataset_id",
   "version",
   "schema_version",
@@ -175,7 +179,24 @@ function cleanSnapshot(value: unknown, depth = 0): unknown {
     return Object.fromEntries(
       Object.entries(value)
         .filter(([key]) => fields.has(key))
-        .map(([key, item]) => [key, cleanSnapshot(item, depth + 1)]),
+        .map(([key, item]) => [
+          key,
+          key === "values" &&
+          item &&
+          typeof item === "object" &&
+          !Array.isArray(item)
+            ? Object.fromEntries(
+                Object.entries(item)
+                  .filter(
+                    ([operand, n]) =>
+                      isIndicator(operand) &&
+                      typeof n === "number" &&
+                      Number.isFinite(n),
+                  )
+                  .slice(0, 40),
+              )
+            : cleanSnapshot(item, depth + 1),
+        ]),
     );
   return null;
 }

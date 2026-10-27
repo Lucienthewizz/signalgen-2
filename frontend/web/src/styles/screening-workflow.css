@@ -215,6 +215,7 @@
   gap: 12px;
 }
 .rule-condition-row[data-slot="field-group"] {
+  align-items: start;
   padding: 16px 0;
   border: 0;
   border-radius: 0;

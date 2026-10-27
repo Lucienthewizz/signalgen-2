@@ -262,13 +262,14 @@ export async function runBacktest(
     const features = await extractBacktestFeatures(
       prepared.dataset.series,
       signal,
+      current.required_operands ?? [],
     );
     check(signal, prepared.revision);
     if (
       features.length !== prepared.dataset.series.length ||
       features.some(
         (group, i) =>
-          group.engine_version !== "core-0.4.0" ||
+          group.engine_version !== "core-0.5.0" ||
           group.feature_schema_version !== "screener-features-1" ||
           group.candidates.length !==
             prepared.dataset.series[i].candles.length - 19 ||

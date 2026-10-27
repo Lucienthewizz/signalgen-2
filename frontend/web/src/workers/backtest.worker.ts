@@ -8,6 +8,7 @@ let ready: ReturnType<typeof loadEngine> | null = null;
 self.onmessage = async (event: MessageEvent) => {
   const message = event.data as {
     jobId: string;
+    operands?: string[];
     type: "features" | "simulate";
     series?: DatasetContent["series"];
     request?: BacktestRequest;
@@ -49,6 +50,7 @@ self.onmessage = async (event: MessageEvent) => {
               purpose: "backtest",
               symbol: item.symbol,
               candles: item.candles,
+              operands: message.operands,
             }),
           ),
         ),

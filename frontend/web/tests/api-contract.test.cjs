@@ -472,7 +472,7 @@ test("hybrid screener calls use the implemented Go API contract", async () => {
   const rule = {
     id: "default-scalping-v1",
     definition_hash: "sha256:rule",
-    engine_version: "core-0.4.0",
+    engine_version: "core-0.5.0",
     schema_version: "signal-baseline-1",
   };
   await c.api.prepareDataset("default-scalping-v1", "universe-bank");
@@ -516,7 +516,7 @@ test("backtest requests preserve manual/rule scope, grant bindings and private h
   const rule = {
     id: "rule-a",
     definition_hash: "sha256:rule",
-    engine_version: "core-0.4.0",
+    engine_version: "core-0.5.0",
     schema_version: "signal-baseline-1",
   };
   const candidates = [

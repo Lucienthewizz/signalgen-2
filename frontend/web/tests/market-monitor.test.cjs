@@ -25,6 +25,7 @@ vm.runInNewContext(
   ).outputText,
   {
     exports: storageModule,
+    require: () => require("./helpers/indicator-loader.cjs"),
     TextEncoder,
     CustomEvent: class {
       constructor(type, init) {
@@ -52,7 +53,7 @@ function loadMonitor() {
     ).outputText,
     {
       exports,
-      require: () => storageModule,
+      require: name => name.includes("indicators") ? require("./helpers/indicator-loader.cjs") : storageModule,
       window: browser,
       Event: class Event {},
     },

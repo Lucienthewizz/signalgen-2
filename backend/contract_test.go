@@ -12,7 +12,7 @@ func TestOpenAPIDocumentAndLocalReferences(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(OpenAPI()), &document); err != nil {
 		t.Fatal(err)
 	}
-	if Version() != "0.13.0" {
+	if Version() != "0.14.0" {
 		t.Fatal("unexpected API version")
 	}
 	var walk func(any)

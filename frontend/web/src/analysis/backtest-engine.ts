@@ -58,7 +58,9 @@ function job<T>(payload: object, signal: AbortSignal): Promise<T> {
 export const extractBacktestFeatures = (
   series: DatasetContent["series"],
   signal: AbortSignal,
-) => job<ScreenerFeatureResult[]>({ type: "features", series }, signal);
+  operands: string[] = [],
+) =>
+  job<ScreenerFeatureResult[]>({ type: "features", series, operands }, signal);
 export const simulateBacktest = (
   request: BacktestRequest,
   signal: AbortSignal,

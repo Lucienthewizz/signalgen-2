@@ -35,11 +35,13 @@ export async function loadEngine(): Promise<WorkerScope> {
   if (!manifestResponse.ok) throw new Error("WASM manifest not found");
   const manifest = (await manifestResponse.json()) as WasmManifest;
   if (
-    manifest.engine_version !== "core-0.4.0" ||
+    manifest.engine_version !== "core-0.5.0" ||
     manifest.worker_protocol !== "worker-2" ||
     manifest.feature_schema_version !== "screener-features-1"
   )
-    throw new Error("Unsupported WASM worker version");
+    throw new Error(
+      "The indicator engine is outdated. Rebuild the WASM assets and refresh the app.",
+    );
 
   const [runtimeResponse, wasmResponse] = await Promise.all([
     fetch(new URL(manifest.runtime_file, base)),

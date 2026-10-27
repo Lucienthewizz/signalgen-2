@@ -88,4 +88,15 @@ assert.equal(JSON.parse(globalThis.signalgenBacktestCapabilities()).policy_versi
 assert.equal(JSON.parse(globalThis.signalgenBacktestCapabilities()).schema_version, 'backtest-2');
 assert.deepEqual(JSON.parse(globalThis.signalgenCapabilities()).purposes, ['screen']);
 console.log('Feature export, capabilities, invalid input and SELL rejection verified');
+const indicators = JSON.parse(readFileSync('core/testdata/claudio_indicators_v1.json', 'utf8'));
+for (let offset = 0; offset < indicators.operands.length; offset += 40) {
+  const request = {...indicators.request, operands: indicators.operands.slice(offset, offset + 40)};
+  const native = JSON.parse(execFileSync('go', ['run', './cmd/features'], {input: JSON.stringify(request), encoding: 'utf8', maxBuffer: 16 << 20}));
+  const wasm = JSON.parse(globalThis.signalgenComputeFeatures(JSON.stringify(request)));
+  assert.equal(wasm.ok, true, JSON.stringify(wasm.error));
+  compare(wasm.result, native);
+}
+assert.equal(JSON.parse(globalThis.signalgenCapabilities()).indicator_catalog_version, 'claudio-indicators-1');
+assert.equal(JSON.parse(globalThis.signalgenCapabilities()).indicators.length, 78);
+console.log('All Claudio indicator families: native/WASM feature results match');
 process.exit(0);

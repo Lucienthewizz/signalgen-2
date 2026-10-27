@@ -358,3 +358,47 @@
     transition: none;
   }
 }
+
+/* Indicator parameters stay beside their condition in both themes. */
+.indicator-input {
+  min-width: 0;
+  width: 100%;
+}
+.indicator-input > [data-slot="select-trigger"] {
+  width: 100%;
+  min-height: 44px;
+}
+.indicator-parameters {
+  margin-top: 8px;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.indicator-parameters summary {
+  cursor: pointer;
+  padding: 8px 0;
+  min-height: 36px;
+}
+.indicator-parameters summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.indicator-parameter-fields {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 100px), 1fr));
+}
+.indicator-parameter-fields label {
+  display: grid;
+  gap: 4px;
+  color: var(--foreground);
+}
+.indicator-parameter-fields input {
+  width: 100%;
+  min-height: 44px;
+}
+.indicator-parameters small {
+  display: block;
+  margin-top: 8px;
+  line-height: 1.5;
+}

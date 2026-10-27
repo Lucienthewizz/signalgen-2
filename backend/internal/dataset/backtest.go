@@ -45,20 +45,24 @@ func (store *DynamicStore) prepareBacktest(ctx context.Context, owner string, in
 	if to.After(store.now().UTC()) {
 		return Manifest{}, ErrInvalidRequest
 	}
-	fetchFrom := from.AddDate(0, 0, -90)
+	warmupRequired := core.IndicatorWarmup(input.RequiredOperands)
+	fetchFrom := from.AddDate(0, 0, -max(90, (warmupRequired*18+9)/10+30))
 	fetchTo := to.AddDate(0, 0, 3*input.NSteps+11)
 	tomorrow := store.now().UTC().Truncate(24*time.Hour).AddDate(0, 0, 1)
 	if fetchTo.After(tomorrow) {
 		fetchTo = tomorrow
 	}
-	if fetchTo.Sub(fetchFrom) > 6*366*24*time.Hour {
+	if fetchTo.Sub(fetchFrom) > 10*366*24*time.Hour {
 		return Manifest{}, ErrInvalidRequest
 	}
 	reader, ok := store.provider.(marketdata.HistoryProvider)
 	if !ok {
 		return Manifest{}, marketdata.ErrHistoryUnavailable
 	}
-	keyBytes, _ := json.Marshal(input)
+	keyBytes, _ := json.Marshal(struct {
+		PrepareRequest
+		Operands []string `json:"required_operands"`
+	}{input, input.RequiredOperands})
 	contextKey := "backtest\x00" + string(keyBytes)
 	store.mu.Lock()
 	store.pruneExpiredLocked()
@@ -122,7 +126,7 @@ func (store *DynamicStore) prepareBacktest(ctx context.Context, owner string, in
 							inRange++
 						}
 					}
-					if e == nil && (warmup < 20 || inRange == 0) {
+					if e == nil && (warmup < warmupRequired || inRange == 0) {
 						e = marketdata.ErrInsufficientCandles
 					}
 				}
@@ -163,7 +167,7 @@ func (store *DynamicStore) prepareBacktest(ctx context.Context, owner string, in
 	for _, item := range series {
 		source.Warnings = append(source.Warnings, item.QualityWarnings...)
 	}
-	manifest := Manifest{DatasetID: id, Version: now.Format("20060102T150405Z"), ExpiresAt: expires.Format(time.RFC3339), SchemaVersion: "ohlcv-multi-1", Provider: source.Provider, Purpose: "backtest", Market: market, Currency: currency, Symbols: symbols, Exchanges: exchanges, Timeframe: "1d", Timezone: "UTC", RequestedRange: Range{input.From, input.To}, AvailableRange: Range{firstDate, lastDate}, WarmupCandles: 20, Adjustment: "none", CandleCount: count, DecodedBytes: len(content), Checksum: "sha256:" + hex.EncodeToString(hash[:]), Quality: Quality{Status: "partial", Warnings: source.Warnings}, Backtest: scope}
+	manifest := Manifest{DatasetID: id, Version: now.Format("20060102T150405Z"), ExpiresAt: expires.Format(time.RFC3339), SchemaVersion: "ohlcv-multi-1", Provider: source.Provider, Purpose: "backtest", Market: market, Currency: currency, Symbols: symbols, Exchanges: exchanges, Timeframe: "1d", Timezone: "UTC", RequestedRange: Range{input.From, input.To}, AvailableRange: Range{firstDate, lastDate}, WarmupCandles: warmupRequired, RequiredOperands: append([]string(nil), input.RequiredOperands...), IndicatorCatalogVersion: core.IndicatorCatalogVersion, Adjustment: "none", CandleCount: count, DecodedBytes: len(content), Checksum: "sha256:" + hex.EncodeToString(hash[:]), Quality: Quality{Status: "partial", Warnings: source.Warnings}, Backtest: scope}
 	manifest.AvailableTimestampRange, _ = timestampRanges(series)
 	store.mu.Lock()
 	defer store.mu.Unlock()

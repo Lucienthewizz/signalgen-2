@@ -21,9 +21,9 @@ func (server *Handler) Signals(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	var input backtest.SignalInput
-	if err := platformhttp.DecodeJSONLimit(request, &input, 1<<20); err != nil {
+	if err := platformhttp.DecodeJSONLimit(request, &input, 8<<20); err != nil {
 		if errors.Is(err, shared.ErrJSONBodyTooLarge) {
-			shared.WriteError(writer, request, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "Backtest features exceed 1 MiB.")
+			shared.WriteError(writer, request, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "Backtest features exceed 8 MiB.")
 		} else {
 			shared.WriteJSONInputError(writer, request, err, "Invalid backtest features.")
 		}

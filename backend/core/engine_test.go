@@ -47,7 +47,7 @@ func TestValidateRuleAcceptsOnlyAdvertisedSubset(t *testing.T) {
 	for name, mutate := range map[string]func(*RuleSnapshot){
 		"logic":           func(rule *RuleSnapshot) { rule.Logic = "XOR" },
 		"signal":          func(rule *RuleSnapshot) { rule.SignalType = "HOLD" },
-		"left":            func(rule *RuleSnapshot) { rule.Conditions[0].Left = "MACD" },
+		"left":            func(rule *RuleSnapshot) { rule.Conditions[0].Left = "UNKNOWN" },
 		"operator":        func(rule *RuleSnapshot) { rule.Conditions[0].Op = "==" },
 		"right type":      func(rule *RuleSnapshot) { rule.Conditions[0].Right = true },
 		"self comparison": func(rule *RuleSnapshot) { rule.Conditions[0].Right = "EMA9" },
@@ -225,7 +225,7 @@ func assertClose(t *testing.T, name string, got, want float64) {
 
 func TestRunSignalsRejectsUnsupportedOperand(t *testing.T) {
 	fixture := loadFixture(t)
-	fixture.Request.Rule.Conditions[0].Left = "MACD"
+	fixture.Request.Rule.Conditions[0].Left = "UNKNOWN"
 	if _, err := RunSignals(fixture.Request); err == nil {
 		t.Fatal("expected unsupported operand error")
 	}

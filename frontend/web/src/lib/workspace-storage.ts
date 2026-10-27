@@ -1,4 +1,5 @@
 import type { UserRuleDefinition } from "@/types";
+import { isIndicator } from "./indicators";
 
 const PREFIX = "signalgen:workspace:v1:";
 export const WORKSPACE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
@@ -130,7 +131,8 @@ export function validatedRuleDraft(value: unknown): RuleDraft | null {
     !d.conditions.every(
       (c) =>
         c &&
-        ["PRICE", "EMA9", "EMA20", "RSI14"].includes(c.left) &&
+        typeof c.left === "string" &&
+        isIndicator(c.left) &&
         ["<", "<=", ">", ">=", "CROSS_UP", "CROSS_DOWN"].includes(c.op) &&
         (typeof c.right === "number"
           ? Number.isFinite(c.right)

@@ -122,7 +122,11 @@ async function runAuthorizedScreener(
 
   onStage("loading_engine");
   const featureStart = performance.now();
-  const featureRuns = await extractDatasetFeatures(dataset.series, signal);
+  const featureRuns = await extractDatasetFeatures(
+    dataset.series,
+    signal,
+    manifest.required_operands ?? [],
+  );
   ensureNotCancelled(signal);
   const featureMs = performance.now() - featureStart;
   // Reject corrupt/empty feature groups before consuming an access grant.

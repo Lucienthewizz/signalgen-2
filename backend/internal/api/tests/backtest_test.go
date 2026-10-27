@@ -224,6 +224,6 @@ func TestBacktestSignalsHTTPInputAndAuthLimits(t *testing.T) {
 	assertErrorCode(t, response, 401, "AUTH_REQUIRED")
 	response = backtestHTTP(t, server, "POST", "/api/v1/backtests/signals", map[string]any{"unexpected": true})
 	assertErrorCode(t, response, 400, "INVALID_REQUEST")
-	response = backtestHTTP(t, server, "POST", "/api/v1/backtests/signals", map[string]any{"compute_grant_id": strings.Repeat("x", 1<<20)})
+	response = backtestHTTP(t, server, "POST", "/api/v1/backtests/signals", map[string]any{"compute_grant_id": strings.Repeat("x", 8<<20)})
 	assertErrorCode(t, response, 413, "PAYLOAD_TOO_LARGE")
 }

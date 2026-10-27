@@ -11,7 +11,7 @@ async (page) => {
   const now = new Date().toISOString();
   const day = now.slice(0, 10);
   const definition = { name: "Rule fixture", logic: "AND", signal_type: "BUY", cooldown_sec: 0, conditions: [{ left: "PRICE", op: ">", right: "EMA20" }, { left: "EMA9", op: ">", right: "EMA20" }] };
-  const rule = { id: "fixture-rule", name: definition.name, owner_type: "user", read_only: false, version: 2, definition_hash: "fixture-hash", schema_version: "rule-1", engine_version: "core-0.4.0", definition };
+  const rule = { id: "fixture-rule", name: definition.name, owner_type: "user", read_only: false, version: 2, definition_hash: "fixture-hash", schema_version: "rule-1", engine_version: "core-0.5.0", definition };
   const universe = { id: "fixture-universe", name: "Bank pilihan", version: 1, symbols: ["BBCA.JK", "BBRI.JK"] };
   const rows = [true, false].map((matched, i) => ({ decision: { symbol: universe.symbols[i], timestamp: now, matched, reason_codes: [matched ? "RULE_MATCHED" : "CONDITIONS_NOT_MET"] }, features: { price: 100 + i, ema9: matched ? 99 : 95, ema20: 98, rsi14: 60 }, latestOpen: 95, latestClose: 100 + i }));
   const run = { rows, latestDecision: rows[0].decision, features: rows[0].features, latestOpen: 95, latestClose: 100, result: { type: "screener.result", protocol: "screener-private-1", request_id: "fixture-request", decision_version: "fixture-decision", results: rows.map(row => row.decision) }, manifest: { dataset_id: "fixture-dataset", version: "1", schema_version: "ohlcv-multi-1", provider: "yahoo_finance", purpose: "screen", market: "IDX", currency: "IDR", symbols: universe.symbols, timeframe: "1d", timezone: "UTC", requested_range: { from: day, to: day }, available_range: { from: day, to: day }, warmup_candles: 20, adjustment: "split", candle_count: 100, decoded_bytes: 1000, checksum: "fixture-checksum", quality: { status: "complete", warnings: [] } }, execution: "client_wasm+server_private_scoring" };
@@ -830,7 +830,7 @@ async (page) => {
     if (width > 760) {
       if (!(await page.locator('.rule-condition-columns').innerText()).startsWith('No')) throw Error('Condition numbering header is not No');
       if (!await page.locator('.rule-condition-columns').evaluate(el => getComputedStyle(el).textAlign === 'center')) throw Error('Condition headings are not centered');
-      const geometry = await page.locator('.rule-condition-row').evaluateAll(rows => rows.map(row => [...row.querySelectorAll('[data-slot="select-trigger"], [data-slot="input"]')].map(control => { const r = control.getBoundingClientRect(); return { left:r.left, top:r.top, height:r.height }; })));
+      const geometry = await page.locator('.rule-condition-row').evaluateAll(rows => rows.map(row => [...row.querySelectorAll('[data-slot="select-trigger"], [data-slot="input"]')].filter(control => !control.closest(".indicator-parameters") && control.getClientRects().length).map(control => { const r = control.getBoundingClientRect(); return { left:r.left, top:r.top, height:r.height }; })));
       for (const row of geometry) if (row.some((cell, index) => Math.abs(cell.height - 48) > 1 || Math.abs(cell.top - row[0].top) > 1 || Math.abs(cell.left - geometry[0][index].left) > 1)) throw Error(`Condition columns are not aligned: ${JSON.stringify(geometry)}`);
     }
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw Error(`Preset workflow overflow ${width} ${theme}`);
@@ -838,6 +838,29 @@ async (page) => {
   await page.getByRole("button", { name: "Save rule", exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#rule-name')?.value === '');
   if (!ruleWrite || ruleWrite.definition.conditions[0].op !== "CROSS_UP" || ruleWrite.definition.signal_type !== "BUY") throw Error("Preset save payload lost crossover or signal action");
+  await page.getByRole("button", {name:/Add the first condition/}).click();
+  await draftInput.fill("Claudio indicator parity");
+  await page.getByRole("combobox", {name:"Condition indicator 1",exact:true}).click();
+  for (const label of ["Doji", "MACD (12, 26)", "MA 200", "Ichimoku span B (52)", "Stochastic %K (14)"]) {
+    await page.getByRole("option",{name:label,exact:true}).waitFor({state:"attached",timeout:5000});
+  }
+  await page.getByRole("option",{name:"Custom EMA period",exact:true}).click();
+  const claudioCondition = page.getByRole("group",{name:"Condition 1",exact:true});
+  await claudioCondition.locator(".indicator-parameters summary").first().click();
+  await page.getByRole("spinbutton",{name:"Condition indicator 1 period",exact:true}).fill("37");
+  await page.getByRole("spinbutton",{name:"Condition indicator 1 previous candles",exact:true}).fill("3");
+  await page.getByRole("combobox",{name:"Condition reference 1",exact:true}).click();
+  await page.getByRole("option",{name:"MACD signal (9)",exact:true}).click();
+  await page.getByRole("listbox").waitFor({state:"hidden"});
+  for (const width of [1440,390]) for (const theme of ["light","dark"]) {
+    await page.setViewportSize({width,height:1000});
+    await page.evaluate(theme => document.documentElement.dataset.theme = theme,theme);
+    await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth + 1, null, {timeout:5000});
+    await claudioCondition.screenshot({path:`output/playwright/claudio-indicators-${width}-${theme}.png`,animations:"disabled"});
+  }
+  await page.getByRole("button",{name:"Save rule",exact:true}).click();
+  await page.waitForFunction(() => document.querySelector('#rule-name')?.value === '');
+  if (ruleWrite.definition.conditions[0].left !== "EMA37_PREV_3" || ruleWrite.definition.conditions[0].right !== "MACD_SIGNAL") throw Error("Claudio period/history was lost in the saved rule");
   await page.getByRole("button", { name: "Delete Rule fixture", exact: true }).click();
   const deleteRuleDialog = page.getByRole("alertdialog", { name: "Delete this rule?" });
   await deleteRuleDialog.waitFor();

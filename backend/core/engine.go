@@ -33,22 +33,25 @@ var supportedOperators = map[string]bool{
 // Mengembalikan nilai baru (bukan referensi) agar pemanggil tidak dapat memutasi slice bersama secara tidak sengaja.
 func GetCapabilities() Capabilities {
 	return Capabilities{
-		CapabilitiesVersion:  CapabilitiesVersion,
-		EngineVersion:        EngineVersion,
-		SchemaVersion:        SchemaVersion,
-		FeatureSchemaVersion: FeatureSchemaVersion,
-		DecisionVersion:      DecisionVersion,
-		PrivateProtocol:      PrivateProtocol,
-		WorkerProtocol:       WorkerProtocol,
-		Purposes:             []string{"screen"},
-		Markets:              []string{"IDX", "US"},
-		Timeframes:           []string{"1m", "5m", "15m", "1h", "1d"},
-		Indicators:           []string{"PRICE", "EMA9", "EMA20", "RSI14"},
-		Operators:            []string{"<", "<=", ">", ">=", "CROSS_UP", "CROSS_DOWN"},
-		RuleLogic:            []string{"AND", "OR"},
-		SignalTypes:          []string{"BUY", "SELL"},
-		MaxCandlesPerRun:     MaxCandlesPerRun,
-		MaxSymbolsPerRun:     1,
+		CapabilitiesVersion:     CapabilitiesVersion,
+		IndicatorCatalogVersion: IndicatorCatalogVersion,
+		MaxIndicatorPeriod:      250,
+		MaxIndicatorOffset:      250,
+		EngineVersion:           EngineVersion,
+		SchemaVersion:           SchemaVersion,
+		FeatureSchemaVersion:    FeatureSchemaVersion,
+		DecisionVersion:         DecisionVersion,
+		PrivateProtocol:         PrivateProtocol,
+		WorkerProtocol:          WorkerProtocol,
+		Purposes:                []string{"screen"},
+		Markets:                 []string{"IDX", "US"},
+		Timeframes:              []string{"1m", "5m", "15m", "1h", "1d"},
+		Indicators:              append([]string(nil), indicatorCatalog.Operands...),
+		Operators:               []string{"<", "<=", ">", ">=", "CROSS_UP", "CROSS_DOWN"},
+		RuleLogic:               []string{"AND", "OR"},
+		SignalTypes:             []string{"BUY", "SELL"},
+		MaxCandlesPerRun:        MaxCandlesPerRun,
+		MaxSymbolsPerRun:        1,
 	}
 }
 
@@ -70,6 +73,7 @@ func GetBaselineRuleDefinition() BaselineRuleDefinition {
 // berada di luar baseline ini hingga kebijakan eksekusi dibekukan terpisah.
 func RunSignals(request RunRequest) (RunResult, error) {
 	features, err := ComputeFeatures(FeatureRequest{
+		Operands: RequiredOperands(request.Rule),
 		Purpose: request.Purpose,
 		Symbol:  request.Symbol,
 		Candles: request.Candles,
@@ -102,6 +106,9 @@ func ComputeFeatures(request FeatureRequest) (FeatureResult, error) {
 	if err := validateFeatureRequest(request); err != nil {
 		return FeatureResult{}, err
 	}
+	if err := validateOperands(request.Operands); err != nil {
+		return FeatureResult{}, err
+	}
 
 	closes := make([]float64, len(request.Candles))
 	for i, candle := range request.Candles {
@@ -111,6 +118,13 @@ func ComputeFeatures(request FeatureRequest) (FeatureResult, error) {
 	ema9, _ := emaSeries(closes, 9)
 	ema20, _ := emaSeries(closes, 20)
 	rsi14, _ := rsiSeries(closes, 14)
+	extra := make(map[string][]float64)
+	computer := newIndicatorComputer(request.Candles)
+	for _, name := range request.Operands {
+		if !supportedOperands[name] {
+			extra[name] = computer.series(name)
+		}
+	}
 
 	candidates := make([]FeatureCandidate, 0, len(request.Candles))
 	for i, candle := range request.Candles {
@@ -119,25 +133,38 @@ func ComputeFeatures(request FeatureRequest) (FeatureResult, error) {
 		if i+1 < 15 || math.IsNaN(ema9[i]) || math.IsNaN(ema20[i]) || math.IsNaN(rsi14[i]) {
 			continue
 		}
+		values := map[string]float64{}
+		for name, series := range extra {
+			if !math.IsNaN(series[i]) && !math.IsInf(series[i], 0) {
+				values[name] = series[i]
+			}
+		}
 		candidates = append(candidates, FeatureCandidate{
 			Symbol:    request.Symbol,
 			Timestamp: candle.Timestamp,
 			Features: FeatureVector{
-				Price: candle.Close,
-				EMA9:  ema9[i],
-				EMA20: ema20[i],
-				RSI14: rsi14[i],
+				Values: values,
+				Price:  candle.Close,
+				EMA9:   ema9[i],
+				EMA20:  ema20[i],
+				RSI14:  rsi14[i],
 			},
 		})
 	}
 
+	warnings := []string{}
+	for _, name := range request.Operands {
+		if series, ok := extra[name]; ok && math.IsNaN(series[len(series)-1]) {
+			warnings = append(warnings, "INDICATOR_UNAVAILABLE:"+name)
+		}
+	}
 	return FeatureResult{
 		EngineVersion:        EngineVersion,
 		FeatureSchemaVersion: FeatureSchemaVersion,
 		Execution:            "client_go_features",
 		Candidates:           candidates,
 		CandleCount:          len(request.Candles),
-		Warnings:             []string{},
+		Warnings:             warnings,
 	}, nil
 }
 
@@ -180,6 +207,9 @@ func evaluateDecision(request DecisionRequest, from, to string) (DecisionResult,
 			"EMA20": candidate.Features.EMA20,
 			"RSI14": candidate.Features.RSI14,
 		}
+		for name, value := range candidate.Features.Values {
+			values[name] = value
+		}
 		// Lolos kondisi belum menentukan arah transaksi: BUY/SELL berasal dari rule.
 		// Cooldown masih dapat menahan sinyal meskipun kondisi matematika terpenuhi.
 		matched, err := evaluateRule(request.Rule, values, prevValues)
@@ -215,10 +245,11 @@ func evaluateDecision(request DecisionRequest, from, to string) (DecisionResult,
 			SignalType: request.Rule.SignalType,
 			Price:      candidate.Features.Price,
 			Indicators: IndicatorValues{
-				Price: candidate.Features.Price,
-				EMA9:  candidate.Features.EMA9,
-				EMA20: candidate.Features.EMA20,
-				RSI14: candidate.Features.RSI14,
+				Values: candidate.Features.Values,
+				Price:  candidate.Features.Price,
+				EMA9:   candidate.Features.EMA9,
+				EMA20:  candidate.Features.EMA20,
+				RSI14:  candidate.Features.RSI14,
 			},
 		})
 		evaluations = append(evaluations, CandidateEvaluation{
@@ -329,6 +360,14 @@ func validateCandidates(candidates []FeatureCandidate) error {
 		if candidate.Features.RSI14 < 0 || candidate.Features.RSI14 > 100 {
 			return fmt.Errorf("candidate %d RSI14 must be between 0 and 100", i)
 		}
+		if len(candidate.Features.Values) > MaxIndicatorOperands {
+			return fmt.Errorf("candidate %d contains too many indicator values", i)
+		}
+		for name, value := range candidate.Features.Values {
+			if supportedOperands[name] || math.IsNaN(value) || math.IsInf(value, 0) || !validIndicatorNumber(name, value) {
+				return fmt.Errorf("candidate %d contains invalid indicator %q", i, name)
+			}
+		}
 	}
 	return nil
 }
@@ -354,7 +393,7 @@ func ValidateRule(rule RuleSnapshot) error {
 		return fmt.Errorf("rule must contain 1 to 20 conditions")
 	}
 	for _, condition := range rule.Conditions {
-		if !supportedOperands[condition.Left] {
+		if !IsIndicatorOperand(condition.Left) {
 			return fmt.Errorf("unsupported left operand %q", condition.Left)
 		}
 		if !supportedOperators[condition.Op] {
@@ -367,11 +406,13 @@ func ValidateRule(rule RuleSnapshot) error {
 		}
 
 		if isNumeric {
-			if condition.Left == "RSI14" {
+			spec, _ := parseOperand(condition.Left)
+			family, _, _ := dynamicPeriod(spec.base)
+			if family == "RSI" || family == "ADX" || strings.HasPrefix(spec.base, "STOCH_") {
 				if numericVal < 0 || numericVal > 100 {
 					return fmt.Errorf("RSI14 threshold must be between 0 and 100; got %v", numericVal)
 				}
-			} else {
+			} else if spec.base == "PRICE" || spec.base == "OPEN" || spec.base == "HIGH" || spec.base == "LOW" || spec.base == "CLOSE" || family == "MA" || family == "EMA" {
 				// Ambang batas harga dan rata-rata bergerak (PRICE, EMA9, EMA20) wajib bernilai positif (> 0)
 				if numericVal <= 0 {
 					return fmt.Errorf("%s threshold must be greater than 0; got %v", condition.Left, numericVal)
@@ -393,7 +434,7 @@ func ValidateRule(rule RuleSnapshot) error {
 func extractNumericThreshold(raw interface{}) (float64, bool, error) {
 	switch right := raw.(type) {
 	case string:
-		if supportedOperands[right] {
+		if IsIndicatorOperand(right) {
 			return 0, false, nil
 		}
 		parsed, err := strconv.ParseFloat(right, 64)
@@ -471,7 +512,15 @@ func evaluateRule(rule RuleSnapshot, values map[string]float64, prevValues map[s
 // terhadap candle sebelumnya (prevValues). Jika candle sebelumnya tidak ada (misal candle pertama),
 // kondisi persilangan akan mengembalikan false karena belum ada data riwayat persilangan.
 func evaluateCondition(condition Condition, values map[string]float64, prevValues map[string]float64) (bool, error) {
-	left := values[condition.Left]
+	left, exists := values[condition.Left]
+	if !exists {
+		return false, nil
+	}
+	if right, ok := condition.Right.(string); ok && IsIndicatorOperand(right) {
+		if _, exists := values[right]; !exists {
+			return false, nil
+		}
+	}
 	right, err := resolveValue(condition.Right, values)
 	if err != nil {
 		return false, err
@@ -489,7 +538,15 @@ func evaluateCondition(condition Condition, values map[string]float64, prevValue
 		if prevValues == nil {
 			return false, nil
 		}
-		prevLeft := prevValues[condition.Left]
+		prevLeft, exists := prevValues[condition.Left]
+		if !exists {
+			return false, nil
+		}
+		if right, ok := condition.Right.(string); ok && IsIndicatorOperand(right) {
+			if _, exists := prevValues[right]; !exists {
+				return false, nil
+			}
+		}
 		prevRight, err := resolveValue(condition.Right, prevValues)
 		if err != nil {
 			return false, err
@@ -499,7 +556,15 @@ func evaluateCondition(condition Condition, values map[string]float64, prevValue
 		if prevValues == nil {
 			return false, nil
 		}
-		prevLeft := prevValues[condition.Left]
+		prevLeft, exists := prevValues[condition.Left]
+		if !exists {
+			return false, nil
+		}
+		if right, ok := condition.Right.(string); ok && IsIndicatorOperand(right) {
+			if _, exists := prevValues[right]; !exists {
+				return false, nil
+			}
+		}
 		prevRight, err := resolveValue(condition.Right, prevValues)
 		if err != nil {
 			return false, err

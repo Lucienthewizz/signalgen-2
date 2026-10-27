@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.13.0
+  version: 0.14.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     The Go API performs email/password and recovery flows through Supabase Auth,
@@ -1142,7 +1142,7 @@ paths:
       description: |
         Requires a backtest grant and current backtest entitlement. Features must
         include every eligible snapshot timestamp (candle index 19 onward), in
-        order, for one symbol. Maximum 2500 candidates and 1 MiB JSON. Warmup
+        order, for one symbol. Maximum 2500 candidates and 8 MiB JSON. Warmup
         preserves crossover history but does not consume entry-window cooldown.
         Only decisions are computed here; fills and P&L execute in client WASM.
         Client features and results are unverified analysis, not accounting evidence.
@@ -1167,7 +1167,7 @@ paths:
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
         '413':
-          description: JSON exceeds this endpoint's 1 MiB limit.
+          description: JSON exceeds this endpoint's 8 MiB limit.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ErrorEnvelope'}
@@ -2029,7 +2029,7 @@ components:
       required: [name, version, description, docs, status]
       properties:
         name: {type: string}
-        version: {type: string, enum: [0.13.0]}
+        version: {type: string, enum: [0.14.0]}
         description: {type: string}
         docs: {type: string}
         status: {type: string, enum: [ok]}
@@ -2375,8 +2375,11 @@ components:
       required: [capabilities_version, engine_version, schema_version, feature_schema_version, decision_version, private_protocol, worker_protocol, purposes, markets, timeframes, indicators, operators, rule_logic, max_candles_per_run, max_symbols_per_run, screening]
       properties:
         backtest: {$ref: "#/components/schemas/BacktestCapabilities"}
-        capabilities_version: {type: string, example: capabilities-3}
-        engine_version: {type: string, example: core-0.4.0}
+        capabilities_version: {type: string, example: capabilities-4}
+        engine_version: {type: string, example: core-0.5.0}
+        indicator_catalog_version: {type: string, enum: [claudio-indicators-1]}
+        max_indicator_period: {type: integer, enum: [250]}
+        max_indicator_offset: {type: integer, enum: [250]}
         schema_version: {type: string, example: signal-baseline-1}
         feature_schema_version: {type: string, example: screener-features-1}
         decision_version: {type: string, example: decision-1}
@@ -2393,7 +2396,7 @@ components:
           items: {type: string, enum: [1d]}
         indicators:
           type: array
-          items: {type: string, enum: [PRICE, EMA9, EMA20, RSI14]}
+          items: {$ref: '#/components/schemas/IndicatorOperand'}
         operators:
           type: array
           items: {type: string, enum: ["<", "<=", ">", ">=", "CROSS_UP", "CROSS_DOWN"]}
@@ -2414,13 +2417,25 @@ components:
             requires_universe: {type: boolean, enum: [true]}
             max_symbols_per_batch: {type: integer, enum: [10]}
             max_candidates: {type: integer, enum: [1000]}
-            max_message_bytes: {type: integer, enum: [262144]}
+            max_message_bytes: {type: integer, enum: [2097152]}
+    IndicatorOperand:
+      type: string
+      maxLength: 80
+      description: |
+        Claudio catalog claudio-indicators-1: 78 fixed operands (OHLC, previous candle,
+        MA/EMA, MACD 12/26/9, RSI, ADX, Bollinger 20/2, Stochastic 14/3,
+        Ichimoku 9/26/52 visual=false, volume, EMA distance ratio and ten TA-Lib
+        binary candle patterns). Also MA<N>, EMA<N>, RSI<N>, ADX<N>,
+        SMA_VOLUME_<N>, REL_VOLUME_<N>, their _PREV forms and <base>_PREV_<N>.
+        N is canonical whole 1..250, no leading zeroes or nested history suffixes.
+        PRICE_EMA20_DIFF_PCT is abs(close-EMA20)/EMA20, not multiplied by 100.
+        Missing warmup/undefined values are absent; candle patterns are 0 or 1.
     RuleCondition:
       type: object
       additionalProperties: false
       required: [left, op, right]
       properties:
-        left: {type: string, enum: [PRICE, EMA9, EMA20, RSI14]}
+        left: {$ref: '#/components/schemas/IndicatorOperand'}
         op: {type: string, enum: ["<", "<=", ">", ">=", "CROSS_UP", "CROSS_DOWN"]}
         right:
           oneOf:
@@ -2617,7 +2632,13 @@ components:
           $ref: "#/components/schemas/DateRange"
         available_range:
           $ref: "#/components/schemas/DateRange"
-        warmup_candles: {type: integer, minimum: 0}
+        warmup_candles: {type: integer, minimum: 0, description: "Rule-derived valid candle requirement, including period/history offsets; at least 20."}
+        required_operands:
+          type: array
+          maxItems: 40
+          description: Derived from the authorized rule by the server; pass these names to Go/WASM. Never accepted in the prepare request.
+          items: {$ref: '#/components/schemas/IndicatorOperand'}
+        indicator_catalog_version: {type: string, enum: [claudio-indicators-1]}
         adjustment: {type: string}
         candle_count: {type: integer, minimum: 1}
         decoded_bytes: {type: integer, minimum: 1}
@@ -2684,7 +2705,7 @@ components:
           type: string
           description: The system baseline ID or an owner-scoped user rule ID.
         definition_hash: {type: string, pattern: "^sha256:"}
-        engine_version: {type: string, enum: [core-0.4.0]}
+        engine_version: {type: string, enum: [core-0.5.0]}
         schema_version: {type: string, enum: [signal-baseline-1]}
     ComputeGrant:
       allOf:
@@ -2795,6 +2816,11 @@ components:
             ema9: {type: number, minimum: 0, exclusiveMinimum: true}
             ema20: {type: number, minimum: 0, exclusiveMinimum: true}
             rsi14: {type: number, minimum: 0, maximum: 100}
+            values:
+              type: object
+              maxProperties: 40
+              description: Optional additive indicator values keyed by IndicatorOperand. Legacy price/ema9/ema20/rsi14 remain required and cannot be overridden here. Keys are validated; null, unknown keys and nonfinite values are rejected. Missing warmup is omitted.
+              additionalProperties: {type: number}
 
     BacktestTradeMetrics:
       type: object

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -180,7 +181,7 @@ func TestBacktestFeaturesWarmupAndNoFutureLeak(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i, candidate := range prefix.Candidates {
-		if features.Candidates[i] != candidate {
+		if !reflect.DeepEqual(features.Candidates[i], candidate) {
 			t.Fatal("future candles changed prefix features")
 		}
 	}

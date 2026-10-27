@@ -32,7 +32,7 @@ export function screeningFailure(error: {
     return {
       title: "Not enough completed candles",
       detail:
-        "Fewer than 20 valid closed candles are available after extending the lookback. Choose another interval or stock universe. This is not a No match result.",
+        "There are too few valid closed candles for this rule's indicator periods and history offsets after extending the lookback. Choose another interval, stock universe, or shorter periods. This is not a No match result.",
       action: "interval",
     };
   if (error.status === 429)
@@ -82,6 +82,7 @@ export function conditionEvidence(
   prevFeatures?: ScreenerFeatureVector | null,
 ) {
   const values: Record<string, number> = {
+    ...features.values,
     PRICE: features.price,
     EMA9: features.ema9,
     EMA20: features.ema20,
@@ -100,6 +101,7 @@ export function conditionEvidence(
   if (condition.op === "CROSS_UP" || condition.op === "CROSS_DOWN") {
     if (!prevFeatures) return null;
     const previousValues: Record<string, number> = {
+      ...prevFeatures.values,
       PRICE: prevFeatures.price,
       EMA9: prevFeatures.ema9,
       EMA20: prevFeatures.ema20,

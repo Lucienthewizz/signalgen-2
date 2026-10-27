@@ -21,7 +21,7 @@ function load(
       ),
       { compilerOptions: { module: ts.ModuleKind.CommonJS } },
     ).outputText,
-    { exports, TextEncoder, window: { localStorage } },
+    { exports, TextEncoder, require: () => require("./helpers/indicator-loader.cjs"), window: { localStorage } },
   );
   return exports;
 }
@@ -35,6 +35,12 @@ const draft = () => ({
   },
   editingId: null,
   editingVersion: null,
+});
+test("Claudio rules survive a draft save and reload", () => {
+  const storage = load(); const value = draft();
+  value.definition.conditions = [{left:"EMA250_PREV_250", op:">", right:"MACD_SIGNAL"}, {left:"PATTERN_CDLDOJI",op:">",right:0}];
+  assert.equal(storage.saveRuleDraft("claudio", value), true);
+  assert.equal(load().readRuleDraft("claudio").definition.conditions[0].left, "EMA250_PREV_250");
 });
 test("drafts survive refresh, stay account scoped, and deliberate blank clears a previous preset", () => {
   const storage = load();

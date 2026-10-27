@@ -1,11 +1,8 @@
 import type { RuleCondition, UserRuleDefinition } from "@/types";
 
-export const indicatorLabels = {
-  PRICE: "Close price",
-  EMA9: "EMA 9",
-  EMA20: "EMA 20",
-  RSI14: "RSI 14",
-};
+import { indicatorLabel, isIndicator, thresholdError } from "./indicators";
+export { indicatorLabels } from "./indicators";
+
 export const operatorLabels = {
   ">": "is above",
   ">=": "is at or above",
@@ -110,9 +107,8 @@ export function conditionSummary(condition: RuleCondition) {
   const right =
     typeof condition.right === "number"
       ? String(condition.right)
-      : (indicatorLabels[condition.right as keyof typeof indicatorLabels] ??
-        condition.right);
-  return `${indicatorLabels[condition.left] ?? condition.left} ${operatorLabels[condition.op] ?? condition.op} ${right}`;
+      : indicatorLabel(condition.right);
+  return `${indicatorLabel(condition.left)} ${operatorLabels[condition.op] ?? condition.op} ${right}`;
 }
 
 export function ruleSummary(definition?: UserRuleDefinition) {
@@ -134,26 +130,16 @@ export function validateRule(definition: UserRuleDefinition) {
       ? "Use whole seconds from 0 to 86,400."
       : "";
   const conditions = definition.conditions.map((condition) => {
-    if (
-      !(condition.left in indicatorLabels) ||
-      !(condition.op in operatorLabels)
-    )
+    if (!isIndicator(condition.left) || !(condition.op in operatorLabels))
       return "Choose a supported indicator and comparison.";
     if (typeof condition.right === "string") {
-      if (!(condition.right in indicatorLabels))
-        return "Use PRICE, EMA9, EMA20, RSI14, or a number.";
+      if (!isIndicator(condition.right))
+        return "Choose a Claudio indicator (period/history 1–250) or a number.";
       if (condition.right === condition.left)
         return "Choose a different reference; an indicator cannot compare with itself.";
     } else if (!Number.isFinite(condition.right))
       return "Enter a finite number.";
-    else if (
-      condition.left === "RSI14"
-        ? condition.right < 0 || condition.right > 100
-        : condition.right <= 0
-    )
-      return condition.left === "RSI14"
-        ? "RSI thresholds must be from 0 to 100."
-        : "Price and EMA thresholds must be greater than zero.";
+    else return thresholdError(condition.left, condition.right);
     return "";
   });
   const count =

@@ -9,6 +9,7 @@ self.onmessage = async (event: MessageEvent) => {
   const message = event.data as {
     type: "extract" | "extract-batch";
     jobId: string;
+    operands?: string[];
     symbol: string;
     candles: Candle[];
     series?: Array<{ symbol: string; candles: Candle[] }>;
@@ -29,6 +30,7 @@ self.onmessage = async (event: MessageEvent) => {
           purpose: "screen",
           symbol: item.symbol,
           candles: item.candles,
+          operands: message.operands,
         }),
       );
       if (!encoded) throw new Error("WASM feature function is unavailable");

@@ -4,7 +4,7 @@ import type { ScreenerFeatureResult } from "@/types";
 export function packCandidateBatches(
   groups: ScreenerFeatureResult[],
   maximum: number,
-  maxBytes = 240000,
+  maxBytes = 2000000,
 ): ScreenerFeatureResult[] {
   if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > 1000)
     throw Error("Invalid scoring candidate limit.");
@@ -15,7 +15,7 @@ export function packCandidateBatches(
   for (const group of groups) {
     if (
       !group ||
-      group.engine_version !== "core-0.4.0" ||
+      group.engine_version !== "core-0.5.0" ||
       group.feature_schema_version !== "screener-features-1" ||
       !Array.isArray(group.candidates) ||
       !group.candidates.length

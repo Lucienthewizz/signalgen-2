@@ -38,7 +38,6 @@ import {
 } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  indicatorLabels,
   conditionSummary,
   operatorLabels,
   operatorSymbols,
@@ -47,6 +46,7 @@ import {
   validateRule,
 } from "@/lib/rule-workflow";
 import { Input } from "@/components/ui/input";
+import { IndicatorInput } from "@/components/indicator-input";
 import {
   Select,
   SelectContent,
@@ -826,35 +826,12 @@ export function ServerRulesPanel({
                           >
                             Indicator
                           </FieldLabel>
-                          <Select
+                          <IndicatorInput
                             value={condition.left}
-                            items={Object.entries(indicatorLabels).map(
-                              ([value, label]) => ({ value, label }),
-                            )}
-                            onValueChange={(value) =>
-                              setCondition(index, {
-                                left: value as RuleCondition["left"],
-                              })
-                            }
-                          >
-                            <SelectTrigger
-                              id={`condition-indicator-${index}`}
-                              aria-label={`Condition indicator ${index + 1}`}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                {(
-                                  ["PRICE", "EMA9", "EMA20", "RSI14"] as const
-                                ).map((value) => (
-                                  <SelectItem key={value} value={value}>
-                                    {indicatorLabels[value]}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
+                            onChange={(left) => setCondition(index, { left })}
+                            id={`condition-indicator-${index}`}
+                            label={`Condition indicator ${index + 1}`}
+                          />
                         </Field>
                         <Field>
                           <FieldLabel
@@ -924,46 +901,22 @@ export function ServerRulesPanel({
                           >
                             Reference
                           </FieldLabel>
-                          <Select
+                          <IndicatorInput
                             value={
                               typeof condition.right === "number" ||
                               condition.right === ""
                                 ? "number"
                                 : condition.right
                             }
-                            items={[
-                              ...Object.entries(indicatorLabels).map(
-                                ([value, label]) => ({ value, label }),
-                              ),
-                              { value: "number", label: "Numeric value" },
-                            ]}
-                            onValueChange={(value) =>
+                            onChange={(right) =>
                               setCondition(index, {
-                                right: value === "number" ? 55 : String(value),
+                                right: right === "number" ? 55 : right,
                               })
                             }
-                          >
-                            <SelectTrigger
-                              id={`condition-reference-${index}`}
-                              aria-label={`Condition reference ${index + 1}`}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                {Object.entries(indicatorLabels).map(
-                                  ([value, label]) => (
-                                    <SelectItem key={value} value={value}>
-                                      {label}
-                                    </SelectItem>
-                                  ),
-                                )}
-                                <SelectItem value="number">
-                                  Numeric value
-                                </SelectItem>
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
+                            id={`condition-reference-${index}`}
+                            label={`Condition reference ${index + 1}`}
+                            numeric
+                          />
                           {(typeof condition.right === "number" ||
                             condition.right === "") && (
                             <Input

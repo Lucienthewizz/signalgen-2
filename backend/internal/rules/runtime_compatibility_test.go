@@ -12,6 +12,10 @@ func TestPreviousRuleLanguageRemainsExecutableWithoutDatabaseRewrite(t *testing.
 	if upgraded.EngineVersion != core.EngineVersion || upgraded.DefinitionHash != item.DefinitionHash || upgraded.Version != 7 || item.EngineVersion != "core-0.3.0" {
 		t.Fatalf("invalid runtime projection: %+v", upgraded)
 	}
+	item.EngineVersion = "core-0.4.0"
+	if compatibleRuntimeRule(item).EngineVersion != core.EngineVersion {
+		t.Fatal("0.4 rule needs a database rewrite")
+	}
 	item.SchemaVersion = "future-schema"
 	if compatibleRuntimeRule(item).EngineVersion != item.EngineVersion {
 		t.Fatal("unsupported schema was silently promoted")

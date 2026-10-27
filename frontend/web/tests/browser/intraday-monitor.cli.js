@@ -17,7 +17,7 @@ async (page) => {
     version: 1,
     definition_hash: "monitor-hash",
     schema_version: "signal-baseline-1",
-    engine_version: "core-0.4.0",
+    engine_version: "core-0.5.0",
     definition: {
       name: "Monitor rule",
       logic: "AND",
@@ -148,7 +148,7 @@ async (page) => {
           expires_at: new Date(Date.now() + 86400000).toISOString(),
         },
         device: { installation_id: "monitor", current: true },
-        capabilities_version: "capabilities-3",
+        capabilities_version: "capabilities-4",
       };
     else if (p === "/api/v1/rules") payload = { items: [rule] };
     else if (p === `/api/v1/rules/${rule.id}`) payload = rule;

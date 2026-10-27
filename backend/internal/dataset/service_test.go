@@ -56,7 +56,7 @@ func TestAccessServicePreparesOnlyAuthorizedOwnerRule(t *testing.T) {
 		store := &accessRecorder{manifest: Manifest{DatasetID: "snapshot", Purpose: "screen"}}
 		input := PrepareRequest{Purpose: "screen", RuleID: rule, UniverseID: "private-universe"}
 		manifest, err := store.service().Prepare(context.Background(), "verified-owner", input)
-		if err != nil || manifest.DatasetID != "snapshot" || store.input != input {
+		if err != nil || manifest.DatasetID != "snapshot" || !reflect.DeepEqual(store.input, input) {
 			t.Fatalf("prepare failed: %v", err)
 		}
 		want := []string{"feature", "prepare"}

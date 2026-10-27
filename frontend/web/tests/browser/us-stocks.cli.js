@@ -54,7 +54,7 @@ async (page) => {
     owner_type: "user",
     version: 1,
     definition_hash: "fixture-rule-hash",
-    engine_version: "core-0.4.0",
+    engine_version: "core-0.5.0",
     definition: {
       name: "US fixture rule",
       logic: "AND",

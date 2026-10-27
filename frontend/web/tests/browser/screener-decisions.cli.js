@@ -16,7 +16,7 @@ async (page) => {
     { name: "QA cooldown", signal: "BUY", logic: "AND", matched: false, label: "Cooldown", market: "IDX", conditions: [{left:"PRICE",op:"<",right:200}], reason: "COOLDOWN_ACTIVE" },
     { name: "QA legacy missing direction", signal: "SELL", logic: "OR", matched: true, label: "Matched", market: "US", legacy: true, conditions: [{left:"RSI14",op:"CROSS_DOWN",right:70}], reason: "RULE_MATCHED" },
   ];
-  const rules = cases.map((item, index) => ({ id:`qa-rule-${index}`,name:item.name,owner_type:"user",read_only:false,version:1,definition_hash:`qa-hash-${index}`,schema_version:"rule-1",engine_version:"core-0.4.0",definition:{name:item.name,logic:item.logic,signal_type:item.signal,cooldown_sec:300,conditions:item.conditions} }));
+  const rules = cases.map((item, index) => ({ id:`qa-rule-${index}`,name:item.name,owner_type:"user",read_only:false,version:1,definition_hash:`qa-hash-${index}`,schema_version:"rule-1",engine_version:"core-0.5.0",definition:{name:item.name,logic:item.logic,signal_type:item.signal,cooldown_sec:300,conditions:item.conditions} }));
   const history = cases.map((item, index) => {
     const symbol = item.market === "IDX" ? "BBCA.JK" : "AAPL";
     const decision = { symbol,timestamp:now,matched:item.matched,reason_codes:[item.reason],...(!item.legacy && item.matched ? {signal_type:item.signal} : {}) };
@@ -43,7 +43,7 @@ async (page) => {
     let payload;
     if(p === "/api" || p === "/ready") payload={status:"ready",name:"Synthetic API"};
     else if(p === "/api/auth/me") payload=user;
-    else if(p === "/api/v1/account/me") payload={user,features:["screener"],session:{id:"qa-session",expires_at:new Date(Date.now()+86400000).toISOString()},device:{installation_id:"qa",current:true},capabilities_version:"capabilities-3"};
+    else if(p === "/api/v1/account/me") payload={user,features:["screener"],session:{id:"qa-session",expires_at:new Date(Date.now()+86400000).toISOString()},device:{installation_id:"qa",current:true},capabilities_version:"capabilities-4"};
     else if(p === "/api/v1/rules") payload={items:rules};
     else if(p === "/api/v1/stock-universes") payload={items:[{id:"qa-universe",name:"QA US",symbols:["AAPL"],version:1}]};
     else if(p === "/api/v1/subscription") payload={subscription:{plan_code:"pro",plan_name:"Pro",status:"active",features:["screener"],source:"manual",current_period_end:new Date(Date.now()+86400000).toISOString()}};

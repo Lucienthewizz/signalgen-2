@@ -1,5 +1,13 @@
 # Signalgen Web
 
+## Claudio indicators (27 October 2026)
+
+All 78 fixed Claudio rule operands and dynamic periods/history offsets (1–250)
+are available in Rules, screener and daily backtest. Use the grouped indicator
+selector and **Parameters / previous candle** on either side of a condition.
+Requires API 0.14.0 and rebuilt WASM core-0.5.0; no indicator database migration.
+See [formulas, availability, API compatibility and checks](../../docs/backend/CLAUDIO_INDICATORS.md).
+
 ## Admin access management (26 October 2026)
 
 Open the workspace sidebar and choose **Administration → Admin Panel**. On mobile,

@@ -32,7 +32,7 @@ type History struct {
 // It does not inherit the three-symbol UI universe limit or truncate to 100
 // candles. Short histories from recent listings are retained, not fabricated.
 func (provider *YahooFinance) DailyHistory(ctx context.Context, instrument universe.Instrument, from, to time.Time) (History, error) {
-	if instrument.Symbol == "" || instrument.ProviderSymbol == "" || !from.Before(to) || to.Sub(from) > 6*366*24*time.Hour {
+	if instrument.Symbol == "" || instrument.ProviderSymbol == "" || !from.Before(to) || to.Sub(from) > 10*366*24*time.Hour {
 		return History{}, ErrInvalidData
 	}
 	endpoint, err := url.Parse(provider.baseURL + "/v8/finance/chart/" + url.PathEscape(instrument.ProviderSymbol))

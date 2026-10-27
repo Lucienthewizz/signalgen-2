@@ -15,6 +15,13 @@ vm.runInNewContext(
   ).outputText,
   { exports: output },
 );
+test("Claudio condition evidence uses captured current and previous indicator values", () => {
+  const current = {price:100, ema9:99, ema20:98, rsi14:50, values:{MACD:0.2, MACD_SIGNAL:0.1, PATTERN_CDLDOJI:1}};
+  const previous = {...current, values:{MACD:-0.1, MACD_SIGNAL:0}};
+  assert.equal(output.conditionEvidence({left:"MACD",op:"CROSS_UP",right:"MACD_SIGNAL"},current,previous).passed,true);
+  assert.equal(output.conditionEvidence({left:"PATTERN_CDLDOJI",op:">",right:0},current).passed,true);
+  assert.equal(output.conditionEvidence({left:"ADX250",op:"<",right:20},current),null);
+});
 test("screening errors offer permission, rate-limit, missing resource and network recovery", () => {
   for (const [status, action] of [
     [401, "login"],

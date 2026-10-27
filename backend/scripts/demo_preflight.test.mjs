@@ -13,11 +13,11 @@ const runtime = Buffer.from("Go runtime fixture");
 const hash = (content) =>
   `sha256:${createHash("sha256").update(content).digest("hex")}`;
 const manifest = {
-  engine_version: "core-0.4.0",
+  engine_version: "core-0.5.0",
   schema_version: "signal-baseline-1",
   feature_schema_version: "screener-features-1",
   worker_protocol: "worker-2",
-  capabilities_version: "capabilities-3",
+  capabilities_version: "capabilities-4",
   wasm_file: "signalgen_core.wasm",
   runtime_file: "wasm_exec.js",
   wasm_sha256: hash(wasm),

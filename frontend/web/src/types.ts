@@ -68,6 +68,8 @@ export type StockExchange = "XIDX" | "XNAS" | "XNYS";
 export type ScreenerTimeframe = "1m" | "5m" | "15m" | "1h" | "1d";
 
 export type DatasetManifest = {
+  required_operands?: string[];
+  indicator_catalog_version?: string;
   available_timestamp_range?: { from: string; to: string };
   requested_timestamp_range?: { from: string; to: string };
   dataset_id: string;
@@ -117,7 +119,7 @@ export type DatasetContent = {
 };
 
 export type RuleCondition = {
-  left: "PRICE" | "EMA9" | "EMA20" | "RSI14";
+  left: string;
   op: "<" | "<=" | ">" | ">=" | "CROSS_UP" | "CROSS_DOWN";
   right: string | number;
 };
@@ -243,6 +245,7 @@ export type ScreenerSocketTicket = {
 };
 
 export type ScreenerFeatureVector = {
+  values?: Record<string, number>;
   price: number;
   ema9: number;
   ema20: number;
@@ -256,7 +259,7 @@ export type ScreenerFeatureCandidate = {
 };
 
 export type ScreenerFeatureResult = {
-  engine_version: "core-0.4.0";
+  engine_version: "core-0.5.0";
   feature_schema_version: "screener-features-1";
   execution: "client_go_features";
   candidates: ScreenerFeatureCandidate[];

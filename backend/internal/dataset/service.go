@@ -47,6 +47,7 @@ type AccessService struct {
 // Prepare checks purpose, entitlement and private rule before fetching data.
 // Universe ownership is checked by the repository when preparing its snapshot.
 func (service AccessService) Prepare(ctx context.Context, owner string, input PrepareRequest) (Manifest, error) {
+	input.RequiredOperands = nil
 	feature, supported := entitlement.FeatureForPurpose(input.Purpose)
 	if !supported {
 		return Manifest{}, ErrUnsupportedPurpose
@@ -67,6 +68,7 @@ func (service AccessService) Prepare(ctx context.Context, owner string, input Pr
 		if input.Purpose == "backtest" && rule.Definition.SignalType != "BUY" {
 			return Manifest{}, ErrInvalidRequest
 		}
+		input.RequiredOperands = core.RequiredOperands(rule.Definition)
 	}
 	return service.Repository.Prepare(ctx, owner, input)
 }

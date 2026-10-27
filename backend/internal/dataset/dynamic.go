@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Lucienthewizz/signalgen-2/backend/core"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/marketdata"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
 )
@@ -90,7 +91,8 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	store.mu.Lock()
 	store.pruneExpiredLocked()
 	available := store.hasCapacityLocked(owner, 0)
-	contextKey := request.RuleID + "\x00" + request.UniverseID + "\x00" + request.Timeframe
+	operandKey, _ := json.Marshal(request.RequiredOperands)
+	contextKey := request.RuleID + "\x00" + request.UniverseID + "\x00" + request.Timeframe + string(operandKey)
 	canReuse := false
 	for _, entry := range store.entries {
 		if entry.owner == owner && entry.contextKey == contextKey {
@@ -119,15 +121,22 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 	for index, item := range instruments {
 		exchanges[index] = item.Exchange
 	}
-	series, err := marketdata.ReadCandles(ctx, store.provider, instruments, dynamicOutputSize, request.Timeframe)
+	warmup := core.IndicatorWarmup(request.RequiredOperands)
+	outputSize := max(dynamicOutputSize, warmup+80)
+	series, err := marketdata.ReadCandles(ctx, store.provider, instruments, outputSize, request.Timeframe)
 	if err != nil {
 		return Manifest{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return Manifest{}, err
 	}
-	if err := marketdata.ValidateSeries(series, instruments, dynamicOutputSize); err != nil {
+	if err := marketdata.ValidateSeries(series, instruments, outputSize); err != nil {
 		return Manifest{}, ErrIntegrity
+	}
+	for _, item := range series {
+		if len(item.Candles) < warmup {
+			return Manifest{}, marketdata.ErrInsufficientCandles
+		}
 	}
 
 	content, err := json.Marshal(map[string]any{
@@ -165,11 +174,12 @@ func (store *DynamicStore) Prepare(ctx context.Context, owner string, request Pr
 		source.Warnings = append(source.Warnings, item.QualityWarnings...)
 	}
 	manifest := Manifest{
+		RequiredOperands: append([]string(nil), request.RequiredOperands...), IndicatorCatalogVersion: core.IndicatorCatalogVersion,
 		DatasetID: id, Version: now.Format("20060102T150405Z"), ExpiresAt: expiresAt.Format(time.RFC3339),
 		SchemaVersion: "ohlcv-multi-1", Provider: source.Provider, Purpose: "screen",
 		Market: market, Currency: currency, Symbols: symbols, Exchanges: exchanges, Timeframe: request.Timeframe, Timezone: "UTC",
 		RequestedRange: Range{From: from, To: to}, AvailableRange: Range{From: from, To: to},
-		WarmupCandles: 20, Adjustment: "none", CandleCount: candleCount, DecodedBytes: len(content),
+		WarmupCandles: warmup, Adjustment: "none", CandleCount: candleCount, DecodedBytes: len(content),
 		Checksum: "sha256:" + hex.EncodeToString(hash[:]),
 		Quality:  Quality{Status: "complete", Warnings: source.Warnings},
 	}
@@ -247,6 +257,7 @@ func (store *DynamicStore) hasCapacityLocked(owner string, bytes int) bool {
 }
 
 func cloneManifest(manifest Manifest) Manifest {
+	manifest.RequiredOperands = append([]string(nil), manifest.RequiredOperands...)
 	if manifest.Backtest != nil {
 		copy := *manifest.Backtest
 		manifest.Backtest = &copy

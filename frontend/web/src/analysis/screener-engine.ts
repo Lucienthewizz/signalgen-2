@@ -21,6 +21,7 @@ if (typeof window !== "undefined")
 export function extractDatasetFeatures(
   series: DatasetContent["series"],
   signal: AbortSignal,
+  operands: string[] = [],
 ): Promise<ScreenerFeatureResult[]> {
   signal.throwIfAborted();
   if (activeCancel)
@@ -63,7 +64,8 @@ export function extractDatasetFeatures(
     }
     activeCancel = cancelled;
     signal.addEventListener("abort", cancelled, { once: true });
-    engine.onerror = () => finishError("The Go/WASM worker could not be loaded.");
+    engine.onerror = () =>
+      finishError("The Go/WASM worker could not be loaded.");
     engine.onmessageerror = () =>
       finishError("The Go/WASM worker response could not be read.");
     engine.onmessage = (event) => {
@@ -87,7 +89,7 @@ export function extractDatasetFeatures(
       resolve(message.results);
     };
     try {
-      engine.postMessage({ type: "extract-batch", jobId, series });
+      engine.postMessage({ type: "extract-batch", jobId, series, operands });
     } catch {
       finishError("The dataset could not be sent to the worker.");
     }
