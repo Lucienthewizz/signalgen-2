@@ -758,7 +758,7 @@ export function SubscriptionPanel({
                   code: "backtest",
                   name: "Backtest access",
                   description:
-                    "Included in your plan. The backtest page is not available yet.",
+                    "Test daily rules and manual entries with historical data.",
                   icon: History,
                 },
               ].map(({ code, name, description, icon: Icon }) => {
@@ -780,11 +780,7 @@ export function SubscriptionPanel({
                       </CardTitle>
                       <CardAction>
                         <Badge variant={included ? "secondary" : "outline"}>
-                          {included
-                            ? code === "backtest"
-                              ? "Not available yet"
-                              : "Active"
-                            : "Not included"}
+                          {included ? "Active" : "Not included"}
                         </Badge>
                       </CardAction>
                     </CardHeader>

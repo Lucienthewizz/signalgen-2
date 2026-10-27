@@ -1,5 +1,34 @@
 # Backend progress
 
+## Pemeriksaan demo dengan akun asli — 27 Oktober 2026
+
+Uji browser langsung memakai akun yang diloginkan pengguna pada aplikasi lokal,
+tanpa fixture API: manual/rule backtest pada tiga saham IDX, snapshot provider
+terkonfigurasi, next-open, perbandingan T+1…T+3, CSV, reload dan pembukaan arsip
+berhasil. CSV manual dua entry ASII dicocokkan dengan UI sampai Rp0,01; hasil
+T+1 Rp10.201.253,77 dari modal simulasi Rp10 juta. Ini bukti pada snapshot uji,
+bukan benchmark produksi atau validasi strategi investasi.
+
+Admin asli diuji sampai pencarian/pemilihan akun sendiri, preset Backtest tujuh
+hari dan review → Cancel; tidak ada perubahan grant akses anggota, role, atau
+subscription. Write grant/revoke tetap diperiksa pada Playwright dengan akun/API
+sintetis. Preflight delapan pemeriksaan dan regresi sepuluh halaman workspace
+(dua viewport × dua tema), 187 tes frontend, build, serta regresi admin lulus.
+Browser langsung tidak merekam error pada pemeriksaan log terakhir.
+
+Temuan: Plan & access masih mengunci label Backtest pada “Not available yet”, dan
+tes browser lama justru mengharuskan label tersebut. Label/deskripsi diperbaiki
+untuk fitur yang sudah tersedia, dengan tes paket aktif dan kedaluwarsa. Batas
+otorisasi API tidak berubah. Referensi `backtest-1` pada README frontend juga
+dibetulkan menjadi `backtest-2`.
+
+[Panduan latihan dan demo 28 Oktober](../DEMO_BACKTEST_ADMIN_2026_10_28.md)
+memuat urutan presentasi, angka contoh, penjelasan arsitektur/metrics, preflight
+dan cadangan ketika jaringan/provider bermasalah. Screenshot dan CSV lokal tidak
+masuk Git. Masa paket yang terlihat pada akun demo saat pengujian sampai 25
+November 2026; periksa ulang sebelum presentasi. Warning format enam file lama
+di luar perubahan ini tetap terbuka.
+
 ## Backtest schema 2, analisis dan riwayat lokal — 27 Oktober 2026
 
 Branch `frontend/backtest-analysis` menambahkan statistik closed-trade net

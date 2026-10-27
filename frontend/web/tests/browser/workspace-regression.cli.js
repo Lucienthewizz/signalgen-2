@@ -543,7 +543,16 @@ async (page) => {
   await page.goto(`${origin}/#app/subscription`);
   await page.getByRole("heading", { name: "Quota usage", exact: true }).waitFor({ timeout: 10000 });
   const backtest = page.locator('.subscription-feature-grid [data-slot="card"]').filter({ hasText: "Backtest access" });
-  if (!(await backtest.innerText()).includes("Not available yet")) throw Error("Backtest incorrectly presented as usable");
+  if (!(await backtest.innerText()).includes("Active") || (await backtest.innerText()).includes("not available yet")) throw Error("Active backtest plan still presented as unavailable");
+  const activePeriodEnd = subscription.current_period_end;
+  subscription.current_period_end = "2000-01-01T00:00:00Z";
+  await page.reload();
+  await page.getByRole("heading", { name: "Quota usage", exact: true }).waitFor({ timeout: 10000 });
+  if (!(await backtest.innerText()).includes("Not included")) throw Error("Expired plan presents backtest access as active");
+  subscription.current_period_end = activePeriodEnd;
+  await page.reload();
+  await page.getByRole("heading", { name: "Quota usage", exact: true }).waitFor({ timeout: 10000 });
+  if (!(await backtest.innerText()).includes("Active")) throw Error("Active plan did not recover after expiry test");
   const manage = page.locator(".subscription-manage--account");
   await manage.locator("summary").click({ timeout: 5000 });
   if (!await manage.getByRole("button", { name: "Cancel now", exact: true }).isVisible()) throw Error("Manage disclosure does not reveal controls");

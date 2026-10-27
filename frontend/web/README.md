@@ -49,6 +49,8 @@ All account/API fixtures are synthetic; this test never grants real users access
 
 ## Basic backtesting workspace (26 October 2026)
 
+For the 28 October presentation, use the [tested demo and study guide](../../docs/DEMO_BACKTEST_ADMIN_2026_10_28.md).
+
 Open `#app/backtest` or **Analysis → Backtesting** with a signed-in account that
 has the `backtest` entitlement and a saved stock universe. This is a functional
 testing surface using the existing theme and controls; visual polish can follow.
@@ -66,7 +68,7 @@ testing surface using the existing theme and controls; visual polish can follow.
   counted separately. Open positions show unrealized P&L. Loading,
   cancellation, empty results, invalid data and denied access have explicit states.
 
-The API must support OpenAPI 0.12.0, `backtest-1` and `holding-next-open-1`.
+The API must support OpenAPI 0.12.0, `backtest-2` and `holding-next-open-1`.
 Generate the matching WASM assets with the Docker command below before use.
 Client code verifies snapshot bytes/checksum, rechecks online access and snapshot
 version before each run, and sends each symbol's complete indicator history for
