@@ -43,6 +43,7 @@ async (page) => {
     holdReady,
     heldDone;
   const snapshots = new Map();
+  const cloudHistory = new Map();
   await page.addInitScript(() => {
     sessionStorage.setItem("signalgen.access-token", "synthetic-backtest-only");
     sessionStorage.setItem(
@@ -140,6 +141,20 @@ async (page) => {
       url = new URL(request.url()),
       pathname = url.pathname;
     const respond = (payload) => route.fulfill({ json: payload });
+    if(pathname.startsWith('/api/v1/backtests/history')){
+      const id=pathname.slice('/api/v1/backtests/history'.length+1),key=`${user.id}:${id}`;
+      if(mode==='denied')return route.fulfill({status:403,json:{error:{code:'ENTITLEMENT_REQUIRED',message:'Backtest access required'}}});
+      if(request.method()==='GET'){
+        if(id){const row=cloudHistory.get(key);return row?respond(row):route.fulfill({status:404,json:{error:{code:'RESOURCE_NOT_FOUND',message:'Not found'}}});}
+        return respond({items:[...cloudHistory.entries()].filter(([key])=>key.startsWith(user.id+':')).map(([,row])=>{const {result,...data}=row.data;return {...row,data};})});
+      }
+      const body=request.postDataJSON();
+      if(request.method()==='DELETE'){if(id)cloudHistory.delete(key);else for(const key of cloudHistory.keys())if(key.startsWith(user.id+':'))cloudHistory.delete(key);return route.fulfill({status:204});}
+      if('owner_id' in body.data)throw Error('Archive upload supplied client owner');
+      const row={id,version:1,bytes:JSON.stringify(body.data).length,data:body.data};cloudHistory.set(key,row);
+      const rows=[...cloudHistory.entries()].filter(([key])=>key.startsWith(user.id+':'));for(const [key] of rows.slice(0,-10))cloudHistory.delete(key);
+      return respond(row);
+    }
     if (
       pathname !== "/api" &&
       !pathname.startsWith("/api/") &&
@@ -353,7 +368,7 @@ async (page) => {
       await result();
       if (grants !== beforeGrants + 1 || scoring !== beforeScoring + 1)
         throw Error("Rule mode did not use one complete symbol batch");
-      await page.getByText("Saved to this account's local history.", { exact: true }).waitFor();
+      await page.getByText("Saved to this account's server history and this browser.", { exact: true }).waitFor();
       const comparison = page.getByRole("region", { name: "Holding period comparison", exact: true });
       if (await comparison.locator("tbody tr").count() !== 3) throw Error("Missing horizon comparison");
       await comparison.getByRole("button", {name:"T+1",exact:true}).focus();
@@ -428,7 +443,7 @@ async (page) => {
         .textContent();
       if (finalEquity !== "$10,454.55")
         throw Error(`Unexpected actual WASM next-open P&L: ${finalEquity}`);
-      await page.getByText("Saved to this account's local history.", { exact: true }).waitFor();
+      await page.getByText("Saved to this account's server history and this browser.", { exact: true }).waitFor();
       await assertLayout(width);
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({
@@ -554,7 +569,7 @@ async (page) => {
   await page.getByRole("button",{name:"Next equity values",exact:true}).click();
   if(await page.getByRole("region",{name:"Backtest equity",exact:true}).locator("tbody tr").count()!==25)throw Error("Equity table is not paginated");
   await page.getByRole("button",{name:"Run backtest",exact:true}).click();await result();
-  await page.getByText("Saved to this account's local history.",{exact:true}).waitFor();
+  await page.getByText("Saved to this account's server history and this browser.",{exact:true}).waitFor();
   // Native IndexedDB transactions, persistence and limits; no fake storage implementation.
   const storageChecks = await page.evaluate(async(owner) => {
     const h=await import("/src/analysis/backtest-history.ts");
@@ -598,8 +613,10 @@ async (page) => {
     return {rows:rows.length,latestTitle:rows[0].title};
   },user.id);
   const readsBefore=prepares,grantsBefore=grants,scoringBefore=scoring;
+  // A clean device has no IndexedDB copy: results must restore from the owner API.
+  await page.evaluate(async owner=>{const h=await import('/src/analysis/backtest-history.ts');await h.deleteBacktestArchives(owner,null,new AbortController().signal,()=>true);},user.id);
   await ready();
-  const history=page.getByRole("region",{name:"Local backtest history",exact:true});
+  const history=page.getByRole("region",{name:"Backtest history",exact:true});
   await history.getByRole("button",{name:/Open saved run/}).first().click();await result();
   await page.getByText(/Saved result · read-only/).waitFor();
   if(prepares!==readsBefore || grants!==grantsBefore || scoring!==scoringBefore)throw Error("Opening history fetched market data or scored a rule");
@@ -618,11 +635,11 @@ async (page) => {
   await ready();
   if(await page.getByRole("button",{name:/Open saved run/}).count()!==storageChecks.rows-1)throw Error("Logout erased persistent history");
   const previousId=user.id;user.id="11111111-1111-4111-8111-111111111117";await ready();
-  await page.getByText("No saved backtests on this browser yet.",{exact:true}).waitFor();
+  await page.getByText("No saved backtests for this account yet.",{exact:true}).waitFor();
   user.id=previousId;await ready();
   if(await page.getByRole("button",{name:/Open saved run/}).count()!==storageChecks.rows-1)throw Error("Account switch lost owner history");
-  await page.getByRole("button",{name:"Delete all history",exact:true}).click();await page.getByRole("button",{name:"Delete all local backtests",exact:true}).click();
-  await page.getByText("No saved backtests on this browser yet.",{exact:true}).waitFor();
+  await page.getByRole("button",{name:"Delete all history",exact:true}).click();await page.getByRole("button",{name:"Delete all backtests",exact:true}).click();
+  await page.getByText("No saved backtests for this account yet.",{exact:true}).waitFor();
   mode = "denied";
   await page.reload();
   await page.getByRole("alert").filter({ hasText: "not enabled" }).waitFor();
@@ -632,7 +649,7 @@ async (page) => {
       .count()
   )
     throw Error("Denied account has a runnable form");
-  if(await page.getByRole("heading",{name:"Local backtest history",exact:true}).count())throw Error("Denied account can see saved history");
+  if(await page.getByRole("heading",{name:"Backtest history",exact:true}).count())throw Error("Denied account can see saved history");
   mode = "healthy";
   await page.getByRole("button", { name: "Retry", exact: true }).click();
   await page.getByLabel("Entry mode", { exact: true }).waitFor();

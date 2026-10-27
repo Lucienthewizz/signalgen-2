@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BacktestResults } from "./backtest-results";
 import { BacktestHistoryPanel } from "./backtest-history-panel";
+import { uploadArchive } from "@/analysis/backtest-sync";
 import { parseBacktestEntries } from "@/analysis/backtest-presentation";
 import {
   saveBacktestArchive,
@@ -326,7 +327,28 @@ export function WorkspaceBacktestPanel({
               !!session.getToken(),
           );
           if (operation.current === controller && !controller.signal.aborted)
-            setHistoryMessage("Saved to this account's local history.");
+            setHistoryMessage(
+              "Saved to this account's local history. Uploading server copy…",
+            );
+          try {
+            await uploadArchive(
+              archive,
+              controller.signal,
+              () =>
+                operation.current === controller &&
+                session.getIdentityRevision() === owner.revision &&
+                !!session.getToken(),
+            );
+            if (operation.current === controller && !controller.signal.aborted)
+              setHistoryMessage(
+                "Saved to this account's server history and this browser.",
+              );
+          } catch (cause) {
+            if (operation.current === controller && !controller.signal.aborted)
+              setHistoryMessage(
+                `Saved locally only. Server sync failed: ${cause instanceof Error ? cause.message : "Retry from history."}`,
+              );
+          }
         } catch (cause) {
           if (operation.current === controller && !controller.signal.aborted)
             setHistoryMessage(

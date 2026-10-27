@@ -14,11 +14,11 @@ type ChartTrade = {
   symbol: string;
   exit: number;
 };
-const money = (value: number) =>
+const moneyFor = (currency: string) => (value: number) =>
   new Intl.NumberFormat("en-GB", {
     style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
+    currency,
+    maximumFractionDigits: 2,
   }).format(value);
 const date = (value: string) =>
   new Intl.DateTimeFormat("en-GB", {
@@ -27,7 +27,14 @@ const date = (value: string) =>
     timeZone: "Asia/Jakarta",
   }).format(new Date(value));
 
-export function JournalPnlChart({ records }: { records: ChartTrade[] }) {
+export function JournalPnlChart({
+  records,
+  currency = "IDR",
+}: {
+  records: ChartTrade[];
+  currency?: string;
+}) {
+  const money = moneyFor(currency);
   const [selected, setSelected] = useState<number | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(700);
@@ -54,12 +61,14 @@ export function JournalPnlChart({ records }: { records: ChartTrade[] }) {
   const describe = (point: (typeof points)[number]) =>
     point.record
       ? `${date(point.record.closedAt)} · ${point.record.symbol} exit ${money(point.record.exit)} · cumulative P&L ${money(point.value)}`
-      : "Starting cumulative P&L: IDR 0";
+      : `Starting cumulative P&L: ${currency} 0`;
   return (
     <figure className="journal-pnl-chart journal-pnl-chart--dated">
       <figcaption>
         <span>Cumulative realized P&amp;L</span>
-        <small>IDR · closed-trade dates · same filters as the table</small>
+        <small>
+          {currency} · closed-trade dates · same filters as the table
+        </small>
       </figcaption>
       {!records.length ? (
         <Empty>
@@ -82,10 +91,10 @@ export function JournalPnlChart({ records }: { records: ChartTrade[] }) {
             <svg
               viewBox={`0 0 ${width} 255`}
               role="img"
-              aria-label="Cumulative realized P&L in IDR by closed-trade date"
+              aria-label={`Cumulative realized P&L in ${currency} by closed-trade date`}
             >
               <text x="100" y="20" className="journal-chart-axis-title">
-                Cumulative P&amp;L (IDR)
+                Cumulative P&amp;L ({currency})
               </text>
               {(high === low ? [0] : [low, (low + high) / 2, high]).map(
                 (value, index) => (

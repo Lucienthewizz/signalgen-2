@@ -90,6 +90,32 @@
   min-height: 44px;
   height: 44px;
 }
+
+.journal-trade-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+.journal-trade-fields .journal-capture-actions { margin-top: 0; }
+.journal-loading { min-height: 160px; }
+.journal-ledger .backtest-actions { margin: 0; }
+.journal-ledger td { vertical-align: middle; }
+.admin-activity small { overflow-wrap: anywhere; }
+
+.journal-toolbar__actions > button[aria-label="Refresh journal"] {
+  width: 48px;
+  flex: 0 0 48px;
+}
+@media (max-width: 600px) {
+  .journal-toolbar__actions > button:last-child {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+  }
+}
 .journal-pnl-chart--dated {
   min-width: 0;
   grid-template-rows: auto auto auto;

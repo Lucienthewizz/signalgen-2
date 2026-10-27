@@ -1,4 +1,5 @@
-export type AdminAction = "grant" | "revoke" | "subscription" | "role";
+export type AdminAction =
+  "grant" | "revoke" | "subscription" | "role" | "status";
 
 export function accessExpiry(days: number, now = Date.now()) {
   const end = new Date(now + days * 86400000);

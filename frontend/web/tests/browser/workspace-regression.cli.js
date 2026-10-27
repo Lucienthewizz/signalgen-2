@@ -26,6 +26,9 @@ async (page) => {
   let savedCardFixture = false;
   let healthOffline = false;
   let sessionMutations = 0;
+  let journalUnavailable = false;
+  const journalWrites = [];
+  const journalItems = [198600,90000,-32000,70000].map((pnl,i)=>({id:`77777777-7777-4777-8777-${String(i+1).padStart(12,"0")}`,version:1,bytes:1000,data:{symbol:["BBCA","TLKM","ASII","BMRI"][i],market:"IDX",currency:"IDR",side:"BUY",quantity:1000,entry_price:1000,exit_price:1000+pnl/1000,entry_fee:0,exit_fee:0,entry_date:`2026-09-${[16,15,12,10][i]}`,exit_date:`2026-09-${[16,15,12,10][i]}`,book:"Trading journal",note:"Synthetic user-recorded trade",net_pl:pnl,return_pct:pnl/10000}}));
   const sessionFixtures = [
     { id: "fixture-current", label: "Current browser", status: "active", current: true, last_seen_at: now },
     { id: "fixture-active", label: "Other active browser", status: "active", current: false, last_seen_at: now },
@@ -61,6 +64,16 @@ async (page) => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort();
     const p = url.pathname;
+    if(p.startsWith("/api/v1/journal/trades")){
+      if(route.request().method()==="GET")return route.fulfill({json:{items:journalItems}});
+      const id=p.split("/").at(-1),body=route.request().postDataJSON();journalWrites.push({id,body});
+      if(journalUnavailable)return route.fulfill({status:503,json:{error:{code:"RECORDS_UNAVAILABLE",message:"Synthetic storage interruption. Nothing was reported as saved."}}});
+      const index=journalItems.findIndex(r=>r.id===id);
+      if(route.request().method()==="DELETE"){if(index>=0)journalItems.splice(index,1);return route.fulfill({status:204});}
+      const d=body.data,net=d.exit_price===null?null:Math.round(((d.exit_price-d.entry_price)*(d.side==="BUY"?1:-1)*d.quantity-d.entry_fee-d.exit_fee)*100)/100;
+      const row={id,version:(body.version??0)+1,bytes:1000,data:{...d,net_pl:net,return_pct:net===null?null:net/(d.quantity*d.entry_price+d.entry_fee)*100}};
+      if(index>=0)journalItems[index]=row;else journalItems.push(row);return route.fulfill({json:row});
+    }
     if (healthOffline && p === "/api") return route.fulfill({ status: 503, json: { error: { code: "UNAVAILABLE", message: "Fixture health interruption" } } });
     if (p === "/api/v1/rules" && route.request().method() === "POST") {
       ruleWrite = route.request().postDataJSON();
@@ -135,18 +148,53 @@ async (page) => {
   await page.getByRole('button',{name:'Open journal form',exact:true}).waitFor();
   await page.getByLabel('Month',{exact:true}).fill('2026-10');
   await page.getByText('No closed trades in this period',{exact:true}).waitFor();
-  await page.getByText('No closed trades match these filters.',{exact:true}).waitFor();
+  await page.getByText(/No recorded trades match these filters/).waitFor();
   await page.getByRole('button',{name:'Clear month filter',exact:true}).click();
-  await page.getByText('No closed trades match these filters.',{exact:true}).waitFor({state:'hidden'});
+  await page.getByText(/No recorded trades match these filters/).waitFor({state:'hidden'});
   if (await page.locator('.journal-ledger tbody tr').count() !== 4) throw Error('Clearing month did not restore table');
   const summaryText = await page.locator('.journal-performance__summary').innerText();
-  if (!summaryText.includes('326,600') || !summaryText.includes('4 sample closed trades')) throw Error('Journal total does not match visible sample rows');
+  if (!summaryText.includes('326,600') || !summaryText.includes('4 closed trades') || summaryText.includes('sample')) throw Error('Journal total does not match server records');
   if (!(await page.locator('.journal-pnl-chart svg').textContent()).includes('Cumulative P&L (IDR)')) throw Error('Chart axis labels missing');
   await page.getByRole('button',{name:'Open journal form',exact:true}).click();
-  const saveBox=await page.getByRole('button',{name:'Saving unavailable',exact:true}).boundingBox();
+  const saveBox=await page.getByRole('button',{name:'Save trade',exact:true}).boundingBox();
   const closeBox=await page.getByRole('button',{name:'Close form',exact:true}).boundingBox();
   if (!saveBox || !closeBox || Math.abs(saveBox.width-closeBox.width)>1 || Math.abs(saveBox.height-closeBox.height)>1) throw Error('Journal form actions differ in size');
-  if (!await page.getByRole("button", { name: "Saving unavailable", exact: true }).isDisabled()) throw Error("Unavailable journal storage must not submit");
+  await page.getByLabel('Symbol',{exact:true}).fill('TEST');
+  await page.getByLabel('Lot',{exact:true}).fill('1');
+  await page.getByLabel('Entry price (IDR)',{exact:true}).fill('100');
+  await page.getByLabel('Exit price (IDR, optional)',{exact:true}).fill('110');
+  await page.getByLabel('Entry date',{exact:true}).fill('2026-09-18');
+  await page.getByLabel('Exit date',{exact:true}).fill('2026-09-19');
+  await page.getByLabel('Entry fee (IDR)',{exact:true}).fill('1');
+  await page.getByLabel('Exit fee (IDR)',{exact:true}).fill('1');
+  journalUnavailable=true;
+  await page.getByRole('button',{name:'Save trade',exact:true}).click();
+  await page.getByText('Journal unavailable',{exact:true}).waitFor();
+  if(journalItems.length!==4||await page.getByLabel('Symbol',{exact:true}).inputValue()!=='TEST')throw Error('Failed save lost input or created a record');
+  const retryID=journalWrites.at(-1).id;
+  journalUnavailable=false;
+  await page.getByRole('button',{name:'Save trade',exact:true}).click();
+  await page.getByRole('button',{name:'Edit trade TEST',exact:true}).waitFor();
+  if(journalWrites.at(-1).id!==retryID||journalItems.length!==5)throw Error('Retry changed trade ID or duplicated a record');
+  if(!(await page.locator('.journal-performance__summary').innerText()).includes('327,598'))throw Error('Recorded trade did not update P&L');
+  await page.getByRole('button',{name:'Edit trade TEST',exact:true}).click();
+  await page.getByLabel('Exit price (IDR, optional)',{exact:true}).fill('');
+  await page.getByLabel('Exit date',{exact:true}).fill('');
+  await page.getByLabel('Exit fee (IDR)',{exact:true}).fill('0');
+  await page.getByRole('button',{name:'Update trade',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.journal-performance__summary')?.textContent?.includes('326,600'));
+  if(journalWrites.at(-1).body.version!==1||'net_pl' in journalWrites.at(-1).body.data)throw Error('Journal update supplied a computed P&L or lost its version');
+  if(!(await page.locator('.journal-performance__summary').innerText()).includes('326,600'))throw Error('Open position was counted in realized P&L');
+  await page.getByRole('button',{name:'Delete trade TEST',exact:true}).click();
+  await page.getByRole('alertdialog',{name:'Delete recorded trade?',exact:true}).getByRole('button',{name:'Cancel',exact:true}).click();
+  if(journalItems.length!==5)throw Error('Cancel deleted a trade');
+  await page.getByRole('button',{name:'Delete trade TEST',exact:true}).click();
+  await page.getByRole('alertdialog',{name:'Delete recorded trade?',exact:true}).getByRole('button',{name:'Delete trade',exact:true}).click();
+  await page.getByRole('button',{name:'Edit trade TEST',exact:true}).waitFor({state:'hidden'});
+  if(journalItems.length!==4)throw Error('Confirmed trade delete failed');
+  await page.getByLabel('Currency',{exact:true}).selectOption('USD');
+  if((await page.locator('.journal-performance__summary').innerText()).includes('326,600'))throw Error('Journal mixed IDR and USD');
+  await page.getByLabel('Currency',{exact:true}).selectOption('IDR');
   if (await page.locator(".journal-drafts").count()) throw Error("Local draft workflow still visible");
   await page.reload();
   if (await page.evaluate(key => localStorage.getItem(key), journalKey) !== "preserve-existing-drafts") throw Error("Old drafts were overwritten");
@@ -443,15 +491,8 @@ async (page) => {
           });
           if (controlAlignment.heights > 2 || (width >= 1440 && controlAlignment.bottoms > 2)) throw Error(`Journal controls misaligned: ${JSON.stringify(controlAlignment)}`);
           await page.locator(".journal-toolbar").screenshot({ path: `/private/tmp/signalgen-journal-toolbar-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
-          const review = page.locator(".journal-detail");
-          await review.screenshot({ path: `/private/tmp/signalgen-journal-review-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
-          if (await review.locator("dt").allTextContents().then(labels => labels.join(",")) !== "Rule,Entry time,Exit time") throw Error("Journal review metadata not separated");
-          const offset = await review.evaluate(el => {
-            const parts = [el.querySelector("header"), el.querySelector(".journal-detail__note"), el.querySelector("dl"), el.querySelector(".journal-tags")];
-            const positions = parts.map(part => part.getBoundingClientRect().x);
-            return Math.max(...positions) - Math.min(...positions);
-          });
-          if (offset > 1) throw Error(`Journal review alignment differs: ${offset}px`);
+          await page.locator(".journal-ledger").screenshot({ path: `/private/tmp/signalgen-journal-records-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
+          if(await page.locator('.journal-ledger tbody tr').count()!==4)throw Error('Journal did not restore server records');
         }
         if (view === "realtime") {
           const offset = await page.evaluate(() => {

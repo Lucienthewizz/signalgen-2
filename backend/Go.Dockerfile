@@ -12,6 +12,8 @@ COPY backend/internal ./internal
 
 FROM source AS test
 
+COPY backend/Go.Dockerfile ./Go.Dockerfile
+
 RUN go test ./...
 
 

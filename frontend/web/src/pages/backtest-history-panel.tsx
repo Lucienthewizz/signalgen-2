@@ -8,8 +8,15 @@ import {
   loadBacktestArchive,
   deleteBacktestArchives,
   type BacktestArchive,
-  type BacktestArchiveSummary,
 } from "@/analysis/backtest-history";
+import {
+  downloadArchive,
+  uploadArchive,
+  syncedIDs,
+  markSynced,
+  type SyncedSummary,
+  type CloudSummary,
+} from "@/analysis/backtest-sync";
 
 export function BacktestHistoryPanel({
   owner,
@@ -20,7 +27,7 @@ export function BacktestHistoryPanel({
   revision: number;
   onOpen: (archive: BacktestArchive) => void;
 }) {
-  const [items, setItems] = useState<BacktestArchiveSummary[]>([]),
+  const [items, setItems] = useState<SyncedSummary[]>([]),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
@@ -49,11 +56,63 @@ export function BacktestHistoryPanel({
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    listBacktestArchives(owner, controller.signal, active)
-      .then((rows) => {
+    Promise.allSettled([
+      listBacktestArchives(owner, controller.signal, active),
+      api.listRecords<CloudSummary>("backtest", controller.signal),
+    ])
+      .then(async ([local, cloud]) => {
+        if (!active() || controller.signal.aborted) return;
+        const rows = new Map<string, SyncedSummary>();
+        const remoteIDs = new Set(
+          cloud.status === "fulfilled"
+            ? cloud.value.items.map((r) => r.id)
+            : [],
+        );
+        const known = syncedIDs(owner);
+        if (local.status === "fulfilled")
+          for (const row of local.value) {
+            if (
+              cloud.status === "fulfilled" &&
+              known.includes(row.id) &&
+              !remoteIDs.has(row.id)
+            ) {
+              await deleteBacktestArchives(
+                owner,
+                row.id,
+                controller.signal,
+                active,
+              );
+              continue;
+            }
+            rows.set(row.id, { ...row, local: true });
+          }
+        if (cloud.status === "fulfilled")
+          for (const row of cloud.value.items) {
+            markSynced(owner, row.id);
+            rows.set(row.id, {
+              ...rows.get(row.id),
+              id: row.id,
+              owner_id: owner,
+              saved_at: row.data.saved_at,
+              title: row.data.title,
+              currency: row.data.currency,
+              bytes: row.bytes,
+              serverVersion: row.version,
+            });
+          }
         if (active() && !controller.signal.aborted) {
-          setItems(rows);
-          setError("");
+          setItems(
+            [...rows.values()].sort((a, b) =>
+              b.saved_at.localeCompare(a.saved_at),
+            ),
+          );
+          setError(
+            cloud.status === "rejected"
+              ? "Server history is unavailable. Showing device copies only; these are not confirmed as synced."
+              : local.status === "rejected"
+                ? "Device history is unavailable. Server copies are shown."
+                : "",
+          );
         }
       })
       .catch(() => {
@@ -89,12 +148,9 @@ export function BacktestHistoryPanel({
         !account.features.includes("backtest")
       )
         throw Error("Backtesting access is required to open saved results.");
-      const archive = await loadBacktestArchive(
-        owner,
-        id,
-        controller.signal,
-        active,
-      );
+      const archive = items.find((i) => i.id === id)?.local
+        ? await loadBacktestArchive(owner, id, controller.signal, active)
+        : await downloadArchive(owner, id, controller.signal, active);
       if (active() && !controller.signal.aborted) onOpen(archive);
     } catch (cause) {
       if (active() && !controller.signal.aborted)
@@ -119,7 +175,17 @@ export function BacktestHistoryPanel({
     setBusy(true);
     setError("");
     try {
+      const row = items.find((i) => i.id === id);
+      if (id === null || row?.serverVersion || syncedIDs(owner).includes(id))
+        await api.deleteRecord(
+          "backtest",
+          id,
+          row?.serverVersion ?? (id ? 1 : 0),
+          controller.signal,
+        );
+      if (!active() || controller.signal.aborted) return;
       await deleteBacktestArchives(owner, id, controller.signal, active);
+      if (active()) setReload((n) => n + 1);
     } catch {
       if (active() && !controller.signal.aborted)
         setError(
@@ -132,28 +198,68 @@ export function BacktestHistoryPanel({
       }
     }
   }
+  async function sync(id: string) {
+    if (busy) return;
+    const controller = new AbortController();
+    operation.current = controller;
+    setBusy(true);
+    setError("");
+    try {
+      const archive = await loadBacktestArchive(
+        owner,
+        id,
+        controller.signal,
+        active,
+      );
+      await uploadArchive(archive, controller.signal, active);
+      if (active()) setReload((n) => n + 1);
+    } catch (e) {
+      if (active() && !controller.signal.aborted)
+        setError(
+          e instanceof Error
+            ? e.message
+            : "Server sync failed; local copy remains.",
+        );
+    } finally {
+      if (operation.current === controller) {
+        operation.current = null;
+        if (active()) setBusy(false);
+      }
+    }
+  }
   return (
     <section className="backtest-panel" aria-labelledby="bt-history-heading">
       <div className="backtest-section-heading">
         <div>
-          <h3 id="bt-history-heading">Local backtest history</h3>
+          <h3 id="bt-history-heading">Backtest history</h3>
           <p className="backtest-note">
-            This browser · this account · newest 10 runs, up to 50 MiB. Saved
-            results remain after sign out.
+            Server history syncs across devices for this account: newest 10
+            runs, up to 50 MiB (8 MiB per upload). Device-only copies can be
+            synced below. Archives are unverified simulations, not recorded
+            trades.
           </p>
         </div>
-        <Button
-          variant="outline"
-          disabled={busy || (items.length === 0 && !error)}
-          onClick={(e) => {
-            returnFocus.current = e.currentTarget;
-            setPending({ id: null });
-          }}
-        >
-          Delete all history
-        </Button>
+        <div className="backtest-actions">
+          <Button
+            variant="outline"
+            disabled={busy || loading}
+            onClick={() => setReload((n) => n + 1)}
+          >
+            Refresh history
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={busy || (items.length === 0 && !error)}
+            onClick={(e) => {
+              returnFocus.current = e.currentTarget;
+              setPending({ id: null });
+            }}
+          >
+            Delete all history
+          </Button>
+        </div>
       </div>
-      {loading && <p role="status">Loading local history…</p>}
+      {loading && <p role="status">Loading backtest history…</p>}
       {error && (
         <div className="backtest-error">
           <p role="alert">{error}</p>
@@ -163,7 +269,7 @@ export function BacktestHistoryPanel({
         </div>
       )}
       {!loading && !error && !items.length && (
-        <p>No saved backtests on this browser yet.</p>
+        <p>No saved backtests for this account yet.</p>
       )}
       <ul className="backtest-history-list">
         {items.map((item) => (
@@ -171,6 +277,7 @@ export function BacktestHistoryPanel({
             <div>
               <strong>{item.title}</strong>
               <span>
+                {item.serverVersion ? "Server synced" : "Device only"} ·{" "}
                 {new Date(item.saved_at).toLocaleString("en-US", {
                   timeZone: "UTC",
                 })}{" "}
@@ -178,6 +285,15 @@ export function BacktestHistoryPanel({
               </span>
             </div>
             <div className="backtest-actions">
+              {!item.serverVersion && item.local && (
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => void sync(item.id)}
+                >
+                  Sync to server
+                </Button>
+              )}
               <Button
                 variant="outline"
                 disabled={busy}
@@ -203,16 +319,14 @@ export function BacktestHistoryPanel({
       </ul>
       <ConfirmDialog
         open={pending !== null}
-        title={
-          pending?.id ? "Delete saved backtest?" : "Delete all local backtests?"
-        }
+        title={pending?.id ? "Delete saved backtest?" : "Delete all backtests?"}
         description={
           pending?.id
-            ? "This removes the selected archive from this browser. The result currently on screen remains available until you close it."
-            : "This removes every backtest archive for this account on this browser. Other accounts and the historical data cache are unaffected."
+            ? "This removes the selected archive from server history (if synced) and this browser. Other devices remove their synced cache when history refreshes."
+            : "This removes every archive for this account from server history and this browser. Other accounts and the historical candle cache are unaffected. This cannot be undone."
         }
         confirmLabel={
-          pending?.id ? "Delete saved backtest" : "Delete all local backtests"
+          pending?.id ? "Delete saved backtest" : "Delete all backtests"
         }
         destructive
         returnFocus={returnFocus}

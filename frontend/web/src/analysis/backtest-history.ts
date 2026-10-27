@@ -177,7 +177,7 @@ function validSummary(v: unknown): v is BacktestArchiveSummary {
     count(v.bytes)
   );
 }
-function validArchive(v: unknown): v is BacktestArchive {
+export function validArchive(v: unknown): v is BacktestArchive {
   if (
     !record(v) ||
     v.format_version !== 1 ||

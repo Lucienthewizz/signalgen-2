@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.12.0
+  version: 0.13.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     The Go API performs email/password and recovery flows through Supabase Auth,
@@ -38,6 +38,126 @@ tags:
     description: Owner-scoped presentation state; never permissions or authoritative trading records.
 
 paths:
+  /api/v1/journal/trades:
+    get:
+      tags: [Account]
+      operationId: listJournalTrades
+      summary: List the authenticated owner's recorded trades (maximum 1000)
+      description: User-recorded fills, not broker verification. Net P&L and return are calculated by the server; open positions have null realized P&L. Currencies must be aggregated separately.
+      security: [{supabaseBearer: [], appSession: []}]
+      responses: &recordListResponses
+        "200":
+          description: Owner-scoped items with id, version, bytes and data. Private/no-store.
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {description: Inactive account or invalid application session.}
+        "503": {description: RECORDS_UNAVAILABLE, including a missing records migration. No fake or sample records are returned.}
+  /api/v1/journal/trades/{id}:
+    parameters: &recordID
+      - in: path
+        name: id
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Account]
+      operationId: getJournalTrade
+      security: [{supabaseBearer: [], appSession: []}]
+      responses: &recordGetResponses
+        "200": {description: Owner record envelope with id, data, version and bytes.}
+        "404": {description: RESOURCE_NOT_FOUND for this account.}
+        "403": {description: Account/session denied.}
+        "503": {description: Record store unavailable.}
+    put:
+      tags: [Account]
+      operationId: saveJournalTrade
+      summary: Create (version zero) or update (current version) a recorded trade
+      description: |
+        Data accepts only symbol, market (IDX/US), currency (IDR/USD), side (BUY/SELL),
+        quantity in shares (IDX multiples of 100), entry_price, exit_price (null for open),
+        entry_fee, exit_fee, entry_date, exit_date, book and note.
+        Dates are YYYY-MM-DD; exit cannot precede entry. Fees are absolute currency amounts.
+        Short P&L reverses the price delta but includes both fees. No automatic broker orders.
+        Unknown fields, owner IDs, supplied P&L, invalid prices and over-limit notionals are rejected.
+        The same ID and identical create payload are idempotent; updates use optimistic concurrency.
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody: &recordWriteBody
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, data]
+              additionalProperties: false
+              properties:
+                version: {type: integer, minimum: 0}
+                data: {type: object}
+      responses: &recordWriteResponses
+        "200": {description: Saved record envelope and incremented version.}
+        "409": {description: VERSION_CONFLICT or RECORD_LIMIT (1000 journal trades). Reload before editing again.}
+        "413": {description: Record body exceeds endpoint size budget.}
+        "422": {description: Invalid or unknown record fields/version.}
+        "403": {description: Account/session/feature denied.}
+        "503": {description: Record store unavailable; save not confirmed.}
+    delete:
+      tags: [Account]
+      operationId: deleteJournalTrade
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody: &recordDeleteBody
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              additionalProperties: false
+              properties:
+                version: {type: integer, minimum: 0}
+      responses: &recordDeleteResponses
+        "204": {description: Deleted from the current owner's records.}
+        "409": {description: VERSION_CONFLICT, including missing or foreign-owner record.}
+        "422": {description: Invalid ID/version.}
+        "403": {description: Account/session/feature denied.}
+        "503": {description: Deletion not confirmed.}
+  /api/v1/backtests/history:
+    get:
+      tags: [Analysis]
+      operationId: listBacktestArchives
+      description: Backtest entitlement required. Newest 10 archives, maximum 50 MiB total. Data contains metadata only (no result); archives are unverified client simulations, never authoritative trading records.
+      security: [{supabaseBearer: [], appSession: []}]
+      responses: *recordListResponses
+    delete:
+      tags: [Analysis]
+      operationId: deleteAllBacktestArchives
+      summary: Delete all backtest archives for the authenticated owner
+      description: Requires explicit UI confirmation, a JSON version of zero, and current backtest entitlement. Does not delete journal records or candle datasets.
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody: *recordDeleteBody
+      responses: *recordDeleteResponses
+  /api/v1/backtests/history/{id}:
+    parameters: *recordID
+    get:
+      tags: [Analysis]
+      operationId: getBacktestArchive
+      security: [{supabaseBearer: [], appSession: []}]
+      responses: *recordGetResponses
+    put:
+      tags: [Analysis]
+      operationId: saveBacktestArchive
+      description: |
+        Immutable unverified archive, version zero only, maximum upload 8 MiB.
+        Data uses format_version=1, id matching the path UUID, saved_at RFC3339,
+        title, currency, source (dataset ID/version/checksum, universe ID/name/version/symbols,
+        optional rule ID/name/version/definition_hash), and a backtest-2 holding-next-open-1 result.
+        Private rule definitions, raw candles, credentials and owner_id are not accepted.
+        The oldest archives are pruned atomically to ten / 50 MiB per owner.
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody: *recordWriteBody
+      responses: *recordWriteResponses
+    delete:
+      tags: [Analysis]
+      operationId: deleteBacktestArchive
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody: *recordDeleteBody
+      responses: *recordDeleteResponses
   /api/v1/workspace:
     get:
       tags: [Workspace]
@@ -1909,7 +2029,7 @@ components:
       required: [name, version, description, docs, status]
       properties:
         name: {type: string}
-        version: {type: string, enum: [0.12.0]}
+        version: {type: string, enum: [0.13.0]}
         description: {type: string}
         docs: {type: string}
         status: {type: string, enum: [ok]}

@@ -41,6 +41,16 @@ async (page) => {
       const items = filtered.slice(0,limit);
       return respond({items,...(filtered.length > limit ? {next_cursor:items.at(-1).user_id} : {})});
     }
+    if(p==='/api/v1/operator/audit-events'){
+      if(actor.role!=='operator'||actor.status!=='active')throw Error('Non-operator requested audit');
+      const end=url.searchParams.get('before')?5:25;
+      return respond({items:Array.from({length:Math.min(end,20)},(_,i)=>({id:String(end-i),actor:user.id,action:'account.status.changed',target_user_id:url.searchParams.get('user_id'),reason:`Persistent audit fixture ${end-i}`,request_id:`request-${end-i}`,created_at:now})),...(end===25?{next_cursor:'5'}:{})});
+    }
+    if(p.endsWith('/status')&&request.method()==='PATCH'){
+      const body=request.postDataJSON(),member=members.find(m=>m.user_id===p.split('/').at(-2));
+      if(!member||body.expected_status!==member.status||!body.reason||'actor' in body)throw Error('Unsafe account status write');
+      writes.push({method:'PATCH',body});member.status=body.status;return respond(member);
+    }
     if (p === "/api/v1/operator/grants") {
       if (request.method() === "GET") return respond({items:[...grants.values()].filter(item => item.user_id === url.searchParams.get("user_id"))});
       const body = request.postDataJSON();
@@ -139,6 +149,40 @@ async (page) => {
     if (writes.at(-1).method!=="DELETE") throw Error("Revocation used the wrong endpoint");
   }
   mode="healthy"; await ready();
+  await search('member35@');
+  await page.getByRole('button',{name:'Select member35@example.test',exact:true}).click();
+  const audit=page.getByRole('region',{name:'Persistent account audit log',exact:true});
+  await audit.getByText('Persistent audit fixture 25',{exact:true}).waitFor();
+  await audit.getByRole('button',{name:'Older events',exact:true}).click();
+  await audit.getByText('Persistent audit fixture 5',{exact:true}).waitFor();
+  await audit.getByRole('button',{name:'Newer events',exact:true}).click();
+  await audit.getByText('Persistent audit fixture 25',{exact:true}).waitFor();
+  await page.getByRole('tab',{name:'Account status',exact:true}).click();
+  await page.getByLabel('Reason for this change',{exact:true}).fill('Synthetic suspension review');
+  const statusBefore=writes.length;
+  await page.getByRole('button',{name:'Review status change',exact:true}).click();
+  if(writes.length!==statusBefore)throw Error('Review suspended before confirmation');
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+  if(members[34].status!=='active')throw Error('Cancel suspended a member');
+  await page.getByRole('button',{name:'Review status change',exact:true}).click();
+  await page.getByRole('button',{name:'Confirm change',exact:true}).click();
+  await page.getByText('Suspend account: saved.',{exact:true}).waitFor();
+  if(members[34].status!=='suspended'||writes.at(-1).body.expected_status!=='active')throw Error('Suspension lacks compare-and-set');
+  await page.getByLabel('New account status',{exact:true}).click();
+  await page.getByRole('option',{name:'Active',exact:true}).click();
+  await page.getByLabel('Reason for this change',{exact:true}).fill('Synthetic reactivation');
+  await page.getByRole('button',{name:'Review status change',exact:true}).click();
+  await page.getByRole('button',{name:'Confirm change',exact:true}).click();
+  await page.getByText('Reactivate account: saved.',{exact:true}).waitFor();
+  if(members[34].status!=='active'||writes.at(-1).body.expected_status!=='suspended')throw Error('Reactivation lacks compare-and-set');
+  for(const width of [1440,390])for(const theme of ['dark','light']){
+    await page.setViewportSize({width,height:1000});await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
+    await page.getByRole('tabpanel',{name:'Account status',exact:true}).screenshot({path:`/private/tmp/signalgen-status-${width}-${theme}.png`});
+    await audit.screenshot({path:`/private/tmp/signalgen-audit-${width}-${theme}.png`});
+    if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error('Status or audit log overflows');
+  }
+  await page.setViewportSize({width:1440,height:1000});
+  await ready();
   await page.getByLabel("Account status",{exact:true}).click();
   await page.getByRole("option",{name:"Suspended",exact:true}).click();
   await page.getByRole("button",{name:"Search accounts",exact:true}).click();

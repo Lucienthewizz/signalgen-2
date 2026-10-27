@@ -8,11 +8,13 @@ import (
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/account"
 	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/records"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/workspace"
 )
 
 type serverConfig struct {
+	recordStore       records.Store
 	workspaceStore    workspace.Store
 	profileStore      account.ProfileRepository
 	managementStore   account.ManagementRepository
@@ -30,6 +32,16 @@ type serverConfig struct {
 	socketLimiter     *screener.ConnectionLimiter
 	trafficObserver   *platformhttp.TrafficObserver
 	screeningObserver screener.Observer
+}
+
+func WithRecordStore(store records.Store) ServerOption {
+	return func(config *serverConfig) error {
+		if store == nil {
+			return fmt.Errorf("record store is required")
+		}
+		config.recordStore = store
+		return nil
+	}
 }
 
 // WithAccountManagement enables operator-only account metadata/status/audit.

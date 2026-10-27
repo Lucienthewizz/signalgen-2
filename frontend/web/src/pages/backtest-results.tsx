@@ -509,8 +509,8 @@ export function BacktestResults({
       )}
       <p className="backtest-note">
         Hypothetical analysis only. No broker orders, lot-size model or
-        corporate-action adjustment. Saved results are local analysis, not an
-        authoritative journal or broker execution record.
+        corporate-action adjustment. Saved results are unverified analysis, not
+        an authoritative journal or broker execution record.
       </p>
     </section>
   );

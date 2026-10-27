@@ -47,6 +47,7 @@ import {
   type AdminAction,
 } from "@/lib/admin";
 import { AdminAccountDirectory } from "./admin-account-directory";
+import { AdminAuditPanel } from "./admin-audit-panel";
 import type {
   AccountState,
   FeatureGrant,
@@ -62,6 +63,7 @@ type PendingChange = {
   value: string;
   until: string;
   title: string;
+  expectedStatus?: "active" | "suspended";
 };
 type ActivityEntry = {
   id: number;
@@ -105,6 +107,8 @@ export function AdminPage({
   const [feature, setFeature] = useState<FeatureGrant["feature"]>("screener");
   const [plan, setPlan] = useState("");
   const [role, setRole] = useState<"user" | "operator">("user");
+  const [status, setStatus] = useState<"active" | "suspended">("suspended");
+  const [auditRevision, setAuditRevision] = useState(0);
   const [grantUntil, setGrantUntil] = useState(() => accessExpiry(30));
   const [periodEnd, setPeriodEnd] = useState(() => accessExpiry(30));
   const [grants, setGrants] = useState<FeatureGrant[] | null>(null);
@@ -262,6 +266,17 @@ export function AdminPage({
   }
   function review(action: AdminAction) {
     if (!editable) return;
+    if (
+      action === "status" &&
+      (!targetAccount ||
+        targetAccount.user_id !== target.trim() ||
+        targetAccount.status === status)
+    ) {
+      setError(
+        "Select an account from the directory and choose a different status. Refresh the directory if its status has changed.",
+      );
+      return;
+    }
     const until = action === "subscription" ? periodEnd : grantUntil;
     const invalid = validateAdminChange(target, reason, action, until);
     if (invalid) {
@@ -293,12 +308,19 @@ export function AdminPage({
       return;
     }
     const value =
-      action === "role" ? role : action === "subscription" ? plan : feature;
+      action === "status"
+        ? status
+        : action === "role"
+          ? role
+          : action === "subscription"
+            ? plan
+            : feature;
     const titles = {
       grant: `Grant ${featureNames[feature]} access`,
       revoke: `Revoke ${featureNames[feature]} grant`,
       subscription: `Activate ${plans.find((item) => item.code === plan)?.name ?? plan}`,
       role: `Change role to ${role}`,
+      status: `${status === "suspended" ? "Suspend" : "Reactivate"} account`,
     };
     setError(null);
     setMessage(null);
@@ -313,6 +335,7 @@ export function AdminPage({
           ? new Date(until).toISOString()
           : "",
       title: titles[action],
+      expectedStatus: action === "status" ? targetAccount?.status : undefined,
     });
     showReview();
   }
@@ -355,7 +378,18 @@ export function AdminPage({
           change.until,
           change.reason,
         );
-      else
+      else if (change.action === "status") {
+        if (!change.expectedStatus)
+          throw Error("Account status must be inspected before changing it.");
+        const updated = await api.changeAccountStatus(
+          change.userId,
+          change.value as "active" | "suspended",
+          change.expectedStatus,
+          change.reason,
+        );
+        if (alive.current && revision === session.getIdentityRevision())
+          setTargetAccount(updated);
+      } else
         await api.changeAccountRole(
           change.userId,
           change.value as "user" | "operator",
@@ -365,6 +399,7 @@ export function AdminPage({
       setMessage(`${change.title}: saved.`);
       setPending(null);
       setReason("");
+      setAuditRevision((n) => n + 1);
       setActivity((items) =>
         [
           {
@@ -377,6 +412,13 @@ export function AdminPage({
         ].slice(0, 8),
       );
       if (
+        change.action === "status" &&
+        change.userId === account?.user.id &&
+        change.value === "suspended"
+      ) {
+        session.clear();
+        setPermissionAttempt((n) => n + 1);
+      } else if (
         change.action === "role" &&
         change.userId === account?.user.id &&
         change.value === "user"
@@ -609,6 +651,10 @@ export function AdminPage({
               <TabsTrigger value="system">
                 <Activity />
                 System status
+              </TabsTrigger>
+              <TabsTrigger value="status">
+                <UsersRound />
+                Account status
               </TabsTrigger>
             </TabsList>
             <TabsContent value="grants">
@@ -914,6 +960,69 @@ export function AdminPage({
                 </Button>
               </div>
             </TabsContent>
+            <TabsContent value="status">
+              <div className="admin-section-title">
+                <div>
+                  <h3>Account status</h3>
+                  <p>
+                    Suspending an account revokes its application sessions and
+                    blocks access. Reactivation permits a new sign-in; it does
+                    not add paid features.
+                  </p>
+                </div>
+              </div>
+              <p className="admin-help">
+                Current status:{" "}
+                <strong>
+                  {targetAccount?.status ??
+                    "Select a member from the directory"}
+                </strong>
+              </p>
+              <FieldGroup className="admin-fields">
+                <Field>
+                  <FieldLabel htmlFor="admin-status">
+                    New account status
+                  </FieldLabel>
+                  <Select
+                    value={status}
+                    disabled={!editable || !targetAccount}
+                    onValueChange={(v) => {
+                      setStatus(v as "active" | "suspended");
+                      setPending(null);
+                    }}
+                  >
+                    <SelectTrigger id="admin-status">
+                      <SelectValue>
+                        {status === "active" ? "Active" : "Suspended"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="suspended">Suspended</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>
+                    The last active operator cannot be suspended. Changes
+                    require a reason and confirmation below.
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+              <div className="admin-actions">
+                <Button
+                  variant={status === "suspended" ? "destructive" : "default"}
+                  disabled={
+                    !editable ||
+                    !targetAccount ||
+                    targetAccount.status === status
+                  }
+                  onClick={() => review("status")}
+                >
+                  Review status change
+                </Button>
+              </div>
+            </TabsContent>
             <TabsContent value="system">
               <div className="admin-section-title">
                 <div>
@@ -1042,7 +1151,11 @@ export function AdminPage({
                   <div className="admin-actions">
                     <Button
                       variant={
-                        pending.action === "revoke" ? "destructive" : "default"
+                        pending.action === "revoke" ||
+                        (pending.action === "status" &&
+                          pending.value === "suspended")
+                          ? "destructive"
+                          : "default"
                       }
                       disabled={!editable}
                       onClick={() => void confirm()}
@@ -1064,6 +1177,13 @@ export function AdminPage({
           </section>
         </div>
       </div>
+      {authorized && uuidValid && (
+        <AdminAuditPanel
+          key={target}
+          userId={target.trim()}
+          refresh={auditRevision}
+        />
+      )}
       <section
         className="admin-activity"
         aria-labelledby="admin-activity-title"

@@ -1839,7 +1839,7 @@
 }
 .journal-toolbar__filters {
   display: grid;
-  grid-template-columns: repeat(2, minmax(140px, 200px)) minmax(180px, max-content);
+  grid-template-columns: repeat(3, minmax(100px, 1fr)) minmax(170px, 1.2fr);
   gap: 16px;
   align-items: flex-end;
   min-width: 0;

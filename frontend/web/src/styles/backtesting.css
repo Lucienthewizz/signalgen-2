@@ -6,7 +6,7 @@
 .backtest-panel {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 14px;
   padding: var(--workspace-panel-gutter);
   min-width: 0;
 }
@@ -224,12 +224,20 @@
 .backtest-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 20px;
+  gap: 0;
   margin: 24px 0;
+  border-block: 1px solid var(--line);
+}
+.backtest-metrics > div {
+  padding: 18px 16px;
+  border-inline-end: 1px solid var(--line);
+}
+.backtest-metrics > div:nth-child(4n) {
+  border-inline-end: 0;
 }
 .backtest-metrics dt {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
 }
 .backtest-metrics dd {
   color: var(--text);
@@ -262,7 +270,17 @@
 .backtest-panel th,
 .backtest-panel td {
   border-bottom: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line-soft);
+  text-align: center;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
   padding: 12px 14px;
+}
+.backtest-panel tr > :last-child {
+  border-inline-end: 0;
+}
+.backtest-panel tbody tr:hover {
+  background: var(--surface-2);
 }
 .backtest-panel thead th {
   background: var(--surface-2);

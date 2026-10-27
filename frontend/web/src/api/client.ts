@@ -29,6 +29,7 @@ import type {
   AccountRole,
   SessionListResponse,
   EditableProfile,
+  ManagedAccount,
 } from "../types";
 
 const TOKEN_KEY = "signalgen.access-token";
@@ -551,6 +552,68 @@ export const api = {
       }),
     }),
   me: (signal?: AbortSignal) => request<User>("/api/auth/me", { signal }),
+  listRecords: <T>(kind: "backtest" | "journal", signal?: AbortSignal) =>
+    request<{ items: import("@/lib/server-records").ServerRecord<T>[] }>(
+      kind === "backtest"
+        ? "/api/v1/backtests/history"
+        : "/api/v1/journal/trades",
+      { signal },
+    ),
+  getRecord: <T>(
+    kind: "backtest" | "journal",
+    id: string,
+    signal?: AbortSignal,
+  ) =>
+    request<import("@/lib/server-records").ServerRecord<T>>(
+      `${kind === "backtest" ? "/api/v1/backtests/history" : "/api/v1/journal/trades"}/${encodeURIComponent(id)}`,
+      { signal },
+    ),
+  saveRecord: <T>(
+    kind: "backtest" | "journal",
+    id: string,
+    version: number,
+    data: unknown,
+    signal?: AbortSignal,
+  ) =>
+    request<import("@/lib/server-records").ServerRecord<T>>(
+      `${kind === "backtest" ? "/api/v1/backtests/history" : "/api/v1/journal/trades"}/${encodeURIComponent(id)}`,
+      { method: "PUT", body: JSON.stringify({ version, data }), signal },
+    ),
+  deleteRecord: (
+    kind: "backtest" | "journal",
+    id: string | null,
+    version: number,
+    signal?: AbortSignal,
+  ) =>
+    request<void>(
+      `${kind === "backtest" ? "/api/v1/backtests/history" : "/api/v1/journal/trades"}${id ? `/${encodeURIComponent(id)}` : ""}`,
+      { method: "DELETE", body: JSON.stringify({ version }), signal },
+    ),
+  changeAccountStatus: (
+    id: string,
+    status: "active" | "suspended",
+    expectedStatus: "active" | "suspended",
+    reason: string,
+  ) =>
+    request<ManagedAccount>(
+      `/api/v1/operator/accounts/${encodeURIComponent(id)}/status`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          status,
+          expected_status: expectedStatus,
+          reason,
+        }),
+      },
+    ),
+  listAccountAudit: (id: string, before?: string, signal?: AbortSignal) => {
+    const query = new URLSearchParams({ user_id: id, limit: "20" });
+    if (before) query.set("before", before);
+    return request<{
+      items: import("@/lib/server-records").AccountAudit[];
+      next_cursor: string | null;
+    }>(`/api/v1/operator/audit-events?${query}`, { signal });
+  },
   workspace: () =>
     request<{
       items: {
