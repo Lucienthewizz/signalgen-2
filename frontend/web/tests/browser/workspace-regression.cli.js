@@ -563,11 +563,11 @@ async (page) => {
         while(performance.now()-start<650){
           await new Promise(requestAnimationFrame);const time=performance.now()-start;
           if(!reversed&&time>90){toggle.click();reversed=true;}
-          frames.push({width:sidebar.getBoundingClientRect().width,left:workspace.getBoundingClientRect().left,delta:Math.max(...icons.map((icon,i)=>{const r=icon.getBoundingClientRect();return Math.max(Math.abs(r.x-origin[i].x),Math.abs(r.y-origin[i].y),Math.abs(r.width-origin[i].width),Math.abs(r.height-origin[i].height));}))});
+          frames.push({width:sidebar.getBoundingClientRect().width,left:workspace.getBoundingClientRect().left,accountWidth:sidebar.querySelector('.account-menu__trigger').getBoundingClientRect().width,delta:Math.max(...icons.map((icon,i)=>{const r=icon.getBoundingClientRect();return Math.max(Math.abs(r.x-origin[i].x),Math.abs(r.y-origin[i].y),Math.abs(r.width-origin[i].width),Math.abs(r.height-origin[i].height));}))});
         }
-        return {frames:frames.length,moving:frames.some(frame=>frame.width>80&&frame.width<260),delta:Math.max(...frames.map(frame=>frame.delta)),alignment:Math.max(...frames.map(frame=>Math.abs(frame.width-frame.left)))};
+        return {frames:frames.length,moving:frames.some(frame=>frame.width>80&&frame.width<260),delta:Math.max(...frames.map(frame=>frame.delta)),alignment:Math.max(...frames.map(frame=>Math.abs(frame.width-frame.left))),accountAlignment:Math.max(...frames.map(frame=>Math.abs(frame.accountWidth-frame.width+28)))};
       });
-      if(motion.frames<2 || !motion.moving || motion.delta>1 || motion.alignment>2) throw Error('Sidebar animation jumps or fails to reverse smoothly: '+JSON.stringify(motion));
+      if(motion.frames<2 || !motion.moving || motion.delta>1 || motion.alignment>2 || motion.accountAlignment>1) throw Error('Sidebar animation jumps or fails to reverse smoothly: '+JSON.stringify(motion));
       await page.emulateMedia({reducedMotion:'reduce'});
       const accountTrigger=sidebar.getByRole('button',{name:'Open Akun pengujian menu',exact:true});
       const accountShape=await accountTrigger.evaluate(button=>{
@@ -747,6 +747,7 @@ async (page) => {
   for (const width of [1456, 390]) for (const theme of ["dark"]) {
     await page.setViewportSize({ width, height: 853 });
     if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
+    await page.getByRole("button", { name: "New blank rule", exact: true }).click({trial:true});
     const newBounds = await page.getByRole("button", { name: "New blank rule", exact: true }).boundingBox();
     const restoreBounds = await restoreDraftButton.boundingBox();
     if (!newBounds || !restoreBounds || restoreBounds.y < newBounds.y + newBounds.height || Math.abs(restoreBounds.x - newBounds.x) > 1) throw Error("Restore is not aligned below New blank rule");

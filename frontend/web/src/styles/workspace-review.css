@@ -361,16 +361,21 @@
   opacity: 1;
 }
 @media (min-width: 861px) {
+  .demo-workbench {
+    --sidebar-motion-duration: 260ms;
+    --sidebar-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
   .demo-workbench .menu-button {
     display: none;
   }
   .demo-workbench .sidebar {
     transition:
-      width 280ms cubic-bezier(0.16, 1, 0.3, 1),
-      transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
+      width var(--sidebar-motion-duration) var(--sidebar-motion-ease),
+      transform var(--sidebar-motion-duration) var(--sidebar-motion-ease);
   }
   .demo-workbench .workspace {
-    transition: margin-left 280ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: margin-left var(--sidebar-motion-duration)
+      var(--sidebar-motion-ease);
   }
   .demo-workbench .sidebar__brand {
     padding-inline: 18px 16px;
@@ -393,9 +398,6 @@
   }
   .demo-workbench .sidebar__brand-link .brand__name {
     white-space: nowrap;
-    transition:
-      opacity 140ms ease-out,
-      visibility 0s linear;
   }
   .demo-workbench .sidebar__footer {
     height: 104px;
@@ -405,7 +407,16 @@
     flex-shrink: 0;
   }
   .demo-workbench .account-menu__trigger--sidebar {
+    width: calc(100% + 1px);
+    height: 72px;
+    min-height: 0;
     padding-inline: 5px;
+    overflow: hidden;
+    transition:
+      height var(--sidebar-motion-duration) var(--sidebar-motion-ease),
+      border-color 140ms ease-out,
+      background 140ms ease-out,
+      color 140ms ease-out;
   }
   .demo-workbench .account-menu__trigger--sidebar .account-menu__avatar {
     width: 36px;
@@ -419,9 +430,6 @@
     height: 24px;
     white-space: nowrap;
     overflow: hidden;
-    transition:
-      opacity 140ms ease-out,
-      visibility 0s linear;
   }
   .demo-workbench .sidebar .nav-group + .nav-group::before {
     content: "";
@@ -436,7 +444,7 @@
   .demo-workbench .sidebar .nav-group button {
     padding-inline: 16px 10px;
     overflow: hidden;
-    transition: gap 280ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: gap var(--sidebar-motion-duration) var(--sidebar-motion-ease);
   }
   .demo-workbench .sidebar .nav-group button > svg {
     flex: 0 0 18px;
@@ -445,8 +453,19 @@
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
+  }
+  .demo-workbench .sidebar .account-menu__identity {
+    flex: 1;
+    overflow: hidden;
+  }
+  .demo-workbench .sidebar__brand-link .brand__name,
+  .demo-workbench .sidebar .nav-group > span,
+  .demo-workbench .sidebar .nav-group button > span,
+  .demo-workbench .sidebar .account-menu__identity {
+    opacity: 1;
+    visibility: visible;
     transition:
-      opacity 140ms ease-out,
+      opacity 180ms ease-out 80ms,
       visibility 0s linear;
   }
   .demo-workbench .sidebar__brand .sidebar-boundary-toggle {
@@ -474,15 +493,15 @@
   .demo-workbench.is-sidebar-collapsed .workspace {
     margin-left: 76px;
   }
-  .demo-workbench.is-sidebar-collapsed .account-menu__identity {
-    display: none;
-  }
   .demo-workbench.is-sidebar-collapsed .sidebar__brand-link .brand__name,
   .demo-workbench.is-sidebar-collapsed .sidebar .nav-group > span,
-  .demo-workbench.is-sidebar-collapsed .sidebar .nav-group button > span {
+  .demo-workbench.is-sidebar-collapsed .sidebar .nav-group button > span,
+  .demo-workbench.is-sidebar-collapsed .sidebar .account-menu__identity {
     opacity: 0;
     visibility: hidden;
-    transition-delay: 0s, 140ms;
+    transition:
+      opacity 90ms ease-out,
+      visibility 0s linear 90ms;
   }
   .demo-workbench.is-sidebar-collapsed .nav-group {
     padding-inline: 0;
@@ -496,13 +515,8 @@
     gap: 0;
   }
   .demo-workbench.is-sidebar-collapsed .account-menu__trigger--sidebar {
-    width: 48px;
     height: 48px;
-    min-height: 48px;
     margin-inline: 0;
-    justify-content: center;
-    padding-inline: 0;
-    gap: 0;
   }
   .demo-workbench.is-sidebar-collapsed .backdrop {
     display: none;
@@ -519,6 +533,8 @@
   .demo-workbench .sidebar .nav-group > span,
   .demo-workbench .sidebar .nav-group::before,
   .demo-workbench .sidebar__brand-link .brand__name,
+  .demo-workbench .sidebar .account-menu__identity,
+  .demo-workbench .account-menu__trigger--sidebar,
   .sidebar-toggle-icon path,
   .sidebar-toggle-icon__pane {
     transition: none;
