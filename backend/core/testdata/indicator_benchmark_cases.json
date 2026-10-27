@@ -1,0 +1,14 @@
+[
+  {"id":"screen_baseline_1x100","purpose":"screen","symbols":1,"candles":100,"operands":[]},
+  {"id":"screen_ichimoku_1x100","purpose":"screen","symbols":1,"candles":100,"operands":["ICHIMOKU_B"]},
+  {"id":"screen_ichimoku_10x100","purpose":"screen","symbols":10,"candles":100,"operands":["ICHIMOKU_B"]},
+  {"id":"screen_adx_history_10x830","purpose":"screen","symbols":10,"candles":830,"operands":["ADX250_PREV_250"]},
+  {"id":"backtest_ichimoku_10x2500","purpose":"backtest","symbols":10,"candles":2500,"operands":["ICHIMOKU_B"]},
+  {"id":"backtest_40_operands_10x2500","purpose":"backtest","symbols":10,"candles":2500,"operands":[
+    "MA20","MA50","MA100","MA200","MA250","EMA6","EMA10","EMA13","EMA21","EMA34","EMA50","EMA250",
+    "RSI7","RSI14_PREV_3","RSI250","ADX5","ADX14","ADX250","MACD","MACD_SIGNAL","MACD_HIST",
+    "BB_UPPER","BB_MIDDLE","BB_LOWER","BB_WIDTH","STOCH_K","STOCH_D",
+    "ICHIMOKU_CONVERSION","ICHIMOKU_BASE","ICHIMOKU_A","ICHIMOKU_B","VOLUME","SMA_VOLUME_20","REL_VOLUME_20",
+    "PRICE_EMA20_DIFF_PCT","PATTERN_CDLDOJI","PATTERN_CDLHAMMER","PATTERN_BULLISH_ENGULFING","EMA20_PREV_3","ADX250_PREV_250"
+  ]}
+]

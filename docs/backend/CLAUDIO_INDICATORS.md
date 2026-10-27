@@ -129,3 +129,5 @@ real member grants, journal entries or live provider equivalence were asserted.
 Global Prettier still reports five unchanged files: market-news.ts,
 foundation-shell.css, news-journal-details.css, workspace-compatibility.css,
 workspace-surfaces.css. All changed source files pass the scoped formatter.
+
+Performance measurements are recorded separately in [the 27 October indicator benchmark](INDICATOR_BENCHMARK_2026_10_27.md). They include native core and actual browser-worker timings; provider/scoring/portfolio time is outside that benchmark.
