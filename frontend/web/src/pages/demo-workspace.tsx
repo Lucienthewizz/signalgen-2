@@ -1988,7 +1988,12 @@ export function DemoWorkspace({
         </Tooltip.Provider>
         <div className="sidebar__footer">
           {authenticated && user ? (
-            <AccountMenu user={user} onLogout={onLogout} variant="sidebar" />
+            <AccountMenu
+              user={user}
+              onLogout={onLogout}
+              variant="sidebar"
+              collapsed={sidebarCollapsed && !mobileViewport}
+            />
           ) : (
             <a className="back-home" href="#login">
               <KeyRound /> Sign in

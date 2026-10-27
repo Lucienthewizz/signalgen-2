@@ -569,6 +569,23 @@ async (page) => {
       });
       if(motion.frames<2 || !motion.moving || motion.delta>1 || motion.alignment>2) throw Error('Sidebar animation jumps or fails to reverse smoothly: '+JSON.stringify(motion));
       await page.emulateMedia({reducedMotion:'reduce'});
+      const accountTrigger=sidebar.getByRole('button',{name:'Open Akun pengujian menu',exact:true});
+      await accountTrigger.click();
+      const accountPopup=page.getByRole('menu',{name:'Open Akun pengujian menu',exact:true});
+      await accountPopup.waitFor();
+      const popupBox=await accountPopup.boundingBox();
+      if(popupBox.x<box.x+box.width || popupBox.width<280 || popupBox.x+popupBox.width>width || popupBox.y<0 || popupBox.y+popupBox.height>1001) throw Error('Collapsed account popup is clipped or not beside the icon');
+      for(const text of [user.full_name,user.email,'Pro · Active','Profile, plan & devices']) if(!(await accountPopup.innerText()).includes(text)) throw Error('Collapsed account popup omitted '+text);
+      if(await accountPopup.getByRole('menuitem').count()!==2) throw Error('Account actions changed');
+      await page.screenshot({path:'/private/tmp/signalgen-account-rail-popup.png',animations:'disabled'});
+      await page.keyboard.press('Escape');
+      await accountPopup.waitFor({state:'hidden'});
+      if(!await accountTrigger.evaluate(el=>el===document.activeElement)) throw Error('Account popup did not return focus to the icon');
+      await accountTrigger.press('Enter');await accountPopup.waitFor();
+      const outside=await page.getByRole('heading',{name:'Manage rules',exact:true}).boundingBox();
+      await page.mouse.click(outside.x+outside.width/2,outside.y+outside.height/2);
+      await accountPopup.waitFor({state:'hidden'});
+      if(!await page.evaluate(()=>sessionStorage.getItem('signalgen.access-token'))) throw Error('Dismissing account popup signed the user out');
     }
   }
   await page.goto(`${origin}/#account`);

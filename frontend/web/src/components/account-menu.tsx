@@ -6,6 +6,7 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -17,15 +18,18 @@ import {
 } from "@/lib/profile-avatar";
 import type { User } from "@/types";
 import { api } from "@/api/client";
+import { cn } from "@/lib/utils";
 
 export function AccountMenu({
   user,
   onLogout,
   variant,
+  collapsed = false,
 }: {
   user: User;
   onLogout: () => void | Promise<void>;
   variant: "landing" | "workspace" | "sidebar";
+  collapsed?: boolean;
 }) {
   const [avatarKey, setAvatarKey] = useState<ProfileAvatarKey>(() =>
     getSavedProfileAvatar(user.id),
@@ -38,6 +42,7 @@ export function AccountMenu({
   );
   const triggerLabel = name;
   const isSidebarMenu = variant === "sidebar";
+  const isCompactMenu = isSidebarMenu && collapsed;
   const [subscriptionInfo, setSubscriptionInfo] = useState<{
     userId: string;
     label: string;
@@ -111,6 +116,7 @@ export function AccountMenu({
             type="button"
             className={`account-menu__trigger account-menu__trigger--${variant}`}
             aria-label={`Open ${triggerLabel} menu`}
+            data-collapsed={isCompactMenu || undefined}
           />
         }
       >
@@ -130,20 +136,52 @@ export function AccountMenu({
         </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className={`account-menu__content${isSidebarMenu ? " account-menu__content--sidebar" : ""}`}
-        align={isSidebarMenu ? "start" : "end"}
-        side={isSidebarMenu ? "top" : "bottom"}
-        sideOffset={isSidebarMenu ? 0 : 8}
+        className={cn("account-menu__content", {
+          "account-menu__content--sidebar": isSidebarMenu,
+          "account-menu__content--rail": isCompactMenu,
+        })}
+        align={isCompactMenu ? "end" : isSidebarMenu ? "start" : "end"}
+        side={isCompactMenu ? "right" : isSidebarMenu ? "top" : "bottom"}
+        sideOffset={isCompactMenu ? 20 : isSidebarMenu ? 0 : 8}
       >
         <DropdownMenuGroup>
+          {isCompactMenu && (
+            <>
+              <DropdownMenuLabel className="account-menu__summary">
+                <Avatar
+                  className={`account-menu__avatar account-menu__summary-avatar account-avatar--${avatarKey}`}
+                >
+                  <AvatarFallback>
+                    <AvatarIcon aria-hidden="true" />
+                  </AvatarFallback>
+                </Avatar>
+                <span className="account-menu__summary-copy">
+                  <strong>{triggerLabel}</strong>
+                  <span>{user.email}</span>
+                  <small>
+                    {planLabel} · {planStatus}
+                  </small>
+                </span>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="account-menu__separator" />
+            </>
+          )}
           <DropdownMenuItem
             className="account-menu__item"
+            aria-label="Account"
             onClick={() => {
               location.hash = "account";
             }}
           >
             <Settings2 aria-hidden="true" />
-            Account
+            {isCompactMenu ? (
+              <span className="account-menu__action-copy">
+                <span>Account</span>
+                <small>Profile, plan &amp; devices</small>
+              </span>
+            ) : (
+              "Account"
+            )}
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator className="account-menu__separator" />
@@ -151,10 +189,18 @@ export function AccountMenu({
           <DropdownMenuItem
             className="account-menu__item"
             variant="destructive"
+            aria-label="Log out"
             onClick={() => void onLogout()}
           >
             <LogOut aria-hidden="true" />
-            Log out
+            {isCompactMenu ? (
+              <span className="account-menu__action-copy">
+                <span>Log out</span>
+                <small>Sign out of this account</small>
+              </span>
+            ) : (
+              "Log out"
+            )}
           </DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>
