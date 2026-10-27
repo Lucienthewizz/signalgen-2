@@ -3,7 +3,6 @@ import {
   type FormEvent,
   type SetStateAction,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1792,9 +1791,6 @@ export function DemoWorkspace({
   }, []);
   const sync = useWorkspaceSync(authenticated ? user?.id : undefined);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const workspaceRef = useRef<HTMLElement>(null);
-  const workspaceMotion = useRef<Animation | null>(null);
-  const previousWorkspaceLeft = useRef<number | null>(null);
   const [operatorViewer, setOperatorViewer] = useState<string | null>(null);
   const operatorVerified =
     authenticated && backendOnline && operatorViewer === user?.id;
@@ -1864,31 +1860,6 @@ export function DemoWorkspace({
     };
   }, [authenticated, backendOnline, user?.id]);
 
-  function rememberWorkspacePosition() {
-    if (
-      !window.matchMedia("(min-width: 861px)").matches ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    )
-      return;
-    previousWorkspaceLeft.current =
-      workspaceRef.current?.getBoundingClientRect().left ?? null;
-    workspaceMotion.current?.cancel();
-  }
-
-  useLayoutEffect(() => {
-    const element = workspaceRef.current;
-    const previousLeft = previousWorkspaceLeft.current;
-    previousWorkspaceLeft.current = null;
-    if (!element || previousLeft === null) return;
-    const delta = previousLeft - element.getBoundingClientRect().left;
-    if (Math.abs(delta) < 1) return;
-    workspaceMotion.current = element.animate(
-      [{ transform: `translateX(${delta}px)` }, { transform: "translateX(0)" }],
-      { duration: 240, easing: "cubic-bezier(0, 0, 0.58, 1)" },
-    );
-  }, [menuOpen, sidebarCollapsed]);
-
-  useEffect(() => () => workspaceMotion.current?.cancel(), []);
   const [draftSymbol, setDraftSymbol] = useState<string | null>(null);
   const [screeningDraft, setScreeningDraft] =
     useState<JournalScreeningDraft | null>(null);
@@ -1937,7 +1908,6 @@ export function DemoWorkspace({
                   aria-controls="workspace-sidebar"
                   aria-expanded={mobileViewport ? menuOpen : !sidebarCollapsed}
                   onClick={() => {
-                    rememberWorkspacePosition();
                     if (mobileViewport) setMenuOpen(false);
                     else setSidebarCollapsed((current) => !current);
                   }}
@@ -2035,7 +2005,7 @@ export function DemoWorkspace({
           onClick={() => setMenuOpen(false)}
         />
       )}
-      <section className="workspace" ref={workspaceRef}>
+      <section className="workspace">
         <header className="topbar">
           <div className="topbar__inner">
             <div className="topbar__title">
@@ -2043,28 +2013,15 @@ export function DemoWorkspace({
                 <button
                   className="menu-button"
                   onClick={() => {
-                    rememberWorkspacePosition();
-                    if (mobileViewport) setMenuOpen((current) => !current);
-                    else {
-                      setMenuOpen(false);
-                      setSidebarCollapsed((current) => !current);
-                    }
+                    setMenuOpen((current) => !current);
                   }}
                   aria-label={
-                    mobileViewport
-                      ? menuOpen
-                        ? "Close workspace menu"
-                        : "Open workspace menu"
-                      : sidebarCollapsed
-                        ? "Open workspace menu"
-                        : "Collapse sidebar"
+                    menuOpen ? "Close workspace menu" : "Open workspace menu"
                   }
                   aria-controls="workspace-sidebar"
-                  aria-expanded={mobileViewport ? menuOpen : !sidebarCollapsed}
+                  aria-expanded={menuOpen}
                 >
-                  <SidebarToggleIcon
-                    open={mobileViewport ? menuOpen : !sidebarCollapsed}
-                  />
+                  <SidebarToggleIcon open={menuOpen} />
                 </button>
               )}
               <h1>
