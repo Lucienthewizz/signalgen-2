@@ -111,6 +111,8 @@ async (page) => {
   if(await page.locator("#trade-symbol").inputValue()!=="BBCA")throw Error("First selected draft missing");
   for(const width of [1440,390]){
     await page.setViewportSize({width,height:1000});
+    const journalArrows=await page.locator(".journal-workspace select").evaluateAll(items=>items.map(item=>{const style=getComputedStyle(item);return {appearance:style.appearance,padding:parseFloat(style.paddingRight),image:style.backgroundImage,position:style.backgroundPosition,size:style.backgroundSize};}));
+    if(journalArrows.length<6 || journalArrows.some(item=>item.appearance!=="none" || item.padding<40 || !item.image.includes("svg") || !item.position.includes("14px") || item.size!=="16px 16px"))throw Error(`Journal select arrows are inconsistent: ${JSON.stringify(journalArrows)}`);
     await page.locator(".journal-capture").screenshot({path:`output/playwright/usability-review-${width}.png`,animations:"disabled"});
     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error(`Review overflow at ${width}`);
   }
