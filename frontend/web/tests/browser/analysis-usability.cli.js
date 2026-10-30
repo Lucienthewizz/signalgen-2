@@ -77,20 +77,34 @@ async (page) => {
   rulesMode="normal";
   await page.getByRole("button",{name:"Refresh selections",exact:true}).click();
   await page.getByRole("button",{name:"Refresh selections",exact:true}).waitFor();
-  for(const width of [1440,390]){
+  for(const width of [1440,1218,390]){
     await page.setViewportSize({width,height:1000});
-    const all=page.getByRole("checkbox",{name:"Select visible matched stocks",exact:true});
-    await all.check();
+    const ledger=page.locator(".screener-result-ledger");
+    if(await ledger.locator("thead input[type=checkbox]").count())throw Error("Number heading still contains a select-all checkbox");
+    if((await ledger.locator("thead th").first().innerText())!=="No." || (await ledger.locator("thead th").last().innerText())!=="Add to journal")throw Error("Number or journal heading is missing");
+    if((await ledger.locator("tbody tr td:first-child").allTextContents()).join("|")!=="1|2|3")throw Error("Screening rows are not numbered in visible order");
+    if(await ledger.locator("tbody tr td:not(:last-child) input[type=checkbox]").count())throw Error("Journal checkbox is outside the Add to journal column");
+    const first=page.getByRole("checkbox",{name:"Select BBCA for journal",exact:true});
+    await first.focus();await page.keyboard.press("Space");
+    if(!await first.isChecked())throw Error("Journal checkbox is not keyboard operable");
+    await page.keyboard.press("Space");
+    if(await first.isChecked())throw Error("Journal checkbox cannot be deselected");
+    await first.check();
+    await page.getByRole("checkbox",{name:"Select BBRI for journal",exact:true}).check();
+    if(!page.url().endsWith("#app/analysis") || writes.length)throw Error("Checking a journal selection navigated or saved a trade");
     if(!await page.getByRole("checkbox",{name:"Select TLKM for journal",exact:true}).isDisabled())throw Error("Rejected stock is selectable");
     // Search must not silently drop selections hidden by filters.
     const search=page.locator("#screen-search");
-    await search.fill("BBCA");if(!await page.getByRole("button",{name:"Review 2 in journal",exact:true}).isEnabled())throw Error("Filtering discarded selected stocks");await search.fill("");
+    await search.fill("BBCA");if(!await page.getByRole("button",{name:"Review 2 in journal",exact:true}).isEnabled())throw Error("Filtering discarded selected stocks");if((await ledger.locator("tbody tr td:first-child").allTextContents()).join("|")!=="1")throw Error("Filtered row numbering is incorrect");await search.fill("");
     await page.locator(".screener-results").screenshot({path:`output/playwright/usability-screening-${width}.png`,animations:"disabled"});
+    await ledger.locator("tbody tr").first().locator("td").last().scrollIntoViewIfNeeded();
+    await ledger.screenshot({path:`output/playwright/usability-journal-selection-${width}.png`,animations:"disabled"});
     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error(`Document overflow at ${width}`);
     await page.getByRole("button",{name:"Clear selection",exact:true}).click();
   }
   await page.setViewportSize({width:1440,height:1000});
-  await page.getByRole("checkbox",{name:"Select visible matched stocks",exact:true}).check();
+  await page.getByRole("checkbox",{name:"Select BBCA for journal",exact:true}).check();
+  await page.getByRole("checkbox",{name:"Select BBRI for journal",exact:true}).check();
   await page.getByRole("button",{name:"Review 2 in journal",exact:true}).click();
   await page.getByRole("heading",{name:"Record a trade",exact:true}).waitFor();
   if(writes.length)throw Error("Selecting stocks saved trades before confirmation");
@@ -135,5 +149,5 @@ async (page) => {
   if(!await page.evaluate(()=>sessionStorage.getItem("signalgen.access-token")==="synthetic-not-real"))throw Error("Transient outage cleared login");
   if(errors.length)throw Error(errors.join("; "));
   await page.evaluate(()=>document.body.setAttribute("data-signalgen-usability-tests","complete"));
-  return {synthetic:true,individualWrites:writes.length,refreshRetained:true,widths:[1440,390]};
+  return {synthetic:true,individualWrites:writes.length,refreshRetained:true,widths:[1440,1218,390]};
 }

@@ -8,8 +8,9 @@ The API contract, backend, database and Go/WASM calculations are unchanged.
   in-flight resource load per panel and stale-response rejection on account
   change/unmount. Shared GET reads are not aborted out from under other readers.
   Existing transport retries remain bounded; no writes are automatically retried.
-- Check matched stocks and choose **Review selected in journal**. Select-all
-  applies to visible, verifiable matched stocks; hidden selections remain counted.
+- Rows are numbered in the first column. Check verifiable matched stocks in the
+  **Add to journal** column, then choose **Review selected in journal**.
+  Hidden selections remain counted; checking a row never saves or navigates.
   New results clear the selection so old selections cannot refer to new prices.
 - The journal queue is memory-only. Review/edit and save **each** draft explicitly
   through the existing individual record endpoint, or skip/cancel it. It is not

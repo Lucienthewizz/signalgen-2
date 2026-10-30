@@ -33,7 +33,6 @@ import { TradingViewChart } from "@/components/tradingview-chart";
 import { marketCandleDate, marketTimezone } from "@/lib/data-freshness";
 import { ScreeningDataQuality } from "@/components/screening-data-quality";
 import { InfoDialog } from "@/components/ui/info-dialog";
-import { toast } from "@/components/ui/toast";
 import {
   checkJournalScreening,
   type JournalScreeningDraft,
@@ -183,7 +182,6 @@ export function WorkspaceScreenerPanel({
   const resourceOperation = useRef<AbortController | null>(null);
   const resourceIdentity = useRef(userId);
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>([]);
-  const selectionRef = useRef<HTMLInputElement>(null);
   const [resourceMs, setResourceMs] = useState<number | null>(null);
   const [renderMs, setRenderMs] = useState<number | null>(null);
   const [failure, setFailure] = useState<ReturnType<
@@ -405,9 +403,6 @@ export function WorkspaceScreenerPanel({
         )
         .map((row) => row.decision.symbol)
     : [];
-  const allSelected =
-    selectable.length > 0 &&
-    selectable.every((symbol) => selectedSymbols.includes(symbol));
   useEffect(() => {
     setSelectedSymbols([]);
   }, [run, userId]);
@@ -419,12 +414,6 @@ export function WorkspaceScreenerPanel({
     );
     return () => cancelAnimationFrame(frame);
   }, [run]);
-  useEffect(() => {
-    if (selectionRef.current)
-      selectionRef.current.indeterminate =
-        !allSelected &&
-        selectable.some((symbol) => selectedSymbols.includes(symbol));
-  }, [allSelected, selectable.join("|"), selectedSymbols]);
 
   const selectedRule = rules.find((rule) => rule.id === ruleId);
   const selectedUniverse = universes.find(
@@ -1532,7 +1521,9 @@ export function WorkspaceScreenerPanel({
                       )
                     )
                       return;
-                    onDraftBatch(drafts);
+                    if (drafts.length === 1)
+                      onDraft(drafts[0].symbol.replace(/\.JK$/, ""), drafts[0]);
+                    else onDraftBatch(drafts);
                   }}
                 >
                   Review {selectedSymbols.length || "selected"} in journal
@@ -1603,24 +1594,7 @@ export function WorkspaceScreenerPanel({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="analysis-select-cell">
-                      <input
-                        ref={selectionRef}
-                        type="checkbox"
-                        aria-label="Select visible matched stocks"
-                        checked={allSelected}
-                        disabled={!selectable.length || state === "loading"}
-                        onChange={(e) =>
-                          setSelectedSymbols((current) =>
-                            e.target.checked
-                              ? [...new Set([...current, ...selectable])]
-                              : current.filter(
-                                  (symbol) => !selectable.includes(symbol),
-                                ),
-                          )
-                        }
-                      />
-                    </TableHead>
+                    <TableHead className="analysis-row-number">No.</TableHead>
                     <TableHead>Stock</TableHead>
                     <TableHead>Decision</TableHead>
                     <TableHead>Open price ({run.manifest.currency})</TableHead>
@@ -1628,186 +1602,133 @@ export function WorkspaceScreenerPanel({
                     <TableHead>RSI14</TableHead>
                     <TableHead>EMA20</TableHead>
                     <TableHead>Reason</TableHead>
-                    <TableHead>Action</TableHead>
+                    <TableHead>Add to journal</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visibleRows
-                    .filter(
-                      (row) =>
-                        signalFilter === "all" ||
-                        screeningStatus(row.decision) === signalFilter,
-                    )
-                    .map((row) => (
-                      <TableRow key={row.decision.symbol}>
-                        <TableCell className="analysis-select-cell">
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ${row.decision.symbol.replace(/\.JK$/, "")} for journal`}
-                            title={
-                              selectable.includes(row.decision.symbol)
-                                ? "Select for journal review"
-                                : "Only verified matched results can be selected"
-                            }
-                            checked={selectedSymbols.includes(
-                              row.decision.symbol,
-                            )}
-                            disabled={
-                              !selectable.includes(row.decision.symbol) ||
-                              state === "loading"
-                            }
-                            onChange={(e) =>
-                              setSelectedSymbols((current) =>
-                                e.target.checked
-                                  ? [...current, row.decision.symbol]
-                                  : current.filter(
-                                      (symbol) =>
-                                        symbol !== row.decision.symbol,
-                                    ),
-                              )
-                            }
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="screener-stock-action"
-                            aria-expanded={detailSymbol === row.decision.symbol}
-                            onClick={() => setDetailSymbol(row.decision.symbol)}
-                          >
-                            {row.decision.symbol.replace(".JK", "")}
-                          </Button>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              row.decision.matched
-                                ? row.decision.signal_type === "SELL"
-                                  ? "destructive"
-                                  : "success"
-                                : "outline"
-                            }
-                          >
-                            {row.decision.matched ? (
-                              row.decision.signal_type === "SELL" ? (
-                                <>
-                                  <CircleAlert
-                                    data-icon="inline-start"
-                                    aria-hidden="true"
-                                  />
-                                  SELL
-                                </>
-                              ) : (
-                                <>
-                                  <CircleCheck
-                                    data-icon="inline-start"
-                                    aria-hidden="true"
-                                  />
-                                  {decisionLabel(row.decision)}
-                                </>
-                              )
-                            ) : (
+                  {displayedRows.map((row, index) => (
+                    <TableRow key={row.decision.symbol}>
+                      <TableCell className="analysis-row-number">
+                        {index + 1}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="screener-stock-action"
+                          aria-expanded={detailSymbol === row.decision.symbol}
+                          onClick={() => setDetailSymbol(row.decision.symbol)}
+                        >
+                          {row.decision.symbol.replace(".JK", "")}
+                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            row.decision.matched
+                              ? row.decision.signal_type === "SELL"
+                                ? "destructive"
+                                : "success"
+                              : "outline"
+                          }
+                        >
+                          {row.decision.matched ? (
+                            row.decision.signal_type === "SELL" ? (
                               <>
-                                <XCircle
+                                <CircleAlert
                                   data-icon="inline-start"
                                   aria-hidden="true"
                                 />
-                                {screeningStatus(row.decision) === "cooldown"
-                                  ? "Cooldown"
-                                  : "Not matched"}
+                                SELL
                               </>
-                            )}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {row.latestOpen != null &&
-                          Number.isFinite(row.latestOpen)
-                            ? formatStockPrice(
-                                row.latestOpen,
-                                run.manifest.currency,
-                              )
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          {formatStockPrice(
-                            row.latestClose,
-                            run.manifest.currency,
+                            ) : (
+                              <>
+                                <CircleCheck
+                                  data-icon="inline-start"
+                                  aria-hidden="true"
+                                />
+                                {decisionLabel(row.decision)}
+                              </>
+                            )
+                          ) : (
+                            <>
+                              <XCircle
+                                data-icon="inline-start"
+                                aria-hidden="true"
+                              />
+                              {screeningStatus(row.decision) === "cooldown"
+                                ? "Cooldown"
+                                : "Not matched"}
+                            </>
                           )}
-                        </TableCell>
-                        <TableCell>{row.features.rsi14.toFixed(2)}</TableCell>
-                        <TableCell>{row.features.ema20.toFixed(2)}</TableCell>
-                        <TableCell>
-                          {decisionReasons(
-                            row.decision.reason_codes,
-                            evidenceRule?.definition?.logic,
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {row.latestOpen != null &&
+                        Number.isFinite(row.latestOpen)
+                          ? formatStockPrice(
+                              row.latestOpen,
+                              run.manifest.currency,
+                            )
+                          : "—"}
+                      </TableCell>
+                      <TableCell>
+                        {formatStockPrice(
+                          row.latestClose,
+                          run.manifest.currency,
+                        )}
+                      </TableCell>
+                      <TableCell>{row.features.rsi14.toFixed(2)}</TableCell>
+                      <TableCell>{row.features.ema20.toFixed(2)}</TableCell>
+                      <TableCell>
+                        {decisionReasons(
+                          row.decision.reason_codes,
+                          evidenceRule?.definition?.logic,
+                        )}
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="screener-details-action"
+                          onClick={() => setDetailSymbol(row.decision.symbol)}
+                        >
+                          View details
+                        </Button>
+                      </TableCell>
+                      <TableCell className="analysis-select-cell">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${row.decision.symbol.replace(/\.JK$/, "")} for journal`}
+                          title={
+                            selectable.includes(row.decision.symbol)
+                              ? "Select for journal review"
+                              : "Only verified matched results can be selected"
+                          }
+                          checked={selectedSymbols.includes(
+                            row.decision.symbol,
                           )}
-                          <Button
-                            variant="link"
-                            size="sm"
-                            className="screener-details-action"
-                            onClick={() => setDetailSymbol(row.decision.symbol)}
-                          >
-                            View details
-                          </Button>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="workspace-glass-action screener-journal-action"
-                            onClick={() => {
-                              const evidence: JournalScreeningDraft = {
-                                ownerId: userId ?? "",
-                                symbol: row.decision.symbol,
-                                ruleName:
-                                  historicalRun?.rule ??
-                                  runContext?.rule.name ??
-                                  "Screening result",
-                                ruleSnapshot: evidenceRule
-                                  ? {
-                                      version: evidenceRule.version,
-                                      definition_hash:
-                                        evidenceRule.definition_hash,
-                                      definition: evidenceRule.definition,
-                                    }
-                                  : undefined,
-                                screenedAt:
-                                  history.find(
-                                    (item) =>
-                                      item.run.result.request_id ===
-                                      run.result.request_id,
-                                  )?.recordedAt ?? new Date().toISOString(),
-                                run,
-                              };
-                              const check = checkJournalScreening(
-                                evidence,
-                                userId,
-                              );
-                              if (!check.ok) {
-                                toast.add({
-                                  type: "error",
-                                  title: "Cannot add to journal",
-                                  description: check.reason,
-                                });
-                                return;
-                              }
-                              onDraft(
-                                row.decision.symbol.replace(/\.JK$/, ""),
-                                evidence,
-                              );
-                            }}
-                          >
-                            Add to journal
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  {!visibleRows.filter(
-                    (row) =>
-                      signalFilter === "all" ||
-                      screeningStatus(row.decision) === signalFilter,
-                  ).length && (
+                          disabled={
+                            !selectable.includes(row.decision.symbol) ||
+                            state === "loading"
+                          }
+                          onChange={(e) =>
+                            setSelectedSymbols((current) =>
+                              e.target.checked
+                                ? [
+                                    ...new Set([
+                                      ...current,
+                                      row.decision.symbol,
+                                    ]),
+                                  ]
+                                : current.filter(
+                                    (symbol) => symbol !== row.decision.symbol,
+                                  ),
+                            )
+                          }
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!displayedRows.length && (
                     <TableRow>
                       <TableCell colSpan={9}>
                         No stocks match these filters.{" "}

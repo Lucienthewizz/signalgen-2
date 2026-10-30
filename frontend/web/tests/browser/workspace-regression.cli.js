@@ -129,7 +129,8 @@ async (page) => {
   if ((await download).suggestedFilename() !== "signalgen-screening.csv") throw Error("CSV download failed");
   const journalKey = `signalgen:journal-drafts:${user.id}`;
   await page.evaluate(key => localStorage.setItem(key, "preserve-existing-drafts"), journalKey);
-  await page.getByRole("button", { name: "Add to journal", exact: true }).first().click({ timeout: 5000 });
+  await page.getByRole("checkbox", { name: "Select BBCA for journal", exact: true }).check({ timeout: 5000 });
+  await page.getByRole("button", { name: "Review 1 in journal", exact: true }).click({ timeout: 5000 });
   await page.waitForURL('**/#app/journal');
   const journalVerification = page.getByRole('dialog',{name:'Verify screening details',exact:true});
   await journalVerification.waitFor();

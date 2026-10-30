@@ -599,9 +599,14 @@
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
 }
-.screener-result-ledger .analysis-select-cell {
+.screener-result-ledger .analysis-row-number {
   width: 48px;
   padding: 6px 10px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.screener-result-ledger .analysis-select-cell {
+  padding: 10px 16px;
 }
 .analysis-select-cell input[type="checkbox"] {
   display: block;

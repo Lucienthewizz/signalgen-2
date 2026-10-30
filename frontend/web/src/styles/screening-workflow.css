@@ -408,20 +408,11 @@
 .screener-result-ledger td:nth-child(n + 3):nth-child(-n + 6) {
   font-variant-numeric: tabular-nums;
 }
-.screener-result-ledger .screener-stock-action,
-.screener-result-ledger .screener-journal-action {
+.screener-result-ledger .screener-stock-action {
   padding-inline: 0;
   justify-content: center;
   color: var(--text);
   font-weight: 700;
-}
-.screener-result-ledger .screener-journal-action {
-  height: 30px;
-  min-height: 30px;
-  padding: 4px 9px;
-  font-size: 12px;
-  line-height: 1.2;
-  border-radius: 8px;
 }
 .screener-result-ledger .screener-details-action {
   text-decoration: underline;
