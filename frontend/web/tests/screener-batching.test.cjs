@@ -127,6 +127,7 @@ function harness(stockCount = 3) {
             data: {
               type: "result",
               jobId: message.jobId,
+              timing: {startup_ms: 4, compute_ms: 7, cold: true},
               results: message.series.map((s) => group(s.symbol, 40)),
             },
           }),
@@ -233,6 +234,11 @@ test("three-stock run uses one worker, one grant/ticket/socket and a warm second
   );
   assert.equal(first.rows.length, 3);
   assert.equal(first.metrics.candidates, 120);
+  assert.equal(first.metrics.startup_ms, 4);
+  assert.equal(first.metrics.compute_ms, 7);
+  assert.equal(first.metrics.cold, true);
+  assert.ok(first.metrics.preparation_ms >= 0);
+  assert.ok(first.metrics.dataset_ms >= 0);
   assert.deepEqual(h.counts, {
     workers: 1,
     terminated: 0,

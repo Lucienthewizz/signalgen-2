@@ -21,7 +21,10 @@ import { useActionNotifications } from "@/components/ui/toast";
 import { JournalScreeningVerification } from "@/components/journal-screening-verification";
 import { JournalPnlChart } from "@/components/journal-pnl-chart";
 import { journalPerformance, localJournalDate } from "@/lib/journal";
-import type { JournalScreeningDraft } from "@/lib/journal-screening";
+import {
+  checkJournalScreening,
+  type JournalScreeningDraft,
+} from "@/lib/journal-screening";
 import type {
   RecordedTrade,
   TradeInput,
@@ -53,11 +56,15 @@ export function JournalPanel({
   clearDraft,
   screeningDraft,
   userId,
+  screeningBatch = [],
+  consumeBatch,
 }: {
   draftSymbol: string | null;
   clearDraft: () => void;
   screeningDraft: JournalScreeningDraft | null;
   userId?: string;
+  screeningBatch?: JournalScreeningDraft[];
+  consumeBatch?: () => void;
 }) {
   const [records, setRecords] = useState<{ owner: string; items: Item[] }>({
     owner: "",
@@ -83,12 +90,21 @@ export function JournalPanel({
     operation = useRef<AbortController | null>(null),
     lock = useRef(false);
   const newRecordID = useRef(crypto.randomUUID());
+  const [search, setSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState("newest");
+  const [page, setPage] = useState(0);
+  const [loadedOwner, setLoadedOwner] = useState("");
+  const [refreshMs, setRefreshMs] = useState<number | null>(null);
+  const [directionConfirmed, setDirectionConfirmed] = useState(true);
+  const batchDraft =
+    screeningBatch[0]?.ownerId === userId ? screeningBatch[0] : undefined;
   useActionNotifications(notice, error);
   const ownerRef = useRef(userId);
   ownerRef.current = userId;
   useEffect(() => {
     const controller = new AbortController(),
       revision = session.getIdentityRevision();
+    const started = performance.now();
     let alive = true;
     const active = () =>
       alive &&
@@ -97,18 +113,26 @@ export function JournalPanel({
       ownerRef.current === userId;
     setLoading(true);
     setError(null);
-    setRecords({ owner: userId ?? "", items: [] });
+    setRecords((current) =>
+      current.owner === userId ? current : { owner: userId ?? "", items: [] },
+    );
     if (userId)
       void api
         .listRecords<RecordedTrade>("journal", controller.signal)
         .then((r) => {
-          if (active()) setRecords({ owner: userId, items: r.items });
+          if (active()) {
+            setRecords({ owner: userId, items: r.items });
+            setLoadedOwner(userId);
+          }
         })
         .catch((e) => {
           if (active()) setError(message(e));
         })
         .finally(() => {
-          if (active()) setLoading(false);
+          if (active()) {
+            setLoading(false);
+            setRefreshMs(performance.now() - started);
+          }
         });
     else setLoading(false);
     return () => {
@@ -136,6 +160,9 @@ export function JournalPanel({
       setEditing(null);
       setPendingDelete(null);
       setCaptureOpen(false);
+      setLoadedOwner("");
+      setSearch("");
+      setPage(0);
       setNotice(null);
       setError(null);
     });
@@ -150,6 +177,32 @@ export function JournalPanel({
       setCaptureOpen(true);
     }
   }, [draftSymbol, screeningDraft]);
+  function applyScreeningDraft(draft: JournalScreeningDraft) {
+    const check = checkJournalScreening(draft, userId);
+    if (!check.ok) {
+      setError(check.reason);
+      return;
+    }
+    newRecordID.current = crypto.randomUUID();
+    setDirectionConfirmed(
+      check.row.decision.signal_type === "BUY" ||
+        check.row.decision.signal_type === "SELL",
+    );
+    setEditing(null);
+    setForm({
+      ...blank(),
+      symbol: draft.symbol.replace(/\.JK$/, ""),
+      side: check.row.decision.signal_type ?? "BUY",
+      entry_price: check.row.latestClose,
+      market: draft.run.manifest.market as "IDX" | "US",
+      currency: draft.run.manifest.currency as "IDR" | "USD",
+      quantity: draft.run.manifest.market === "IDX" ? 100 : 1,
+    });
+    setCaptureOpen(true);
+  }
+  useEffect(() => {
+    if (batchDraft) applyScreeningDraft(batchDraft);
+  }, [batchDraft, userId]);
   const items = records.owner === userId ? records.items : [];
   const visible = useMemo(
     () =>
@@ -160,15 +213,29 @@ export function JournalPanel({
             (!instrument || r.data.symbol === instrument) &&
             (!book || r.data.book === book) &&
             (!month ||
-              (r.data.exit_date || r.data.entry_date).slice(0, 7) === month),
+              (r.data.exit_date || r.data.entry_date).slice(0, 7) === month) &&
+            `${r.data.symbol} ${r.data.book} ${r.data.note}`
+              .toLowerCase()
+              .includes(search.trim().toLowerCase()),
         )
         .sort(
           (a, b) =>
-            (b.data.exit_date || b.data.entry_date).localeCompare(
-              a.data.exit_date || a.data.entry_date,
-            ) || a.id.localeCompare(b.id),
+            (sortOrder === "symbol"
+              ? a.data.symbol.localeCompare(b.data.symbol)
+              : sortOrder === "pnl"
+                ? (b.data.net_pl ?? -Infinity) - (a.data.net_pl ?? -Infinity)
+                : (b.data.exit_date || b.data.entry_date).localeCompare(
+                    a.data.exit_date || a.data.entry_date,
+                  )) || a.id.localeCompare(b.id),
         ),
-    [items, currency, instrument, book, month],
+    [items, currency, instrument, book, month, search, sortOrder],
+  );
+  useEffect(() => {
+    setPage(0);
+  }, [currency, instrument, book, month, search, sortOrder]);
+  const currentPage = Math.min(
+    page,
+    Math.max(0, Math.ceil(visible.length / 25) - 1),
   );
   const closed = visible
     .filter((r) => r.data.net_pl !== null && r.data.exit_price !== null)
@@ -187,6 +254,7 @@ export function JournalPanel({
       maximumFractionDigits: 2,
     }).format(n);
   function reset() {
+    setDirectionConfirmed(true);
     newRecordID.current = crypto.randomUUID();
     setForm(blank());
     setEditing(null);
@@ -194,6 +262,12 @@ export function JournalPanel({
     clearDraft();
   }
   async function mutate(remove?: Item) {
+    if (!remove && !directionConfirmed) {
+      setError(
+        "Choose the trade direction before saving this legacy screening draft.",
+      );
+      return;
+    }
     if (lock.current || !userId) return;
     lock.current = true;
     setBusy(true);
@@ -228,7 +302,9 @@ export function JournalPanel({
       if (!active()) return;
       setNotice(remove ? "Trade deleted." : "Trade saved to your account.");
       setPendingDelete(null);
-      reset();
+      if (!remove && !editing && batchDraft && screeningBatch.length > 1) {
+        consumeBatch?.();
+      } else reset();
       setReload((n) => n + 1);
     } catch (e) {
       if (active()) setError(message(e));
@@ -254,23 +330,49 @@ export function JournalPanel({
         returnFocus={captureTrigger}
         onClose={clearDraft}
         onVerified={(draft) => {
-          const row = draft.run.rows.find(
-            (r) => r.decision.symbol === draft.symbol,
-          )!;
-          setEditing(null);
-          setForm({
-            ...blank(),
-            symbol: draft.symbol.replace(/\.JK$/, ""),
-            side: row.decision.signal_type ?? "BUY",
-            entry_price: row.latestClose,
-            market: draft.run.manifest.market as "IDX" | "US",
-            currency: draft.run.manifest.currency as "IDR" | "USD",
-            quantity: draft.run.manifest.market === "IDX" ? 100 : 1,
-          });
+          applyScreeningDraft(draft);
           clearDraft();
-          setCaptureOpen(true);
         }}
       />
+      {batchDraft && (
+        <Alert>
+          <AlertTitle>
+            Review selected screening drafts ({screeningBatch.length} remaining)
+          </AlertTitle>
+          <AlertDescription>
+            <p>
+              Reviewing {batchDraft.symbol.replace(/\.JK$/, "")} from{" "}
+              {batchDraft.ruleName}. Screening prices are references, not
+              executed trades. Check the actual price, date and quantity, then
+              save each trade separately. Nothing is saved automatically.
+            </p>
+            <ul
+              className="journal-draft-queue"
+              aria-label="Selected screening drafts"
+            >
+              {screeningBatch.map((item, index) => (
+                <li key={item.symbol}>
+                  <Badge variant={index === 0 ? "success" : "outline"}>
+                    {item.symbol.replace(/\.JK$/, "")} ·{" "}
+                    {index === 0 ? "Reviewing" : "Pending"}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                if (screeningBatch.length > 1) consumeBatch?.();
+                else reset();
+              }}
+            >
+              Skip current draft
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       <section className="journal-toolbar" aria-label="Journal filters">
         <FieldGroup className="journal-toolbar__filters">
           <Field>
@@ -361,6 +463,37 @@ export function JournalPanel({
           </Button>
         </div>
       </section>
+      <FieldGroup className="analysis-table-tools">
+        <Field>
+          <FieldLabel htmlFor="journal-search">
+            Search recorded trades
+          </FieldLabel>
+          <Input
+            id="journal-search"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Stock, journal or note"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="journal-sort">Sort trades</FieldLabel>
+          <select
+            id="journal-sort"
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value)}
+          >
+            <option value="newest">Newest first</option>
+            <option value="symbol">Stock symbol</option>
+            <option value="pnl">Highest realized P&amp;L</option>
+          </select>
+        </Field>
+      </FieldGroup>
+      {loading && loadedOwner === userId && (
+        <p role="status">
+          Refreshing journal. Previous records remain visible.
+        </p>
+      )}
       {error && (
         <Alert variant="destructive">
           <AlertTitle>Journal unavailable</AlertTitle>
@@ -430,11 +563,17 @@ export function JournalPanel({
                   <FieldLabel htmlFor="trade-side">Side</FieldLabel>
                   <select
                     id="trade-side"
-                    value={form.side}
-                    onChange={(e) =>
-                      change("side", e.target.value as "BUY" | "SELL")
-                    }
+                    required
+                    aria-invalid={!directionConfirmed}
+                    value={directionConfirmed ? form.side : ""}
+                    onChange={(e) => {
+                      setDirectionConfirmed(true);
+                      change("side", e.target.value as "BUY" | "SELL");
+                    }}
                   >
+                    {!directionConfirmed && (
+                      <option value="">Choose trade direction</option>
+                    )}
                     <option value="BUY">BUY / Long</option>
                     <option value="SELL">SELL / Short</option>
                   </select>
@@ -567,7 +706,10 @@ export function JournalPanel({
                 </Field>
               </FieldGroup>
               <div className="journal-capture-actions">
-                <Button type="submit" disabled={!userId || loading}>
+                <Button
+                  type="submit"
+                  disabled={!userId || loading || !directionConfirmed}
+                >
                   <Save data-icon="inline-start" />
                   {busy ? "Saving…" : editing ? "Update trade" : "Save trade"}
                 </Button>
@@ -579,10 +721,10 @@ export function JournalPanel({
           </form>
         </section>
       )}
-      {loading ? (
+      {loading && loadedOwner !== userId ? (
         <Skeleton className="journal-loading" />
       ) : (
-        !error && (
+        (loadedOwner === userId || !error) && (
           <>
             <section
               className="journal-performance"
@@ -658,83 +800,86 @@ export function JournalPanel({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {visible.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell>
-                          <strong>{r.data.symbol}</strong>
-                          <small>{r.data.book}</small>
-                        </TableCell>
-                        <TableCell>
-                          {r.data.side === "BUY" ? "Long" : "Short"}
-                          <small>
-                            {r.data.quantity.toLocaleString()} shares
-                          </small>
-                        </TableCell>
-                        <TableCell>
-                          {money(r.data.entry_price)} /{" "}
-                          {r.data.exit_price === null
-                            ? "Open"
-                            : money(r.data.exit_price)}
-                        </TableCell>
-                        <TableCell>
-                          {r.data.entry_date}
-                          <small>{r.data.exit_date || "Still open"}</small>
-                        </TableCell>
-                        <TableCell>
-                          <strong
-                            className={
-                              (r.data.net_pl ?? 0) >= 0
-                                ? "positive"
-                                : "negative"
-                            }
-                          >
-                            {r.data.net_pl === null
-                              ? "—"
-                              : money(r.data.net_pl)}
-                          </strong>
-                          <small>
-                            {r.data.return_pct === null
-                              ? "Unrealized not estimated"
-                              : `${r.data.return_pct.toFixed(2)}%`}
-                          </small>
-                        </TableCell>
-                        <TableCell>
-                          <div className="backtest-actions">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={busy}
-                              aria-label={`Edit trade ${r.data.symbol}`}
-                              onClick={() => {
-                                setEditing(r);
-                                const {
-                                  net_pl: _,
-                                  return_pct: __,
-                                  ...input
-                                } = r.data;
-                                setForm(input);
-                                setCaptureOpen(true);
-                              }}
+                    {visible
+                      .slice(currentPage * 25, (currentPage + 1) * 25)
+                      .map((r) => (
+                        <TableRow key={r.id}>
+                          <TableCell>
+                            <strong>{r.data.symbol}</strong>
+                            <small>{r.data.book}</small>
+                          </TableCell>
+                          <TableCell>
+                            {r.data.side === "BUY" ? "Long" : "Short"}
+                            <small>
+                              {r.data.quantity.toLocaleString()} shares
+                            </small>
+                          </TableCell>
+                          <TableCell>
+                            {money(r.data.entry_price)} /{" "}
+                            {r.data.exit_price === null
+                              ? "Open"
+                              : money(r.data.exit_price)}
+                          </TableCell>
+                          <TableCell>
+                            {r.data.entry_date}
+                            <small>{r.data.exit_date || "Still open"}</small>
+                          </TableCell>
+                          <TableCell>
+                            <strong
+                              className={
+                                (r.data.net_pl ?? 0) >= 0
+                                  ? "positive"
+                                  : "negative"
+                              }
                             >
-                              <Pencil data-icon="inline-start" />
-                              Edit
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              disabled={busy}
-                              aria-label={`Delete trade ${r.data.symbol}`}
-                              onClick={(e) => {
-                                returnFocus.current = e.currentTarget;
-                                setPendingDelete(r);
-                              }}
-                            >
-                              <Trash2 />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                              {r.data.net_pl === null
+                                ? "—"
+                                : money(r.data.net_pl)}
+                            </strong>
+                            <small>
+                              {r.data.return_pct === null
+                                ? "Unrealized not estimated"
+                                : `${r.data.return_pct.toFixed(2)}%`}
+                            </small>
+                          </TableCell>
+                          <TableCell>
+                            <div className="backtest-actions">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={busy || Boolean(batchDraft)}
+                                aria-label={`Edit trade ${r.data.symbol}`}
+                                onClick={() => {
+                                  setEditing(r);
+                                  setDirectionConfirmed(true);
+                                  const {
+                                    net_pl: _,
+                                    return_pct: __,
+                                    ...input
+                                  } = r.data;
+                                  setForm(input);
+                                  setCaptureOpen(true);
+                                }}
+                              >
+                                <Pencil data-icon="inline-start" />
+                                Edit
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                disabled={busy}
+                                aria-label={`Delete trade ${r.data.symbol}`}
+                                onClick={(e) => {
+                                  returnFocus.current = e.currentTarget;
+                                  setPendingDelete(r);
+                                }}
+                              >
+                                <Trash2 />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
                     {!visible.length && (
                       <TableRow>
                         <TableCell colSpan={6}>
@@ -746,7 +891,42 @@ export function JournalPanel({
                   </TableBody>
                 </Table>
               </div>
+              {visible.length > 25 && (
+                <nav className="analysis-pagination" aria-label="Journal pages">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === 0}
+                    onClick={() => setPage(currentPage - 1)}
+                  >
+                    Previous trades
+                  </Button>
+                  <span role="status">
+                    Page {currentPage + 1} of {Math.ceil(visible.length / 25)} ·{" "}
+                    {visible.length} filtered trades
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={(currentPage + 1) * 25 >= visible.length}
+                    onClick={() => setPage(currentPage + 1)}
+                  >
+                    Next trades
+                  </Button>
+                </nav>
+              )}
             </section>
+            {refreshMs !== null && (
+              <details className="analysis-performance">
+                <summary>Browser performance details</summary>
+                <p>
+                  Journal fetch and response processing: {Math.round(refreshMs)}{" "}
+                  ms. Includes network and server wait; this is not server CPU
+                  time. Table renders at most 25 records per page; summaries use
+                  all filtered records.
+                </p>
+              </details>
+            )}
           </>
         )
       )}

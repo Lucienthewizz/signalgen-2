@@ -16,8 +16,11 @@ self.onmessage = async (event: MessageEvent) => {
   };
   if (!["extract", "extract-batch"].includes(message.type)) return;
   try {
+    const cold = ready === null;
+    const start = performance.now();
     ready ??= loadEngine();
     const scope = await ready;
+    const initialized = performance.now();
     const series =
       message.type === "extract"
         ? [{ symbol: message.symbol, candles: message.candles }]
@@ -46,6 +49,11 @@ self.onmessage = async (event: MessageEvent) => {
     self.postMessage({
       type: "result",
       jobId: message.jobId,
+      timing: {
+        startup_ms: cold ? initialized - start : 0,
+        compute_ms: performance.now() - initialized,
+        cold,
+      },
       ...(message.type === "extract" ? { features: results[0] } : { results }),
     });
   } catch (error) {

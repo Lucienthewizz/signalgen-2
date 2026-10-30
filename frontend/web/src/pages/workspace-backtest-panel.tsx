@@ -12,7 +12,13 @@ import { api, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldDescription,
+} from "@/components/ui/field";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { BacktestResults } from "./backtest-results";
 import { BacktestHistoryPanel } from "./backtest-history-panel";
 import { uploadArchive } from "@/analysis/backtest-sync";
@@ -24,6 +30,7 @@ import {
 import {
   prepareBacktest,
   runBacktest,
+  validateBacktestForm,
   type PreparedBacktest,
 } from "@/analysis/backtest";
 import type {
@@ -143,8 +150,6 @@ export function WorkspaceBacktestPanel({
     };
   }, []);
   useEffect(() => {
-    clearSnapshot();
-    setOwner(null);
     if (!authenticated || !backendOnline) {
       setLoading(false);
       return;
@@ -224,6 +229,17 @@ export function WorkspaceBacktestPanel({
       controller.abort();
     };
   }, [authenticated, backendOnline, userId, reload]);
+  useEffect(() => {
+    clearSnapshot();
+    setOwner(null);
+  }, [authenticated, userId]);
+  let validationMessage = "";
+  try {
+    validateBacktestForm(config);
+  } catch (cause) {
+    validationMessage =
+      cause instanceof Error ? cause.message : "Review the configuration.";
+  }
 
   function update<K extends keyof BacktestConfig>(
     key: K,
@@ -248,7 +264,6 @@ export function WorkspaceBacktestPanel({
     operation.current = controller;
     setBusy(true);
     setError("");
-    setResult(null);
     setHistoryMessage("");
     const settings = { ...config };
     try {
@@ -442,20 +457,20 @@ export function WorkspaceBacktestPanel({
         <a href="#login">Sign in</a>
       </section>
     );
-  if (!backendOnline)
+  if (!backendOnline && !owner)
     return (
       <section className="backtest-panel" role="status">
         <h3>Backend unavailable</h3>
         <p>Reconnect to load historical data and verify your access.</p>
       </section>
     );
-  if (loading)
+  if (loading && !owner)
     return (
       <section className="backtest-panel" role="status">
         Loading backtest options…
       </section>
     );
-  if (loadError)
+  if (loadError && !owner)
     return (
       <section className="backtest-panel">
         <p role="alert">{loadError}</p>
@@ -472,6 +487,22 @@ export function WorkspaceBacktestPanel({
     );
   return (
     <div className="backtest-workspace">
+      {(!backendOnline || loadError) && (
+        <Alert variant="destructive">
+          <AlertTitle>Backtest connection needs attention</AlertTitle>
+          <AlertDescription>
+            {loadError ||
+              "Backend unavailable. Your settings and last result are kept visible."}{" "}
+            <Button
+              variant="outline"
+              disabled={loading || !backendOnline}
+              onClick={() => setReload((n) => n + 1)}
+            >
+              Retry selections
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       <section
         className="backtest-panel backtest-config"
         aria-labelledby="backtest-config-heading"
@@ -503,7 +534,11 @@ export function WorkspaceBacktestPanel({
               void execute(config.mode === "manual");
             }}
           >
-            <fieldset disabled={busy} className="backtest-config-fields">
+            <fieldset
+              disabled={busy}
+              className="backtest-config-fields"
+              aria-describedby="backtest-config-help"
+            >
               <fieldset className="backtest-config-section">
                 <legend>Entry setup</legend>
                 <FieldGroup
@@ -610,6 +645,12 @@ export function WorkspaceBacktestPanel({
                     </FieldLabel>
                     <Input
                       id="bt-horizon"
+                      aria-describedby="bt-horizon-help"
+                      aria-invalid={
+                        !Number.isInteger(config.n_steps) ||
+                        config.n_steps < 1 ||
+                        config.n_steps > 100
+                      }
                       type="number"
                       required
                       min="1"
@@ -620,6 +661,9 @@ export function WorkspaceBacktestPanel({
                         update("n_steps", Number(event.target.value))
                       }
                     />
+                    <FieldDescription id="bt-horizon-help">
+                      1–100 completed daily candles, not calendar days.
+                    </FieldDescription>
                   </Field>
                 </FieldGroup>
               </fieldset>
@@ -735,11 +779,26 @@ export function WorkspaceBacktestPanel({
               {selectedUniverse?.symbols.join(", ")} · Capital uses the
               dataset's currency. Quantities may be fractional.
             </p>
+            <p id="backtest-config-help" className="backtest-note">
+              Results describe accepted trades in your selected universe, not
+              every possible signal. Review skipped entries separately.
+            </p>
+            {validationMessage && (
+              <p role="alert" className="backtest-error">
+                {validationMessage}
+              </p>
+            )}
             <div className="backtest-actions">
               <Button
                 type="submit"
                 disabled={
-                  busy || !universeId || (config.mode === "rule" && !ruleId)
+                  busy ||
+                  loading ||
+                  !backendOnline ||
+                  Boolean(loadError) ||
+                  Boolean(validationMessage) ||
+                  !universeId ||
+                  (config.mode === "rule" && !ruleId)
                 }
               >
                 <Play />
@@ -928,6 +987,15 @@ export function WorkspaceBacktestPanel({
       {historyMessage && (
         <p role="status" className="backtest-note">
           {historyMessage}
+        </p>
+      )}
+      {result && (busy || error) && (
+        <p role="status" className="backtest-note">
+          {busy
+            ? "The previous result remains visible while the new run is processing."
+            : error
+              ? "The latest run failed. The result below is from the previous completed run."
+              : ""}
         </p>
       )}
       {result && (

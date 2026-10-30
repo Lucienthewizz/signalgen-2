@@ -148,6 +148,9 @@ async (page) => {
   if (await page.locator(".journal-capture input").first().inputValue() !== "BBCA") throw Error("Screener did not prefill journal symbol");
   await page.getByRole('button',{name:'Close journal form',exact:true}).waitFor();
   if (await page.getByLabel('Entry price (IDR)',{exact:true}).inputValue() !== '100') throw Error('Journal price differs from screening snapshot');
+  if(await page.getByLabel('Side',{exact:true}).inputValue()!=="" || !await page.getByRole('button',{name:'Save trade',exact:true}).isDisabled())throw Error('Legacy screening silently assumed a trade direction');
+  await page.getByLabel('Side',{exact:true}).selectOption('BUY');
+  if(!await page.getByRole('button',{name:'Save trade',exact:true}).isEnabled())throw Error('Explicit trade direction did not enable the reviewed form');
   await page.getByText('Screening verified',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Close journal form',exact:true}).click();
   await page.getByRole('button',{name:'Open journal form',exact:true}).waitFor();

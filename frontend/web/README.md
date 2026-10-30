@@ -1,5 +1,38 @@
 # Signalgen Web
 
+## FE-only analysis usability (29 October 2026)
+
+The API contract, backend, database and Go/WASM calculations are unchanged.
+
+- Screener refresh keeps existing selections and results visible, with one
+  in-flight resource load per panel and stale-response rejection on account
+  change/unmount. Shared GET reads are not aborted out from under other readers.
+  Existing transport retries remain bounded; no writes are automatically retried.
+- Check matched stocks and choose **Review selected in journal**. Select-all
+  applies to visible, verifiable matched stocks; hidden selections remain counted.
+  New results clear the selection so old selections cannot refer to new prices.
+- The journal queue is memory-only. Review/edit and save **each** draft explicitly
+  through the existing individual record endpoint, or skip/cancel it. It is not
+  an atomic batch save, broker order, permanent blacklist or auto-trade.
+- Journal refresh retains previously loaded records, including on read failure.
+  Search, sort and 25-row pagination affect presentation; journal summaries use
+  all filtered records, not only the current page. Manual entry remains available.
+- Backtest filters search/sort existing trades without changing report metrics
+  or the complete-horizon CSV exports. Configuration validates existing limits.
+  Old results stay labelled during a rerun/failure. No all-market or new
+  Open/High/Close evaluation mode is enabled by these changes.
+- **Browser performance details** in screener results separates access, snapshot
+  preparation, dataset load/verification, worker startup, indicator computation,
+  scoring wait and commit-to-next-frame latency. Warm/unchanged runs are marked;
+  historical reports may not contain timing fields. Network-inclusive durations
+  are not server CPU measurements. No credentials or telemetry are uploaded.
+
+Run `npm run test:usability` with Vite on 5174. It uses synthetic account/API
+fixtures, never real account writes, and checks selection, reviewed individual
+saves, duplicate-click protection, skipped drafts, retained refresh/errors,
+filtering/pagination and 1440/390px layouts. Existing `test:browser`,
+`test:backtest`, `test:recovery` and `test:monitor` cover the surrounding flows.
+
 ## Claudio indicators (27 October 2026)
 
 All 78 fixed Claudio rule operands and dynamic periods/history offsets (1–250)

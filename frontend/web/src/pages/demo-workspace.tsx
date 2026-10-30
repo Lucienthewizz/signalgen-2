@@ -1863,9 +1863,13 @@ export function DemoWorkspace({
   const [draftSymbol, setDraftSymbol] = useState<string | null>(null);
   const [screeningDraft, setScreeningDraft] =
     useState<JournalScreeningDraft | null>(null);
+  const [screeningBatch, setScreeningBatch] = useState<JournalScreeningDraft[]>(
+    [],
+  );
   useEffect(() => {
     setDraftSymbol(null);
     setScreeningDraft(null);
+    setScreeningBatch([]);
   }, [user?.id]);
   const meta = viewMeta[view];
   const PageIcon = meta.icon;
@@ -1874,6 +1878,7 @@ export function DemoWorkspace({
     location.hash = `app/${next}`;
   }
   function draft(symbol: string, evidence?: JournalScreeningDraft) {
+    setScreeningBatch([]);
     setDraftSymbol(symbol);
     setScreeningDraft(evidence ?? null);
     go("journal");
@@ -2121,7 +2126,14 @@ export function DemoWorkspace({
                     )}
                     {view === "analysis" && (
                       <WorkspaceScreenerPanel
+                        key={user?.id ?? "guest"}
                         onDraft={draft}
+                        onDraftBatch={(drafts) => {
+                          setDraftSymbol(null);
+                          setScreeningDraft(null);
+                          setScreeningBatch(drafts);
+                          go("journal");
+                        }}
                         userId={user?.id}
                         authenticated={authenticated}
                         backendOnline={backendOnline}
@@ -2129,6 +2141,7 @@ export function DemoWorkspace({
                     )}
                     {view === "backtest" && (
                       <WorkspaceBacktestPanel
+                        key={user?.id ?? "guest"}
                         authenticated={authenticated}
                         backendOnline={backendOnline}
                         userId={user?.id}
@@ -2153,12 +2166,18 @@ export function DemoWorkspace({
                     )}
                     {view === "journal" && (
                       <JournalPanel
+                        key={user?.id ?? "guest"}
                         draftSymbol={draftSymbol}
                         screeningDraft={screeningDraft}
+                        screeningBatch={screeningBatch}
+                        consumeBatch={() =>
+                          setScreeningBatch((items) => items.slice(1))
+                        }
                         userId={user?.id}
                         clearDraft={() => {
                           setDraftSymbol(null);
                           setScreeningDraft(null);
+                          setScreeningBatch([]);
                         }}
                       />
                     )}

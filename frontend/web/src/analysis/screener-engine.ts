@@ -22,6 +22,11 @@ export function extractDatasetFeatures(
   series: DatasetContent["series"],
   signal: AbortSignal,
   operands: string[] = [],
+  onTiming?: (timing: {
+    startup_ms: number;
+    compute_ms: number;
+    cold: boolean;
+  }) => void,
 ): Promise<ScreenerFeatureResult[]> {
   signal.throwIfAborted();
   if (activeCancel)
@@ -84,6 +89,12 @@ export function extractDatasetFeatures(
         return;
       }
       settled = true;
+      if (
+        message.timing &&
+        Number.isFinite(message.timing.startup_ms) &&
+        Number.isFinite(message.timing.compute_ms)
+      )
+        onTiming?.(message.timing);
       cleanup();
       idleTimer = setTimeout(reset, 60000);
       resolve(message.results);

@@ -113,6 +113,7 @@ type Props = {
   backendOnline: boolean;
   userId?: string;
   onDraft: (symbol: string, evidence?: JournalScreeningDraft) => void;
+  onDraftBatch: (drafts: JournalScreeningDraft[]) => void;
 };
 
 type RunState = "idle" | "loading" | "completed" | "failed";
@@ -136,6 +137,7 @@ export function WorkspaceScreenerPanel({
   backendOnline,
   userId,
   onDraft,
+  onDraftBatch,
 }: Props) {
   const [account, setAccount] = useState<AccountState | null>(null);
   const [rules, setRules] = useState<RuleResource[]>([]);
@@ -178,6 +180,12 @@ export function WorkspaceScreenerPanel({
   )!;
   const mounted = useRef(false);
   const resourceVersion = useRef(0);
+  const resourceOperation = useRef<AbortController | null>(null);
+  const resourceIdentity = useRef(userId);
+  const [selectedSymbols, setSelectedSymbols] = useState<string[]>([]);
+  const selectionRef = useRef<HTMLInputElement>(null);
+  const [resourceMs, setResourceMs] = useState<number | null>(null);
+  const [renderMs, setRenderMs] = useState<number | null>(null);
   const [failure, setFailure] = useState<ReturnType<
     typeof screeningFailure
   > | null>(null);
@@ -223,6 +231,11 @@ export function WorkspaceScreenerPanel({
 
   async function loadResources() {
     if (!authenticated || !backendOnline) return;
+    if (resourceOperation.current && !resourceOperation.current.signal.aborted)
+      return;
+    const controller = new AbortController();
+    resourceOperation.current = controller;
+    const started = performance.now();
     const version = ++resourceVersion.current;
     setLoadingResources(true);
     setError(null);
@@ -231,6 +244,9 @@ export function WorkspaceScreenerPanel({
     try {
       const [accountResponse, ruleResponse, universeResponse] =
         await Promise.all([
+          // Shared GETs coalesce with shell readers and Strict Mode remounts.
+          // The panel's generation below discards stale responses without
+          // aborting another component's authorized read.
           api.account(),
           api.listRules(),
           api.listStockUniverses(),
@@ -285,27 +301,36 @@ export function WorkspaceScreenerPanel({
       );
       setErrorOpen(true);
     } finally {
-      if (mounted.current && version === resourceVersion.current)
+      if (resourceOperation.current === controller)
+        resourceOperation.current = null;
+      if (mounted.current && version === resourceVersion.current) {
         setLoadingResources(false);
+        setResourceMs(performance.now() - started);
+      }
     }
   }
 
   useEffect(() => {
     mounted.current = true;
-    setAccount(null);
-    setRun(null);
-    setRunContext(null);
-    setHistoricalRun(null);
-    setHistory([]);
-    setRuleId("");
-    setUniverseId("");
-    setPreferencesReady(false);
-    setState("idle");
-    restoredUser.current = null;
-    void loadResources();
+    if (resourceIdentity.current !== userId) {
+      resourceIdentity.current = userId;
+      setAccount(null);
+      setRun(null);
+      setRunContext(null);
+      setHistoricalRun(null);
+      setHistory([]);
+      setRuleId("");
+      setUniverseId("");
+      setPreferencesReady(false);
+      setState("idle");
+      restoredUser.current = null;
+    }
+    if (authenticated && backendOnline) void loadResources();
+    else setLoadingResources(false);
     return () => {
       mounted.current = false;
       ++resourceVersion.current;
+      resourceOperation.current?.abort();
       monitor.stop();
     };
   }, [authenticated, backendOnline, userId]);
@@ -348,6 +373,58 @@ export function WorkspaceScreenerPanel({
     () => filteredRows(run?.rows ?? [], resultFilter, search, sort),
     [run, resultFilter, search, sort],
   );
+  const displayedRows = visibleRows.filter(
+    (row) =>
+      signalFilter === "all" || screeningStatus(row.decision) === signalFilter,
+  );
+  function evidenceFor(symbol: string): JournalScreeningDraft {
+    return {
+      ownerId: userId ?? "",
+      symbol,
+      ruleName:
+        historicalRun?.rule ?? runContext?.rule.name ?? "Screening result",
+      ruleSnapshot: evidenceRule
+        ? {
+            version: evidenceRule.version,
+            definition_hash: evidenceRule.definition_hash,
+            definition: evidenceRule.definition,
+          }
+        : undefined,
+      screenedAt:
+        history.find(
+          (item) => item.run.result.request_id === run?.result.request_id,
+        )?.recordedAt ?? new Date().toISOString(),
+      run: run!,
+    };
+  }
+  const selectable = run
+    ? displayedRows
+        .filter(
+          (row) =>
+            checkJournalScreening(evidenceFor(row.decision.symbol), userId).ok,
+        )
+        .map((row) => row.decision.symbol)
+    : [];
+  const allSelected =
+    selectable.length > 0 &&
+    selectable.every((symbol) => selectedSymbols.includes(symbol));
+  useEffect(() => {
+    setSelectedSymbols([]);
+  }, [run, userId]);
+  useEffect(() => {
+    if (!run) return;
+    const start = performance.now();
+    const frame = requestAnimationFrame(() =>
+      setRenderMs(performance.now() - start),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [run]);
+  useEffect(() => {
+    if (selectionRef.current)
+      selectionRef.current.indeterminate =
+        !allSelected &&
+        selectable.some((symbol) => selectedSymbols.includes(symbol));
+  }, [allSelected, selectable.join("|"), selectedSymbols]);
 
   const selectedRule = rules.find((rule) => rule.id === ruleId);
   const selectedUniverse = universes.find(
@@ -545,10 +622,21 @@ export function WorkspaceScreenerPanel({
               <p>Choose a rule and universe. Screening results appear below.</p>
             </div>
           </div>
-          <Badge variant="outline">Closed candles · Yahoo Finance</Badge>
+          <div className="screener-console__tools">
+            <Badge variant="outline">Closed candles · Yahoo Finance</Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={loadingResources || monitorState.active}
+              onClick={() => void loadResources()}
+            >
+              <RefreshCw data-icon="inline-start" />
+              Refresh selections
+            </Button>
+          </div>
         </header>
 
-        {loadingResources ? (
+        {loadingResources && !account ? (
           <div
             className="screener-resource-loading"
             role="status"
@@ -625,6 +713,12 @@ export function WorkspaceScreenerPanel({
           </div>
         ) : (
           <div className="screener-console__body">
+            {loadingResources && (
+              <p role="status">
+                Refreshing selections. Your current settings and results stay
+                visible.
+              </p>
+            )}
             <FieldGroup className="screener-pickers">
               <Field>
                 <FieldLabel htmlFor="screen-rule">Screening rule</FieldLabel>
@@ -939,9 +1033,12 @@ export function WorkspaceScreenerPanel({
           <div className="screener-progress" role="status">
             <span>
               {stage}
-              <strong>{progress}%</strong>
+              <strong>Stage progress</strong>
             </span>
-            <Progress value={progress} />
+            <Progress
+              value={progress}
+              aria-label="Screening stages, not estimated time remaining"
+            />
           </div>
         )}
         {error && (
@@ -1407,6 +1504,86 @@ export function WorkspaceScreenerPanel({
                 </Button>
               </div>
             </div>
+            <div
+              className="analysis-selection-bar"
+              aria-label="Journal selection"
+            >
+              <span role="status">
+                {selectedSymbols.length} selected · only verified matched
+                results can be selected
+              </span>
+              <div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!selectedSymbols.length}
+                  onClick={() => setSelectedSymbols([])}
+                >
+                  Clear selection
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!selectedSymbols.length || state === "loading"}
+                  onClick={() => {
+                    const drafts = selectedSymbols.map(evidenceFor);
+                    if (
+                      !drafts.every(
+                        (item) => checkJournalScreening(item, userId).ok,
+                      )
+                    )
+                      return;
+                    onDraftBatch(drafts);
+                  }}
+                >
+                  Review {selectedSymbols.length || "selected"} in journal
+                </Button>
+              </div>
+            </div>
+            <details className="analysis-performance">
+              <summary>Browser performance details</summary>
+              <dl>
+                {[
+                  ["Load selections (network included)", resourceMs],
+                  ["Access / session wait", run.metrics?.access_ms],
+                  [
+                    "Prepare snapshot / rule (network included)",
+                    run.metrics?.preparation_ms,
+                  ],
+                  ["Load / verify dataset", run.metrics?.dataset_ms],
+                  ["WASM startup", run.metrics?.startup_ms],
+                  ["Indicator computation", run.metrics?.compute_ms],
+                  [
+                    "Worker round trip, startup included",
+                    run.metrics?.feature_ms,
+                  ],
+                  [
+                    "Private scoring (network included)",
+                    run.metrics?.scoring_ms,
+                  ],
+                  ["Total analysis", run.metrics?.total_ms],
+                  ["UI commit to next frame", renderMs],
+                ].map(([label, value]) => (
+                  <div key={String(label)}>
+                    <dt>{label}</dt>
+                    <dd>
+                      {typeof value === "number"
+                        ? `${Math.round(value)} ms`
+                        : "Not recorded"}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <p>
+                {run.metrics?.reused
+                  ? "Unchanged snapshot reused after online access checks."
+                  : run.metrics?.cold
+                    ? "Cold engine run."
+                    : "Engine reuse not recorded or warm run."}{" "}
+                These browser timings are not server CPU measurements or
+                production capacity benchmarks. Historical runs may not contain
+                every timing.
+              </p>
+            </details>
             <p className="screener-result-count" role="status">
               {
                 visibleRows.filter(
@@ -1417,10 +1594,33 @@ export function WorkspaceScreenerPanel({
               }{" "}
               of {run.rows.length} stocks shown
             </p>
-            <div className="screener-result-ledger">
+            <div
+              className="screener-result-ledger"
+              role="region"
+              tabIndex={0}
+              aria-label="Screening results table, scroll horizontally on smaller screens"
+            >
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="analysis-select-cell">
+                      <input
+                        ref={selectionRef}
+                        type="checkbox"
+                        aria-label="Select visible matched stocks"
+                        checked={allSelected}
+                        disabled={!selectable.length || state === "loading"}
+                        onChange={(e) =>
+                          setSelectedSymbols((current) =>
+                            e.target.checked
+                              ? [...new Set([...current, ...selectable])]
+                              : current.filter(
+                                  (symbol) => !selectable.includes(symbol),
+                                ),
+                          )
+                        }
+                      />
+                    </TableHead>
                     <TableHead>Stock</TableHead>
                     <TableHead>Decision</TableHead>
                     <TableHead>Open price ({run.manifest.currency})</TableHead>
@@ -1440,6 +1640,34 @@ export function WorkspaceScreenerPanel({
                     )
                     .map((row) => (
                       <TableRow key={row.decision.symbol}>
+                        <TableCell className="analysis-select-cell">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${row.decision.symbol.replace(/\.JK$/, "")} for journal`}
+                            title={
+                              selectable.includes(row.decision.symbol)
+                                ? "Select for journal review"
+                                : "Only verified matched results can be selected"
+                            }
+                            checked={selectedSymbols.includes(
+                              row.decision.symbol,
+                            )}
+                            disabled={
+                              !selectable.includes(row.decision.symbol) ||
+                              state === "loading"
+                            }
+                            onChange={(e) =>
+                              setSelectedSymbols((current) =>
+                                e.target.checked
+                                  ? [...current, row.decision.symbol]
+                                  : current.filter(
+                                      (symbol) =>
+                                        symbol !== row.decision.symbol,
+                                    ),
+                              )
+                            }
+                          />
+                        </TableCell>
                         <TableCell>
                           <Button
                             variant="ghost"
@@ -1581,7 +1809,7 @@ export function WorkspaceScreenerPanel({
                       screeningStatus(row.decision) === signalFilter,
                   ).length && (
                     <TableRow>
-                      <TableCell colSpan={8}>
+                      <TableCell colSpan={9}>
                         No stocks match these filters.{" "}
                         <Button
                           variant="ghost"

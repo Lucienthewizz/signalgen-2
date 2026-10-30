@@ -360,7 +360,25 @@ async (page) => {
     await page.getByRole("combobox", {name:"Exit horizon",exact:true}).click();
     await page.getByRole("option", {name:label,exact:true}).click();
   }
+  async function assertSelectArrows() {
+    const arrows=await page.locator(".backtest-panel select").evaluateAll(items=>items.map(item=>{const style=getComputedStyle(item);return {appearance:style.appearance,padding:parseFloat(style.paddingRight),image:style.backgroundImage,position:style.backgroundPosition,size:style.backgroundSize};}));
+    if(!arrows.length || arrows.some(item=>item.appearance!=="none" || item.padding<40 || !item.image.includes("svg") || !item.position.includes("14px") || item.size!=="16px 16px")) throw Error(`Backtest select chevrons lost their consistent inset or text clearance: ${JSON.stringify(arrows)}`);
+  }
   async function assertBacktestPolish(width, theme) {
+    await assertSelectArrows();
+    const metricsBefore=await page.locator(".backtest-metrics").innerText();
+    const tradeSearch=page.getByLabel("Search trades",{exact:true});
+    if(await tradeSearch.count()) {
+      await tradeSearch.fill("NO_SUCH_STOCK");
+      await page.getByText("No trades match these filters. Change the stock, date or status filter.",{exact:true}).waitFor();
+      if(await page.locator(".backtest-metrics").innerText()!==metricsBefore) throw Error("Trade presentation filters changed portfolio metrics");
+      await tradeSearch.fill("");
+      await page.getByLabel("Sort trades",{exact:true}).selectOption("return");
+      const returns=await page.getByRole("region",{name:"Backtest trades",exact:true}).locator("tbody tr td:nth-child(9)").allTextContents();
+      const values=returns.map(text=>Number(text.replace(/[% ,]/g,"")));
+      if(values.some((value,i)=>i>0&&value>values[i-1]))throw Error("Trade return sort is inconsistent");
+      await page.getByLabel("Sort trades",{exact:true}).selectOption("original");
+    }
     const config=page.locator(".backtest-config");
     if(await config.locator("legend").allTextContents().then(items=>items.join("|")) !== "Entry setup|Test period|Capital & position|Trading costs") throw Error("Configuration grouping is incomplete");
     const controls=await config.locator("input, select").evaluateAll(items=>items.map(item=>({height:item.getBoundingClientRect().height,width:item.getBoundingClientRect().width})));
@@ -466,6 +484,7 @@ async (page) => {
       await page
         .getByRole("heading", { name: "Manual entries", exact: true })
         .waitFor();
+      await assertSelectArrows();
       await page
         .getByLabel("Signal candle (UTC)", { exact: true })
         .selectOption({ label: "2026-01-20 · close 100" });

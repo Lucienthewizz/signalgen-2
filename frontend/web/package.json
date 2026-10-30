@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "SignalGen 2.0 website and account portal",
   "scripts": {
+    "test:usability": "node scripts/test-browser.mjs --usability",
     "test:monitor": "node scripts/test-browser.mjs --monitor",
     "test:browser": "node scripts/test-browser.mjs",
     "test:catalog": "node scripts/test-browser.mjs --catalog",

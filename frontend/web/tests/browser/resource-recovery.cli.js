@@ -44,13 +44,14 @@ async (page) => {
       await page.reload();
       const run=page.getByRole("button",{name:"Start screening",exact:true});
       await run.waitFor({timeout:15000});
+      await page.waitForFunction(()=>[...document.querySelectorAll("button")].some(button=>button.textContent.includes("Start screening")&&!button.disabled));
       if(reads !== 2) throw Error(`Expected one automatic retry, got ${reads}`);
       if(await page.getByText("Service temporarily unavailable",{exact:true}).count()) throw Error("Recovered outage still visible");
 
       for(const failure of ["persistent","timeout"]) {
         mode=failure; reads=0;
         await page.reload();
-        await page.getByText(failure === "timeout" ? "Request timed out" : "Service temporarily unavailable",{exact:true}).waitFor();
+        await page.getByRole("heading",{name:failure === "timeout" ? "Request timed out" : "Service temporarily unavailable",exact:true}).waitFor();
         if(reads !== 2) throw Error(`Retry loop detected: ${reads}`);
         if(!await page.evaluate(()=>sessionStorage.getItem("signalgen.access-token") === "synthetic-not-real")) throw Error("Outage cleared the identity");
         if(await page.evaluate(()=>document.documentElement.scrollWidth > innerWidth+1)) throw Error(`Overflow at ${width}`);
@@ -58,6 +59,7 @@ async (page) => {
         mode="healthy";
         await page.getByRole("button",{name:"Reload selections",exact:true}).click();
         await run.waitFor();
+        await page.waitForFunction(()=>[...document.querySelectorAll("button")].some(button=>button.textContent.includes("Start screening")&&!button.disabled));
         if(reads !== 3) throw Error("Explicit recovery did not issue one fresh read");
       }
       if(width === 1440 && theme === 0) await page.screenshot({path:"output/playwright/resource-recovery-fixture.png"});

@@ -3,6 +3,11 @@
   gap: 18px;
   min-width: 0;
 }
+.backtest-workspace .backtest-table-scroll :is(th, td) {
+  padding-block: 9px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
 .backtest-panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -134,6 +139,26 @@
   padding: 8px 10px;
   min-width: 0;
   font: inherit;
+}
+/* Match the shared workbench control reset's specificity, without !important.
+   Keep native keyboard/mobile pickers, with one consistently inset chevron. */
+.demo-workbench .backtest-workspace .backtest-panel select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-inline: 12px 42px;
+  text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a4ada7' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px 16px;
+}
+@media (forced-colors: active) {
+  .demo-workbench .backtest-workspace .backtest-panel select {
+    appearance: auto;
+    -webkit-appearance: auto;
+    background-image: none;
+    padding-inline: 12px;
+  }
 }
 .backtest-panel select:focus-visible,
 .backtest-panel input:focus-visible,

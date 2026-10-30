@@ -33,6 +33,13 @@ export type LiveScreenerRun = {
   }>;
   execution: "client_wasm+server_private_scoring";
   metrics?: {
+    access_ms?: number;
+    preparation_ms?: number;
+    dataset_ms?: number;
+    startup_ms?: number;
+    compute_ms?: number;
+    cold?: boolean;
+    reused?: boolean;
     feature_ms: number;
     scoring_ms: number;
     total_ms: number;
@@ -90,12 +97,15 @@ async function runAuthorizedScreener(
   onStage("validating_access");
   await api.ensureAppSession();
   ensureNotCancelled(signal);
+  const accessMs = performance.now() - start;
+  const prepareStart = performance.now();
   onStage("preparing_data");
   const [manifest, rule] = await Promise.all([
     api.prepareDataset(ruleId, universeId, options.timeframe, signal),
     api.getRule(ruleId, signal),
   ]);
   ensureNotCancelled(signal);
+  const preparationMs = performance.now() - prepareStart;
   if (options.timeframe && manifest.timeframe !== options.timeframe)
     throw new ApiError(
       "Provider returned a different interval.",
@@ -113,19 +123,46 @@ async function runAuthorizedScreener(
     previous.ruleSnapshot.definition_hash === rule.definition_hash &&
     previous.ruleSnapshot.engine_version === rule.engine_version
   ) {
-    return { ...previous, manifest, ruleSnapshot: rule };
+    return {
+      ...previous,
+      manifest,
+      ruleSnapshot: rule,
+      metrics: {
+        ...previous.metrics!,
+        access_ms: accessMs,
+        preparation_ms: preparationMs,
+        dataset_ms: 0,
+        startup_ms: 0,
+        compute_ms: 0,
+        feature_ms: 0,
+        scoring_ms: 0,
+        total_ms: performance.now() - start,
+        stocks: previous.rows.length,
+        candidates: 0,
+        sockets: 0,
+        cold: false,
+        reused: true,
+      },
+    };
   }
+  const datasetStart = performance.now();
   const dataset = await loadScreenerDataset(manifest, signal);
+  const datasetMs = performance.now() - datasetStart;
   ensureNotCancelled(signal);
   if (!dataset.series.length || dataset.series.length > universeSelectionLimit)
     throw new ApiError("The dataset must contain 1–10 stocks for analysis.", 0);
 
   onStage("loading_engine");
   const featureStart = performance.now();
+  let timing:
+    { startup_ms: number; compute_ms: number; cold: boolean } | undefined;
   const featureRuns = await extractDatasetFeatures(
     dataset.series,
     signal,
     manifest.required_operands ?? [],
+    (value) => {
+      timing = value;
+    },
   );
   ensureNotCancelled(signal);
   const featureMs = performance.now() - featureStart;
@@ -209,6 +246,11 @@ async function runAuthorizedScreener(
     rows,
     execution: "client_wasm+server_private_scoring",
     metrics: {
+      access_ms: accessMs,
+      preparation_ms: preparationMs,
+      dataset_ms: datasetMs,
+      ...timing,
+      reused: false,
       feature_ms: featureMs,
       scoring_ms: performance.now() - scoringStart,
       total_ms: performance.now() - start,

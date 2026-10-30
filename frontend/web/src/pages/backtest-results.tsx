@@ -1,4 +1,7 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useMemo } from "react";
+import { Input } from "@/components/ui/input";
+import { FieldGroup } from "@/components/ui/field";
+import { backtestTradeRows } from "@/lib/analysis-table";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
@@ -57,7 +60,27 @@ export function BacktestResults({
     Math.floor((result.horizons.length - 1) / 10),
   );
   const [equityPage, setEquityPage] = useState(0);
+  const [tradeSearch, setTradeSearch] = useState("");
+  const [tradeStatus, setTradeStatus] = useState("all");
+  const [tradeSort, setTradeSort] = useState("original");
   const selectedHorizon = result.horizons[horizonIndex];
+  const shownTrades = useMemo(
+    () =>
+      backtestTradeRows(
+        selectedHorizon.trades,
+        tradeSearch,
+        tradeStatus,
+        tradeSort,
+      ),
+    [selectedHorizon, tradeSearch, tradeStatus, tradeSort],
+  );
+  const currentPage = Math.min(
+    page,
+    Math.max(0, Math.ceil(shownTrades.length / 25) - 1),
+  );
+  useEffect(() => {
+    setPage(0);
+  }, [tradeSearch, tradeStatus, tradeSort]);
   const signedMetrics: Record<string, number | null> = {
     "Realized P&L": selectedHorizon.metrics.net_pl_cash,
     "Unrealized P&L": selectedHorizon.metrics.unrealized_pl,
@@ -411,6 +434,48 @@ export function BacktestResults({
         </p>
       ) : (
         <>
+          <FieldGroup className="analysis-table-tools">
+            <Field>
+              <FieldLabel htmlFor="bt-trade-search">Search trades</FieldLabel>
+              <Input
+                id="bt-trade-search"
+                type="search"
+                placeholder="Stock or date"
+                value={tradeSearch}
+                onChange={(e) => setTradeSearch(e.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="bt-trade-status">Trade status</FieldLabel>
+              <select
+                id="bt-trade-status"
+                value={tradeStatus}
+                onChange={(e) => setTradeStatus(e.target.value)}
+              >
+                <option value="all">All trades</option>
+                <option value="closed">Closed</option>
+                <option value="open">Open</option>
+              </select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="bt-trade-sort">Sort trades</FieldLabel>
+              <select
+                id="bt-trade-sort"
+                value={tradeSort}
+                onChange={(e) => setTradeSort(e.target.value)}
+              >
+                <option value="original">Simulation order</option>
+                <option value="newest">Newest signal</option>
+                <option value="symbol">Stock symbol</option>
+                <option value="return">Highest return</option>
+              </select>
+            </Field>
+          </FieldGroup>
+          <p role="status">
+            {shownTrades.length} of {selectedHorizon.trades.length} trades
+            shown. Portfolio metrics and CSV exports still include the complete
+            selected horizon.
+          </p>
           <div
             className="backtest-table-scroll"
             tabIndex={0}
@@ -440,8 +505,8 @@ export function BacktestResults({
                 </tr>
               </thead>
               <tbody>
-                {selectedHorizon.trades
-                  .slice(page * 25, (page + 1) * 25)
+                {shownTrades
+                  .slice(currentPage * 25, (currentPage + 1) * 25)
                   .map((trade, i) => (
                     <tr key={`${trade.symbol}:${trade.signal_time}:${i}`}>
                       <th scope="row">{trade.symbol}</th>
@@ -480,6 +545,14 @@ export function BacktestResults({
                       </td>
                     </tr>
                   ))}
+                {!shownTrades.length && (
+                  <tr>
+                    <td colSpan={10}>
+                      No trades match these filters. Change the stock, date or
+                      status filter.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -487,19 +560,20 @@ export function BacktestResults({
             <Button
               variant="outline"
               size="sm"
-              disabled={page === 0}
-              onClick={() => setPage((current) => current - 1)}
+              disabled={currentPage === 0}
+              onClick={() => setPage(currentPage - 1)}
             >
               Previous trades
             </Button>
             <span>
-              Page {page + 1} of {Math.ceil(selectedHorizon.trades.length / 25)}
+              Page {currentPage + 1} of{" "}
+              {Math.max(1, Math.ceil(shownTrades.length / 25))}
             </span>
             <Button
               variant="outline"
               size="sm"
-              disabled={(page + 1) * 25 >= selectedHorizon.trades.length}
-              onClick={() => setPage((current) => current + 1)}
+              disabled={(currentPage + 1) * 25 >= shownTrades.length}
+              onClick={() => setPage(currentPage + 1)}
             >
               Next trades
             </Button>
