@@ -731,7 +731,6 @@
 .overview-board .overview-activity li p {
   margin-block: 3px 0;
 }
-.analysis-selection-bar,
 .analysis-pagination {
   display: flex;
   align-items: center;
@@ -740,15 +739,39 @@
   flex-wrap: wrap;
   padding: 12px var(--workspace-panel-gutter);
 }
+.analysis-results-toolbar {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 16px var(--workspace-panel-gutter) 8px;
+}
+.analysis-results-toolbar .analysis-performance {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+}
 .analysis-selection-bar {
-  border-block: 1px solid var(--line);
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-left: auto;
+  min-width: 0;
 }
 .analysis-selection-bar > div {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
-.analysis-selection-bar > span,
+.analysis-selection-bar > span {
+  max-width: 26ch;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
 .analysis-pagination > span {
   font-size: 0.875rem;
   color: var(--muted);
@@ -842,7 +865,14 @@
 }
 @media (max-width: 600px) {
   .analysis-selection-bar {
+    width: 100%;
+    flex-direction: column;
     align-items: stretch;
+    margin-left: 0;
+    gap: 8px;
+  }
+  .analysis-selection-bar > span {
+    max-width: none;
   }
   .analysis-selection-bar > div {
     width: 100%;

@@ -79,6 +79,17 @@ async (page) => {
   await page.getByRole("button",{name:"Refresh selections",exact:true}).waitFor();
   for(const width of [1440,1218,390]){
     await page.setViewportSize({width,height:1000});
+    const toolbar=page.locator(".analysis-results-toolbar");
+    const performance=toolbar.locator(".analysis-performance");
+    const selection=toolbar.locator(".analysis-selection-bar");
+    const performanceBox=await performance.boundingBox(),selectionBox=await selection.boundingBox();
+    if(width>=1218 && (selectionBox.x<performanceBox.x+performanceBox.width-1 || Math.abs(selectionBox.y-performanceBox.y)>1))throw Error(`Journal controls are not beside performance details at ${width}: ${JSON.stringify({performanceBox,selectionBox})}`);
+    if(width===390 && selectionBox.y<performanceBox.y+performanceBox.height)throw Error("Mobile journal controls overlap performance details");
+    const textSize=await selection.locator('[role="status"]').evaluate(el=>parseFloat(getComputedStyle(el).fontSize));
+    if(textSize>12)throw Error("Journal selection count is not compact");
+    await performance.locator("summary").click();
+    if(!await performance.locator("dl").isVisible())throw Error("Performance details no longer expand");
+    await performance.locator("summary").click();
     const ledger=page.locator(".screener-result-ledger");
     if(await ledger.locator("thead input[type=checkbox]").count())throw Error("Number heading still contains a select-all checkbox");
     if((await ledger.locator("thead th").first().innerText())!=="No." || (await ledger.locator("thead th").last().innerText())!=="Add to journal")throw Error("Number or journal heading is missing");

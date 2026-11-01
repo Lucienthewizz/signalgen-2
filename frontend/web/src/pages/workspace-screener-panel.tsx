@@ -1493,88 +1493,93 @@ export function WorkspaceScreenerPanel({
                 </Button>
               </div>
             </div>
-            <div
-              className="analysis-selection-bar"
-              aria-label="Journal selection"
-            >
-              <span role="status">
-                {selectedSymbols.length} selected · only verified matched
-                results can be selected
-              </span>
-              <div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!selectedSymbols.length}
-                  onClick={() => setSelectedSymbols([])}
-                >
-                  Clear selection
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={!selectedSymbols.length || state === "loading"}
-                  onClick={() => {
-                    const drafts = selectedSymbols.map(evidenceFor);
-                    if (
-                      !drafts.every(
-                        (item) => checkJournalScreening(item, userId).ok,
+            <div className="analysis-results-toolbar">
+              <details className="analysis-performance">
+                <summary>Browser performance details</summary>
+                <dl>
+                  {[
+                    ["Load selections (network included)", resourceMs],
+                    ["Access / session wait", run.metrics?.access_ms],
+                    [
+                      "Prepare snapshot / rule (network included)",
+                      run.metrics?.preparation_ms,
+                    ],
+                    ["Load / verify dataset", run.metrics?.dataset_ms],
+                    ["WASM startup", run.metrics?.startup_ms],
+                    ["Indicator computation", run.metrics?.compute_ms],
+                    [
+                      "Worker round trip, startup included",
+                      run.metrics?.feature_ms,
+                    ],
+                    [
+                      "Private scoring (network included)",
+                      run.metrics?.scoring_ms,
+                    ],
+                    ["Total analysis", run.metrics?.total_ms],
+                    ["UI commit to next frame", renderMs],
+                  ].map(([label, value]) => (
+                    <div key={String(label)}>
+                      <dt>{label}</dt>
+                      <dd>
+                        {typeof value === "number"
+                          ? `${Math.round(value)} ms`
+                          : "Not recorded"}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <p>
+                  {run.metrics?.reused
+                    ? "Unchanged snapshot reused after online access checks."
+                    : run.metrics?.cold
+                      ? "Cold engine run."
+                      : "Engine reuse not recorded or warm run."}{" "}
+                  These browser timings are not server CPU measurements or
+                  production capacity benchmarks. Historical runs may not
+                  contain every timing.
+                </p>
+              </details>
+              <div
+                className="analysis-selection-bar"
+                aria-label="Journal selection"
+              >
+                <span role="status">
+                  {selectedSymbols.length} selected · only verified matched
+                  results can be selected
+                </span>
+                <div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!selectedSymbols.length}
+                    onClick={() => setSelectedSymbols([])}
+                  >
+                    Clear selection
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!selectedSymbols.length || state === "loading"}
+                    onClick={() => {
+                      const drafts = selectedSymbols.map(evidenceFor);
+                      if (
+                        !drafts.every(
+                          (item) => checkJournalScreening(item, userId).ok,
+                        )
                       )
-                    )
-                      return;
-                    if (drafts.length === 1)
-                      onDraft(drafts[0].symbol.replace(/\.JK$/, ""), drafts[0]);
-                    else onDraftBatch(drafts);
-                  }}
-                >
-                  Review {selectedSymbols.length || "selected"} in journal
-                </Button>
+                        return;
+                      if (drafts.length === 1)
+                        onDraft(
+                          drafts[0].symbol.replace(/\.JK$/, ""),
+                          drafts[0],
+                        );
+                      else onDraftBatch(drafts);
+                    }}
+                  >
+                    Review {selectedSymbols.length || "selected"} in journal
+                  </Button>
+                </div>
               </div>
             </div>
-            <details className="analysis-performance">
-              <summary>Browser performance details</summary>
-              <dl>
-                {[
-                  ["Load selections (network included)", resourceMs],
-                  ["Access / session wait", run.metrics?.access_ms],
-                  [
-                    "Prepare snapshot / rule (network included)",
-                    run.metrics?.preparation_ms,
-                  ],
-                  ["Load / verify dataset", run.metrics?.dataset_ms],
-                  ["WASM startup", run.metrics?.startup_ms],
-                  ["Indicator computation", run.metrics?.compute_ms],
-                  [
-                    "Worker round trip, startup included",
-                    run.metrics?.feature_ms,
-                  ],
-                  [
-                    "Private scoring (network included)",
-                    run.metrics?.scoring_ms,
-                  ],
-                  ["Total analysis", run.metrics?.total_ms],
-                  ["UI commit to next frame", renderMs],
-                ].map(([label, value]) => (
-                  <div key={String(label)}>
-                    <dt>{label}</dt>
-                    <dd>
-                      {typeof value === "number"
-                        ? `${Math.round(value)} ms`
-                        : "Not recorded"}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-              <p>
-                {run.metrics?.reused
-                  ? "Unchanged snapshot reused after online access checks."
-                  : run.metrics?.cold
-                    ? "Cold engine run."
-                    : "Engine reuse not recorded or warm run."}{" "}
-                These browser timings are not server CPU measurements or
-                production capacity benchmarks. Historical runs may not contain
-                every timing.
-              </p>
-            </details>
             <p className="screener-result-count" role="status">
               {
                 visibleRows.filter(
