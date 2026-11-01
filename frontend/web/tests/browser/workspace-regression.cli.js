@@ -433,6 +433,11 @@ async (page) => {
           await page.locator('.overview-resources').waitFor();
         }
         if (view === "rules") {
+          if(await page.locator('.rule-composer .workspace-glass-action,.rule-library .workspace-glass-action,.rule-composer .workspace-glass-surface,.rule-library .workspace-glass-surface').count())throw Error('Rules still contains liquid-glass surfaces');
+          const actions=await page.locator('.rule-library-action').evaluateAll(items=>items.map(el=>({image:getComputedStyle(el).backgroundImage,blur:getComputedStyle(el).backdropFilter,height:el.getBoundingClientRect().height})));
+          if(!actions.length||actions.some(style=>style.image!=='none'||style.blur!=='none'||style.height<44))throw Error('Rule actions must be solid and remain usable touch targets');
+          await page.locator('.rule-library').evaluate(el=>el.scrollIntoView({block:'center'}));
+          await page.locator('.rule-library').screenshot({path:`/private/tmp/signalgen-solid-rule-library-${width}.png`,animations:'disabled'});
           const filters = await page.locator('.rule-library__filters').evaluate(el => {
             const search = el.querySelector('input').getBoundingClientRect();
             const buttons = [...el.querySelectorAll('[data-signal]')].map(item => item.getBoundingClientRect().height);

@@ -80,6 +80,12 @@ async (page) => {
   for(const width of [1440,1218,390]){
     await page.setViewportSize({width,height:1000});
     await page.evaluate(async()=>{await document.fonts.ready;await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
+    const summary=page.locator('.screener-run-summary');
+    if(await summary.locator('.workspace-glass-surface,.workspace-glass-action').count())throw Error('Rule summary still uses mismatched glass surfaces');
+    const surfaces=await summary.locator('.screener-run-summary__title > *').evaluateAll(items=>items.map(el=>({background:getComputedStyle(el).backgroundImage,blur:getComputedStyle(el).backdropFilter})));
+    if(surfaces.some(style=>style.background!=='none'||style.blur!=='none'))throw Error('Rule summary contains glossy gradients or blur');
+    await summary.evaluate(el=>el.scrollIntoView({block:'center'}));
+    await summary.screenshot({path:`output/playwright/usability-rule-summary-${width}.png`,animations:'disabled'});
     const statusbar=page.locator(".screener-result-statusbar");
     const filtersBox=await statusbar.locator(".screener-signal-filters").boundingBox();
     const actionsBox=await statusbar.locator(".screener-result-actions").boundingBox();

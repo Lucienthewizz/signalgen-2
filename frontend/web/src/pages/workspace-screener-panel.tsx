@@ -817,11 +817,10 @@ export function WorkspaceScreenerPanel({
             <div className="screener-run-summary">
               <div>
                 <div className="screener-run-summary__title">
-                  <strong className="workspace-glass-surface screener-rule-name">
+                  <strong className="screener-rule-name">
                     {selectedRule?.name}
                   </strong>
                   <Badge
-                    className="workspace-glass-surface"
                     variant={
                       selectedRule?.definition?.signal_type === "SELL"
                         ? "destructive"
@@ -833,10 +832,7 @@ export function WorkspaceScreenerPanel({
                     {selectedRule?.definition?.signal_type ?? "System rule"}
                   </Badge>
                   {conditions.length > 0 && (
-                    <Badge
-                      variant="outline"
-                      className="workspace-glass-surface screener-match-mode"
-                    >
+                    <Badge variant="outline" className="screener-match-mode">
                       Match{" "}
                       {selectedRule?.definition?.logic === "OR" ? "any" : "all"}{" "}
                       {conditions.length}{" "}
@@ -845,7 +841,6 @@ export function WorkspaceScreenerPanel({
                   )}
                   {conditions.length > 0 && (
                     <Button
-                      className="workspace-glass-action"
                       variant="outline"
                       nativeButton={false}
                       render={<a href="#app/rules" />}

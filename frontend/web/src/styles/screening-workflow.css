@@ -654,8 +654,19 @@
   min-height: 24px;
   height: auto;
 }
+.rule-library-action {
+  min-height: 44px;
+}
+.rule-library-action--delete {
+  min-width: 44px;
+}
 .screener-run-summary {
   grid-template-columns: minmax(0, 1fr);
+  border-block: 1px solid var(--line-soft);
+}
+.screener-run-summary__title > :is(.screener-rule-name, .screener-match-mode) {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
 }
 .screener-run-summary .screener-run-summary__title {
   width: 100%;

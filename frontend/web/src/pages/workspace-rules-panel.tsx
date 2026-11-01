@@ -1199,7 +1199,7 @@ export function ServerRulesPanel({
                       </div>
                       <div>
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
                           onClick={(event) => {
                             editorTrigger.current = event.currentTarget;
@@ -1207,7 +1207,7 @@ export function ServerRulesPanel({
                           }}
                           disabled={saving}
                           aria-label={`Edit ${rule.name}`}
-                          className="workspace-glass-action"
+                          className="rule-library-action"
                         >
                           <Pencil data-icon="inline-start" /> Edit rules
                         </Button>
@@ -1220,8 +1220,7 @@ export function ServerRulesPanel({
                           }}
                           disabled={saving || !backendOnline}
                           aria-label={`Delete ${rule.name}`}
-                          className="workspace-glass-action"
-                          data-destructive="true"
+                          className="rule-library-action rule-library-action--delete"
                         >
                           <Trash2 />
                         </Button>
