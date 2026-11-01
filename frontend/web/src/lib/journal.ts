@@ -43,16 +43,20 @@ export function filterJournalMonth<T extends { closedAt: string }>(
   return records.filter((record) => record.closedAt.slice(0, 7) === month);
 }
 
-export function journalTimeline<T extends { closedAt: string; pnl: number }>(
-  records: T[],
-) {
+export function journalTimeline<
+  T extends { closedAt: string; pnl: number; id?: string },
+>(records: T[]) {
   const ordered = [...records]
     .filter(
       (record) =>
         Number.isFinite(record.pnl) &&
         Number.isFinite(Date.parse(record.closedAt)),
     )
-    .sort((a, b) => Date.parse(a.closedAt) - Date.parse(b.closedAt));
+    .sort(
+      (a, b) =>
+        Date.parse(a.closedAt) - Date.parse(b.closedAt) ||
+        (a.id ?? "").localeCompare(b.id ?? ""),
+    );
   let value = 0;
   return [
     { value: 0, record: null as T | null },

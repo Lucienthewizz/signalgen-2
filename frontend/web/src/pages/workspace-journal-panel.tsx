@@ -243,6 +243,12 @@ export function JournalPanel({
       id: r.id,
       closedAt: r.data.exit_date + "T12:00:00Z",
       symbol: r.data.symbol,
+      openedAt: r.data.entry_date,
+      entry: r.data.entry_price,
+      side: r.data.side,
+      quantity: r.data.quantity,
+      book: r.data.book,
+      note: r.data.note,
       exit: r.data.exit_price!,
       pnl: r.data.net_pl!,
     }));

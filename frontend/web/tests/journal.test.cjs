@@ -64,3 +64,24 @@ test("month filters drive the same rows, totals and dated P&L points", () => {
   assert.equal(journalTimeline([])[0].value, 0);
   assert.equal(rows[0].id, "later", "Chart must not mutate table order");
 });
+
+test("each same-day trade keeps its own stable point independent of table sorting", () => {
+  const rows = [
+    { id: "c", closedAt: "2026-10-30", pnl: 300 },
+    { id: "a", closedAt: "2026-10-30", pnl: -100 },
+    { id: "b", closedAt: "2026-10-30", pnl: 0 },
+    { id: "invalid", closedAt: "invalid", pnl: 1 },
+  ];
+  const points = journalTimeline(rows);
+  assert.equal(points.length, 4);
+  assert.equal(
+    points.map((point) => point.record?.id ?? "start").join("|"),
+    "start|a|b|c",
+  );
+  assert.equal(points.map((point) => point.value).join("|"), "0|-100|-100|200");
+  assert.equal(
+    JSON.stringify(journalTimeline([...rows].reverse())),
+    JSON.stringify(points),
+  );
+  assert.equal(rows[0].id, "c");
+});

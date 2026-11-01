@@ -1,5 +1,19 @@
 # Signalgen Web
 
+## Interactive journal chart (30 October 2026)
+
+- Each closed trade is a separate cumulative P&L point, including same-day
+  trades. The chart keeps the journal's currency and filters; open trades are
+  excluded. Same-day ties use record IDs for a stable display order, not an
+  assumed intraday execution sequence.
+- Click/tap a point for entry/exit dates and prices, direction, quantity, note,
+  trade P&L and cumulative P&L. Chart interactions never create or update trades.
+  Use Tab to enter the chart, arrows/Home/End to move, Enter/Space to select,
+  and Escape or Clear selection to dismiss. Hidden/deleted selections clear.
+- The selection marker moves between points and details briefly cross-fade.
+  Reduced-motion preferences suppress movement. Dense charts scroll
+  horizontally to retain 44px point targets.
+
 ## FE-only analysis usability (29 October 2026)
 
 The API contract, backend, database and Go/WASM calculations are unchanged.
