@@ -13,6 +13,7 @@ import {
   Download,
   Clock3,
   Activity,
+  Gauge,
   ChevronDown,
   Trash2,
 } from "lucide-react";
@@ -1495,7 +1496,19 @@ export function WorkspaceScreenerPanel({
             </div>
             <div className="analysis-results-toolbar">
               <details className="analysis-performance">
-                <summary>Browser performance details</summary>
+                <summary>
+                  <span
+                    className="analysis-performance__icon"
+                    aria-hidden="true"
+                  >
+                    <Gauge />
+                  </span>
+                  <span>Browser performance details</span>
+                  <ChevronDown
+                    className="analysis-performance__chevron"
+                    aria-hidden="true"
+                  />
+                </summary>
                 <dl>
                   {[
                     ["Load selections (network included)", resourceMs],

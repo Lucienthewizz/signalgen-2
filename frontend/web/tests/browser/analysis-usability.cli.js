@@ -79,7 +79,16 @@ async (page) => {
   await page.getByRole("button",{name:"Refresh selections",exact:true}).waitFor();
   for(const width of [1440,1218,390]){
     await page.setViewportSize({width,height:1000});
+    await page.evaluate(async()=>{await document.fonts.ready;await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
+    const statusbar=page.locator(".screener-result-statusbar");
+    const filtersBox=await statusbar.locator(".screener-signal-filters").boundingBox();
+    const actionsBox=await statusbar.locator(".screener-result-actions").boundingBox();
+    if(width>=1218 && Math.abs(filtersBox.y+filtersBox.height/2-actionsBox.y-actionsBox.height/2)>1)throw Error(`Quality and export actions wrapped at ${width}: ${JSON.stringify({filtersBox,actionsBox,button:await statusbar.locator('[data-slot="toggle-group-item"]').first().evaluate(el=>({font:getComputedStyle(el).fontSize,height:getComputedStyle(el).height,minheight:getComputedStyle(el).minHeight,padding:getComputedStyle(el).padding}))})}`);
+    const dividers=await statusbar.evaluate(el=>({top:getComputedStyle(el).borderTopWidth,bottom:getComputedStyle(el).borderBottomWidth,separator:getComputedStyle(el.querySelector('.screener-result-actions')).borderInlineStartWidth}));
+    if(dividers.top!=="1px"||dividers.bottom!=="1px"||(width>=1218&&dividers.separator!=="1px"))throw Error("Screening toolbar dividers missing");
     const toolbar=page.locator(".analysis-results-toolbar");
+    const spacing=await toolbar.evaluate(el=>({top:parseFloat(getComputedStyle(el).paddingTop),bottom:parseFloat(getComputedStyle(el).paddingBottom),count:parseFloat(getComputedStyle(el.nextElementSibling).paddingTop)}));
+    if(spacing.top<24||spacing.bottom<24||spacing.count<16)throw Error("Performance toolbar or stock count spacing is cramped");
     const performance=toolbar.locator(".analysis-performance");
     const selection=toolbar.locator(".analysis-selection-bar");
     const performanceBox=await performance.boundingBox(),selectionBox=await selection.boundingBox();
