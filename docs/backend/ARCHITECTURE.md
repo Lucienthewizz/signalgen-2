@@ -4,6 +4,13 @@ This document is the reading map for the active Go/WASM backend. It explains
 where code belongs, how a request moves through the system, and which storage
 owns each kind of data.
 
+Manual portfolio API `0.16.0` adds `internal/api/portfolio/handler.go` (HTTP/session
+boundary) and `internal/portfolio/{model,calculate,store}.go` (validation, exact
+weighted-average accounting and Postgres persistence). Routes are composed in
+`internal/api/routes.go`; main only injects the store and readiness check.
+It uses the separate `signalgen.portfolio_transactions` ledger and never converts
+`user_records` journal/backtest entries. [Contract and reading guide](PORTFOLIO_LEDGER.md).
+
 ## Design goals
 
 1. Keep HTTP details separate from business rules and persistence.

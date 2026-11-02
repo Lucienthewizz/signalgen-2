@@ -1,0 +1,103 @@
+{
+  "date_local": "2026-11-03",
+  "timezone": "Asia/Makassar",
+  "branch": "feature/backend-portfolio-ledger",
+  "api_version": "0.16.0",
+  "schema": "portfolio-ledger-1",
+  "cost_policy": "weighted-average-fees-1",
+  "migration": {
+    "version": "20261102160030",
+    "name": "portfolio_ledger",
+    "sha256": "b3f151c6c5df0b7516ab1ab57c700c9a733b5f82dab2bcc0b5c85057b289a2b2",
+    "cloud_applied": true,
+    "local_history_filename_matches_cloud": true
+  },
+  "cloud_metadata": {
+    "rls": true,
+    "force_rls": true,
+    "owner_policy_count": 1,
+    "using_and_check_owner_context": true,
+    "runtime_bypass_rls": false,
+    "anonymous_read": false,
+    "authenticated_direct_read": false,
+    "all_runtime_crud_checked_by_live_readiness": true
+  },
+  "checks": {
+    "go_race_all_packages": "passed",
+    "go_vet": "passed",
+    "final_go_tests_embedded_contract": "passed",
+    "local_postgres": "17 disposable; restricted role, pool reuse, foreign insert denied, exact fees/fractionals, quota=1000, idempotency/CAS, rollback, FORCE RLS readiness, eight concurrent sells with one success and seven oversell denials",
+    "schema_bootstrap": "13 migrations and 3 existing ownership/policy scripts passed; final schema boundary assertions also passed",
+    "existing_api_postgres_actual_wasm_regression": "passed with SIGNALGEN_RUN_WASM_INTEGRATION=1 and disposable database; executed separately from portfolio fixtures",
+    "openapi_validator": "@apidevtools/swagger-cli@4.0.4 passed; corrected inline description commas and OpenAPI 3.0 percentage bounds in previous signal-study definitions",
+    "frontend_tests": {
+      "passed": 213,
+      "failed": 0
+    },
+    "frontend_typecheck_production_build": "passed",
+    "local_preflight": [
+      "API liveness",
+      "Postgres/schema/runtime-role readiness",
+      "API version",
+      "Frontend proxy version",
+      "Published OpenAPI matches checkout",
+      "Unauthenticated access is denied",
+      "Unknown API route has a JSON error",
+      "Matching feature-only Go/WASM assets"
+    ],
+    "live_unauthenticated_routes": [
+      {
+        "method": "GET",
+        "path": "/api/v1/portfolio",
+        "status": 401,
+        "code": "AUTH_REQUIRED",
+        "no_store": true
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/portfolio/transactions",
+        "status": 401,
+        "code": "AUTH_REQUIRED",
+        "no_store": true
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/portfolio/transactions/11111111-1111-4111-8111-111111111111",
+        "status": 401,
+        "code": "AUTH_REQUIRED",
+        "no_store": true
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/portfolio/transactions/11111111-1111-4111-8111-111111111111",
+        "status": 401,
+        "code": "AUTH_REQUIRED",
+        "no_store": true
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/v1/portfolio/transactions/11111111-1111-4111-8111-111111111111",
+        "status": 401,
+        "code": "AUTH_REQUIRED",
+        "no_store": true
+      }
+    ]
+  },
+  "security_advisors": {
+    "portfolio_findings": 0,
+    "existing_findings": [
+      "legacy sqlite tables have no RLS policy (private archive deny-all)",
+      "Supabase leaked password protection disabled"
+    ],
+    "auth_remediation": "https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection",
+    "auth_setting_changed": false
+  },
+  "limits": [
+    "No frontend ledger page integration or visual browser test of ledger",
+    "No cloud authenticated writes or fictitious account transactions",
+    "No quote valuation: market_value and unrealized_pnl null",
+    "No cash balance, FX, shorts, corporate-action adjustment, broker reconciliation or journal conversion",
+    "Catalog audit remains partial; valid data does not certify rule warmup or licensing",
+    "No fresh signed-in UI GET latency sample after final SQL optimization; database region ap-south-1 confirmed, no region/configuration change"
+  ]
+}

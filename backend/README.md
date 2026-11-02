@@ -1,5 +1,11 @@
 # SignalGen Backend
 
+Ledger portofolio manual tersedia pada API `0.16.0`, terpisah dari jurnal lama:
+BUY/SELL, kepemilikan, weighted-average cost dan realized P&L termasuk biaya.
+[Panduan endpoint, contoh Postman, struktur dan batas](../docs/backend/PORTFOLIO_LEDGER.md).
+Terapkan migration `portfolio_ledger` sebelum menjalankan image baru; readiness
+memeriksa tabel, izin role runtime dan RLS/FORCE RLS.
+
 Backend aktif SignalGen menggunakan Go/Gin, Supabase Auth, dan Supabase Postgres. Login,
 register, profil, forgot password, reset password, app-session, perangkat,
 entitlement, dataset, rules, serta compute grant dilayani Go API pada port

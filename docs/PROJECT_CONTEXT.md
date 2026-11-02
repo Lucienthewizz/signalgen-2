@@ -1,6 +1,6 @@
 # SignalGen 2.0 — Project Context and Architecture
 
-Versi 2.3 · 2 November 2026. SignalGen adalah aplikasi web multi-user dengan
+Versi 2.4 · 3 November 2026. SignalGen adalah aplikasi web multi-user dengan
 backend Go/Gin dan Supabase Postgres. Scope target bukan bukti semua fitur selesai;
 status terverifikasi berada di [backend progress](backend/BACKEND_PROGRESS.md) dan
 [laporan asis](ASIS_2026_10_07.md).
@@ -11,6 +11,12 @@ melalui WebSocket. Model B tetap bahan eksperimen, bukan jalur produk kedua.
 Pilihan ini bukan bukti efisiensi production atau persetujuan pembimbing.
 
 ## 1. Acuan
+
+Keputusan 2 November: portofolio memakai ledger BUY/SELL manual baru, terpisah
+dari jurnal masuk–keluar. Tidak ada konversi otomatis. Holding dan realized P&L
+dihitung server dengan weighted average termasuk biaya, dipisah buku/pasar/
+mata uang. Kontrak backend [portfolio-ledger-1](backend/PORTFOLIO_LEDGER.md);
+integrasi halaman frontend dan valuasi quote belum termasuk delivery ini.
 
 [PRD utama](PRD.md), [PRD frontend](frontend/FRONTEND_MVP_PRD.md), [PRD backend](backend/BACKEND_MVP_PRD.md), [kontrak target](backend/MVP_API_CONTRACT.md), [provenance rekaman](VOICE_MEMO_CONTEXT.md). Kode/test/OpenAPI runtime menetapkan kontrak aktual; dokumen target menetapkan pekerjaan yang harus dilakukan.
 

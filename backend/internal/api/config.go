@@ -8,12 +8,14 @@ import (
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/account"
 	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/portfolio"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/records"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/workspace"
 )
 
 type serverConfig struct {
+	portfolioStore    portfolio.Store
 	recordStore       records.Store
 	workspaceStore    workspace.Store
 	profileStore      account.ProfileRepository
@@ -32,6 +34,16 @@ type serverConfig struct {
 	socketLimiter     *screener.ConnectionLimiter
 	trafficObserver   *platformhttp.TrafficObserver
 	screeningObserver screener.Observer
+}
+
+func WithPortfolioStore(store portfolio.Store) ServerOption {
+	return func(config *serverConfig) error {
+		if store == nil {
+			return fmt.Errorf("portfolio store is required")
+		}
+		config.portfolioStore = store
+		return nil
+	}
 }
 
 func WithRecordStore(store records.Store) ServerOption {

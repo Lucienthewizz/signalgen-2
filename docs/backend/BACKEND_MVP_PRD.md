@@ -1,5 +1,10 @@
 # SignalGen — Backend & Portable Core MVP PRD
 
+Checkpoint implementasi 3 November 2026: API `0.16.0` menambahkan
+[ledger portofolio manual terpisah](PORTFOLIO_LEDGER.md). Pengguna memilih
+mempertahankan jurnal lama tanpa konversi; endpoint aktual dan batasnya mengikuti
+OpenAPI. Quote valuation, cash/FX dan UI ledger belum termasuk checkpoint ini.
+
 Versi 2.0 · 16 September 2026 · Target Go API + Go/WASM berdasarkan revisi voice memo. Owner: backend/core developer. [PRD utama](../PRD.md), [arsitektur](../PROJECT_CONTEXT.md), [FE PRD](../frontend/FRONTEND_MVP_PRD.md), [kontrak target](MVP_API_CONTRACT.md).
 
 ## 1. Outcome dan status implementasi

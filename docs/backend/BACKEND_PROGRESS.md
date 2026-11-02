@@ -1,5 +1,26 @@
 # Backend progress
 
+## 3 November 2026 — ledger portofolio dan resume audit
+
+Backend API `0.16.0` menambahkan ledger BUY/SELL manual terpisah sesuai keputusan
+pengguna; jurnal lama dan backtest tidak dikonversi. Holding/realized P&L memakai
+weighted average termasuk biaya dan desimal exact, dipisah buku/pasar/currency.
+Edit/hapus menghitung ulang seluruh riwayat kandidat, dengan CAS dan lock owner
+agar SELL tidak melebihi kepemilikan, termasuk pada penulisan bersamaan.
+[Kontrak, contoh dan struktur](PORTFOLIO_LEDGER.md).
+
+Migration cloud `20261102160030_portfolio_ledger` berhasil diterapkan; metadata
+RLS/FORCE RLS, owner policy dan penolakan akses role browser diperiksa. API hasil
+rebuild sehat; delapan pemeriksaan preflight, Go/race, PostgreSQL disposable,
+213 tes frontend dan production build lulus. UI ledger, valuasi quote/unrealized
+P&L, cash/FX dan corporate-action accounting belum dibuat. Tidak memasukkan
+transaksi fiktif ke akun asli. [Bukti pemeriksaan](../evidence/portfolio-ledger-20261103.json).
+
+Resume provider lima menit/pasar memberi cakupan kumulatif IDX 530 valid/19
+gagal/413 pending dari 962; AS 548 valid/4 pendek/5.048 pending dari 5.600.
+Ini QA data parsial, bukan evaluasi rule seluruh pasar selesai.
+[Bukti resume](../evidence/catalog-data-audit-resume-20261102.json).
+
 ## 2 November 2026 — loading, akses Postgres dan audit data
 
 UI memakai cache TanStack query-core per identitas untuk daftar/paket tampilan.

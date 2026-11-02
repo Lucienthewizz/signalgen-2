@@ -2,7 +2,7 @@
 
 Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** [`openapi.yaml`](../../backend/openapi.yaml) documents only the implemented Go surface and wins for current runtime integration; this file retains proposed routes and policy decisions. Changes require FE+BE review and versioning.
 
-Checkpoint 2 November 2026: runtime OpenAPI **0.15.0**, core **core-0.5.0**,
+Checkpoint 3 November 2026: runtime OpenAPI **0.16.0**, core **core-0.5.0**,
 capabilities **capabilities-5**. Namespace `/api/v1/backtests/studies` kini
 menyiapkan konteks/batch/batal untuk analisis semua sinyal, memakai manifest,
 compute grant dan evaluator yang ada. WASM `signalgenRunSignalStudy` memakai
@@ -239,38 +239,30 @@ Date bound inclusivity and exact binary/canonical content schema are M0 decision
 
 Compute grant request binds `purpose`, `dataset_id/version/checksum`, `rule_id/definition_hash`, `engine_version`, `schema_version`, session and expiry. Receipt is metadata for evaluation/audit; WASM can be modified and receipt cannot prove what client computed.
 
-## 4. Journal and portfolio routes (P1)
+## 4. Journal dan ledger portofolio (aktual 3 November)
+
+Pengguna memilih ledger baru terpisah; jurnal lama tidak dikonversi otomatis.
+Route aktual memakai prefix `/api/v1`, bukan route target lama
+`/journal/transactions` atau `/portfolio/positions` yang belum pernah diaktifkan.
 
 | Method | Route | Purpose |
-| --- | --- |
-| GET/POST | `/journal/transactions` | Owner list/create; POST idempotency key required |
-| GET/PATCH/DELETE | `/journal/transactions/{id}` | Owner-only; version conflict protection |
-| GET | `/portfolio/positions` | Authoritative positions and realized P&L |
-| GET | `/portfolio/summary` | Bounded totals, valuation source/time/warnings |
+| --- | --- | --- |
+| GET | `/api/v1/journal/trades` | Catatan masuk–keluar lama |
+| GET/PUT/DELETE | `/api/v1/journal/trades/{id}` | Kontrak jurnal lama tetap |
+| GET | `/api/v1/portfolio` | Holding dan realized P&L, terpisah buku/pasar/currency |
+| GET | `/api/v1/portfolio/transactions` | Ledger BUY/SELL terurut waktu dan UUID |
+| GET/PUT/DELETE | `/api/v1/portfolio/transactions/{id}` | Owner-only, create idempotent, versi CAS |
 
-Transaction write:
+Body PUT adalah `{version, data}`. Angka quantity/price/fee **string desimal**;
+create version nol dengan UUID stabil per draft. Edit memakai versi terkini;
+DELETE memerlukan `{version}`. Riwayat kandidat divalidasi ulang dalam transaksi
+terkunci per owner; tidak boleh menghasilkan SELL melebihi kepemilikan.
 
-```json
-{
-  "symbol":"BBCA.JK","market":"IDX","currency":"IDR","side":"BUY",
-  "quantity":"100","price":"9000","fee":"2500","executed_at":"2026-09-16T02:00:00Z",
-  "note":"Manual fill","source":"manual","source_reference":null
-}
-```
-
-`source=analysis_draft` may include non-authoritative reference/result metadata, but server still treats confirmed values as user-entered journal data. Server ignores client P&L/cost values. Response includes id/version/timestamps and recalculation state. Long-only P1 rejects SELL exceeding holdings after chronological recomputation.
-
-Position:
-
-```json
-{
-  "symbol":"BBCA.JK","quantity":"100","average_cost":"9025","realized_pnl":"0",
-  "last_price":"9100","last_price_at":"...","valuation_status":"historical","unrealized_pnl":"7500",
-  "cost_method":"weighted_average","version":4
-}
-```
-
-Missing quote uses null price/P&L and warning, not zero.
+Lihat [kontrak portfolio-ledger-1 lengkap](PORTFOLIO_LEDGER.md) dan OpenAPI untuk
+schema, contoh angka, header dan error. Weighted average termasuk biaya; quote
+belum dimuat sehingga market value/unrealized P&L null. Tidak ada FX, saldo kas,
+short selling, broker fill atau corporate-action accounting. Frontend ledger
+belum terintegrasi. Tidak mengubah schema/protokol backtest/WASM.
 
 ## 5. Restricted operator contract (P1)
 

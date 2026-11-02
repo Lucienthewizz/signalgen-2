@@ -1,6 +1,6 @@
 # SignalGen 2.0 — Product Requirements Document
 
-Versi 2.3 · 2 November 2026 · Produk: aplikasi web multi-user dengan Supabase Postgres. Kebutuhan dan hasil pengujian aktual dibedakan; lihat [bahan asis 4 November](ASIS_2026_11_04.md).
+Versi 2.4 · 3 November 2026 · Produk: aplikasi web multi-user dengan Supabase Postgres. Kebutuhan dan hasil pengujian aktual dibedakan; lihat [bahan asis 4 November](ASIS_2026_11_04.md).
 
 Keputusan implementasi 5 Oktober 2026: alur screening aktif memakai **Model A**
 (indikator di Go/WASM client, private decision di Go server melalui WebSocket).
@@ -8,6 +8,12 @@ Model B hanya pembanding penelitian. Benchmark dan persetujuan pembimbing tidak
 dianggap selesai hanya karena pilihan implementasi sudah ditetapkan.
 
 ## 1. Otoritas dan revisi
+
+Keputusan pengguna 2 November: ledger portofolio BUY/SELL baru, jurnal lama tetap;
+tanpa konversi otomatis. Pencatatan manual long-only memakai weighted average
+termasuk biaya, ownership server dan pemeriksaan penjualan melebihi kepemilikan.
+IDR/USD dan buku dipisahkan. Valuasi quote, cash/FX dan sinkronisasi broker tetap
+pekerjaan lanjutan. [Kontrak dan batas aktual](backend/PORTFOLIO_LEDGER.md).
 
 PRD ini menggantikan baseline desktop-first v1. Pengguna menegaskan rekaman Universitas Udayana.m4a sebagai revisi terbaru. Rekaman adalah sumber kebutuhan, bukan bukti implementasi atau hasil benchmark. Revisi dokumen tidak menghapus kode/data legacy.
 

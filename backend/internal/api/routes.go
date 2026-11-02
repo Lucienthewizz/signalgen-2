@@ -11,6 +11,7 @@ import (
 	datasetsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/datasets"
 	newsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/news"
 	operatorapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/operator"
+	portfolioapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/portfolio"
 	recordsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/records"
 	rulesapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/rules"
 	screenerapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/screener"
@@ -46,6 +47,12 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	systemHandler := &systemapi.Handler{Context: server.Context}
 	universesHandler := &universesapi.Handler{Context: server.Context}
 	router := platformhttp.NewRouter()
+	portfolioHandler := &portfolioapi.Handler{Context: server.Context, Store: config.portfolioStore}
+	router.Handle(http.MethodGet, "/api/v1/portfolio", portfolioHandler.Serve)
+	router.Handle(http.MethodGet, "/api/v1/portfolio/transactions", portfolioHandler.Serve)
+	router.Handle(http.MethodGet, "/api/v1/portfolio/transactions/:id", portfolioHandler.Serve)
+	router.Handle(http.MethodPut, "/api/v1/portfolio/transactions/:id", portfolioHandler.Serve)
+	router.Handle(http.MethodDelete, "/api/v1/portfolio/transactions/:id", portfolioHandler.Serve)
 	recordsHandler := &recordsapi.Handler{Context: server.Context, Store: config.recordStore}
 	for _, base := range []string{"/api/v1/journal/trades", "/api/v1/backtests/history"} {
 		router.Handle(http.MethodGet, base, recordsHandler.Serve)
