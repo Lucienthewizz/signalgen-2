@@ -58,3 +58,10 @@ test("missing price, symbol, indicator or candle time does not produce a success
     assert.equal(api.checkJournalScreening(draft, "owner").ok, false);
   }
 });
+test("bulk selection accepts only explicit directions and matching market/currency",()=>{
+ const draft=fixture();draft.run.manifest.market="IDX";
+ assert.equal(api.eligibleJournalScreening(draft,"owner"),true);
+ delete draft.run.rows[0].decision.signal_type;assert.equal(api.eligibleJournalScreening(draft,"owner"),false);
+ draft.run.rows[0].decision.signal_type="SELL";draft.run.manifest.currency="USD";assert.equal(api.eligibleJournalScreening(draft,"owner"),false);
+ draft.run.manifest.market="US";assert.equal(api.eligibleJournalScreening(draft,"owner"),true);assert.equal(api.eligibleJournalScreening(draft,"other"),false);
+});

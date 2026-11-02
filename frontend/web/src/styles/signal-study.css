@@ -1,0 +1,182 @@
+/* Keep the existing ledger palette and 44px touch controls; rows are compact. */
+.signal-study-panel,
+.journal-batch-review {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+  padding: var(--workspace-panel-gutter, 24px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.signal-study-panel h2,
+.journal-batch-review h3 {
+  font-size: 1.25rem;
+  margin: 0;
+  color: var(--text);
+}
+.signal-study-panel p,
+.journal-batch-review p {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.65;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.study-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  border: 0;
+  padding: 0;
+  margin: 20px 0;
+  min-width: 0;
+}
+.study-fields legend {
+  padding: 0 0 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.study-fields label {
+  display: grid;
+  gap: 8px;
+  font-size: 0.8rem;
+  min-width: 0;
+}
+.study-fields select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+.study-fields :is(select, input):focus-visible,
+.study-confirm input:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+.study-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-block: 8px;
+}
+.study-table-scroll {
+  overflow-x: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.study-table-scroll table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.study-table-scroll :is(th, td) {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.study-table-scroll th {
+  font-weight: 600;
+  color: var(--muted);
+}
+.study-table-scroll caption {
+  text-align: left;
+  padding: 10px 0;
+  font-weight: 600;
+  color: var(--text);
+}
+.study-table-scroll small {
+  display: block;
+  color: var(--muted);
+}
+.study-table-scroll input {
+  min-width: 100px;
+}
+.study-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 0.82rem;
+}
+.journal-row-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .journal-row-select {
+    min-width: 28px;
+    min-height: 28px;
+  }
+}
+.study-confirm input,
+.screener-workspace input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--green);
+  flex-shrink: 0;
+}
+.signal-study-panel details {
+  min-width: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.signal-study-panel summary {
+  cursor: pointer;
+  min-height: 44px;
+  font-size: 0.86rem;
+  display: list-item;
+  align-content: center;
+}
+.signal-study-panel progress {
+  width: 100%;
+  accent-color: var(--green);
+  height: 8px;
+}
+.signal-study-panel pre {
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.journal-batch-review {
+  margin-block: 16px;
+}
+@media (min-width: 861px) {
+  .screener-result-ledger [data-slot="table-cell"],
+  .screener-result-ledger [data-slot="table-head"] {
+    padding-block: 8px;
+  }
+  .screener-result-ledger td:nth-child(n + 4):nth-child(-n + 7) {
+    font-variant-numeric: tabular-nums;
+  }
+}
+@media (max-width: 760px) {
+  .study-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .study-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .signal-study-panel,
+  .journal-batch-review {
+    padding: 16px;
+  }
+  .study-actions > button {
+    min-height: 44px;
+  }
+}

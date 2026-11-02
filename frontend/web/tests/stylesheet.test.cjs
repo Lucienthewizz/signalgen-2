@@ -19,6 +19,7 @@ const modules = [
   "screening-workflow",
   "workspace-review",
   "backtesting",
+  "signal-study",
   "admin-access",
 ];
 

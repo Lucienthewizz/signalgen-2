@@ -1863,9 +1863,13 @@ export function DemoWorkspace({
   const [draftSymbol, setDraftSymbol] = useState<string | null>(null);
   const [screeningDraft, setScreeningDraft] =
     useState<JournalScreeningDraft | null>(null);
+  const [screeningDrafts, setScreeningDrafts] = useState<
+    JournalScreeningDraft[]
+  >([]);
   useEffect(() => {
     setDraftSymbol(null);
     setScreeningDraft(null);
+    setScreeningDrafts([]);
   }, [user?.id]);
   const meta = viewMeta[view];
   const PageIcon = meta.icon;
@@ -1874,6 +1878,7 @@ export function DemoWorkspace({
     location.hash = `app/${next}`;
   }
   function draft(symbol: string, evidence?: JournalScreeningDraft) {
+    setScreeningDrafts([]);
     setDraftSymbol(symbol);
     setScreeningDraft(evidence ?? null);
     go("journal");
@@ -2122,6 +2127,12 @@ export function DemoWorkspace({
                     {view === "analysis" && (
                       <WorkspaceScreenerPanel
                         onDraft={draft}
+                        onDraftBatch={(items) => {
+                          setDraftSymbol(null);
+                          setScreeningDraft(null);
+                          setScreeningDrafts(items);
+                          go("journal");
+                        }}
                         userId={user?.id}
                         authenticated={authenticated}
                         backendOnline={backendOnline}
@@ -2155,10 +2166,12 @@ export function DemoWorkspace({
                       <JournalPanel
                         draftSymbol={draftSymbol}
                         screeningDraft={screeningDraft}
+                        screeningDrafts={screeningDrafts}
                         userId={user?.id}
                         clearDraft={() => {
                           setDraftSymbol(null);
                           setScreeningDraft(null);
+                          setScreeningDrafts([]);
                         }}
                       />
                     )}

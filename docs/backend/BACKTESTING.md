@@ -1,10 +1,17 @@
-# Backtesting backend/core — 27 Oktober 2026
+# Backtesting backend/core — revisi 2 November 2026
+
+Mode utama sekarang adalah [Analisis semua sinyal](SIGNAL_STUDY.md), kontrak
+`signal-study-1 / signal-close-independent-1`: close acuan, O/H/C setiap horizon,
+BUY/SELL analisis arah, TP/SL SL dahulu, dan katalog diproses batch. Bagian di
+bawah mendokumentasikan **mode simulasi portofolio terpisah** yang tetap ada;
+kebijakan modal/next-open di sini tidak diterapkan pada studi semua sinyal.
 
 Status: backend/core slice `backtest-2`, policy `holding-next-open-1`. Ini mengikuti
 analisis T+1…T+n Claudio dengan kebijakan eksekusi baru. UI dasar untuk pengujian
 tersedia di `#app/backtest`; [alur frontend dan tes browser](../../frontend/web/README.md#basic-backtesting-workspace-26-october-2026).
-Riwayat hasil sekarang tersedia lokal per akun di browser. History server/lintas
-perangkat, jurnal authoritative, intraday, short, target-stop dan exit-rule belum termasuk.
+Riwayat simulasi tersedia lokal dan melalui API arsip server. Jurnal authoritative
+memakai `user_records` terpisah. Intraday portfolio, short nyata dan exit-rule
+tidak ditambahkan; TP/SL studi adalah observasi OHLC, bukan fill portofolio.
 
 ## Alur dan kontrak
 
@@ -28,7 +35,7 @@ perangkat, jurnal authoritative, intraday, short, target-stop dan exit-rule belu
 4. Rule: jalankan `signalgenComputeBacktestFeatures` dalam worker, satu series per
    panggilan dengan `purpose=backtest`. Buat `/api/v1/compute-grants` dengan purpose
    `backtest`, metadata snapshot dan rule hash/engine/schema versi saat ini.
-5. POST `/api/v1/backtests/signals`, maksimal 1 MiB:
+5. POST `/api/v1/backtests/signals`, maksimal 8 MiB:
 
 ```json
 {"compute_grant_id":"GRANT_ID","feature_schema_version":"screener-features-1","policy_version":"holding-next-open-1","candidates":[]}

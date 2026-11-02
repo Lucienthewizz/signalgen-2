@@ -2,6 +2,17 @@
 
 Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** [`openapi.yaml`](../../backend/openapi.yaml) documents only the implemented Go surface and wins for current runtime integration; this file retains proposed routes and policy decisions. Changes require FE+BE review and versioning.
 
+Checkpoint 2 November 2026: runtime OpenAPI **0.15.0**, core **core-0.5.0**,
+capabilities **capabilities-5**. Namespace `/api/v1/backtests/studies` kini
+menyiapkan konteks/batch/batal untuk analisis semua sinyal, memakai manifest,
+compute grant dan evaluator yang ada. WASM `signalgenRunSignalStudy` memakai
+[`signal-study-1`](../../backend/contracts/signal-study.schema.json) dan policy
+`signal-close-independent-1`; `backtest-2` tetap simulasi next-open yang terpisah.
+Lihat [kontrak studi lengkap](SIGNAL_STUDY.md). API jurnal `/api/v1/journal/trades`
+serta arsip simulasi server sudah digunakan, dengan ownership/version/idempotency
+dan P&L server. Pernyataan unimplemented di checkpoint lama di bawah bersifat
+historis. Tidak ada halaman historical screener baru atau background compute job.
+
 Checkpoint 5 October 2026 (supersedes historical fixture/split notes below):
 the user selected Model A for active implementation. Dynamic preparation now
 requires an owned `universe_id`; content returns `series[]` for up to three

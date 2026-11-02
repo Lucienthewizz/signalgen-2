@@ -56,6 +56,26 @@ function client(reply, timers = {}) {
 const response = (payload, status = 200) =>
   new Response(JSON.stringify(payload), { status });
 
+test("a completed mutation cannot reuse an older in-flight list response",async()=>{
+ let release;let reads=0;const c=client((_url,init)=>init.method==="PUT"?response({version:1}):++reads===1?new Promise(r=>release=r):response({items:[{id:"fresh"}]}));
+ const old=c.api.listRecords("journal");await c.api.saveRecord("journal","new-record",0,{});
+ const current=await c.api.listRecords("journal");assert.equal(current.items[0].id,"fresh");assert.equal(reads,2);release(response({items:[]}));await old;
+});
+
+test("abortable duplicate reads share transport; leaving one reader keeps the other alive",async()=>{
+ let finish;const c=client(()=>new Promise(resolve=>finish=resolve));
+ const a=new AbortController(),b=new AbortController();
+ const first=c.api.listRules(a.signal),second=c.api.listRules(b.signal);
+ assert.equal(c.calls.length,1);a.abort();await assert.rejects(first,e=>e.name==="AbortError");
+ assert.equal(c.calls[0].init.signal.aborted,false);finish(response({items:[]}));await second;
+});
+test("last abortable reader cancels transport and does not join a later request",async()=>{
+ const c=client((_url,init)=>new Promise((_resolve,reject)=>init.signal.addEventListener("abort",()=>reject(Error("abort")))));
+ const a=new AbortController(),b=new AbortController(),first=c.api.listRules(a.signal),second=c.api.listRules(b.signal);
+ a.abort();b.abort();await Promise.allSettled([first,second]);assert.equal(c.calls[0].init.signal.aborted,true);
+ const d=new AbortController(),later=c.api.listRules(d.signal);assert.equal(c.calls.length,2);d.abort();await assert.rejects(later);
+});
+
 test("intraday requests pass timeframe and Stop aborts HTTP without a retry", async()=>{
   const controller=new AbortController();
   const c=client((_url,init)=>new Promise((_resolve,reject)=>init.signal.addEventListener("abort",()=>reject(new DOMException("Cancelled","AbortError")),{once:true})));

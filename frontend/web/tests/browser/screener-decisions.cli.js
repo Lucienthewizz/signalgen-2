@@ -2,6 +2,7 @@
 async (page) => {
   // Akun, harga, dan respons server berikut adalah fixture; tidak ada data akun asli.
   const origin = new URL(page.url()).origin;
+  let backendFailure=false;
   const renderErrors = [];
   page.on("pageerror", error => renderErrors.push(error.message));
   page.on("console", message => {
@@ -41,7 +42,7 @@ async (page) => {
     if(url.origin !== origin) return route.abort();
     if(p !== "/api" && !p.startsWith("/api/") && p !== "/ready") return route.continue();
     let payload;
-    if(p === "/api" || p === "/ready") payload={status:"ready",name:"Synthetic API"};
+    if(p === "/api" || p === "/ready") {if(backendFailure)return route.fulfill({status:503,json:{error:{code:"SERVICE_UNAVAILABLE",request_id:"qa-health-outage"}}});payload={status:"ready",name:"Synthetic API"};}
     else if(p === "/api/auth/me") payload=user;
     else if(p === "/api/v1/account/me") payload={user,features:["screener"],session:{id:"qa-session",expires_at:new Date(Date.now()+86400000).toISOString()},device:{installation_id:"qa",current:true},capabilities_version:"capabilities-4"};
     else if(p === "/api/v1/rules") payload={items:rules};
@@ -83,12 +84,12 @@ async (page) => {
         if (!(await quality.innerText()).includes('does not guarantee gap-free')) throw Error('Complete was presented as guaranteed data quality');
         if (item.name === cases[0].name && await quality.locator('li').count() !== 2) throw Error('Provider warnings were lost after history reload');
         await quality.getByRole('button', {name:'Close', exact:true}).click();
-        const label=(await row.getByRole("cell").nth(1).innerText()).trim();
+        const label=(await row.getByRole("cell").nth(2).innerText()).trim();
         if(label !== item.label) throw Error(`Wrong direction after reload: ${item.name}: ${label}`);
         const currency=item.market === "IDX" ? "IDR" : "USD";
         await page.getByRole("columnheader",{name:`Open price (${currency})`,exact:true}).waitFor();
         await page.getByRole("columnheader",{name:`Close price (${currency})`,exact:true}).waitFor();
-        const reason=await row.getByRole("cell").nth(6).innerText();
+        const reason=await row.getByRole("cell").nth(7).innerText();
         if(item.reason === "RULE_MATCHED" && !reason.includes(item.logic === "OR" ? "At least one condition met." : "All conditions met.")) throw Error(`Incorrect logic explanation: ${item.name}`);
         if(item.reason === "CONDITIONS_NOT_MET" && !reason.includes("No conditions met.")) throw Error("OR failure reason is wrong");
         if(item.reason === "COOLDOWN_ACTIVE" && !reason.includes("conditions met, but")) throw Error("Cooldown was confused with a false condition");
@@ -104,9 +105,6 @@ async (page) => {
           if (!await comparison.evaluate(el => el.children.length === 2 && getComputedStyle(el).gridTemplateColumns.split(' ').length === 2)) throw Error('Crossover is not a two-column comparison');
           await page.evaluate(() => window.scrollTo(0,0));
           await page.screenshot({path:`/private/tmp/signalgen-evidence-flow-${width}-${theme}.png`,fullPage:true,animations:'disabled'});
-          await page.getByRole('button', {name:/View data quality/}).click();
-          await quality.screenshot({path:`/private/tmp/signalgen-data-quality-${width}-${theme}.png`,animations:'disabled'});
-          await quality.getByRole('button', {name:'Close', exact:true}).click();
           await detail.locator('.stock-detail__evidence').screenshot({path:`/private/tmp/signalgen-crossover-${width}-${theme}.png`,animations:'disabled'});
           await page.locator('.screener-history').screenshot({path:`/private/tmp/signalgen-history-status-${width}-${theme}.png`,animations:'disabled'});
           if(!(await detail.innerText()).includes("SELL signal (not an order)")) throw Error("Detail lost SELL direction");
@@ -125,6 +123,9 @@ async (page) => {
       if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     }
   }
+  backendFailure=true;await page.waitForTimeout(5500);
+  if(!await page.locator(".screener-result-ledger tbody tr").count())throw Error("A transient health failure cleared the previous screener table (request qa-health-outage)");
+  backendFailure=false;
   if(renderErrors.length) throw Error(renderErrors.join("; "));
   await page.evaluate(()=>document.body.setAttribute("data-signalgen-decision-tests","complete"));
   return {synthetic:true,cases:cases.length,widths:[1440,390],themes:2,reload:true,csv:true,history:true};

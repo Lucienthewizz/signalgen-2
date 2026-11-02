@@ -13,7 +13,7 @@ async (page) => {
   const definition = { name: "Rule fixture", logic: "AND", signal_type: "BUY", cooldown_sec: 0, conditions: [{ left: "PRICE", op: ">", right: "EMA20" }, { left: "EMA9", op: ">", right: "EMA20" }] };
   const rule = { id: "fixture-rule", name: definition.name, owner_type: "user", read_only: false, version: 2, definition_hash: "fixture-hash", schema_version: "rule-1", engine_version: "core-0.5.0", definition };
   const universe = { id: "fixture-universe", name: "Bank pilihan", version: 1, symbols: ["BBCA.JK", "BBRI.JK"] };
-  const rows = [true, false].map((matched, i) => ({ decision: { symbol: universe.symbols[i], timestamp: now, matched, reason_codes: [matched ? "RULE_MATCHED" : "CONDITIONS_NOT_MET"] }, features: { price: 100 + i, ema9: matched ? 99 : 95, ema20: 98, rsi14: 60 }, latestOpen: 95, latestClose: 100 + i }));
+  const rows = [true, false].map((matched, i) => ({ decision: { symbol: universe.symbols[i], timestamp: now, matched, signal_type:"BUY", reason_codes: [matched ? "RULE_MATCHED" : "CONDITIONS_NOT_MET"] }, features: { price: 100 + i, ema9: matched ? 99 : 95, ema20: 98, rsi14: 60 }, latestOpen: 95, latestClose: 100 + i }));
   const run = { rows, latestDecision: rows[0].decision, features: rows[0].features, latestOpen: 95, latestClose: 100, result: { type: "screener.result", protocol: "screener-private-1", request_id: "fixture-request", decision_version: "fixture-decision", results: rows.map(row => row.decision) }, manifest: { dataset_id: "fixture-dataset", version: "1", schema_version: "ohlcv-multi-1", provider: "yahoo_finance", purpose: "screen", market: "IDX", currency: "IDR", symbols: universe.symbols, timeframe: "1d", timezone: "UTC", requested_range: { from: day, to: day }, available_range: { from: day, to: day }, warmup_candles: 20, adjustment: "split", candle_count: 100, decoded_bytes: 1000, checksum: "fixture-checksum", quality: { status: "complete", warnings: [] } }, execution: "client_wasm+server_private_scoring" };
   const before = JSON.parse(JSON.stringify(run));
   before.rows.forEach(row => { row.decision.matched = !row.decision.matched; });
@@ -32,6 +32,7 @@ async (page) => {
   let healthOffline = false;
   let sessionMutations = 0;
   let journalUnavailable = false;
+  let journalReadFailure=false;
   const journalWrites = [];
   const journalItems = [198600,90000,-32000,70000].map((pnl,i)=>({id:`77777777-7777-4777-8777-${String(i+1).padStart(12,"0")}`,version:1,bytes:1000,data:{symbol:["BBCA","TLKM","ASII","BMRI"][i],market:"IDX",currency:"IDR",side:"BUY",quantity:1000,entry_price:1000,exit_price:1000+pnl/1000,entry_fee:0,exit_fee:0,entry_date:`2026-09-${[16,15,12,10][i]}`,exit_date:`2026-09-${[16,15,12,10][i]}`,book:"Trading journal",note:"Synthetic user-recorded trade",net_pl:pnl,return_pct:pnl/10000}}));
   const sessionFixtures = [
@@ -70,7 +71,7 @@ async (page) => {
     if (url.hostname !== "127.0.0.1") return route.abort();
     const p = url.pathname;
     if(p.startsWith("/api/v1/journal/trades")){
-      if(route.request().method()==="GET")return route.fulfill({json:{items:journalItems}});
+      if(route.request().method()==="GET"){if(journalReadFailure){await new Promise(r=>setTimeout(r,100));return route.fulfill({status:503,json:{error:{code:"RECORDS_UNAVAILABLE",request_id:"qa-journal-outage"}}})}return route.fulfill({json:{items:journalItems}});}
       const id=p.split("/").at(-1),body=route.request().postDataJSON();journalWrites.push({id,body});
       if(journalUnavailable)return route.fulfill({status:503,json:{error:{code:"RECORDS_UNAVAILABLE",message:"Synthetic storage interruption. Nothing was reported as saved."}}});
       const index=journalItems.findIndex(r=>r.id===id);
@@ -200,6 +201,37 @@ async (page) => {
   await page.getByLabel('Currency',{exact:true}).selectOption('USD');
   if((await page.locator('.journal-performance__summary').innerText()).includes('326,600'))throw Error('Journal mixed IDR and USD');
   await page.getByLabel('Currency',{exact:true}).selectOption('IDR');
+  journalReadFailure=true;
+  await page.getByRole('button',{name:'Refresh journal',exact:true}).click();
+  await page.getByText('Updating journal; previous rows remain visible.',{exact:true}).waitFor();
+  await page.getByText('Journal unavailable',{exact:true}).waitFor();
+  if(await page.locator('.journal-ledger tbody tr').count()!==4)throw Error('A transient journal read removed the existing rows (qa-journal-outage)');
+  journalReadFailure=false;await page.getByRole('button',{name:'Retry journal',exact:true}).click();
+  await page.getByText('Journal unavailable',{exact:true}).waitFor({state:'hidden'});
+  // Bulk selection is only a memory draft. No write before reviewed quantities
+  // and explicit confirmation; failed saves retry the exact original UUID.
+  await page.goto(`${origin}/#app/analysis`);
+  await page.getByLabel('Select all matched stocks for journal',{exact:true}).check();
+  const writesBefore=journalWrites.length;
+  await page.getByRole('button',{name:'Review 1 selected in journal',exact:true}).click();
+  await page.getByRole('heading',{name:'Review selected screening drafts',exact:true}).waitFor();
+  if(journalWrites.length!==writesBefore)throw Error('Selecting screening rows saved transactions automatically');
+  await page.getByLabel('Quantity BBCA.JK',{exact:true}).fill('100');
+  await page.getByLabel('Entry price BBCA.JK',{exact:true}).fill('105');
+  await page.getByLabel('Entry fee BBCA.JK',{exact:true}).fill('2');
+  await page.getByLabel('Journal name BBCA.JK',{exact:true}).fill('Batch QA');
+  await page.getByLabel('I confirm these are user-recorded trades, not orders executed by SignalGen.',{exact:true}).check();
+  journalUnavailable=true;await page.getByRole('button',{name:'Save unsaved / retry failed trades',exact:true}).click();
+  await page.locator('.journal-batch-review').getByText('Synthetic storage interruption. Nothing was reported as saved.',{exact:true}).waitFor();
+  const batchUUID=journalWrites.at(-1).id;journalUnavailable=false;
+  await page.getByRole('button',{name:'Save unsaved / retry failed trades',exact:true}).click();
+  await page.getByRole('button',{name:'Edit trade BBCA.JK',exact:true}).waitFor();
+  if(journalWrites.at(-1).id!==batchUUID||journalItems.length!==5||journalWrites.at(-1).body.data.quantity!==100)throw Error('Bulk retry changed identity or quantity');
+  await page.getByRole('button',{name:'Close review',exact:true}).click();
+  await page.getByRole('button',{name:'Delete trade BBCA.JK',exact:true}).click();
+  await page.getByRole('alertdialog',{name:'Delete recorded trade?',exact:true}).getByRole('button',{name:'Delete trade',exact:true}).click();
+  await page.getByRole('button',{name:'Edit trade BBCA.JK',exact:true}).waitFor({state:'hidden'});
+  if(journalItems.length!==4)throw Error('Bulk fixture cleanup failed');
   if (await page.locator(".journal-drafts").count()) throw Error("Local draft workflow still visible");
   await page.reload();
   if (await page.evaluate(key => localStorage.getItem(key), journalKey) !== "preserve-existing-drafts") throw Error("Old drafts were overwritten");
@@ -342,7 +374,7 @@ async (page) => {
           });
           if (Math.abs(controlGeometry.left - controlGeometry.expected) > 1) throw Error('Monitor status padding is not aligned');
           if (width === 1440 && controlGeometry.start < controlGeometry.times) throw Error('Start/Stop must be right of check times');
-          const actions = await page.locator('.screener-result-actions > button').evaluateAll(items => items.map(el => el.getBoundingClientRect().height));
+          const actions = await page.locator('.screener-result-actions > button').filter({hasText:/View data quality|Export CSV/}).evaluateAll(items => items.map(el => el.getBoundingClientRect().height));
           if (actions.length !== 2 || Math.abs(actions[0] - actions[1]) > 1) throw Error('Quality and CSV buttons do not align');
           const offset = await page.evaluate(() => {
             const note = document.querySelector(".screener-result-count");

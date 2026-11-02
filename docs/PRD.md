@@ -1,6 +1,6 @@
 # SignalGen 2.0 — Product Requirements Document
 
-Versi 2.1 · 29 September 2026 · Keputusan produk terbaru: aplikasi web multi-user dengan Supabase Postgres sebagai penyimpanan aplikasi. Status implementasi: migrasi berlangsung.
+Versi 2.3 · 2 November 2026 · Produk: aplikasi web multi-user dengan Supabase Postgres. Kebutuhan dan hasil pengujian aktual dibedakan; lihat [bahan asis 4 November](ASIS_2026_11_04.md).
 
 Keputusan implementasi 5 Oktober 2026: alur screening aktif memakai **Model A**
 (indikator di Go/WASM client, private decision di Go server melalui WebSocket).
@@ -52,6 +52,15 @@ P0 selesai bukan berarti MVP selesai. Target satu minggu demo adalah estimasi aw
 
 ## 4. Functional requirements
 
+Revisi 2 November 2026: **Analisis semua sinyal** menjadi mode utama backtest;
+close candle sinyal sebagai acuan, O/H/C T+1…T+n, BUY/SELL sebagai analisis arah,
+TP/SL konservatif SL dahulu, serta data masa depan kurang bukan loss. Seluruh
+katalog IDX atau AS diproses batch sepuluh tanpa mengubah limit screener langsung.
+Mode portofolio next-open tetap terpisah. Ceklis hasil Match membawa draft ke
+review jurnal dengan quantity/harga/tanggal/biaya/buku dan konfirmasi pengguna.
+Tidak mengisi jurnal otomatis dari backtest. Detail acceptance, limit, kontrak
+dan kebijakan: [SIGNAL_STUDY](backend/SIGNAL_STUDY.md).
+
 Revisi disetujui pengguna 20 Oktober 2026: monitoring Start–Stop di halaman
 screener, interval 1m/5m/15m/1h/1d (default UI 5m), range intraday otomatis
 3→7→30 hari kalender (1m berhenti di 7), hanya diperluas bila candle <20;
@@ -86,7 +95,11 @@ atau pekerjaan server tanpa browser. Detail kontrak, penerimaan dan limit:
 | MVP-EVAL-01 | P0/P1 | Evaluasi | 1/10/30 sesi, cold/warm, CPU/RAM kedua sisi, latency/traffic/failure dan threat model |
 | MVP-WEB-01 | P1 | Informasi produk/akun jujur | CTA menuju web app; tidak menjanjikan checkout/installer/live feed yang belum ada |
 
-History backtest lintas perangkat di server, full watchlist, CSV, banyak indikator/exit strategy masuk P2. Hasil backtest P0/P1 lokal/ephemeral; jurnal transaksi terkonfirmasi disimpan server.
+Arsip simulasi backtest dan jurnal terkonfirmasi menggunakan API server yang
+sudah ada. Detail studi seluruh pasar bersifat sementara per akun di IndexedDB,
+bukan jurnal atau return portofolio. Full watchlist dan strategi exit lain
+tetap di luar revisi ini. Keberadaan fitur tidak menggantikan verifikasi provider,
+performa, recovery atau penerimaan pembimbing.
 
 ## 5. Journeys dan business rules
 

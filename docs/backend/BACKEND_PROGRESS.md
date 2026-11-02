@@ -1,5 +1,16 @@
 # Backend progress
 
+## 2 November 2026 — independent signal study and demo verification
+
+Added `signal-study-1 / signal-close-independent-1`, close-based independent
+O/H/C horizons, BUY/SELL direction, conservative TP/SL, frozen owner/session
+study contexts, ten-stock catalog batches, cancellation/release, and grant/rule
+hash binding. Native/WASM and the legacy next-open simulator remain separate.
+API 0.15.0 / capabilities-5; core indicator and feature protocols stay compatible.
+Existing journal storage/API is reused for reviewed multi-row screening drafts.
+Cloud journal migration/RLS metadata was inspected read-only; no new migration.
+[Current evidence, performance limits and demo guide](../ASIS_2026_11_04.md).
+
 ## 27 October 2026 — Claudio indicator catalog
 
 Added all 78 archived rule operands, dynamic 1–250 periods and previous-candle

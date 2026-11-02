@@ -22,6 +22,7 @@ export type WorkerScope = typeof globalThis & {
   signalgenComputeFeatures?: (request: string) => string;
   signalgenComputeBacktestFeatures?: (request: string) => string;
   signalgenRunBacktest?: (request: string) => string;
+  signalgenRunSignalStudy?: (request: string) => string;
   signalgenBacktestCapabilities?: () => string;
 };
 

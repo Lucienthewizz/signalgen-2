@@ -1,6 +1,6 @@
 # SignalGen 2.0 — Project Context and Architecture
 
-Versi 2.2 · 6 Oktober 2026. SignalGen adalah aplikasi web multi-user dengan
+Versi 2.3 · 2 November 2026. SignalGen adalah aplikasi web multi-user dengan
 backend Go/Gin dan Supabase Postgres. Scope target bukan bukti semua fitur selesai;
 status terverifikasi berada di [backend progress](backend/BACKEND_PROGRESS.md) dan
 [laporan asis](ASIS_2026_10_07.md).
@@ -76,10 +76,14 @@ FE tidak menentukan izin, memegang server secrets atau mengirim order broker. Co
 Satu API boundary `/api`; setiap route punya satu pemilik. Route `/api/v1` untuk
 account/session/rules/universe/dataset/compute/screener/backtests/subscription/operator
 sudah diimplementasikan di Go. Daftar aktual mengikuti `backend/openapi.yaml`
-(0.12.0), bukan semua endpoint dalam kontrak target. Backtest inti memiliki core
+(0.15.0), bukan semua endpoint dalam kontrak target. Backtest inti memiliki core
 Go/WASM harian dan API akses/sinyal privat; lihat [kebijakan backtest](backend/BACKTESTING.md).
-UI dasar backtest untuk pengujian rule/manual tersedia di `#app/backtest`.
-History backtest lintas perangkat, jurnal dan portfolio tetap pekerjaan terbuka.
+`#app/backtest` kini memisahkan studi seluruh sinyal (`signal-study-1`, close
+acuan, TP/SL, batch katalog) dan simulasi portofolio lama (`backtest-2`, next-open).
+API jurnal dan arsip simulasi server digunakan kembali; draft ceklis screener
+harus direview dan dikonfirmasi sebelum menjadi jurnal. Detail studi sementara
+tidak menjadi transaksi. [Kontrak studi](backend/SIGNAL_STUDY.md) dan
+[bukti asis](ASIS_2026_11_04.md) menyatakan verifikasi serta batas yang aktual.
 Runtime aktif tidak dual-write SQLite/Postgres.
 
 Legacy auth /api/auth/register, /api/auth/login, /api/auth/me tetap kompatibel; field/response tidak diganti diam-diam. Kontrak API dan worker dibekukan M0 lalu diterbitkan OpenAPI/schema. Base URL/version/WASM URL terpusat; FE mengikuti runtime yang benar.

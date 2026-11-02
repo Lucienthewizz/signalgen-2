@@ -36,6 +36,7 @@ import { InfoDialog } from "@/components/ui/info-dialog";
 import { toast } from "@/components/ui/toast";
 import {
   checkJournalScreening,
+  eligibleJournalScreening,
   type JournalScreeningDraft,
 } from "@/lib/journal-screening";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -113,6 +114,7 @@ type Props = {
   backendOnline: boolean;
   userId?: string;
   onDraft: (symbol: string, evidence?: JournalScreeningDraft) => void;
+  onDraftBatch?: (drafts: JournalScreeningDraft[]) => void;
 };
 
 type RunState = "idle" | "loading" | "completed" | "failed";
@@ -136,6 +138,7 @@ export function WorkspaceScreenerPanel({
   backendOnline,
   userId,
   onDraft,
+  onDraftBatch,
 }: Props) {
   const [account, setAccount] = useState<AccountState | null>(null);
   const [rules, setRules] = useState<RuleResource[]>([]);
@@ -153,6 +156,8 @@ export function WorkspaceScreenerPanel({
   const monitorInfoRef = useRef<HTMLButtonElement>(null);
   const recoveryFocus = useRef<HTMLElement | null>(null);
   const [run, setRun] = useState<LiveScreenerRun | null>(null);
+  const [journalSelection, setJournalSelection] = useState<string[]>([]);
+  useEffect(() => setJournalSelection([]), [run?.result.request_id, userId]);
   const [detailSymbol, setDetailSymbol] = useState<string | null>(null);
   const detailRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -222,7 +227,7 @@ export function WorkspaceScreenerPanel({
   const evidenceRule = historicalRun?.context?.ruleSnapshot ?? runContext?.rule;
 
   async function loadResources() {
-    if (!authenticated || !backendOnline) return;
+    if (!authenticated) return;
     const version = ++resourceVersion.current;
     setLoadingResources(true);
     setError(null);
@@ -236,6 +241,8 @@ export function WorkspaceScreenerPanel({
           api.listStockUniverses(),
         ]);
       if (!mounted.current || version !== resourceVersion.current) return;
+      if (accountResponse.user.id !== userId)
+        throw new Error("The account changed. Reload your selections.");
       setAccount(accountResponse);
       setRules(ruleResponse.items);
       setUniverses(universeResponse.items);
@@ -308,7 +315,7 @@ export function WorkspaceScreenerPanel({
       ++resourceVersion.current;
       monitor.stop();
     };
-  }, [authenticated, backendOnline, userId]);
+  }, [authenticated, userId]);
 
   useEffect(() => {
     const stop = () => monitor.stop();
@@ -362,7 +369,13 @@ export function WorkspaceScreenerPanel({
   }
 
   function execute() {
-    if (!selectedRule || !selectedUniverse || !canScreen || monitorState.active)
+    if (
+      !backendOnline ||
+      !selectedRule ||
+      !selectedUniverse ||
+      !canScreen ||
+      monitorState.active
+    )
       return;
     let previous: LiveScreenerRun | null = null;
     let failurePresented = false;
@@ -464,7 +477,22 @@ export function WorkspaceScreenerPanel({
         : loadResources());
   }
 
-  if (!authenticated || !backendOnline) {
+  const journalEligible =
+    run?.rows
+      .filter((row) =>
+        eligibleJournalScreening(
+          {
+            ownerId: userId ?? "",
+            symbol: row.decision.symbol,
+            ruleName: "",
+            screenedAt: new Date().toISOString(),
+            run,
+          },
+          userId,
+        ),
+      )
+      .map((row) => row.decision.symbol) ?? [];
+  if (!authenticated) {
     return (
       <Empty className="workspace-empty-state">
         <EmptyHeader>
@@ -491,6 +519,13 @@ export function WorkspaceScreenerPanel({
 
   return (
     <div className="screener-workspace" tabIndex={-1}>
+      {!backendOnline && (
+        <p role="status">
+          Connection interrupted. Previous screening results remain visible and
+          have not been updated. New requests still require server
+          authorization.
+        </p>
+      )}
       <ConfirmDialog
         open={Boolean(pendingHistoryDelete) || deleteAllHistory}
         title={
@@ -548,7 +583,7 @@ export function WorkspaceScreenerPanel({
           <Badge variant="outline">Closed candles · Yahoo Finance</Badge>
         </header>
 
-        {loadingResources ? (
+        {loadingResources && !account ? (
           <div
             className="screener-resource-loading"
             role="status"
@@ -870,6 +905,7 @@ export function WorkspaceScreenerPanel({
                 onClick={() => void execute()}
                 disabled={
                   loadingResources ||
+                  !backendOnline ||
                   !canScreen ||
                   !selectedRule ||
                   !selectedUniverse
@@ -1355,6 +1391,67 @@ export function WorkspaceScreenerPanel({
                 ))}
               </ToggleGroup>
               <div className="screener-result-actions">
+                {onDraftBatch && (
+                  <>
+                    <label className="study-confirm">
+                      <input
+                        type="checkbox"
+                        disabled={monitorState.active}
+                        aria-label="Select all matched stocks for journal"
+                        checked={
+                          journalEligible.length > 0 &&
+                          journalEligible.every((symbol) =>
+                            journalSelection.includes(symbol),
+                          )
+                        }
+                        onChange={(e) =>
+                          setJournalSelection(
+                            e.target.checked ? journalEligible : [],
+                          )
+                        }
+                      />
+                      Select all matched
+                    </label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!journalSelection.length || monitorState.active}
+                      onClick={() => {
+                        const drafts = run.rows
+                          .filter(
+                            (r) =>
+                              r.decision.matched &&
+                              journalSelection.includes(r.decision.symbol),
+                          )
+                          .map((row) => ({
+                            ownerId: userId ?? "",
+                            symbol: row.decision.symbol,
+                            ruleName:
+                              historicalRun?.rule ??
+                              runContext?.rule.name ??
+                              "Screening result",
+                            ruleSnapshot: evidenceRule
+                              ? {
+                                  version: evidenceRule.version,
+                                  definition_hash: evidenceRule.definition_hash,
+                                  definition: evidenceRule.definition,
+                                }
+                              : undefined,
+                            screenedAt: new Date().toISOString(),
+                            run,
+                          }));
+                        if (
+                          drafts.every(
+                            (d) => checkJournalScreening(d, userId).ok,
+                          )
+                        )
+                          onDraftBatch(drafts);
+                      }}
+                    >
+                      Review {journalSelection.length} selected in journal
+                    </Button>
+                  </>
+                )}
                 <ScreeningDataQuality
                   manifest={run.manifest}
                   timestamps={run.rows.map((row) => row.decision.timestamp)}
@@ -1421,6 +1518,7 @@ export function WorkspaceScreenerPanel({
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {onDraftBatch && <TableHead>Select</TableHead>}
                     <TableHead>Stock</TableHead>
                     <TableHead>Decision</TableHead>
                     <TableHead>Open price ({run.manifest.currency})</TableHead>
@@ -1440,6 +1538,33 @@ export function WorkspaceScreenerPanel({
                     )
                     .map((row) => (
                       <TableRow key={row.decision.symbol}>
+                        {onDraftBatch && (
+                          <TableCell>
+                            <label className="journal-row-select">
+                              <input
+                                type="checkbox"
+                                aria-label={`Select ${row.decision.symbol} for journal`}
+                                disabled={
+                                  !journalEligible.includes(
+                                    row.decision.symbol,
+                                  ) || monitorState.active
+                                }
+                                checked={journalSelection.includes(
+                                  row.decision.symbol,
+                                )}
+                                onChange={(e) =>
+                                  setJournalSelection((old) =>
+                                    e.target.checked
+                                      ? [...old, row.decision.symbol]
+                                      : old.filter(
+                                          (s) => s !== row.decision.symbol,
+                                        ),
+                                  )
+                                }
+                              />
+                            </label>
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Button
                             variant="ghost"
@@ -1581,7 +1706,7 @@ export function WorkspaceScreenerPanel({
                       screeningStatus(row.decision) === signalFilter,
                   ).length && (
                     <TableRow>
-                      <TableCell colSpan={8}>
+                      <TableCell colSpan={onDraftBatch ? 9 : 8}>
                         No stocks match these filters.{" "}
                         <Button
                           variant="ghost"

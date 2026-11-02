@@ -20,6 +20,7 @@ import {
 import { useActionNotifications } from "@/components/ui/toast";
 import { JournalScreeningVerification } from "@/components/journal-screening-verification";
 import { JournalPnlChart } from "@/components/journal-pnl-chart";
+import { JournalBatchReview } from "@/components/journal-batch-review";
 import { journalPerformance, localJournalDate } from "@/lib/journal";
 import type { JournalScreeningDraft } from "@/lib/journal-screening";
 import type {
@@ -53,11 +54,13 @@ export function JournalPanel({
   clearDraft,
   screeningDraft,
   userId,
+  screeningDrafts = [],
 }: {
   draftSymbol: string | null;
   clearDraft: () => void;
   screeningDraft: JournalScreeningDraft | null;
   userId?: string;
+  screeningDrafts?: JournalScreeningDraft[];
 }) {
   const [records, setRecords] = useState<{ owner: string; items: Item[] }>({
     owner: "",
@@ -97,7 +100,10 @@ export function JournalPanel({
       ownerRef.current === userId;
     setLoading(true);
     setError(null);
-    setRecords({ owner: userId ?? "", items: [] });
+    // Preserve this owner's rows while refreshing; never expose another owner.
+    setRecords((previous) =>
+      previous.owner === userId ? previous : { owner: userId ?? "", items: [] },
+    );
     if (userId)
       void api
         .listRecords<RecordedTrade>("journal", controller.signal)
@@ -210,21 +216,43 @@ export function JournalPanel({
     try {
       await api.ensureAppSession();
       if (!active()) return;
-      if (remove)
+      if (remove) {
         await api.deleteRecord(
           "journal",
           remove.id,
           remove.version,
           controller.signal,
         );
-      else
-        await api.saveRecord<RecordedTrade>(
+        if (active())
+          setRecords((previous) =>
+            previous.owner === owner
+              ? {
+                  ...previous,
+                  items: previous.items.filter((item) => item.id !== remove.id),
+                }
+              : previous,
+          );
+      } else {
+        const saved = await api.saveRecord<RecordedTrade>(
           "journal",
           editing?.id ?? newRecordID.current,
           editing?.version ?? 0,
           form,
           controller.signal,
         );
+        if (active())
+          setRecords((previous) =>
+            previous.owner === owner
+              ? {
+                  ...previous,
+                  items: [
+                    saved,
+                    ...previous.items.filter((item) => item.id !== saved.id),
+                  ],
+                }
+              : previous,
+          );
+      }
       if (!active()) return;
       setNotice(remove ? "Trade deleted." : "Trade saved to your account.");
       setPendingDelete(null);
@@ -361,6 +389,15 @@ export function JournalPanel({
           </Button>
         </div>
       </section>
+      {screeningDrafts.length > 0 && (
+        <JournalBatchReview
+          key={screeningDrafts.map((d) => d.symbol + d.screenedAt).join("|")}
+          drafts={screeningDrafts}
+          userId={userId}
+          onClose={clearDraft}
+          onSaved={() => setReload((n) => n + 1)}
+        />
+      )}
       {error && (
         <Alert variant="destructive">
           <AlertTitle>Journal unavailable</AlertTitle>
@@ -579,176 +616,171 @@ export function JournalPanel({
           </form>
         </section>
       )}
-      {loading ? (
+      {loading && items.length > 0 && (
+        <p role="status">Updating journal; previous rows remain visible.</p>
+      )}
+      {loading && items.length === 0 ? (
         <Skeleton className="journal-loading" />
       ) : (
-        !error && (
-          <>
-            <section
-              className="journal-performance"
-              aria-label="Trading performance"
-            >
-              <div className="journal-performance__summary">
-                <div>
-                  <span>Performance of displayed trades</span>
-                  <strong
-                    className={metrics.totalPnl >= 0 ? "positive" : "negative"}
-                  >
-                    {money(metrics.totalPnl)}
-                  </strong>
-                  <small>
-                    {closed.length} closed trades · {currency} only · after
-                    recorded fees
-                  </small>
-                </div>
-                <dl>
-                  <div>
-                    <dt>Win rate</dt>
-                    <dd>{closed.length ? `${metrics.winRate}%` : "—"}</dd>
-                  </div>
-                  <div>
-                    <dt>Profit factor</dt>
-                    <dd>
-                      {metrics.profitFactor === null
-                        ? "—"
-                        : `${metrics.profitFactor.toFixed(2)}×`}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Average win</dt>
-                    <dd>{closed.length ? money(metrics.averageWin) : "—"}</dd>
-                  </div>
-                </dl>
+        <>
+          <section
+            className="journal-performance"
+            aria-label="Trading performance"
+          >
+            <div className="journal-performance__summary">
+              <div>
+                <span>Performance of displayed trades</span>
+                <strong
+                  className={metrics.totalPnl >= 0 ? "positive" : "negative"}
+                >
+                  {money(metrics.totalPnl)}
+                </strong>
+                <small>
+                  {closed.length} closed trades · {currency} only · after
+                  recorded fees
+                </small>
               </div>
-              <JournalPnlChart records={closed} currency={currency} />
-            </section>
-            <section
-              className="journal-ledger"
-              aria-label="Recorded trade history"
-            >
-              <header>
+              <dl>
                 <div>
-                  <h3>Recorded trades</h3>
-                  <p>
-                    Open positions are excluded from realized P&amp;L. Up to
-                    1,000 trades per account.
-                  </p>
+                  <dt>Win rate</dt>
+                  <dd>{closed.length ? `${metrics.winRate}%` : "—"}</dd>
                 </div>
-                <Badge variant="outline">{visible.length} records</Badge>
-              </header>
-              <div
-                className="journal-ledger__table"
-                role="region"
-                aria-label="Recorded trades table, scroll horizontally on smaller screens"
-                tabIndex={0}
-              >
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {[
-                        "Instrument",
-                        "Position",
-                        "Entry / exit",
-                        "Dates",
-                        "Net P&L",
-                        "Actions",
-                      ].map((h) => (
-                        <TableHead key={h}>{h}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {visible.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell>
-                          <strong>{r.data.symbol}</strong>
-                          <small>{r.data.book}</small>
-                        </TableCell>
-                        <TableCell>
-                          {r.data.side === "BUY" ? "Long" : "Short"}
-                          <small>
-                            {r.data.quantity.toLocaleString()} shares
-                          </small>
-                        </TableCell>
-                        <TableCell>
-                          {money(r.data.entry_price)} /{" "}
-                          {r.data.exit_price === null
-                            ? "Open"
-                            : money(r.data.exit_price)}
-                        </TableCell>
-                        <TableCell>
-                          {r.data.entry_date}
-                          <small>{r.data.exit_date || "Still open"}</small>
-                        </TableCell>
-                        <TableCell>
-                          <strong
-                            className={
-                              (r.data.net_pl ?? 0) >= 0
-                                ? "positive"
-                                : "negative"
-                            }
-                          >
-                            {r.data.net_pl === null
-                              ? "—"
-                              : money(r.data.net_pl)}
-                          </strong>
-                          <small>
-                            {r.data.return_pct === null
-                              ? "Unrealized not estimated"
-                              : `${r.data.return_pct.toFixed(2)}%`}
-                          </small>
-                        </TableCell>
-                        <TableCell>
-                          <div className="backtest-actions">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={busy}
-                              aria-label={`Edit trade ${r.data.symbol}`}
-                              onClick={() => {
-                                setEditing(r);
-                                const {
-                                  net_pl: _,
-                                  return_pct: __,
-                                  ...input
-                                } = r.data;
-                                setForm(input);
-                                setCaptureOpen(true);
-                              }}
-                            >
-                              <Pencil data-icon="inline-start" />
-                              Edit
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              disabled={busy}
-                              aria-label={`Delete trade ${r.data.symbol}`}
-                              onClick={(e) => {
-                                returnFocus.current = e.currentTarget;
-                                setPendingDelete(r);
-                              }}
-                            >
-                              <Trash2 />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                <div>
+                  <dt>Profit factor</dt>
+                  <dd>
+                    {metrics.profitFactor === null
+                      ? "—"
+                      : `${metrics.profitFactor.toFixed(2)}×`}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Average win</dt>
+                  <dd>{closed.length ? money(metrics.averageWin) : "—"}</dd>
+                </div>
+              </dl>
+            </div>
+            <JournalPnlChart records={closed} currency={currency} />
+          </section>
+          <section
+            className="journal-ledger"
+            aria-label="Recorded trade history"
+          >
+            <header>
+              <div>
+                <h3>Recorded trades</h3>
+                <p>
+                  Open positions are excluded from realized P&amp;L. Up to 1,000
+                  trades per account.
+                </p>
+              </div>
+              <Badge variant="outline">{visible.length} records</Badge>
+            </header>
+            <div
+              className="journal-ledger__table"
+              role="region"
+              aria-label="Recorded trades table, scroll horizontally on smaller screens"
+              tabIndex={0}
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {[
+                      "Instrument",
+                      "Position",
+                      "Entry / exit",
+                      "Dates",
+                      "Net P&L",
+                      "Actions",
+                    ].map((h) => (
+                      <TableHead key={h}>{h}</TableHead>
                     ))}
-                    {!visible.length && (
-                      <TableRow>
-                        <TableCell colSpan={6}>
-                          No recorded trades match these filters. Record your
-                          first trade above.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </section>
-          </>
-        )
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visible.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>
+                        <strong>{r.data.symbol}</strong>
+                        <small>{r.data.book}</small>
+                      </TableCell>
+                      <TableCell>
+                        {r.data.side === "BUY" ? "Long" : "Short"}
+                        <small>{r.data.quantity.toLocaleString()} shares</small>
+                      </TableCell>
+                      <TableCell>
+                        {money(r.data.entry_price)} /{" "}
+                        {r.data.exit_price === null
+                          ? "Open"
+                          : money(r.data.exit_price)}
+                      </TableCell>
+                      <TableCell>
+                        {r.data.entry_date}
+                        <small>{r.data.exit_date || "Still open"}</small>
+                      </TableCell>
+                      <TableCell>
+                        <strong
+                          className={
+                            (r.data.net_pl ?? 0) >= 0 ? "positive" : "negative"
+                          }
+                        >
+                          {r.data.net_pl === null ? "—" : money(r.data.net_pl)}
+                        </strong>
+                        <small>
+                          {r.data.return_pct === null
+                            ? "Unrealized not estimated"
+                            : `${r.data.return_pct.toFixed(2)}%`}
+                        </small>
+                      </TableCell>
+                      <TableCell>
+                        <div className="backtest-actions">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            aria-label={`Edit trade ${r.data.symbol}`}
+                            onClick={() => {
+                              setEditing(r);
+                              const {
+                                net_pl: _,
+                                return_pct: __,
+                                ...input
+                              } = r.data;
+                              setForm(input);
+                              setCaptureOpen(true);
+                            }}
+                          >
+                            <Pencil data-icon="inline-start" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={busy}
+                            aria-label={`Delete trade ${r.data.symbol}`}
+                            onClick={(e) => {
+                              returnFocus.current = e.currentTarget;
+                              setPendingDelete(r);
+                            }}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!visible.length && (
+                    <TableRow>
+                      <TableCell colSpan={6}>
+                        No recorded trades match these filters. Record your
+                        first trade above.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+        </>
       )}
       <ConfirmDialog
         open={pendingDelete !== null}

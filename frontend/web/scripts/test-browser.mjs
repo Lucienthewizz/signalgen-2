@@ -6,13 +6,14 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const adminOnly = process.argv.includes("--admin");
+const studyOnly = process.argv.includes("--study");
 const backtestOnly = process.argv.includes("--backtest");
 const catalogOnly = process.argv.includes("--catalog");
 const decisionsOnly = process.argv.includes("--decisions");
 const recoveryOnly = process.argv.includes("--recovery");
 const monitorOnly = process.argv.includes("--monitor");
 const baseURL = process.env.SIGNALGEN_TEST_BASE_URL || "http://127.0.0.1:5174";
-const testFilename = adminOnly
+const testFilename = studyOnly ? "tests/browser/signal-study.cli.js" : adminOnly
   ? "tests/browser/admin-access.cli.js"
   : backtestOnly
     ? "tests/browser/backtest.cli.js"
@@ -25,7 +26,7 @@ const testFilename = adminOnly
           : catalogOnly
             ? "tests/browser/stock-catalog.cli.js"
             : "tests/browser/workspace-regression.cli.js";
-const attributeName = adminOnly
+const attributeName = studyOnly ? "data-signalgen-study-tests" : adminOnly
   ? "data-signalgen-admin-tests"
   : backtestOnly
     ? "data-signalgen-backtest-tests"
@@ -125,7 +126,11 @@ if (usedCli) {
     await page.goto(baseURL);
     const code = fs.readFileSync(path.join(root, testFilename), "utf8");
     const fn = eval("(" + code.trim().replace(/;$/, "") + ")");
-    await fn(page);
+    try { const evidence=await fn(page);if(studyOnly)writeFileSync(path.join(root,"output/playwright/signal-study-browser.json"),JSON.stringify(evidence,null,2)+"\n"); } catch(error) {
+      await page.screenshot({path:`output/playwright/${studyOnly?"signal-study":"browser"}-failure.png`,fullPage:true}).catch(()=>{});
+      console.error((await page.locator("body").innerText()).slice(0,3500));
+      throw error;
+    }
     const result = await page.evaluate(
       (attr) => document.body.getAttribute(attr),
       attributeName,
@@ -138,7 +143,7 @@ if (usedCli) {
 }
 
 console.log(
-  adminOnly
+  studyOnly ? "PASS: 23 stocks / 3 batches, real Go/WASM, 92 independent signals, failed-only retry, full detail CSV, native IndexedDB paging and quota rollback, Stop/late response/navigation, 1440/390px with dark and forced light CSS. Synthetic API/account/provider only." : adminOnly
     ? "PASS: verified-role sidebar navigation, admin search/paging, reviewed grant/revoke, validation focus, contrast and 44px controls, denied/forged/suspended roles, 1440/375px and 844x390 landscape, dark theme. Synthetic account/API fixtures only."
     : backtestOnly
       ? "PASS: backtest-2 rule/manual, real Go/WASM, horizon/equity/trade paging, bulk input, full CSV downloads, native IndexedDB persistence/limits/rollback, archive reload/logout/isolation, cancellation/integrity/denial, 1440/390px dark theme. Synthetic account/API fixtures only."

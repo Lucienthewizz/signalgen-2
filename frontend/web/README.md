@@ -510,3 +510,37 @@ a criteria preview, not market results: the current dataset/compute API requires
 saved rule ID and definition hash. Save and run the rule in Screener for results.
 Saved rules can be searched by name and filtered by BUY/SELL, with condition counts
 and a separate no-matching-rules state. Filters do not mutate saved rules.
+
+## Signal studies and journal review — 2 November 2026
+
+`#app/backtest` defaults to **Analyse every signal**. **Portfolio simulation**
+opens the existing next-open simulator. Independent studies use a close reference,
+all O/H/C trading-candle horizons and optional conservative TP/SL. Entire-market
+sources run sequential batches of ten with a reused worker, frozen catalog/rule,
+partial coverage, failed-stock retry, Stop, and paged temporary IndexedDB details.
+CSV exports include all individual horizons and a separate coverage report.
+Settings changed after a run require a new study; retry keeps the frozen context.
+
+Matched screener rows with explicit BUY/SELL direction can be selected and sent
+to journal review. Selection does not save anything. Enter actual quantity,
+price, date, fees and journal, then confirm. Stable UUIDs allow failed-only retry;
+the Go API remains authoritative for validation, ownership, versions and P&L.
+Backtests never automatically create journal trades.
+
+Transient health/resource failures retain previous results, and journal refresh
+does not replace populated rows with a loading skeleton. Identical GETs share
+in-flight work with independent cancellation; writes invalidate post-write read
+coalescing. Permission checks remain server-side on every protected operation.
+
+Use the existing development port **5174**. Rebuild API and WASM together after
+pulling. This addition needs API 0.15.0 / capabilities-5 and the new WASM export;
+older assets show an update error instead of silently falling back.
+
+Checks: `npm test`, `npm run build`, `npm run test:study`, `npm run test:browser`,
+`npm run test:backtest`, `npm run test:monitor`, `npm run test:decisions`,
+`npm run test:recovery`. The study browser suite uses real Go/WASM and IndexedDB
+with synthetic API/provider/account fixtures at 1440/390px, including forced
+light CSS. The product's existing dark-only theme policy is unchanged.
+
+[Study contract and storage limits](../../docs/backend/SIGNAL_STUDY.md) ·
+[Demo/evidence and known limits](../../docs/ASIS_2026_11_04.md).

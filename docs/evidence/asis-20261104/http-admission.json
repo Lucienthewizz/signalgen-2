@@ -1,0 +1,84 @@
+{
+  "arch": "arm64",
+  "cpus": 10,
+  "go": "go1.27.2",
+  "kind": "loopback_http_synthetic_admission",
+  "limits": "One create and first ten-stock batch per admitted user; contexts held until admission wave ends. Current process-local bounds; no real Supabase/Yahoo, no complete screening, no production capacity claim.",
+  "os": "darwin",
+  "provider_calls": 642,
+  "runs": [
+    {
+      "admitted_contexts": 1,
+      "capacity_rejected_contexts": 0,
+      "create_p50_ms": 0.736208,
+      "create_p95_ms": 0.736208,
+      "first_batch_stocks_prepared": 10,
+      "logical_users": 1,
+      "prepare_p50_ms": 1.075458,
+      "prepare_p95_ms": 1.075458,
+      "response_json_bytes": 13387,
+      "snapshot_capacity_failures": 0,
+      "unexpected_errors": 0
+    },
+    {
+      "admitted_contexts": 10,
+      "capacity_rejected_contexts": 0,
+      "create_p50_ms": 0.567791,
+      "create_p95_ms": 0.648041,
+      "first_batch_stocks_prepared": 100,
+      "logical_users": 10,
+      "prepare_p50_ms": 1.704709,
+      "prepare_p95_ms": 3.18275,
+      "response_json_bytes": 133869,
+      "snapshot_capacity_failures": 0,
+      "unexpected_errors": 0
+    },
+    {
+      "admitted_contexts": 30,
+      "capacity_rejected_contexts": 0,
+      "create_p50_ms": 0.651417,
+      "create_p95_ms": 0.960709,
+      "first_batch_stocks_prepared": 128,
+      "logical_users": 30,
+      "prepare_p50_ms": 4.869,
+      "prepare_p95_ms": 5.129792,
+      "response_json_bytes": 195178,
+      "snapshot_capacity_failures": 172,
+      "unexpected_errors": 0
+    },
+    {
+      "admitted_contexts": 32,
+      "capacity_rejected_contexts": 68,
+      "create_p50_ms": 1.937,
+      "create_p95_ms": 2.278417,
+      "first_batch_stocks_prepared": 128,
+      "logical_users": 100,
+      "prepare_p50_ms": 5.104708,
+      "prepare_p95_ms": 5.475,
+      "response_json_bytes": 209986,
+      "snapshot_capacity_failures": 192,
+      "unexpected_errors": 0
+    },
+    {
+      "admitted_contexts": 32,
+      "capacity_rejected_contexts": 968,
+      "create_p50_ms": 6.714458,
+      "create_p95_ms": 10.515083,
+      "first_batch_stocks_prepared": 128,
+      "logical_users": 1000,
+      "prepare_p50_ms": 5.738042,
+      "prepare_p95_ms": 6.035208,
+      "response_json_bytes": 369288,
+      "snapshot_capacity_failures": 192,
+      "unexpected_errors": 0
+    }
+  ],
+  "synthetic_dependencies": [
+    "identity",
+    "session",
+    "entitlement",
+    "catalog",
+    "daily OHLCV"
+  ],
+  "timestamp": "2026-11-02T04:33:15.964921Z"
+}

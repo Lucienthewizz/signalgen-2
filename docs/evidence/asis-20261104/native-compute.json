@@ -1,0 +1,313 @@
+{
+  "admission_limit": 32,
+  "arch": "arm64",
+  "candles_per_symbol": 300,
+  "cpus": 10,
+  "excluded": [
+    "real auth/database/provider latency",
+    "HTTP/JSON parse",
+    "browser startup/compute/render",
+    "physical devices",
+    "production capacity"
+  ],
+  "feature_json_bytes_per_request": 452581,
+  "go": "go1.27.2",
+  "gomaxprocs": 10,
+  "input_sha256": "a83b408ef8d02782d68f7148e531ab7f44b20cae2740725e74520770a28250c5",
+  "kind": "local_synthetic_compute_admission",
+  "matching_signals": 165,
+  "os": "darwin",
+  "raw_json_bytes_per_request": 308093,
+  "rule": {
+    "name": "Frozen experiment",
+    "logic": "AND",
+    "signal_type": "BUY",
+    "cooldown_sec": 0,
+    "conditions": [
+      {
+        "left": "PRICE",
+        "op": "\u003e",
+        "right": "EMA20"
+      },
+      {
+        "left": "RSI14",
+        "op": "\u003c",
+        "right": 80
+      }
+    ]
+  },
+  "runs": [
+    {
+      "accepted": 10,
+      "attempted": 10,
+      "capacity_rejected": 0,
+      "decision": {
+        "p50_ms": 1.3414169999999999,
+        "p95_ms": 1.659251
+      },
+      "elapsed_ms": 19.203125,
+      "errors": 0,
+      "features": {
+        "p50_ms": 0.48333299999999996,
+        "p95_ms": 0.644293
+      },
+      "heap_before_bytes": 975296,
+      "latency": {
+        "p50_ms": 1.806291,
+        "p95_ms": 2.22025
+      },
+      "logical_clients": 1,
+      "mode": "indicators_and_rule",
+      "process_alloc_bytes": 23376048,
+      "process_alloc_count": 209122,
+      "sample_interval_ms": 1,
+      "sampled_peak_go_heap_bytes": 3912712,
+      "trials": 10
+    },
+    {
+      "accepted": 100,
+      "attempted": 100,
+      "capacity_rejected": 0,
+      "decision": {
+        "p50_ms": 4.007793,
+        "p95_ms": 5.164708999999999
+      },
+      "elapsed_ms": 67.310459,
+      "errors": 0,
+      "features": {
+        "p50_ms": 1.843291,
+        "p95_ms": 2.868043
+      },
+      "heap_before_bytes": 978096,
+      "latency": {
+        "p50_ms": 5.983959,
+        "p95_ms": 6.992042
+      },
+      "logical_clients": 10,
+      "mode": "indicators_and_rule",
+      "process_alloc_bytes": 238565216,
+      "process_alloc_count": 2091959,
+      "sample_interval_ms": 1,
+      "sampled_peak_go_heap_bytes": 10079568,
+      "trials": 10
+    },
+    {
+      "accepted": 300,
+      "attempted": 300,
+      "capacity_rejected": 0,
+      "decision": {
+        "p50_ms": 8.039708000000001,
+        "p95_ms": 13.027748999999998
+      },
+      "elapsed_ms": 163.006416,
+      "errors": 0,
+      "features": {
+        "p50_ms": 4.221874,
+        "p95_ms": 9.967669
+      },
+      "heap_before_bytes": 1321184,
+      "latency": {
+        "p50_ms": 13.386834,
+        "p95_ms": 16.395458
+      },
+      "logical_clients": 30,
+      "mode": "indicators_and_rule",
+      "process_alloc_bytes": 704176832,
+      "process_alloc_count": 6274002,
+      "sample_interval_ms": 1,
+      "sampled_peak_go_heap_bytes": 14148368,
+      "trials": 10
+    },
+    {
+      "accepted": 320,
+      "attempted": 1000,
+      "capacity_rejected": 680,
+      "decision": {
+        "p50_ms": 9.479916000000001,
+        "p95_ms": 18.256
+      },
+      "elapsed_ms": 205.838209,
+      "errors": 0,
+      "features": {
+        "p50_ms": 4.738626,
+        "p95_ms": 16.138125000000002
+      },
+      "heap_before_bytes": 1412752,
+      "latency": {
+        "p50_ms": 15.475084,
+        "p95_ms": 31.822792
+      },
+      "logical_clients": 100,
+      "mode": "indicators_and_rule",
+      "process_alloc_bytes": 752093944,
+      "process_alloc_count": 6693471,
+      "sample_interval_ms": 1,
+      "sampled_peak_go_heap_bytes": 30719552,
+      "trials": 10
+    },
+    {
+      "accepted": 320,
+      "attempted": 10000,
+      "capacity_rejected": 9680,
+      "decision": {
+        "p50_ms": 7.607624,
+        "p95_ms": 14.730917
+      },
+      "elapsed_ms": 173.17075,
+      "errors": 0,
+      "features": {
+        "p50_ms": 4.4415000000000004,
+        "p95_ms": 11.118958000000001
+      },
+      "heap_before_bytes": 1461304,
+      "latency": {
+        "p50_ms": 13.610583,
+        "p95_ms": 17.905
+      },
+      "logical_clients": 1000,
+      "mode": "indicators_and_rule",
+      "process_alloc_bytes": 748506024,
+      "process_alloc_count": 6705478,
+      "sample_interval_ms": 1,
+      "sampled_peak_go_heap_bytes": 23200632,
+      "trials": 10
+    },
+    {
+      "accepted": 10,
+      "attempted": 10,
+      "capacity_rejected": 0,
+      "decision": {
+        "p50_ms": 0.995042,
+        "p95_ms": 1.0506229999999999
+      },
+      "elapsed_ms": 9.65425,
+      "errors": 0,
+      "features": {
+        "p50_ms": 0,
+        "p95_ms": 0
+      },
+      "heap_before_bytes": 1782672,
+      "latency": {
+        "p50_ms": 0.995584,
+        "p95_ms": 1.051167
+      },
+      "logical_clients": 1,
+      "mode": "rule_only",
+      "process_alloc_bytes": 14025192,
+      "process_alloc_count": 144992,
+      "sample_interval_ms": 1,
+      "sampled_peak_go_heap_bytes": 3807848,
+      "trials": 10
+    },
+    {
+      "accepted": 100,
+      "attempted": 100,
+      "capacity_rejected": 0,
+      "decision": {
+        "p50_ms": 3.2175810000000005,
+        "p95_ms": 3.887209
+      },
+      "elapsed_ms": 38.442667,
+      "errors": 0,
+      "features": {
+        "p50_ms": 0,
+        "p95_ms": 0
+      },
+      "heap_before_bytes": 1746872,
+      "latency": {
+        "p50_ms": 3.217958,
+        "p95_ms": 3.887875
+      },
+      "logical_clients": 10,
+      "mode": "rule_only",
+      "process_alloc_bytes": 141860384,
+      "process_alloc_count": 1450032,
+      "sample_interval_ms": 1,
+      "sampled_peak_go_heap_bytes": 14273016,
+      "trials": 10
+    },
+    {
+      "accepted": 300,
+      "attempted": 300,
+      "capacity_rejected": 0,
+      "decision": {
+        "p50_ms": 7.951749,
+        "p95_ms": 10.03
+      },
+      "elapsed_ms": 103.82375,
+      "errors": 0,
+      "features": {
+        "p50_ms": 0,
+        "p95_ms": 0
+      },
+      "heap_before_bytes": 1934152,
+      "latency": {
+        "p50_ms": 7.952334,
+        "p95_ms": 10.030667
+      },
+      "logical_clients": 30,
+      "mode": "rule_only",
+      "process_alloc_bytes": 421100488,
+      "process_alloc_count": 4349591,
+      "sample_interval_ms": 1,
+      "sampled_peak_go_heap_bytes": 13015616,
+      "trials": 10
+    },
+    {
+      "accepted": 320,
+      "attempted": 1000,
+      "capacity_rejected": 680,
+      "decision": {
+        "p50_ms": 8.642584999999999,
+        "p95_ms": 10.655957999999998
+      },
+      "elapsed_ms": 110.736833,
+      "errors": 0,
+      "features": {
+        "p50_ms": 0,
+        "p95_ms": 0
+      },
+      "heap_before_bytes": 1825920,
+      "latency": {
+        "p50_ms": 8.643208,
+        "p95_ms": 10.656625
+      },
+      "logical_clients": 100,
+      "mode": "rule_only",
+      "process_alloc_bytes": 448915744,
+      "process_alloc_count": 4640282,
+      "sample_interval_ms": 1,
+      "sampled_peak_go_heap_bytes": 13305472,
+      "trials": 10
+    },
+    {
+      "accepted": 320,
+      "attempted": 10000,
+      "capacity_rejected": 9680,
+      "decision": {
+        "p50_ms": 8.812416,
+        "p95_ms": 10.822751
+      },
+      "elapsed_ms": 113.90725,
+      "errors": 0,
+      "features": {
+        "p50_ms": 0,
+        "p95_ms": 0
+      },
+      "heap_before_bytes": 1941640,
+      "latency": {
+        "p50_ms": 8.813083,
+        "p95_ms": 10.823375
+      },
+      "logical_clients": 1000,
+      "mode": "rule_only",
+      "process_alloc_bytes": 449259288,
+      "process_alloc_count": 4652512,
+      "sample_interval_ms": 1,
+      "sampled_peak_go_heap_bytes": 13940240,
+      "trials": 10
+    }
+  ],
+  "symbols_per_request": 10,
+  "timestamp": "2026-11-02T04:22:39.695503Z"
+}

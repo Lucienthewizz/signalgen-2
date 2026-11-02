@@ -211,7 +211,14 @@ function errorEnvelope(payload: unknown): ErrorEnvelope | undefined {
 }
 
 // Share simultaneous reads only. Never cache authorization or mutation responses.
-const pendingReads = new Map<string, Promise<unknown>>();
+type PendingRead = {
+  promise: Promise<unknown>;
+  controller: AbortController;
+  readers: number;
+  settled: boolean;
+};
+const pendingReads = new Map<string, PendingRead>();
+let readEpoch = 0;
 let tokenRefresh: Promise<void> | null = null;
 
 function unauthorized() {
@@ -283,28 +290,79 @@ function request<T>(
   retryExpiredSession = true,
   rawText = false,
 ): Promise<T> {
-  if (init.method && init.method !== "GET")
-    return performRequest<T>(path, init, retryExpiredSession, rawText);
-  // A caller-owned abort must not cancel another reader's shared request.
-  if (init.signal)
-    return readWithRecovery<T>(path, init, retryExpiredSession, rawText);
+  if (init.method && init.method !== "GET") {
+    // A read begun before/during a write cannot satisfy a post-write refresh.
+    readEpoch++;
+    return performRequest<T>(path, init, retryExpiredSession, rawText).finally(
+      () => {
+        readEpoch++;
+      },
+    );
+  }
+  // Each subscriber can leave independently. Only the final departing reader
+  // cancels the shared transport; no authorization response is cached.
+  if (init.signal?.aborted)
+    return Promise.reject(new DOMException("Request cancelled.", "AbortError"));
   const key = JSON.stringify([
     path,
     session.getToken(),
     session.getAppSession(),
+    session.getIdentityRevision(),
+    readEpoch,
+    [...new Headers(init.headers).entries()],
     retryExpiredSession,
     rawText,
   ]);
-  const existing = pendingReads.get(key);
-  if (existing) return existing as Promise<T>;
-  const pending = readWithRecovery<T>(
-    path,
-    init,
-    retryExpiredSession,
-    rawText,
-  ).finally(() => pendingReads.delete(key));
-  pendingReads.set(key, pending);
-  return pending;
+  let entry = pendingReads.get(key);
+  if (!entry) {
+    const controller = new AbortController();
+    entry = {
+      controller,
+      readers: 0,
+      settled: false,
+      promise: Promise.resolve(),
+    };
+    const active = entry;
+    active.promise = readWithRecovery<T>(
+      path,
+      { ...init, signal: controller.signal },
+      retryExpiredSession,
+      rawText,
+    ).finally(() => {
+      active.settled = true;
+      if (pendingReads.get(key) === active) pendingReads.delete(key);
+    });
+    pendingReads.set(key, active);
+  }
+  const active = entry;
+  active.readers++;
+  return new Promise<T>((resolve, reject) => {
+    let finished = false;
+    const leave = () => {
+      if (finished) return false;
+      finished = true;
+      init.signal?.removeEventListener("abort", cancel);
+      active.readers--;
+      if (!active.readers && !active.settled) {
+        if (pendingReads.get(key) === active) pendingReads.delete(key);
+        active.controller.abort();
+      }
+      return true;
+    };
+    const cancel = () => {
+      if (leave()) reject(new DOMException("Request cancelled.", "AbortError"));
+    };
+    init.signal?.addEventListener("abort", cancel, { once: true });
+    active.promise.then(
+      (value) => {
+        if (leave()) resolve(value as T);
+      },
+      (error) => {
+        if (leave()) reject(error);
+      },
+    );
+    if (init.signal?.aborted) cancel();
+  });
 }
 
 // Retry one transient read, never a login, save, session creation or mutation.
@@ -724,6 +782,59 @@ export const api = {
     request<{ backtest?: BacktestCapabilities }>("/api/v1/capabilities", {
       signal,
     }),
+  createStudy: (
+    input: import("@/analysis/signal-study-types").StudyInput,
+    signal: AbortSignal,
+  ) =>
+    request<import("@/analysis/signal-study-types").StudyContext>(
+      "/api/v1/backtests/studies",
+      { method: "POST", signal, body: JSON.stringify(input) },
+    ),
+  createStudyGrant: (
+    manifest: BacktestManifest,
+    study: import("@/analysis/signal-study-types").StudyContext,
+    signal: AbortSignal,
+  ) =>
+    request<BacktestGrant>("/api/v1/compute-grants", {
+      method: "POST",
+      signal,
+      body: JSON.stringify({
+        purpose: "backtest",
+        dataset_id: manifest.dataset_id,
+        dataset_version: manifest.version,
+        dataset_checksum: manifest.checksum,
+        rule_id: study.rule_id,
+        definition_hash: study.definition_hash,
+        engine_version: study.engine_version,
+        schema_version: study.rule_schema_version,
+      }),
+    }),
+  prepareStudyBatch: (
+    id: string,
+    batch: number,
+    signal: AbortSignal,
+    retrySymbols?: string[],
+  ) =>
+    request<import("@/analysis/signal-study-types").StudyBatch>(
+      `/api/v1/backtests/studies/${encodeURIComponent(id)}/batches/${batch}/prepare`,
+      {
+        method: "POST",
+        signal,
+        body: JSON.stringify(
+          retrySymbols ? { retry_symbols: retrySymbols } : {},
+        ),
+      },
+    ),
+  releaseStudyBatch: (id: string, batch: number) =>
+    request<void>(
+      `/api/v1/backtests/studies/${encodeURIComponent(id)}/batches/${batch}/prepare`,
+      { method: "DELETE" },
+    ),
+  cancelStudy: (id: string, keepalive = false) =>
+    request<void>(`/api/v1/backtests/studies/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      keepalive,
+    }),
   prepareBacktest: (
     scope: BacktestScope,
     universeId: string,
@@ -767,6 +878,7 @@ export const api = {
     grantId: string,
     candidates: import("@/types").ScreenerFeatureCandidate[],
     signal: AbortSignal,
+    policy = "holding-next-open-1",
   ) =>
     request<{ policy_version: string; entries: BacktestEntry[] }>(
       "/api/v1/backtests/signals",
@@ -776,7 +888,7 @@ export const api = {
         body: JSON.stringify({
           compute_grant_id: grantId,
           feature_schema_version: "screener-features-1",
-          policy_version: "holding-next-open-1",
+          policy_version: policy,
           candidates,
         }),
       },
