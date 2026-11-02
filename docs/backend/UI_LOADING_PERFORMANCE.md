@@ -1,5 +1,12 @@
 # Loading halaman — pemeriksaan 2 November 2026
 
+Catatan verifikasi 3 November: metadata project cloud menempatkan database di
+`ap-south-1`, sedangkan Go API dan UI berjalan lokal. Jadi menjalankan UI lokal
+tidak menghilangkan perjalanan jaringan ke database. Ini kemungkinan sumber
+latensi yang perlu diukur, bukan bukti semua durasi GET disebabkan region.
+Sampel navigasi akun baru setelah optimasi query terakhir belum tersedia;
+tidak ada klaim persentase percepatan tambahan atau perubahan region/pooler.
+
 Pemeriksaan ini melanjutkan perubahan frontend lokal pada branch
 `frontend/asis-20261104-backtest-journal-performance`. Tidak ada migration,
 perubahan `.env`, cache authorization, atau perubahan algoritme screening.

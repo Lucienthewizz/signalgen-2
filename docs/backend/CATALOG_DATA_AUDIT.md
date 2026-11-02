@@ -93,3 +93,20 @@ salin masing-masing folder ke `/tmp` container terlebih dahulu lalu gunakan
 `-out` yang sesuai; jangan menimpa folder audit yang sedang dipakai proses lain.
 Ringkasan aman untuk repository ada di
 [artefak bukti](../evidence/catalog-data-audit-20261102.json).
+
+### Resume kedua, 2 November
+
+Sesuai pilihan pengguna, pending saja dilanjutkan lima menit lagi per pasar;
+failed/insufficient sebelumnya tidak di-retry. Katalog beku, hash dan window
+tetap sama. Angka kumulatif setelah dua pass:
+
+| Pasar | Katalog | Valid | <20 candle | Gagal | Belum dicoba |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| IDX | 962 | 530 | 0 | 19 | 413 |
+| AS | 5.600 | 548 | 4 | 0 | 5.048 |
+
+Semua 19 gagal IDX berupa respons provider 404; ticker baru yang gagal tercantum
+pada [bukti resume](../evidence/catalog-data-audit-resume-20261102.json), bukan
+otomatis dianggap delisting. Tambahan riwayat pendek AS: AMRO, 12 candle. Warning
+corporate action kumulatif pada 68 ticker IDX dan 175 AS. Laporan tetap parsial,
+`coverage_complete=false`; screening rule seluruh pasar belum diuji penuh.
