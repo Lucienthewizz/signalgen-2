@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -126,13 +128,69 @@ from signalgen.app_sessions where user_id=$1::uuid and token_hash=$2`, userID, h
 	if err := validSession(item); err != nil {
 		return Session{}, err
 	}
+	return store.touch(ctx, item)
+}
+
+func (store *PostgresRepository) touch(ctx context.Context, item Session) (Session, error) {
 	now := time.Now().UTC().Truncate(time.Second)
+	// Only presence metadata is throttled; every request above still reads and
+	// validates the authoritative session, including expiry and revocation.
+	if now.Sub(item.LastSeenAt) < time.Minute {
+		return item, nil
+	}
 	if _, err := store.db.Exec(ctx, `update signalgen.app_sessions set last_seen_at=$3
-where user_id=$1::uuid and id=$2`, userID, item.ID, now); err != nil {
+where user_id=$1::uuid and id=$2 and last_seen_at <= $3::timestamptz - interval '1 minute'`, item.UserID, item.ID, now); err != nil {
 		return Session{}, err
 	}
 	item.LastSeenAt = now
 	return item, nil
+}
+
+// VerifyAccount has the same denial ordering as Verify then RequireActive,
+// with one owner-bound SELECT instead of two cloud round trips.
+func (store *PostgresRepository) VerifyAccount(ctx context.Context, userID, token string) (Session, access.Account, error) {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(token) == "" {
+		return Session{}, access.Account{}, ErrInvalid
+	}
+	hash := sha256.Sum256([]byte(strings.TrimSpace(token)))
+	var item Session
+	var revoked, created, updated pgtype.Timestamptz
+	var email, role, status pgtype.Text
+	err := store.db.QueryRow(ctx, `select s.id,s.user_id::text,s.installation_id,s.label,
+s.created_at,s.expires_at,s.last_seen_at,s.revoked_at,
+p.email,p.role,p.status,p.created_at,p.updated_at
+from signalgen.app_sessions s
+left join signalgen.account_profiles p on p.user_id=s.user_id
+where s.user_id=$1::uuid and s.token_hash=$2`, userID, hash[:]).Scan(
+		&item.ID, &item.UserID, &item.InstallationID, &item.Label,
+		&item.CreatedAt, &item.ExpiresAt, &item.LastSeenAt, &revoked,
+		&email, &role, &status, &created, &updated)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Session{}, access.Account{}, ErrInvalid
+	}
+	if err != nil {
+		return Session{}, access.Account{}, err
+	}
+	if revoked.Valid {
+		value := revoked.Time.UTC()
+		item.RevokedAt = &value
+	}
+	if err := validSession(item); err != nil {
+		return Session{}, access.Account{}, err
+	}
+	if !status.Valid {
+		return Session{}, access.Account{}, access.ErrAccountNotFound
+	}
+	if status.String != access.StatusActive {
+		return Session{}, access.Account{}, access.ErrAccountSuspended
+	}
+	item, err = store.touch(ctx, item)
+	if err != nil {
+		return Session{}, access.Account{}, err
+	}
+	profile := access.Account{UserID: item.UserID, Email: email.String, Role: role.String,
+		Status: status.String, CreatedAt: created.Time, UpdatedAt: updated.Time}
+	return item, profile, nil
 }
 
 func (store *PostgresRepository) VerifyByID(ctx context.Context, userID, sessionID string) (Session, error) {

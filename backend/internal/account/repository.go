@@ -131,24 +131,29 @@ from signalgen.feature_grants where user_id=$1::uuid order by feature`, userID)
 }
 
 func (store *PostgresRepository) RequireFeature(ctx context.Context, userID, feature string) error {
-	if _, err := store.RequireActive(ctx, userID); err != nil {
-		return err
-	}
 	if feature != access.FeatureScreener && feature != access.FeatureBacktest {
 		return access.ErrInvalidValue
 	}
 	var enabled bool
+	var status string
 	err := store.db.QueryRow(ctx, `select
-  exists(select 1 from signalgen.feature_grants
+  profile.status, (exists(select 1 from signalgen.feature_grants
     where user_id=$1::uuid and feature=$2 and revoked_at is null and valid_until>now())
   or
   exists(select 1 from signalgen.subscriptions subscription
     join signalgen.subscription_plan_features plan_feature on plan_feature.plan_code=subscription.plan_code
     where subscription.user_id=$1::uuid and plan_feature.feature=$2
       and subscription.status in ('trialing','active')
-      and subscription.current_period_end>now())`, userID, feature).Scan(&enabled)
+      and subscription.current_period_end>now()))
+from signalgen.account_profiles profile where profile.user_id=$1::uuid`, userID, feature).Scan(&status, &enabled)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return access.ErrAccountNotFound
+	}
 	if err != nil {
 		return fmt.Errorf("check Postgres feature: %w", err)
+	}
+	if status != access.StatusActive {
+		return access.ErrAccountSuspended
 	}
 	if !enabled {
 		return access.ErrEntitlementMissing

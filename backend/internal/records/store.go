@@ -31,12 +31,12 @@ type Store interface {
 }
 type PostgresStore struct{ DB *pgxpool.Pool }
 
-func (s *PostgresStore) begin(ctx context.Context, owner string, write bool) (pgx.Tx, error) {
+func (s *PostgresStore) beginWrite(ctx context.Context, owner string) (pgx.Tx, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if _, err = tx.Exec(ctx, `select set_config('signalgen.owner_id',$1,true)`, owner); err == nil && write {
+	if _, err = tx.Exec(ctx, `select set_config('signalgen.owner_id',$1,true)`, owner); err == nil {
 		_, err = tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1,0))`, owner)
 	}
 	if err != nil {
@@ -53,13 +53,23 @@ func scan(row pgx.Row) (Item, error) {
 	}
 	return item, err
 }
+
+// SendBatch keeps owner setup and the read in one implicit transaction. Closing
+// results commits/rolls back and resets the local RLS context before pool reuse.
+func (s *PostgresStore) read(ctx context.Context, owner, query string, args ...any) pgx.BatchResults {
+	batch := &pgx.Batch{}
+	batch.Queue(`select set_config('signalgen.owner_id',$1,true)`, owner)
+	batch.Queue(query, args...)
+	return s.DB.SendBatch(ctx, batch)
+}
+
 func (s *PostgresStore) List(ctx context.Context, owner, kind string) ([]Item, error) {
-	tx, err := s.begin(ctx, owner, false)
-	if err != nil {
+	result := s.read(ctx, owner, `select id, case when kind='backtest' then data - 'result' else data end,version,octet_length(data::text) from signalgen.user_records where user_id=$1::uuid and kind=$2 order by created_at desc,id limit 1000`, owner, kind)
+	defer result.Close()
+	if _, err := result.Exec(); err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
-	rows, err := tx.Query(ctx, `select id, case when kind='backtest' then data - 'result' else data end,version,octet_length(data::text) from signalgen.user_records where user_id=$1::uuid and kind=$2 order by created_at desc,id limit 1000`, owner, kind)
+	rows, err := result.Query()
 	if err != nil {
 		return nil, err
 	}
@@ -77,22 +87,22 @@ func (s *PostgresStore) List(ctx context.Context, owner, kind string) ([]Item, e
 	if err != nil {
 		return nil, err
 	}
-	return items, tx.Commit(ctx)
+	return items, result.Close()
 }
 func (s *PostgresStore) Get(ctx context.Context, owner, kind, id string) (Item, error) {
-	tx, err := s.begin(ctx, owner, false)
+	result := s.read(ctx, owner, `select id,data,version,octet_length(data::text) from signalgen.user_records where user_id=$1::uuid and kind=$2 and id=$3::uuid`, owner, kind, id)
+	defer result.Close()
+	if _, err := result.Exec(); err != nil {
+		return Item{}, err
+	}
+	item, err := scan(result.QueryRow())
 	if err != nil {
 		return Item{}, err
 	}
-	defer tx.Rollback(ctx)
-	item, err := scan(tx.QueryRow(ctx, `select id,data,version,octet_length(data::text) from signalgen.user_records where user_id=$1::uuid and kind=$2 and id=$3::uuid`, owner, kind, id))
-	if err != nil {
-		return Item{}, err
-	}
-	return item, tx.Commit(ctx)
+	return item, result.Close()
 }
 func (s *PostgresStore) Put(ctx context.Context, owner, kind, id string, version int64, data json.RawMessage) (Item, error) {
-	tx, err := s.begin(ctx, owner, true)
+	tx, err := s.beginWrite(ctx, owner)
 	if err != nil {
 		return Item{}, err
 	}
@@ -129,7 +139,7 @@ func (s *PostgresStore) Put(ctx context.Context, owner, kind, id string, version
 	return item, tx.Commit(ctx)
 }
 func (s *PostgresStore) Delete(ctx context.Context, owner, kind, id string, version int64) error {
-	tx, err := s.begin(ctx, owner, true)
+	tx, err := s.beginWrite(ctx, owner)
 	if err != nil {
 		return err
 	}

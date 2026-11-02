@@ -21,6 +21,7 @@ type databaseTimingKey string
 
 var (
 	_ pgx.QueryTracer       = (*poolTracer)(nil)
+	_ pgx.BatchTracer       = (*poolTracer)(nil)
 	_ pgx.ConnectTracer     = (*poolTracer)(nil)
 	_ pgxpool.AcquireTracer = (*poolTracer)(nil)
 )
@@ -35,6 +36,16 @@ func (trace *poolTracer) end(ctx context.Context, stage string, err error) {
 		return
 	}
 	elapsed := time.Since(started)
+	switch stage {
+	case "acquire":
+		platformhttp.RecordTiming(ctx, platformhttp.DBAcquire, elapsed)
+	case "connect":
+		platformhttp.RecordTiming(ctx, platformhttp.DBConnect, elapsed)
+	case "query":
+		platformhttp.RecordTiming(ctx, platformhttp.DBQuery, elapsed)
+	case "batch":
+		platformhttp.RecordTiming(ctx, platformhttp.DBBatch, elapsed)
+	}
 	if err == nil && elapsed < trace.slow {
 		return
 	}
@@ -56,6 +67,13 @@ func (trace *poolTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx
 }
 func (trace *poolTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
 	trace.end(ctx, "query", data.Err)
+}
+func (trace *poolTracer) TraceBatchStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceBatchStartData) context.Context {
+	return trace.start(ctx, "batch")
+}
+func (*poolTracer) TraceBatchQuery(context.Context, *pgx.Conn, pgx.TraceBatchQueryData) {}
+func (trace *poolTracer) TraceBatchEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceBatchEndData) {
+	trace.end(ctx, "batch", data.Err)
 }
 func (trace *poolTracer) TraceAcquireStart(ctx context.Context, _ *pgxpool.Pool, _ pgxpool.TraceAcquireStartData) context.Context {
 	return trace.start(ctx, "acquire")

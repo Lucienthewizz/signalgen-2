@@ -76,25 +76,48 @@ func (server *Context) RequirePrincipal(writer http.ResponseWriter, request *htt
 }
 
 func (server *Context) RequireAppSession(writer http.ResponseWriter, request *http.Request) (auth.Principal, session.Session, string, bool) {
-	principal, ok := server.RequirePrincipal(writer, request)
+	principal, appSession, _, ok := server.RequireAppSessionAccount(writer, request)
 	if !ok {
 		return auth.Principal{}, session.Session{}, "", false
+	}
+	return principal, appSession, strings.TrimSpace(request.Header.Get("X-App-Session")), true
+}
+
+// Return the account already checked by this guard, without a second DB read.
+// Nothing is reused across requests: status and session are always revalidated.
+func (server *Context) RequireAppSessionAccount(writer http.ResponseWriter, request *http.Request) (auth.Principal, session.Session, access.Account, bool) {
+	principal, ok := server.RequirePrincipal(writer, request)
+	if !ok {
+		return auth.Principal{}, session.Session{}, access.Account{}, false
 	}
 	token := strings.TrimSpace(request.Header.Get("X-App-Session"))
 	if token == "" {
 		WriteError(writer, request, http.StatusUnauthorized, "AUTH_REQUIRED", "Sesi aplikasi diperlukan.")
-		return auth.Principal{}, session.Session{}, "", false
+		return auth.Principal{}, session.Session{}, access.Account{}, false
+	}
+	if verifier, supported := server.Sessions.(session.AccountVerifier); supported {
+		appSession, profile, err := verifier.VerifyAccount(request.Context(), principal.ID, token)
+		if err != nil {
+			if errors.Is(err, access.ErrAccountNotFound) || errors.Is(err, access.ErrAccountSuspended) {
+				WriteAccessError(writer, request, err)
+			} else {
+				WriteSessionError(writer, request, err)
+			}
+			return auth.Principal{}, session.Session{}, access.Account{}, false
+		}
+		return principal, appSession, profile, true
 	}
 	appSession, err := server.Sessions.Verify(request.Context(), principal.ID, token)
 	if err != nil {
 		WriteSessionError(writer, request, err)
-		return auth.Principal{}, session.Session{}, "", false
+		return auth.Principal{}, session.Session{}, access.Account{}, false
 	}
-	if _, err := server.Access.RequireActive(request.Context(), principal.ID); err != nil {
+	account, err := server.Access.RequireActive(request.Context(), principal.ID)
+	if err != nil {
 		WriteAccessError(writer, request, err)
-		return auth.Principal{}, session.Session{}, "", false
+		return auth.Principal{}, session.Session{}, access.Account{}, false
 	}
-	return principal, appSession, token, true
+	return principal, appSession, account, true
 }
 
 func (server *Context) RequireOperator(writer http.ResponseWriter, request *http.Request) (auth.Principal, session.Session, bool) {

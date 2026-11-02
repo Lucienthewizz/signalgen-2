@@ -13,13 +13,8 @@ import (
 // AccountMe combines identity, authorization profile, and active features for
 // the signed-in account page.
 func (server *Handler) AccountMe(writer http.ResponseWriter, request *http.Request) {
-	principal, appSession, _, ok := server.RequireAppSession(writer, request)
+	principal, appSession, account, ok := server.RequireAppSessionAccount(writer, request)
 	if !ok {
-		return
-	}
-	account, err := server.Access.RequireActive(request.Context(), principal.ID)
-	if err != nil {
-		shared.WriteAccessError(writer, request, err)
 		return
 	}
 	features, err := server.Access.Features(request.Context(), principal.ID)

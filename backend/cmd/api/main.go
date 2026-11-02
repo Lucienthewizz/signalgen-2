@@ -55,6 +55,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	identity.EnableLocalVerification()
 	// Supabase Postgres owns durable multi-user application state. SQL schema
 	// changes are versioned under supabase/migrations, not run at API startup.
 	operationalLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))

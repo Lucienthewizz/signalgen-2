@@ -51,7 +51,14 @@ func postgresConfig(databaseURL string, logger *slog.Logger) (*pgxpool.Config, e
 	// this small until measured production concurrency justifies an increase.
 	config.MaxConns = 5
 	config.MinConns = 0
-	config.MaxConnIdleTime = 2 * time.Minute
+	// Observed cold cloud connections take >1s. Reuse the same bounded pool
+	// across ordinary navigation pauses instead of dropping it after two minutes.
+	config.MaxConnIdleTime = 10 * time.Minute
+	// pgx defaults to a network ping after only 1s idle. During navigation that
+	// adds a cloud round trip before the real query; recheck after 30s instead.
+	config.ShouldPing = func(_ context.Context, params pgxpool.ShouldPingParams) bool {
+		return params.IdleDuration >= 30*time.Second
+	}
 	config.MaxConnLifetime = 30 * time.Minute
 	// Pool connection construction may outlive the canceled Acquire caller.
 	// Bound every new connection, not only the initial startup Ping.
