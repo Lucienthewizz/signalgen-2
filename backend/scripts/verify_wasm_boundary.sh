@@ -12,7 +12,7 @@ if ! rg -a -q "signalgenComputeFeatures" "$artifact"; then
   exit 1
 fi
 
-for required in signalgenRunBacktest signalgenComputeBacktestFeatures signalgenBacktestCapabilities; do
+for required in signalgenRunBacktest signalgenComputeBacktestFeatures signalgenBacktestCapabilities signalgenRunSignalStudy; do
   if ! rg -a -q "$required" "$artifact"; then
     echo "missing backtest export marker: $required" >&2
     exit 1

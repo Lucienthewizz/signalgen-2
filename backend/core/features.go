@@ -5,7 +5,7 @@ package core
 const (
 	EngineVersion        = "core-0.5.0"
 	SchemaVersion        = "signal-baseline-1"
-	CapabilitiesVersion  = "capabilities-4"
+	CapabilitiesVersion  = "capabilities-5"
 	WorkerProtocol       = "worker-2"
 	FeatureSchemaVersion = "screener-features-1"
 	DecisionVersion      = "decision-1"

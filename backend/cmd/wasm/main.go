@@ -72,6 +72,20 @@ func computeBacktestFeatures(_ js.Value, args []js.Value) interface{} {
 }
 
 func main() {
+	js.Global().Set("signalgenRunSignalStudy", js.FuncOf(func(_ js.Value, args []js.Value) interface{} {
+		if len(args) != 1 || args[0].Type() != js.TypeString {
+			return marshalResponse(nil, "request must be one JSON string")
+		}
+		r, err := core.DecodeSignalStudyRequest([]byte(args[0].String()))
+		if err != nil {
+			return marshalResponse(nil, err.Error())
+		}
+		result, err := core.RunSignalStudy(r)
+		if err != nil {
+			return marshalResponse(nil, err.Error())
+		}
+		return marshalResponse(result, "")
+	}))
 	js.Global().Set("signalgenRunBacktest", js.FuncOf(runBacktest))
 	js.Global().Set("signalgenComputeBacktestFeatures", js.FuncOf(computeBacktestFeatures))
 	js.Global().Set("signalgenBacktestCapabilities", js.FuncOf(func(_ js.Value, _ []js.Value) interface{} {

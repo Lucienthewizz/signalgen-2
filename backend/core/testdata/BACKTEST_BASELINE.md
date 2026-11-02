@@ -1,5 +1,11 @@
 # Backtest fixtures
 
+`signal_study_claudio_v1.json` pins the unchanged legacy source and the shared
+OHLCV fixture SHA-256. `scripts/check_signal_study_claudio.py` compares 24 price,
+BUY/SELL and completed TP/SL outcomes against exact extracted legacy functions.
+New studies retain all horizons and mark incomplete futures; legacy `_time_exit`
+can shorten the horizon. This is a declared policy difference, not full parity.
+
 `claudio_backtest_formula_v1.json` freezes only the unchanged per-share price
 return and all-in fractional-capital formula for one 100 -> 110 long, no costs.
 `python3 scripts/check_claudio_backtest.py` executes the exact two nested legacy
