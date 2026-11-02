@@ -21,6 +21,7 @@ FROM source AS api-build
 
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/signalgen-api ./cmd/api \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/signalgen-admin ./cmd/admin \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/signalgen-audit-catalog ./cmd/auditcatalog \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/signalgen-healthcheck ./cmd/healthcheck
 
 
@@ -33,6 +34,7 @@ RUN apt-get update \
 
 COPY --from=api-build /out/signalgen-api /usr/local/bin/signalgen-api
 COPY --from=api-build /out/signalgen-admin /usr/local/bin/signalgen-admin
+COPY --from=api-build /out/signalgen-audit-catalog /usr/local/bin/signalgen-audit-catalog
 COPY --from=api-build /out/signalgen-healthcheck /usr/local/bin/signalgen-healthcheck
 COPY backend/core/testdata/default_scalping_v1.json /usr/share/signalgen/fixtures/default_scalping_v1.json
 

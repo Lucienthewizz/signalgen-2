@@ -169,7 +169,7 @@ func (store *DynamicStore) prepareBacktest(ctx context.Context, owner string, in
 	now := store.now().UTC()
 	expires := now.Add(store.limits.TTL)
 	source := marketdata.DescribeSource(store.provider)
-	source.Warnings = append(source.Warnings, "Raw OHLCV; splits/dividends and exchange-calendar completeness are not verified. Exit horizons without enough closed candles remain open.")
+	source.Warnings = append(source.Warnings, "Provider OHLCV without additional adjustment; split/dividend adjustment and exchange-calendar completeness are not certified. Exit horizons without enough closed candles remain open.")
 	for _, item := range series {
 		source.Warnings = append(source.Warnings, item.QualityWarnings...)
 	}

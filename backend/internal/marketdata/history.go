@@ -43,7 +43,7 @@ func (provider *YahooFinance) DailyHistory(ctx context.Context, instrument unive
 	query.Set("period1", strconv.FormatInt(from.Unix(), 10))
 	query.Set("period2", strconv.FormatInt(to.Unix(), 10))
 	query.Set("interval", "1d")
-	query.Set("events", "history")
+	query.Set("events", "div,splits")
 	query.Set("includeAdjustedClose", "true")
 	endpoint.RawQuery = query.Encode()
 	raw, err := provider.fetchChart(ctx, endpoint.String())
@@ -55,6 +55,9 @@ func (provider *YahooFinance) DailyHistory(ctx context.Context, instrument unive
 		return History{}, ErrInvalidData
 	}
 	chart := payload.Chart.Result[0]
+	if err := validateChartMetadata(chart.Meta, instrument, "1d"); err != nil {
+		return History{}, err
+	}
 	quote := chart.Indicators.Quote[0]
 	n := len(chart.Timestamp)
 	if n == 0 || n > 2500 || n != len(quote.Open) || n != len(quote.High) || n != len(quote.Low) || n != len(quote.Close) || n != len(quote.Volume) {
@@ -81,6 +84,7 @@ func (provider *YahooFinance) DailyHistory(ctx context.Context, instrument unive
 		})
 	}
 	result.Series.QualityWarnings = dailyQualityWarnings(instrument.Symbol, result.SkippedNullRows, result.ExcludedOpenRows, finality.fallback)
+	result.Series.QualityWarnings = append(result.Series.QualityWarnings, historicalQualityWarnings(instrument.Symbol, result.Series.Candles, chart.Events)...)
 	if err := ValidateHistory(result.Series, instrument.Symbol, from, to); err != nil {
 		return History{}, err
 	}

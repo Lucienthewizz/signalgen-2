@@ -1,5 +1,27 @@
 # Backend progress
 
+## 2 November 2026 — loading, akses Postgres dan audit data
+
+UI memakai cache TanStack query-core per identitas untuk daftar/paket tampilan.
+Go memverifikasi bearer ES256/RS256 melalui JWKS, menjaga pemeriksaan sesi/akun
+dan hak fitur; HS256 tetap diverifikasi remote. Telemetry memisahkan auth/key,
+pool acquire/connect, query dan batch tanpa token atau isi akun. Query sesi/profil
+dan status/entitlement digabung; heartbeat dibatasi sekali per menit. Pool tetap
+lima koneksi, ping idle 30 detik dan idle retention 10 menit.
+[Bukti, pengukuran dan batas](UI_LOADING_PERFORMANCE.md).
+
+Provider menolak metadata simbol/currency/interval yang tidak cocok dan melaporkan
+split/dividen serta gap panjang tanpa penyesuaian harga tambahan. Audit katalog
+operator baca-saja kini tersedia dengan katalog beku, serial fetch, budget,
+resume/retry dan status valid/insufficient/failed/pending. Audit data bukan
+evaluasi rule seluruh pasar dan tidak mengklaim point-in-time atau hak distribusi.
+[Cara audit](CATALOG_DATA_AUDIT.md).
+
+Audit provider asli lima menit/pasar pada window 1 Juli–sebelum 2 November:
+IDX 273 valid, 5 gagal, 684 pending dari 962; AS 273 valid, 3 riwayat pendek,
+5.324 pending dari 5.600. Kedua laporan sengaja parsial dan disimpan lokal untuk
+resume, bukan bukti semua saham sudah selesai dianalisis rule.
+
 ## 2 November 2026 — independent signal study and demo verification
 
 Added `signal-study-1 / signal-close-independent-1`, close-based independent

@@ -8,6 +8,8 @@ import (
 )
 
 type yahooMarketMeta struct {
+	Symbol               string          `json:"symbol"`
+	Currency             string          `json:"currency"`
 	DataGranularity      string          `json:"dataGranularity"`
 	TradingPeriods       json.RawMessage `json:"tradingPeriods"`
 	ExchangeTimezoneName string          `json:"exchangeTimezoneName"`
