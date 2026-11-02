@@ -31,6 +31,7 @@ async (page) => {
   let savedCardFixture = false;
   let healthOffline = false;
   let sessionMutations = 0;
+  let accountReads = 0;
   let journalUnavailable = false;
   let journalReadFailure=false;
   const journalWrites = [];
@@ -70,6 +71,7 @@ async (page) => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort();
     const p = url.pathname;
+    if(p==='/api/v1/account/me')accountReads++;
     if(p.startsWith("/api/v1/journal/trades")){
       if(route.request().method()==="GET"){if(journalReadFailure){await new Promise(r=>setTimeout(r,100));return route.fulfill({status:503,json:{error:{code:"RECORDS_UNAVAILABLE",request_id:"qa-journal-outage"}}})}return route.fulfill({json:{items:journalItems}});}
       const id=p.split("/").at(-1),body=route.request().postDataJSON();journalWrites.push({id,body});
@@ -114,6 +116,97 @@ async (page) => {
     else payload = { items: [] };
     return route.fulfill({ json: payload });
   });
+  // Keep unrelated GETs unresolved: useful UI must render before they finish.
+  // Editors that restore synchronized preferences must still wait for hydration.
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({width,height:1000});
+    let releaseWorkspace, releaseSubscription;
+    let workspaceFinished=false, subscriptionFinished=false;
+    const workspaceWait=new Promise(resolve=>{releaseWorkspace=resolve;});
+    const subscriptionWait=new Promise(resolve=>{releaseSubscription=resolve;});
+    await page.route("**/api/v1/workspace",async route=>{
+      await workspaceWait; workspaceFinished=true;
+      await route.fulfill({json:{items:[{kind:"monitor-history",data:history,version:1,updated_at:now}]}}).catch(()=>{});
+    });
+    await page.route("**/api/v1/subscription",async route=>{
+      await subscriptionWait; subscriptionFinished=true;
+      if(width===390)return route.fulfill({status:503,json:{error:{code:"SUBSCRIPTION_UNAVAILABLE",request_id:"qa-delayed-plan"}}}).catch(()=>{});
+      await route.fulfill({json:{subscription}}).catch(()=>{});
+    });
+    await page.goto(`${origin}/#app/overview`);
+    await page.reload();
+    await page.waitForFunction(()=>{
+      const values=[...document.querySelectorAll('.overview-resources__value')].map(el=>el.textContent);
+      return values[0]==='1' && values[1]==='1' && values[2]==='Loading…' && values[3]==='Active';
+    },{timeout:10000});
+    if(workspaceFinished||subscriptionFinished)throw Error('Slow-read fixture was released before checking progressive UI');
+    await page.getByText('Loading recent screening…',{exact:true}).waitFor();
+    if(await page.locator('.overview-open-screener').isDisabled())throw Error('Unrelated plan/history GET blocked available screening access');
+    await page.screenshot({path:`output/playwright/ui-progressive-loading-${width}.png`,fullPage:false});
+    if(width===390){
+      releaseSubscription();
+      await page.getByText('Some data could not be loaded',{exact:true}).waitFor({timeout:10000});
+      const values=await page.locator('.overview-resources__value').allTextContents();
+      if(values[0]!=='1'||values[1]!=='1'||values[3]!=='Active')throw Error('Delayed plan failure hid available dashboard resources');
+    }
+    await page.goto(`${origin}/#app/universes`);
+    await page.locator('.stock-catalog-picker__catalog').waitFor({timeout:10000});
+    if(workspaceFinished)throw Error('Universe page incorrectly needed workspace hydration');
+    if(width===1440){
+      await page.goto(`${origin}/#app/analysis`);
+      await page.locator('.route-loading').waitFor({timeout:10000});
+      if(await page.locator('.screener-console').count())throw Error('Screener mounted before synchronized preference hydration');
+    }else{
+      await page.goto(`${origin}/#app/overview`);
+      await page.getByText('Loading recent screening…',{exact:true}).waitFor();
+    }
+    releaseWorkspace(); releaseSubscription();
+    if(width===390){
+      await page.locator('.overview-activity li').first().waitFor({timeout:10000});
+      if(await page.locator('.overview-activity li').count()!==2)throw Error('Late workspace history was not applied to the mounted dashboard');
+      await page.goto(`${origin}/#app/analysis`);
+    }
+    await page.getByRole('button',{name:'Export CSV',exact:true}).waitFor({timeout:10000});
+    await page.unroute("**/api/v1/workspace");
+    await page.unroute("**/api/v1/subscription");
+  }
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  await page.waitForFunction(()=>document.querySelector('.account-menu__identity small')?.textContent.includes('Pro'));
+  // The lists have been warmed by the dashboard/universe checks above.
+  // Returning to them must work even while all their GET responses are held.
+  let releaseCachedReads;const cachedReadsWait=new Promise(resolve=>{releaseCachedReads=resolve;});
+  let cacheReadRequests=0;const cacheTimings=[];
+  for(const path of ['rules','stock-universes','stocks'])await page.route(`**/api/v1/${path}`,async route=>{
+    cacheReadRequests++;await cachedReadsWait;await route.fallback().catch(()=>{});
+  });
+  for(const width of [1440,390]){
+    await page.setViewportSize({width,height:1000});
+    let started=Date.now();
+    await page.goto(`${origin}/#app/rules`);
+    await page.locator('.rule-library').getByText(rule.name,{exact:true}).first().waitFor({timeout:5000});
+    cacheTimings.push({width,page:'rules',visible_ms:Date.now()-started});
+    await page.locator('.rule-library').scrollIntoViewIfNeeded();
+    await page.screenshot({path:`output/playwright/ui-cache-rules-${width}.png`,fullPage:false});
+    started=Date.now();
+    await page.goto(`${origin}/#app/universes`);
+    await page.getByRole('button',{name:`Edit ${universe.name}`,exact:true}).waitFor({timeout:5000});
+    cacheTimings.push({width,page:'universes',visible_ms:Date.now()-started});
+    if(!(await page.locator('.stock-catalog-picker__table').innerText()).includes('BBCA'))throw Error('Cached catalog was replaced by a loading skeleton');
+  }
+  if(cacheReadRequests!==0)throw Error(`Fresh navigation cache issued ${cacheReadRequests} unnecessary GETs`);
+  console.log('UI_CACHE_NAV_EVIDENCE '+JSON.stringify({synthetic:true,requests:cacheReadRequests,timings:cacheTimings}));
+  const refreshing=page.waitForRequest('**/api/v1/stock-universes');
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();await refreshing;
+  if(!await page.getByRole('button',{name:`Edit ${universe.name}`,exact:true}).isVisible())throw Error('Explicit revalidation cleared the cached universe rows');
+  releaseCachedReads();
+  await page.waitForFunction(()=>{const button=[...document.querySelectorAll('button')].find(el=>el.textContent.trim()==='Refresh');return button&&!button.disabled;});
+  for(const path of ['rules','stock-universes','stocks'])await page.unroute(`**/api/v1/${path}`);
+  accountReads=0;
+  await page.goto(`${origin}/#app/news`);
+  await page.locator('.news-feed').waitFor({timeout:10000});
+  await page.goto(`${origin}/#app/journal`);
+  await page.locator('.journal-toolbar').waitFor({timeout:10000});
+  if(accountReads!==0)throw Error('Navigation still requests unused sidebar operator authorization');
   await page.goto(`${origin}/#app/analysis`);
   await page.reload();
   await page.getByRole("button", { name: "Export CSV" }).waitFor({ timeout: 10000 });
@@ -1012,6 +1105,7 @@ async (page) => {
   }
   savedCardFixture = true;
   await page.goto(`${origin}/#app/universes`);
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
   await page.getByRole('button', { name: 'Edit Banking watchlist', exact:true }).waitFor();
   if (await page.locator('.universe-library__rows > article').count() !== 2) throw Error('Universe preview must contain only two cards');
   for (const width of [1440, 900, 390]) for (const theme of ["dark"]) {

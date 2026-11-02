@@ -1,3 +1,9 @@
+import {
+  clearUiCache,
+  invalidateUiCache,
+  loadUiResource,
+  peekUiResource,
+} from "./ui-cache";
 import type {
   BacktestManifest,
   BacktestScope,
@@ -44,6 +50,7 @@ const identityListeners = new Set<() => void>();
 
 function identityChanged() {
   identityRevision++;
+  clearUiCache();
   for (const listener of identityListeners) listener();
 }
 
@@ -296,6 +303,7 @@ function request<T>(
     return performRequest<T>(path, init, retryExpiredSession, rawText).finally(
       () => {
         readEpoch++;
+        invalidateUiCache(path);
       },
     );
   }
@@ -752,7 +760,8 @@ export const api = {
       method: "DELETE",
       body: JSON.stringify({ version }),
     }),
-  listStocks: () => request<{ items: StockInstrument[] }>("/api/v1/stocks"),
+  listStocks: (signal?: AbortSignal) =>
+    request<{ items: StockInstrument[] }>("/api/v1/stocks", { signal }),
   listStockUniverses: (signal?: AbortSignal) =>
     request<{ items: StockUniverse[] }>("/api/v1/stock-universes", { signal }),
   createStockUniverse: (name: string, symbols: StockInstrument["symbol"][]) =>
@@ -955,8 +964,10 @@ export const api = {
     }),
   listSubscriptionPlans: () =>
     request<{ items: SubscriptionPlan[] }>("/api/v1/subscription/plans"),
-  currentSubscription: () =>
-    request<{ subscription: Subscription | null }>("/api/v1/subscription"),
+  currentSubscription: (signal?: AbortSignal) =>
+    request<{ subscription: Subscription | null }>("/api/v1/subscription", {
+      signal,
+    }),
   resourceUsage: () =>
     request<import("@/types").ResourceUsage>("/api/v1/subscription/usage"),
   cancelSubscription: (atPeriodEnd: boolean, reason: string) =>
@@ -1036,6 +1047,50 @@ export const api = {
         reason,
       }),
     }),
+};
+
+// Explicit UI-only reads; api.* remains uncached for authorization/execution.
+export const ui = {
+  peekRules: (owner?: string) =>
+    peekUiResource<RuleListResponse>(identityRevision, owner, "rules"),
+  peekUniverses: (owner?: string) =>
+    peekUiResource<{ items: StockUniverse[] }>(
+      identityRevision,
+      owner,
+      "universes",
+    ),
+  peekStocks: (owner?: string) =>
+    peekUiResource<{ items: StockInstrument[] }>(
+      identityRevision,
+      owner,
+      "stocks",
+    ),
+  peekSubscription: (owner?: string) =>
+    peekUiResource<{ subscription: Subscription | null }>(
+      identityRevision,
+      owner,
+      "subscription",
+    ),
+  listRules: (owner?: string, refresh = false) =>
+    loadUiResource(identityRevision, owner, "rules", api.listRules, refresh),
+  listStockUniverses: (owner?: string, refresh = false) =>
+    loadUiResource(
+      identityRevision,
+      owner,
+      "universes",
+      api.listStockUniverses,
+      refresh,
+    ),
+  listStocks: (owner?: string, refresh = false) =>
+    loadUiResource(identityRevision, owner, "stocks", api.listStocks, refresh),
+  currentSubscription: (owner?: string, refresh = false) =>
+    loadUiResource(
+      identityRevision,
+      owner,
+      "subscription",
+      api.currentSubscription,
+      refresh,
+    ),
 };
 
 export function websocketURL(path: string, ticket: string): string {

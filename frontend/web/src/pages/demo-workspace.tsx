@@ -78,7 +78,7 @@ import {
   type LiveScreenerRun,
   type ScreenerStage,
 } from "@/analysis/screener";
-import { api, session } from "@/api/client";
+import { api } from "@/api/client";
 import { useWorkspaceSync } from "@/lib/use-workspace-sync";
 import type { AccountDevice, AccountSession, AccountState } from "@/types";
 import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
@@ -212,7 +212,6 @@ const navGroups: Array<{
     view: DemoView;
     label: string;
     icon: typeof Gauge;
-    operatorOnly?: boolean;
   }>;
 }> = [
   {
@@ -1790,10 +1789,11 @@ export function DemoWorkspace({
     return () => query.removeEventListener("change", change);
   }, []);
   const sync = useWorkspaceSync(authenticated ? user?.id : undefined);
+  // Only these editors consume synchronized drafts/preferences at mount.
+  const needsWorkspace = ["analysis", "rules", "realtime", "news"].includes(
+    view,
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [operatorViewer, setOperatorViewer] = useState<string | null>(null);
-  const operatorVerified =
-    authenticated && backendOnline && operatorViewer === user?.id;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -1810,55 +1810,6 @@ export function DemoWorkspace({
     if (view === "operator")
       document.getElementById("workspace-route-heading")?.focus();
   }, [view]);
-
-  useEffect(() => {
-    let active = true;
-    let request = 0;
-    setOperatorViewer(null);
-    if (!authenticated || !backendOnline || !user?.id) return;
-    const viewer = user.id;
-    const refresh = async () => {
-      const current = ++request;
-      if (!session.getToken()) {
-        setOperatorViewer(null);
-        return;
-      }
-      const revision = session.getIdentityRevision();
-      try {
-        const account = await api.account();
-        if (
-          active &&
-          current === request &&
-          revision === session.getIdentityRevision()
-        )
-          setOperatorViewer(
-            account.user.id === viewer &&
-              account.user.role === "operator" &&
-              account.user.status === "active"
-              ? viewer
-              : null,
-          );
-      } catch {
-        if (active && current === request) setOperatorViewer(null);
-      }
-    };
-    const identityChanged = () => {
-      request++;
-      setOperatorViewer(null);
-    };
-    const unsubscribe = session.onIdentityChange(identityChanged);
-    void refresh();
-    window.addEventListener("focus", refresh);
-    window.addEventListener("hashchange", refresh);
-    window.addEventListener("signalgen:account-role", refresh);
-    return () => {
-      active = false;
-      unsubscribe();
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("hashchange", refresh);
-      window.removeEventListener("signalgen:account-role", refresh);
-    };
-  }, [authenticated, backendOnline, user?.id]);
 
   const [draftSymbol, setDraftSymbol] = useState<string | null>(null);
   const [screeningDraft, setScreeningDraft] =
@@ -1936,9 +1887,7 @@ export function DemoWorkspace({
         <Tooltip.Provider delay={250}>
           <nav aria-label="Workspace navigation">
             {navGroups.map((group, index) => {
-              const visibleItems = group.items.filter(
-                (item) => !item.operatorOnly || operatorVerified,
-              );
+              const visibleItems = group.items;
               if (!visibleItems.length) return null;
               return (
                 <div
@@ -1956,7 +1905,7 @@ export function DemoWorkspace({
                         <Tooltip.Trigger
                           render={
                             <button
-                              className={`${view === item.view ? "active" : ""}${item.operatorOnly ? " workspace-admin-nav" : ""}`}
+                              className={view === item.view ? "active" : ""}
                               aria-label={item.label}
                               aria-current={
                                 view === item.view ? "page" : undefined
@@ -1966,12 +1915,7 @@ export function DemoWorkspace({
                           }
                         >
                           <Icon aria-hidden="true" />
-                          <span>
-                            {item.label}
-                            {item.operatorOnly && (
-                              <small>Members &amp; access</small>
-                            )}
-                          </span>
+                          <span>{item.label}</span>
                         </Tooltip.Trigger>
                         <Tooltip.Portal>
                           <Tooltip.Positioner side="right" sideOffset={20}>
@@ -2076,7 +2020,7 @@ export function DemoWorkspace({
               <div className="workspace-sync" role="status" aria-live="polite">
                 <span>
                   {sync.state === "loading"
-                    ? "Loading account data…"
+                    ? "Syncing your preferences…"
                     : sync.state === "saving"
                       ? "Saving changes…"
                       : sync.state === "conflict"
@@ -2109,10 +2053,13 @@ export function DemoWorkspace({
               </div>
             )}
           </div>
-          <div className="route-stage" key={`${view}:${sync.epoch}`}>
+          <div
+            className="route-stage"
+            key={`${view}:${user?.id ?? "guest"}:${sync.epoch}`}
+          >
             <RouteBoundary>
               <Suspense fallback={<RouteLoading />}>
-                {!sync.ready ? (
+                {needsWorkspace && !sync.ready ? (
                   <RouteLoading />
                 ) : (
                   <>
@@ -2121,6 +2068,7 @@ export function DemoWorkspace({
                         authenticated={authenticated}
                         userId={user?.id}
                         backendOnline={backendOnline}
+                        workspaceReady={sync.ready}
                         go={go}
                       />
                     )}
@@ -2185,6 +2133,7 @@ export function DemoWorkspace({
                       <StockUniversesPanel
                         authenticated={authenticated}
                         backendOnline={backendOnline}
+                        userId={user?.id}
                       />
                     )}
                     {view === "subscription" && (

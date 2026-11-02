@@ -5,6 +5,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { webcrypto } = require("node:crypto");
 const ts = require("typescript");
+require("./helpers/query-core.cjs");
 
 function client(reply, timers = {}) {
   const calls = [],
@@ -21,8 +22,14 @@ function client(reply, timers = {}) {
     },
   }).outputText;
   const exports = {};
+  const cache = {};
+  vm.runInNewContext(ts.transpileModule(
+    fs.readFileSync(path.join(__dirname, "../src/api/ui-cache.ts"), "utf8"),
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
+  ).outputText, { exports: cache, require, structuredClone, AbortController, Date });
   vm.runInNewContext(compiled, {
     exports,
+    require: name => name === "./ui-cache" ? cache : require(name),
     Headers,
     Event,
     AbortController,
@@ -55,6 +62,40 @@ function client(reply, timers = {}) {
 }
 const response = (payload, status = 200) =>
   new Response(JSON.stringify(payload), { status });
+
+test("UI cache reuses owned lists while authorization stays uncached and writes invalidate", async t => {
+  let version=1,reads=0,accounts=0;
+  const c=client((url,init)=>{
+    if(url.endsWith('/account/me')){accounts++;return response({user:{id:'owner-a'}});}
+    if(init.method==='PATCH'){version++;return response({id:'rule-a',version});}
+    reads++;return response({items:[{id:'rule-a',version}]});
+  });
+  t.after(()=>c.session.clear());c.session.setToken('synthetic');c.session.setAppSession('synthetic-session');
+  await c.ui.listRules('owner-a');await c.ui.listRules('owner-a');assert.equal(reads,1);
+  assert.equal(c.calls[0].init.headers.get('X-App-Session'),'synthetic-session');
+  await c.api.account();await c.api.account();assert.equal(accounts,2);
+  await c.api.updateRule('rule-a',1,{});
+  assert.equal(c.ui.peekRules('owner-a'),undefined);
+  assert.equal((await c.ui.listRules('owner-a')).items[0].version,2);assert.equal(reads,2);
+});
+
+test("UI cache cancels pre-write snapshots and cannot restore them after a mutation", async t => {
+  let release,reads=0;const c=client((_url,init)=>init.method==='DELETE'?new Response(null,{status:204}):++reads===1?new Promise(r=>{release=r;}):response({items:[]}));
+  t.after(()=>c.session.clear());c.session.setToken('synthetic');
+  const pending=c.ui.listRules('owner-a'),cancelled=assert.rejects(pending);
+  await c.api.deleteRule('rule-a',1);await cancelled;
+  release(response({items:[{id:'deleted'}]}));
+  assert.deepEqual((await c.ui.listRules('owner-a')).items,[]);
+  assert.equal(c.ui.peekRules('owner-a').items.length,0);
+});
+
+test("UI snapshots are cleared when a current app-session revocation is received", async t => {
+  const c=client(url=>url.endsWith('/account/me')?response({error:{code:'SESSION_REVOKED'}},403):response({items:[{id:'owned'}]}));
+  t.after(()=>c.session.clear());c.session.setToken('synthetic');c.session.setAppSession('synthetic-session');
+  await c.ui.listRules('owner-a');assert.ok(c.ui.peekRules('owner-a'));
+  await assert.rejects(c.api.account());
+  assert.equal(c.session.getToken(),null);assert.equal(c.ui.peekRules('owner-a'),undefined);
+});
 
 test("a completed mutation cannot reuse an older in-flight list response",async()=>{
  let release;let reads=0;const c=client((_url,init)=>init.method==="PUT"?response({version:1}):++reads===1?new Promise(r=>release=r):response({items:[{id:"fresh"}]}));

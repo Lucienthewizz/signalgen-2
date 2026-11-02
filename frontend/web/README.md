@@ -455,6 +455,36 @@ Indonesian backend walkthrough: [Match, BUY/SELL and the decision flow](../../do
 
 ## Resource loading and recovery
 
+UI list cache: `src/api/ui-cache.ts` uses pinned `@tanstack/query-core` in memory,
+shared by dashboard, saved rules, stock universes/catalog and plan labels. Data
+is keyed by login revision, verified user ID and resource; it is not persisted.
+Rules/universes/plan labels stay fresh for 30 seconds, stock metadata for five
+minutes. Returning to a fresh list does not issue another list GET. Stale data
+can remain visible during refresh, with at most five minutes of cache retention.
+Refresh explicitly requests server data. Writes invalidate the relevant cache,
+including pending reads; logout/account changes clear it. `api.*` stays uncached
+for authorization, execution, raw candles, journals and grants. UI-only callers
+use `ui.*`; a cached label or rule does not authorize an operation.
+
+The browser fixture returns to Rules and Universes while their GETs are held:
+all four desktop/mobile returns display cached data with zero new list GETs.
+See [cache measurements](../../docs/evidence/ui-cache-20261102.json). These are
+warm-cache fixture timings, not first-load latency or a cloud API benchmark.
+
+Dashboard resources render as each authorized GET finishes; a slow plan read
+does not hold account/rule/universe data behind a combined response barrier.
+Pending counts are labeled as loading rather than zero. Account workspace sync
+runs alongside server-backed routes (dashboard, universes, journal, backtest,
+access, subscription and admin). Editors using synchronized rule drafts,
+screener preferences or watchlists still wait for initial hydration. Dashboard
+history updates after hydration, and account changes remount route content.
+`npm run test:browser` holds workspace/subscription responses unresolved at
+1440/390px to verify progressive rendering, partial failure and draft safety.
+This removes frontend waiting; it does not claim lower Yahoo/Supabase latency.
+The follow-up backend optimization keeps session authorization live while
+throttling presence writes and batching RLS record reads. See
+[measurements and verification limits](../../docs/backend/UI_LOADING_PERFORMANCE.md).
+
 Account/rule/universe reads retry one transient network, timeout or 502/503/504
 failure. Duplicate reads share that recovery, with no persistent authorization
 cache. The 15-second browser timeout covers reading the body too; the Go boundary

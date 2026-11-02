@@ -17,7 +17,7 @@ import {
   type ProfileAvatarKey,
 } from "@/lib/profile-avatar";
 import type { User } from "@/types";
-import { api } from "@/api/client";
+import { ui } from "@/api/client";
 import { cn } from "@/lib/utils";
 
 export function AccountMenu({
@@ -56,9 +56,9 @@ export function AccountMenu({
     subscriptionInfo?.userId === user.id ? subscriptionInfo.status : "Loading…";
   useEffect(() => {
     let active = true;
-    const loadSubscription = () => {
-      void api
-        .currentSubscription()
+    const loadSubscription = (refresh = false) => {
+      void ui
+        .currentSubscription(user.id, refresh)
         .then(({ subscription }) => {
           if (!active) return;
           const statuses: Record<string, string> = {
@@ -78,18 +78,29 @@ export function AccountMenu({
         })
         .catch(() => {
           if (active)
-            setSubscriptionInfo({
-              userId: user.id,
-              label: "Subscription",
-              status: "Unavailable",
-            });
+            setSubscriptionInfo((current) =>
+              current?.userId === user.id
+                ? {
+                    ...current,
+                    status: "Not updated",
+                  }
+                : {
+                    userId: user.id,
+                    label: "Subscription",
+                    status: "Unavailable",
+                  },
+            );
         });
     };
     loadSubscription();
-    addEventListener("signalgen:subscription", loadSubscription);
+    const changed = () => loadSubscription(true);
+    const focus = () => loadSubscription();
+    addEventListener("signalgen:subscription", changed);
+    addEventListener("focus", focus);
     return () => {
       active = false;
-      removeEventListener("signalgen:subscription", loadSubscription);
+      removeEventListener("signalgen:subscription", changed);
+      removeEventListener("focus", focus);
     };
   }, [user.id]);
 

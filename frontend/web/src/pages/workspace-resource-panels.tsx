@@ -28,7 +28,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { api, ApiError } from "@/api/client";
+import { api, ApiError, ui } from "@/api/client";
 import { subscriptionState } from "@/lib/workspace-feedback";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -114,14 +114,19 @@ function formatDate(value?: string) {
 export function StockUniversesPanel({
   authenticated,
   backendOnline,
-}: ConnectionProps) {
-  const [catalog, setCatalog] = useState<StockInstrument[]>([]);
+  userId,
+}: ConnectionProps & { userId?: string }) {
+  const [catalog, setCatalog] = useState<StockInstrument[]>(
+    () => ui.peekStocks(userId)?.items ?? [],
+  );
   const [market, setMarket] = useState<StockMarket>("IDX");
   const marketCatalog = useMemo(
     () => catalog.filter((stock) => stockMarket(stock) === market),
     [catalog, market],
   );
-  const [universes, setUniverses] = useState<StockUniverse[]>([]);
+  const [universes, setUniverses] = useState<StockUniverse[]>(
+    () => ui.peekUniverses(userId)?.items ?? [],
+  );
   const [allUniversesOpen, setAllUniversesOpen] = useState(false);
   const libraryReturnFocus = useRef<HTMLElement | null>(null);
   const [editing, setEditing] = useState<StockUniverse | null>(null);
@@ -133,14 +138,14 @@ export function StockUniversesPanel({
   const [notice, setNotice] = useState<string | null>(null);
   useActionNotifications(notice, error);
 
-  async function load() {
+  async function load(refresh = true) {
     if (!authenticated || !backendOnline) return;
     setLoading(true);
     setError(null);
     try {
       const [stocks, groups] = await Promise.all([
-        api.listStocks(),
-        api.listStockUniverses(),
+        ui.listStocks(userId, refresh),
+        ui.listStockUniverses(userId, refresh),
       ]);
       setCatalog(stocks.items);
       setUniverses(groups.items);
@@ -154,8 +159,8 @@ export function StockUniversesPanel({
   }
 
   useEffect(() => {
-    void load();
-  }, [authenticated, backendOnline]);
+    void load(false);
+  }, [authenticated, backendOnline, userId]);
 
   function resetEditor() {
     setEditing(null);
@@ -280,7 +285,7 @@ export function StockUniversesPanel({
           key={`${editing?.id ?? "new"}:${market}`}
           catalog={marketCatalog}
           selected={symbols}
-          loading={loading}
+          loading={loading && catalog.length === 0}
           disabled={saving}
           onToggle={toggleSymbol}
           header={

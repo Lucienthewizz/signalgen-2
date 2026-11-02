@@ -1,0 +1,15 @@
+{
+  "kind": "warm_ui_cache_return_navigation",
+  "synthetic": true,
+  "date": "2026-11-02",
+  "cache_engine": "@tanstack/query-core@5.105.1",
+  "resources_held": ["rules", "stock-universes", "stocks"],
+  "new_list_get_requests": 0,
+  "observations": [
+    {"viewport_width": 1440, "page": "rules", "visible_ms": 34},
+    {"viewport_width": 1440, "page": "universes", "visible_ms": 28},
+    {"viewport_width": 390, "page": "rules", "visible_ms": 35},
+    {"viewport_width": 390, "page": "universes", "visible_ms": 26}
+  ],
+  "limits": "Four warmed desktop-browser fixture observations, hash navigation to visible saved-list element. Excludes first load, full paint/interaction readiness, real cloud latency and physical mobile hardware. Other authorized GETs may still run. Not a percentile or production capacity benchmark."
+}

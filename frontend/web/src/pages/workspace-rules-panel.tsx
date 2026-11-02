@@ -14,7 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Dialog } from "@base-ui/react/dialog";
-import { api, ApiError } from "@/api/client";
+import { api, ApiError, ui } from "@/api/client";
 import { ResourceQuota } from "@/components/resource-quota";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useActionNotifications } from "@/components/ui/toast";
@@ -118,7 +118,9 @@ export function ServerRulesPanel({
   userId,
   onRun,
 }: Props) {
-  const [rules, setRules] = useState<RuleResource[]>([]);
+  const [rules, setRules] = useState<RuleResource[]>(
+    () => ui.peekRules(userId)?.items ?? [],
+  );
   const [editing, setEditing] = useState<RuleResource | null>(null);
   const [definition, setDefinition] =
     useState<UserRuleDefinition>(blankDefinition);
@@ -165,7 +167,7 @@ export function ServerRulesPanel({
     setStartMode(null);
     setPresetId([]);
     setEditing(null);
-    setRules([]);
+    setRules(ui.peekRules(userId)?.items ?? []);
     setSaving(false);
     setLoading(false);
     setError(null);
@@ -213,13 +215,13 @@ export function ServerRulesPanel({
     setNotice("Draft restored. Check the conditions before saving.");
   }
 
-  async function load() {
+  async function load(refresh = true) {
     if (!authenticated || !backendOnline) return;
     const owner = userId;
     setLoading(true);
     setError(null);
     try {
-      const response = await api.listRules();
+      const response = await ui.listRules(userId, refresh);
       if (activeUser.current !== owner) return;
       setRules(response.items);
     } catch (caught) {
@@ -231,7 +233,7 @@ export function ServerRulesPanel({
   }
 
   useEffect(() => {
-    void load();
+    void load(false);
   }, [authenticated, backendOnline, userId]);
 
   const filteredRules = useMemo(
