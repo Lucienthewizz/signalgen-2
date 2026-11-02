@@ -25,14 +25,15 @@ func (server *Handler) Capabilities(writer http.ResponseWriter, request *http.Re
 	// core contract. Backtesting has its own additive policy/version contract.
 	shared.WriteJSON(writer, http.StatusOK, struct {
 		core.Capabilities
-		Screening screeningCapabilities     `json:"screening"`
-		Backtest  core.BacktestCapabilities `json:"backtest"`
+		Screening   screeningCapabilities     `json:"screening"`
+		Backtest    core.BacktestCapabilities `json:"backtest"`
+		SignalStudy map[string]any            `json:"signal_study"`
 	}{core.GetCapabilities(), screeningCapabilities{
 		Model: screener.Model, FeatureExecution: "client_wasm",
 		DecisionExecution: "server_private", DatasetContent: "series",
 		RequiresUniverse: true, MaxSymbols: universe.MaxSymbols,
 		MaxCandidates: screener.MaxCandidates, MaxMessageBytes: screener.MaxMessageBytes,
-	}, core.GetBacktestCapabilities()})
+	}, core.GetBacktestCapabilities(), map[string]any{"schema_version": core.SignalStudySchema, "policy_version": core.SignalStudyPolicy, "wasm_export": "signalgenRunSignalStudy", "batch_size": 10, "max_horizon": 100, "max_years": 1, "timeframes": []string{"1d"}, "reference_price": "signal_close", "signals": []string{"BUY", "SELL"}, "execution": "client_wasm", "decision_execution": "server_private", "background_jobs": false}})
 }
 
 // Deployment-level orchestration is deliberately outside the portable core.

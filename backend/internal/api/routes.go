@@ -55,6 +55,11 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	}
 	router.Handle(http.MethodDelete, "/api/v1/backtests/history", recordsHandler.Serve)
 	backtestsHandler := &backtestsapi.Handler{Context: server.Context}
+	studiesHandler := backtestsapi.NewStudyHandler(server.Context)
+	router.Handle(http.MethodPost, "/api/v1/backtests/studies", studiesHandler.Create)
+	router.Handle(http.MethodPost, "/api/v1/backtests/studies/:id/batches/:batch/prepare", studiesHandler.Batch)
+	router.Handle(http.MethodDelete, "/api/v1/backtests/studies/:id/batches/:batch/prepare", studiesHandler.Batch)
+	router.Handle(http.MethodDelete, "/api/v1/backtests/studies/:id", studiesHandler.Cancel)
 	router.Handle(http.MethodPost, "/api/v1/backtests/signals", backtestsHandler.Signals)
 	workspaceHandler := &workspaceapi.Handler{Context: server.Context, Store: config.workspaceStore}
 	router.Handle(http.MethodGet, "/api/v1/workspace", workspaceHandler.List)

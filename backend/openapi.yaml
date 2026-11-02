@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.14.0
+  version: 0.15.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     The Go API performs email/password and recovery flows through Supabase Auth,
@@ -1134,11 +1134,104 @@ paths:
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
         "409": {description: Version conflict.}
+  /api/v1/backtests/studies:
+    post:
+      tags: [Analysis]
+      operationId: createSignalStudy
+      summary: Freeze an owner/session rule and daily stock catalog for independent signal analysis
+      description: "At most one active context per account/session pair and 32 per process, TTL two hours. Metadata only; no background job. Current active catalog, not a point-in-time listing universe. Browser processes one batch of ten at a time. Rule changes require a new context."
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SignalStudyInput'}
+      responses:
+        '201':
+          description: Frozen study context
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SignalStudyContext'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /api/v1/backtests/studies/{id}/batches/{batch}/prepare:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+      - {name: batch, in: path, required: true, schema: {type: integer, minimum: 0}}
+    post:
+      tags: [Analysis]
+      operationId: prepareSignalStudyBatch
+      summary: Prepare at most ten frozen stocks with explicit per-ticker failures
+      description: "Send an empty JSON object for the whole frozen batch, or retry_symbols for a unique subset of that batch. Arbitrary symbols and owner identities are rejected. Bounded three provider fetches at a time; request deadline eight seconds before response. Read each manifest/content, issue a bound backtest grant, compute features in WASM and evaluate with signal-close-independent-1. Release this batch before preparing another."
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                retry_symbols: {type: array, maxItems: 10, uniqueItems: true, items: {type: string}, description: Optional subset validated against the frozen batch; omitted or empty prepares all members}
+      responses:
+        '200':
+          description: Partial or complete batch; a 200 is not a claim of full market coverage
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [index, stocks, manifests, failures]
+                properties:
+                  index: {type: integer}
+                  stocks: {type: array, maxItems: 10, items: {type: string}}
+                  manifests: {type: array, maxItems: 10, items: {$ref: '#/components/schemas/DatasetManifest'}}
+                  failures:
+                    type: array
+                    items:
+                      type: object
+                      required: [symbol, code, retryable]
+                      properties:
+                        symbol: {type: string}
+                        code: {type: string, enum: [PROVIDER_UNAVAILABLE, INSUFFICIENT_CANDLES, SNAPSHOT_CAPACITY]}
+                        retryable: {type: boolean}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: Busy batch, expired/canceled context or changed rule; start again for version mismatch}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+    delete:
+      tags: [Analysis]
+      operationId: releaseSignalStudyBatch
+      summary: Release this owner's temporary study snapshots without clearing the shared price cache
+      security: [{supabaseBearer: [], appSession: []}]
+      responses:
+        '204': {description: Batch released}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: An active preparation cannot be released until it returns}
+  /api/v1/backtests/studies/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    delete:
+      tags: [Analysis]
+      operationId: cancelSignalStudy
+      summary: Cancel the owner/session study context and invalidate its snapshots
+      security: [{supabaseBearer: [], appSession: []}]
+      responses:
+        '204': {description: Context canceled; late provider results cannot be published}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
   /api/v1/backtests/signals:
     post:
       tags: [Analysis]
       operationId: evaluateBacktestSignals
-      summary: Evaluate one complete symbol feature series using a private long-only rule
+      summary: Evaluate one complete symbol feature series using the private rule
       description: |
         Requires a backtest grant and current backtest entitlement. Features must
         include every eligible snapshot timestamp (candle index 19 onward), in
@@ -1146,6 +1239,8 @@ paths:
         preserves crossover history but does not consume entry-window cooldown.
         Only decisions are computed here; fills and P&L execute in client WASM.
         Client features and results are unverified analysis, not accounting evidence.
+        Legacy holding-next-open-1 is BUY-only. signal-close-independent-1 accepts
+        BUY/SELL only with a study-bound manifest and frozen rule hash.
       security:
         - supabaseBearer: []
           appSession: []
@@ -2029,7 +2124,7 @@ components:
       required: [name, version, description, docs, status]
       properties:
         name: {type: string}
-        version: {type: string, enum: [0.14.0]}
+        version: {type: string, enum: [0.15.0]}
         description: {type: string}
         docs: {type: string}
         status: {type: string, enum: [ok]}
@@ -2375,7 +2470,8 @@ components:
       required: [capabilities_version, engine_version, schema_version, feature_schema_version, decision_version, private_protocol, worker_protocol, purposes, markets, timeframes, indicators, operators, rule_logic, max_candles_per_run, max_symbols_per_run, screening]
       properties:
         backtest: {$ref: "#/components/schemas/BacktestCapabilities"}
-        capabilities_version: {type: string, example: capabilities-4}
+        signal_study: {type: object, description: "signal-study-1 / signal-close-independent-1; WASM export signalgenRunSignalStudy; batch_size 10, daily only, max_horizon 100, browser-owned lifecycle."}
+        capabilities_version: {type: string, example: capabilities-5}
         engine_version: {type: string, example: core-0.5.0}
         indicator_catalog_version: {type: string, enum: [claudio-indicators-1]}
         max_indicator_period: {type: integer, enum: [250]}
@@ -2747,6 +2843,47 @@ components:
         to: {type: string, format: date}
         n_steps: {type: integer, minimum: 1, maximum: 100}
         rule_id: {type: string, description: Present only for rule mode; binds grant issuance.}
+        study_id: {type: string, description: Present only for a server-prepared signal study snapshot.}
+        definition_hash: {type: string, description: Frozen rule hash; must also match grant issuance.}
+    SignalStudyConfig:
+      type: object
+      additionalProperties: false
+      required: [from, to, n_steps]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date, description: Inclusive; at most one calendar year from start}
+        n_steps: {type: integer, minimum: 1, maximum: 100, default: 3}
+        take_profit_pct: {type: number, exclusiveMinimum: 0, exclusiveMaximum: 100}
+        stop_loss_pct: {type: number, exclusiveMinimum: 0, exclusiveMaximum: 100}
+    SignalStudyInput:
+      type: object
+      additionalProperties: false
+      required: [source, market, rule_id, config]
+      properties:
+        source: {type: string, enum: [market, universe]}
+        market: {type: string, enum: [IDX, US]}
+        universe_id: {type: string, description: Required only for source universe; ownership is server-checked}
+        rule_id: {type: string}
+        config: {$ref: '#/components/schemas/SignalStudyConfig'}
+    SignalStudyContext:
+      type: object
+      required: [id, schema_version, policy_version, engine_version, rule_schema_version, market, currency, config, rule_id, definition_hash, catalog_hash, total, batch_size, batches, expires_at]
+      properties:
+        id: {type: string}
+        schema_version: {type: string, enum: [signal-study-1]}
+        policy_version: {type: string, enum: [signal-close-independent-1]}
+        engine_version: {type: string}
+        rule_schema_version: {type: string}
+        market: {type: string, enum: [IDX, US]}
+        currency: {type: string, enum: [IDR, USD]}
+        config: {$ref: '#/components/schemas/SignalStudyConfig'}
+        rule_id: {type: string}
+        definition_hash: {type: string}
+        catalog_hash: {type: string}
+        total: {type: integer, minimum: 1, maximum: 20000}
+        batch_size: {type: integer, enum: [10]}
+        batches: {type: integer, minimum: 1}
+        expires_at: {type: string, format: date-time}
     BacktestCapabilities:
       type: object
       required: [schema_version, policy_version, modes, timeframes, signal_types, exit_strategies, max_symbols, max_candles_per_symbol, max_entries, max_horizon, financial_execution, decision_execution]
@@ -2778,7 +2915,7 @@ components:
       properties:
         compute_grant_id: {type: string}
         feature_schema_version: {type: string, enum: [screener-features-1]}
-        policy_version: {type: string, enum: [holding-next-open-1]}
+        policy_version: {type: string, enum: [holding-next-open-1, signal-close-independent-1]}
         candidates:
           type: array
           minItems: 1
@@ -2789,7 +2926,7 @@ components:
       required: [decision_version, policy_version, candidate_count, signals, entries]
       properties:
         decision_version: {type: string, enum: [decision-1]}
-        policy_version: {type: string, enum: [holding-next-open-1]}
+        policy_version: {type: string, enum: [holding-next-open-1, signal-close-independent-1]}
         candidate_count: {type: integer, description: Includes warmup and exit-buffer candidates.}
         signals:
           type: array
@@ -2799,7 +2936,13 @@ components:
           items: {type: object, description: Entry-window rule outcome and reason codes.}
         entries:
           type: array
-          items: {$ref: '#/components/schemas/BacktestEntry'}
+          items:
+            type: object
+            required: [symbol, timestamp, signal_type]
+            properties:
+              symbol: {type: string}
+              timestamp: {type: string, format: date-time}
+              signal_type: {type: string, enum: [BUY, SELL]}
     BacktestFeatureCandidate:
       type: object
       additionalProperties: false

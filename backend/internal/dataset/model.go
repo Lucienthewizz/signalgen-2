@@ -1,6 +1,9 @@
 package dataset
 
-import "errors"
+import (
+	"errors"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
+)
 
 var (
 	ErrInvalidRequest = errors.New("invalid dataset request")
@@ -10,15 +13,18 @@ var (
 )
 
 type PrepareRequest struct {
-	RequiredOperands []string `json:"-"` // derived from the authorized rule, never client-controlled
-	Mode             string   `json:"mode,omitempty"`
-	From             string   `json:"from,omitempty"`
-	To               string   `json:"to,omitempty"`
-	NSteps           int      `json:"n_steps,omitempty"`
-	Timeframe        string   `json:"timeframe,omitempty"`
-	Purpose          string   `json:"purpose"`
-	RuleID           string   `json:"rule_id"`
-	UniverseID       string   `json:"universe_id"`
+	StudyID          string                `json:"-"`
+	StudyRuleHash    string                `json:"-"`
+	StudyInstruments []universe.Instrument `json:"-"`
+	RequiredOperands []string              `json:"-"` // derived from the authorized rule, never client-controlled
+	Mode             string                `json:"mode,omitempty"`
+	From             string                `json:"from,omitempty"`
+	To               string                `json:"to,omitempty"`
+	NSteps           int                   `json:"n_steps,omitempty"`
+	Timeframe        string                `json:"timeframe,omitempty"`
+	Purpose          string                `json:"purpose"`
+	RuleID           string                `json:"rule_id"`
+	UniverseID       string                `json:"universe_id"`
 }
 
 type Range struct {
@@ -32,11 +38,13 @@ type Quality struct {
 }
 
 type BacktestScope struct {
-	Mode   string `json:"mode"`
-	From   string `json:"from"`
-	To     string `json:"to"`
-	NSteps int    `json:"n_steps"`
-	RuleID string `json:"rule_id,omitempty"`
+	StudyID        string `json:"study_id,omitempty"`
+	DefinitionHash string `json:"definition_hash,omitempty"`
+	Mode           string `json:"mode"`
+	From           string `json:"from"`
+	To             string `json:"to"`
+	NSteps         int    `json:"n_steps"`
+	RuleID         string `json:"rule_id,omitempty"`
 }
 
 type Manifest struct {

@@ -8,7 +8,7 @@ import {
 } from "./demo_preflight.mjs";
 
 const contract = "info:\n  title: SignalGen\n  version: 0.10.0\n";
-const wasm = Buffer.from("signalgenComputeFeatures fixture bytes");
+const wasm = Buffer.from("signalgenComputeFeatures signalgenRunSignalStudy fixture bytes");
 const runtime = Buffer.from("Go runtime fixture");
 const hash = (content) =>
   `sha256:${createHash("sha256").update(content).digest("hex")}`;
@@ -17,7 +17,7 @@ const manifest = {
   schema_version: "signal-baseline-1",
   feature_schema_version: "screener-features-1",
   worker_protocol: "worker-2",
-  capabilities_version: "capabilities-4",
+  capabilities_version: "capabilities-5",
   wasm_file: "signalgen_core.wasm",
   runtime_file: "wasm_exec.js",
   wasm_sha256: hash(wasm),

@@ -53,7 +53,8 @@ func (service Service) Signals(ctx context.Context, owner, sessionID string, inp
 	if input.ComputeGrantID == "" || len(input.Candidates) < 1 || len(input.Candidates) > core.MaxBacktestCandles {
 		return SignalResult{}, ErrInvalid
 	}
-	if input.PolicyVersion != core.BacktestPolicyVersion || input.FeatureSchemaVersion != core.FeatureSchemaVersion {
+	study := input.PolicyVersion == core.SignalStudyPolicy
+	if (!study && input.PolicyVersion != core.BacktestPolicyVersion) || input.FeatureSchemaVersion != core.FeatureSchemaVersion {
 		return SignalResult{}, ErrUnsupported
 	}
 	if err := service.Features.RequireFeature(ctx, owner, entitlement.FeatureBacktest); err != nil {
@@ -78,7 +79,13 @@ func (service Service) Signals(ctx context.Context, owner, sessionID string, inp
 	if err != nil {
 		return SignalResult{}, &Failure{"rule", err}
 	}
-	if rule.SignalType != "BUY" {
+	if study != (manifest.Backtest.StudyID != "") {
+		return SignalResult{}, ErrVersion
+	}
+	if study && manifest.Backtest.DefinitionHash != grant.DefinitionHash {
+		return SignalResult{}, ErrVersion
+	}
+	if !study && rule.SignalType != "BUY" {
 		return SignalResult{}, ErrUnsupported
 	}
 	var payload struct {
@@ -115,8 +122,11 @@ func (service Service) Signals(ctx context.Context, owner, sessionID string, inp
 		return SignalResult{}, err
 	}
 	result := SignalResult{DecisionResult: decision, PolicyVersion: core.BacktestPolicyVersion, Entries: []core.BacktestEntry{}}
+	if study {
+		result.PolicyVersion = core.SignalStudyPolicy
+	}
 	for _, signal := range decision.Signals {
-		result.Entries = append(result.Entries, core.BacktestEntry{Symbol: signal.Symbol, Timestamp: signal.Timestamp, SignalType: "BUY"})
+		result.Entries = append(result.Entries, core.BacktestEntry{Symbol: signal.Symbol, Timestamp: signal.Timestamp, SignalType: signal.SignalType})
 	}
 	return result, nil
 }

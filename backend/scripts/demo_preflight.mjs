@@ -105,7 +105,7 @@ export async function runPreflight({ api, web, contract, request = fetch }) {
       manifest.schema_version !== "signal-baseline-1" ||
       manifest.worker_protocol !== "worker-2" ||
       manifest.feature_schema_version !== "screener-features-1" ||
-      manifest.capabilities_version !== "capabilities-4" ||
+      manifest.capabilities_version !== "capabilities-5" ||
       manifest.wasm_file !== "signalgen_core.wasm" ||
       manifest.runtime_file !== "wasm_exec.js"
     )
@@ -122,6 +122,7 @@ export async function runPreflight({ api, web, contract, request = fetch }) {
     // anti-reverse-engineering or evidence that all private logic is hidden.
     if (
       !wasm.includes(Buffer.from("signalgenComputeFeatures")) ||
+      !wasm.includes(Buffer.from("signalgenRunSignalStudy")) ||
       ["signalgenRunSignals", "Default Scalping", "RULE_MATCHED"].some(
         (marker) => wasm.includes(Buffer.from(marker)),
       )
