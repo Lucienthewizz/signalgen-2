@@ -503,6 +503,36 @@ Indonesian backend walkthrough: [Match, BUY/SELL and the decision flow](../../do
 
 ## Resource loading and recovery
 
+UI list cache: `src/api/ui-cache.ts` uses pinned `@tanstack/query-core` in memory,
+shared by dashboard, saved rules, stock universes/catalog and plan labels. Data
+is keyed by login revision, verified user ID and resource; it is not persisted.
+Rules/universes/plan labels stay fresh for 30 seconds, stock metadata for five
+minutes. Returning to a fresh list does not issue another list GET. Stale data
+can remain visible during refresh, with at most five minutes of cache retention.
+Refresh explicitly requests server data. Writes invalidate the relevant cache,
+including pending reads; logout/account changes clear it. `api.*` stays uncached
+for authorization, execution, raw candles, journals and grants. UI-only callers
+use `ui.*`; a cached label or rule does not authorize an operation.
+
+The browser fixture returns to Rules and Universes while their GETs are held:
+all four desktop/mobile returns display cached data with zero new list GETs.
+See [cache measurements](../../docs/evidence/ui-cache-20261102.json). These are
+warm-cache fixture timings, not first-load latency or a cloud API benchmark.
+
+Dashboard resources render as each authorized GET finishes; a slow plan read
+does not hold account/rule/universe data behind a combined response barrier.
+Pending counts are labeled as loading rather than zero. Account workspace sync
+runs alongside server-backed routes (dashboard, universes, journal, backtest,
+access, subscription and admin). Editors using synchronized rule drafts,
+screener preferences or watchlists still wait for initial hydration. Dashboard
+history updates after hydration, and account changes remount route content.
+`npm run test:browser` holds workspace/subscription responses unresolved at
+1440/390px to verify progressive rendering, partial failure and draft safety.
+This removes frontend waiting; it does not claim lower Yahoo/Supabase latency.
+The follow-up backend optimization keeps session authorization live while
+throttling presence writes and batching RLS record reads. See
+[measurements and verification limits](../../docs/backend/UI_LOADING_PERFORMANCE.md).
+
 Account/rule/universe reads retry one transient network, timeout or 502/503/504
 failure. Duplicate reads share that recovery, with no persistent authorization
 cache. The 15-second browser timeout covers reading the body too; the Go boundary
@@ -558,3 +588,37 @@ a criteria preview, not market results: the current dataset/compute API requires
 saved rule ID and definition hash. Save and run the rule in Screener for results.
 Saved rules can be searched by name and filtered by BUY/SELL, with condition counts
 and a separate no-matching-rules state. Filters do not mutate saved rules.
+
+## Signal studies and journal review — 2 November 2026
+
+`#app/backtest` defaults to **Analyse every signal**. **Portfolio simulation**
+opens the existing next-open simulator. Independent studies use a close reference,
+all O/H/C trading-candle horizons and optional conservative TP/SL. Entire-market
+sources run sequential batches of ten with a reused worker, frozen catalog/rule,
+partial coverage, failed-stock retry, Stop, and paged temporary IndexedDB details.
+CSV exports include all individual horizons and a separate coverage report.
+Settings changed after a run require a new study; retry keeps the frozen context.
+
+Matched screener rows with explicit BUY/SELL direction can be selected and sent
+to journal review. Selection does not save anything. Enter actual quantity,
+price, date, fees and journal, then confirm. Stable UUIDs allow failed-only retry;
+the Go API remains authoritative for validation, ownership, versions and P&L.
+Backtests never automatically create journal trades.
+
+Transient health/resource failures retain previous results, and journal refresh
+does not replace populated rows with a loading skeleton. Identical GETs share
+in-flight work with independent cancellation; writes invalidate post-write read
+coalescing. Permission checks remain server-side on every protected operation.
+
+Use the existing development port **5174**. Rebuild API and WASM together after
+pulling. This addition needs API 0.15.0 / capabilities-5 and the new WASM export;
+older assets show an update error instead of silently falling back.
+
+Checks: `npm test`, `npm run build`, `npm run test:study`, `npm run test:browser`,
+`npm run test:backtest`, `npm run test:monitor`, `npm run test:decisions`,
+`npm run test:recovery`. The study browser suite uses real Go/WASM and IndexedDB
+with synthetic API/provider/account fixtures at 1440/390px, including forced
+light CSS. The product's existing dark-only theme policy is unchanged.
+
+[Study contract and storage limits](../../docs/backend/SIGNAL_STUDY.md) ·
+[Demo/evidence and known limits](../../docs/ASIS_2026_11_04.md).

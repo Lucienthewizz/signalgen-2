@@ -12,7 +12,7 @@ import {
   Newspaper,
   UserRound,
 } from "lucide-react";
-import { api } from "@/api/client";
+import { api, ui } from "@/api/client";
 import { monitorRuns, type MonitorRun } from "@/lib/market-monitor";
 import { screeningStatus, screeningStatusLabels } from "@/lib/screening-status";
 import {
@@ -40,6 +40,7 @@ type Props = {
   authenticated: boolean;
   backendOnline: boolean;
   userId?: string;
+  workspaceReady: boolean;
   go: (
     view:
       | "analysis"
@@ -56,48 +57,80 @@ export function WorkspaceOverviewPanel({
   authenticated,
   backendOnline,
   userId,
+  workspaceReady,
   go,
 }: Props) {
   const [account, setAccount] = useState<AccountState | null>(null);
-  const [rules, setRules] = useState<RuleResource[]>([]);
-  const [universes, setUniverses] = useState<StockUniverse[]>([]);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [rules, setRules] = useState<RuleResource[]>(
+    () => ui.peekRules(userId)?.items ?? [],
+  );
+  const [universes, setUniverses] = useState<StockUniverse[]>(
+    () => ui.peekUniverses(userId)?.items ?? [],
+  );
+  const [subscription, setSubscription] = useState<Subscription | null>(
+    () => ui.peekSubscription(userId)?.subscription ?? null,
+  );
+  const [pending, setPending] = useState({
+    account: true,
+    rules: true,
+    universes: true,
+    subscription: true,
+  });
+  const loading = Object.values(pending).some(Boolean);
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
   const [history, setHistory] = useState<MonitorRun[]>([]);
   useEffect(() => {
-    const update = () => setHistory(monitorRuns(userId));
+    const update = () => setHistory(workspaceReady ? monitorRuns(userId) : []);
     update();
     window.addEventListener("signalgen:monitor-run", update);
     return () => window.removeEventListener("signalgen:monitor-run", update);
-  }, [userId]);
+  }, [userId, workspaceReady]);
   useEffect(() => {
     setAccount(null);
-    setRules([]);
-    setUniverses([]);
-    setSubscription(null);
+    setRules(ui.peekRules(userId)?.items ?? []);
+    setUniverses(ui.peekUniverses(userId)?.items ?? []);
+    setSubscription(ui.peekSubscription(userId)?.subscription ?? null);
   }, [userId]);
   useEffect(() => {
     if (!authenticated || !backendOnline) return;
     let active = true;
-    setLoading(true);
-    setError(false);
-    // One failed request must not hide the resources that are available.
-    Promise.allSettled([
-      api.account(),
-      api.listRules(),
-      api.listStockUniverses(),
-      api.currentSubscription(),
-    ]).then(([a, r, u, s]) => {
-      if (!active) return;
-      if (a.status === "fulfilled") setAccount(a.value);
-      if (r.status === "fulfilled") setRules(r.value.items);
-      if (u.status === "fulfilled") setUniverses(u.value.items);
-      if (s.status === "fulfilled") setSubscription(s.value.subscription);
-      setError([a, r, u, s].some((result) => result.status === "rejected"));
-      setLoading(false);
+    setPending({
+      account: true,
+      rules: true,
+      universes: true,
+      subscription: true,
     });
+    setError(false);
+    // Publish each response immediately; an unrelated slow read must not hold the dashboard.
+    async function load<T>(
+      key: keyof typeof pending,
+      request: Promise<T>,
+      apply: (value: T) => void,
+    ) {
+      try {
+        const value = await request;
+        if (active) apply(value);
+      } catch {
+        if (active) setError(true);
+      } finally {
+        if (active) setPending((current) => ({ ...current, [key]: false }));
+      }
+    }
+    void load("account", api.account(), setAccount);
+    void load("rules", ui.listRules(userId, reload > 0), (response) =>
+      setRules(response.items),
+    );
+    void load(
+      "universes",
+      ui.listStockUniverses(userId, reload > 0),
+      (response) => setUniverses(response.items),
+    );
+    void load(
+      "subscription",
+      ui.currentSubscription(userId, reload > 0),
+      (response) => setSubscription(response.subscription),
+    );
     return () => {
       active = false;
     };
@@ -107,6 +140,8 @@ export function WorkspaceOverviewPanel({
     rules.length > 0 &&
     universes.length > 0;
   const latest = history[0];
+  const preparing =
+    !ready && (pending.account || pending.rules || pending.universes);
   const nextStep = !account?.features.includes("screener")
     ? "subscription"
     : !rules.length
@@ -142,7 +177,13 @@ export function WorkspaceOverviewPanel({
         )}
       </Alert>
     );
-  if (loading && !account)
+  if (
+    Object.values(pending).every(Boolean) &&
+    !account &&
+    !rules.length &&
+    !universes.length &&
+    !subscription
+  )
     return (
       <div
         className="overview-board"
@@ -197,18 +238,24 @@ export function WorkspaceOverviewPanel({
         >
           <div>
             <h3 id="overview-next-title">
-              {ready
-                ? latest
-                  ? "Continue your analysis"
-                  : "Ready for your first screening"
-                : "Set up your workspace"}
+              {preparing
+                ? "Loading your workspace"
+                : ready
+                  ? !workspaceReady
+                    ? "Your analysis workspace"
+                    : latest
+                      ? "Continue your analysis"
+                      : "Ready for your first screening"
+                  : "Set up your workspace"}
             </h3>
             <p>
-              {ready
-                ? latest
-                  ? "Use your last selection or adjust it before screening."
-                  : "Choose a rule and stock universe, then review the results and evidence."
-                : "You need screener access, a rule, and a stock universe to run an analysis."}
+              {preparing
+                ? "Available account data appears as it loads."
+                : ready
+                  ? latest
+                    ? "Use your last selection or adjust it before screening."
+                    : "Choose a rule and stock universe, then review the results and evidence."
+                  : "You need screener access, a rule, and a stock universe to run an analysis."}
             </p>
             {latest && (
               <div
@@ -239,16 +286,19 @@ export function WorkspaceOverviewPanel({
           <Button
             size="lg"
             className="workspace-glass-action overview-open-screener"
+            disabled={preparing}
             onClick={() => (ready ? continueScreen() : go(nextStep))}
           >
             <SearchCheck data-icon="inline-start" />
-            {ready
-              ? "Open screener"
-              : nextStep === "subscription"
-                ? "Check access"
-                : nextStep === "rules"
-                  ? "Create rule"
-                  : "Create universe"}
+            {preparing
+              ? "Loading analysis options…"
+              : ready
+                ? "Open screener"
+                : nextStep === "subscription"
+                  ? "Check access"
+                  : nextStep === "rules"
+                    ? "Create rule"
+                    : "Create universe"}
           </Button>
         </section>
         <nav className="overview-shortcuts" aria-label="Quick access">
@@ -281,21 +331,26 @@ export function WorkspaceOverviewPanel({
               view: "rules",
               icon: ListChecks,
               label: "Rules",
-              value: rules.length,
+              value: pending.rules && !rules.length ? "Loading…" : rules.length,
               action: "Manage rules",
             },
             {
               view: "universes",
               icon: Boxes,
               label: "Stock universes",
-              value: universes.length,
+              value:
+                pending.universes && !universes.length
+                  ? "Loading…"
+                  : universes.length,
               action: "Manage universes",
             },
             {
               view: "subscription",
               icon: Crown,
               label: "Plan",
-              value: subscription?.plan_name ?? "—",
+              value:
+                subscription?.plan_name ??
+                (pending.subscription ? "Loading…" : "—"),
               action: "View plan",
             },
             {
@@ -305,7 +360,8 @@ export function WorkspaceOverviewPanel({
               value:
                 account?.user.status === "active"
                   ? "Active"
-                  : (account?.user.status ?? "—"),
+                  : (account?.user.status ??
+                    (pending.account ? "Loading…" : "—")),
               action: "View account",
             },
           ] as const
@@ -396,6 +452,10 @@ export function WorkspaceOverviewPanel({
               </li>
             ))}
           </ul>
+        ) : !workspaceReady ? (
+          <div className="overview-activity__empty" role="status">
+            <p>Loading recent screening…</p>
+          </div>
         ) : (
           <Empty className="overview-activity__empty">
             <EmptyHeader>

@@ -1,0 +1,19 @@
+{
+  "legacy_source": "legacy/python/app/api/routes/backtests.py",
+  "source_sha256": "d06ddf8870ba99db959003d866355e4e412e3ffb1d0853a7ca66d2c34388d6e7",
+  "base_fixture": "backtest_next_open_v1.json",
+  "base_sha256": "43037f429dafd7fec55918f788f93ffa36433215a8f4b4581697d865c6c7e918",
+  "rule_scope": "Frozen entries from the base fixture isolate price analysis; indicator/signal parity is tested separately with claudio_indicators_v1.json and the private evaluator tests.",
+  "config": {"from":"2026-01-20","to":"2026-01-26","n_steps":1},
+  "expected": {
+    "signals":4, "evaluated":3, "missing":1,
+    "first_buy_return_pct":{"open":10,"high":20,"close":15},
+    "first_sell_return_pct":{"open":-10,"high":-20,"close":-15},
+    "swing":{"take_profit_pct":5,"stop_loss_pct":3,"statuses":["take_profit","stop_loss","take_profit","incomplete"],"returns":[5,-3,5,null]}
+  },
+  "policy_differences":[
+    "The new study never clips an incomplete horizon to the last available candle; Claudio's _time_exit does.",
+    "No overlapping capital accounting or next-open execution in signal-study-1.",
+    "Synthetic sessions include weekends; separate tests use explicit Friday-to-Monday gaps."
+  ]
+}

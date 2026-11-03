@@ -87,6 +87,20 @@ func TestIssuanceServiceUsesVerifiedOwnerAndSession(t *testing.T) {
 	}
 }
 
+func TestStudyGrantPinsPreparedDefinitionHash(t *testing.T) {
+	input, store := issuanceFixture()
+	input.Purpose = "backtest"
+	store.manifest.Purpose = "backtest"
+	store.manifest.Backtest = &dataset.BacktestScope{Mode: "rule", RuleID: input.RuleID, StudyID: "study", DefinitionHash: "previous-hash"}
+	if _, e := store.service().Issue(context.Background(), "owner", "session", input); !errors.Is(e, ErrBindingMismatch) || store.created.UserID != "" {
+		t.Fatal("new rule accepted against old study snapshot")
+	}
+	store.manifest.Backtest.DefinitionHash = input.DefinitionHash
+	if _, e := store.service().Issue(context.Background(), "owner", "session", input); e != nil {
+		t.Fatal(e)
+	}
+}
+
 func TestIssuanceServiceRejectsBeforePersistence(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

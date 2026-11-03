@@ -1,5 +1,59 @@
 # Backend progress
 
+## 3 November 2026 — ledger portofolio dan resume audit
+
+Backend API `0.16.0` menambahkan ledger BUY/SELL manual terpisah sesuai keputusan
+pengguna; jurnal lama dan backtest tidak dikonversi. Holding/realized P&L memakai
+weighted average termasuk biaya dan desimal exact, dipisah buku/pasar/currency.
+Edit/hapus menghitung ulang seluruh riwayat kandidat, dengan CAS dan lock owner
+agar SELL tidak melebihi kepemilikan, termasuk pada penulisan bersamaan.
+[Kontrak, contoh dan struktur](PORTFOLIO_LEDGER.md).
+
+Migration cloud `20261102160030_portfolio_ledger` berhasil diterapkan; metadata
+RLS/FORCE RLS, owner policy dan penolakan akses role browser diperiksa. API hasil
+rebuild sehat; delapan pemeriksaan preflight, Go/race, PostgreSQL disposable,
+213 tes frontend dan production build lulus. UI ledger, valuasi quote/unrealized
+P&L, cash/FX dan corporate-action accounting belum dibuat. Tidak memasukkan
+transaksi fiktif ke akun asli. [Bukti pemeriksaan](../evidence/portfolio-ledger-20261103.json).
+
+Resume provider lima menit/pasar memberi cakupan kumulatif IDX 530 valid/19
+gagal/413 pending dari 962; AS 548 valid/4 pendek/5.048 pending dari 5.600.
+Ini QA data parsial, bukan evaluasi rule seluruh pasar selesai.
+[Bukti resume](../evidence/catalog-data-audit-resume-20261102.json).
+
+## 2 November 2026 — loading, akses Postgres dan audit data
+
+UI memakai cache TanStack query-core per identitas untuk daftar/paket tampilan.
+Go memverifikasi bearer ES256/RS256 melalui JWKS, menjaga pemeriksaan sesi/akun
+dan hak fitur; HS256 tetap diverifikasi remote. Telemetry memisahkan auth/key,
+pool acquire/connect, query dan batch tanpa token atau isi akun. Query sesi/profil
+dan status/entitlement digabung; heartbeat dibatasi sekali per menit. Pool tetap
+lima koneksi, ping idle 30 detik dan idle retention 10 menit.
+[Bukti, pengukuran dan batas](UI_LOADING_PERFORMANCE.md).
+
+Provider menolak metadata simbol/currency/interval yang tidak cocok dan melaporkan
+split/dividen serta gap panjang tanpa penyesuaian harga tambahan. Audit katalog
+operator baca-saja kini tersedia dengan katalog beku, serial fetch, budget,
+resume/retry dan status valid/insufficient/failed/pending. Audit data bukan
+evaluasi rule seluruh pasar dan tidak mengklaim point-in-time atau hak distribusi.
+[Cara audit](CATALOG_DATA_AUDIT.md).
+
+Audit provider asli lima menit/pasar pada window 1 Juli–sebelum 2 November:
+IDX 273 valid, 5 gagal, 684 pending dari 962; AS 273 valid, 3 riwayat pendek,
+5.324 pending dari 5.600. Kedua laporan sengaja parsial dan disimpan lokal untuk
+resume, bukan bukti semua saham sudah selesai dianalisis rule.
+
+## 2 November 2026 — independent signal study and demo verification
+
+Added `signal-study-1 / signal-close-independent-1`, close-based independent
+O/H/C horizons, BUY/SELL direction, conservative TP/SL, frozen owner/session
+study contexts, ten-stock catalog batches, cancellation/release, and grant/rule
+hash binding. Native/WASM and the legacy next-open simulator remain separate.
+API 0.15.0 / capabilities-5; core indicator and feature protocols stay compatible.
+Existing journal storage/API is reused for reviewed multi-row screening drafts.
+Cloud journal migration/RLS metadata was inspected read-only; no new migration.
+[Current evidence, performance limits and demo guide](../ASIS_2026_11_04.md).
+
 ## 27 October 2026 — Claudio indicator catalog
 
 Added all 78 archived rule operands, dynamic 1–250 periods and previous-candle

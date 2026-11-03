@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"github.com/Lucienthewizz/signalgen-2/backend/internal/records"
-	"github.com/Lucienthewizz/signalgen-2/backend/internal/workspace"
 	"log"
 	"log/slog"
 	"net/http"
@@ -24,11 +22,14 @@ import (
 	platformdb "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/database"
 	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/platform/observability"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/portfolio"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/ratelimit"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/records"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/workspace"
 )
 
 func main() {
@@ -55,6 +56,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	identity.EnableLocalVerification()
 	// Supabase Postgres owns durable multi-user application state. SQL schema
 	// changes are versioned under supabase/migrations, not run at API startup.
 	operationalLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -114,6 +116,7 @@ func main() {
 	// into the HTTP package through small interfaces for testing and migration.
 	traffic := platformhttp.NewTrafficObserver(operationalLogger)
 	screeningMetrics := observability.NewScreenerObserver(operationalLogger)
+	portfolioStore := &portfolio.PostgresStore{DB: database}
 	handler, err := apihttp.NewServer(
 		identity, sessions, accessStore, datasets, computeStore,
 		apihttp.WithAuthService(identity),
@@ -129,9 +132,10 @@ func main() {
 		apihttp.WithUniverseStore(universeStore),
 		apihttp.WithWorkspaceStore(&workspace.PostgresStore{DB: database}),
 		apihttp.WithRecordStore(&records.PostgresStore{DB: database}),
+		apihttp.WithPortfolioStore(portfolioStore),
 		apihttp.WithRateLimiter(mutationLimiter),
 		apihttp.WithCORSOrigins(allowedOrigins),
-		apihttp.WithReadinessChecks(platformdb.PostgresReadiness{Pool: database}, platformdb.RuntimePrivileges{Pool: database}, datasets),
+		apihttp.WithReadinessChecks(platformdb.PostgresReadiness{Pool: database}, platformdb.RuntimePrivileges{Pool: database}, datasets, portfolioStore),
 	)
 	if err != nil {
 		log.Fatal(err)

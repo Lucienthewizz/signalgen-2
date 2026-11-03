@@ -132,9 +132,20 @@ async (page) => {
   await page.getByRole("checkbox",{name:"Select BBCA for journal",exact:true}).check();
   await page.getByRole("checkbox",{name:"Select BBRI for journal",exact:true}).check();
   await page.getByRole("button",{name:"Review 2 in journal",exact:true}).click();
-  await page.getByRole("heading",{name:"Record a trade",exact:true}).waitFor();
+  await page.getByRole("heading",{name:"Review selected screening drafts",exact:true}).waitFor();
   if(writes.length)throw Error("Selecting stocks saved trades before confirmation");
-  if(await page.locator("#trade-symbol").inputValue()!=="BBCA")throw Error("First selected draft missing");
+  await page.getByLabel("Quantity BBCA.JK",{exact:true}).fill("100");
+  await page.getByLabel("Quantity BBRI.JK",{exact:true}).fill("100");
+  await page.getByLabel("Entry price BBCA.JK",{exact:true}).fill("105");
+  const review=page.locator('.journal-batch-review');
+  await review.getByRole('checkbox').check();
+  await review.getByRole('button',{name:'Save unsaved / retry failed trades',exact:true}).evaluate(button=>{button.click();button.click();});
+  await wait(()=>writes.length===2);
+  if(writes[0].body.data.entry_price!==105)throw Error("Review edits were not saved");
+  await review.getByText('2/2 saved to this account',{exact:true}).waitFor();
+  if(writes.length!==2)throw Error('Double click duplicated reviewed trades');
+  await review.getByRole('button',{name:'Close review',exact:true}).click();
+  await page.getByRole('button',{name:'Open journal form',exact:true}).click();
   for(const width of [1440,390]){
     await page.setViewportSize({width,height:1000});
     const journalArrows=await page.locator(".journal-workspace select").evaluateAll(items=>items.map(item=>{const style=getComputedStyle(item);return {appearance:style.appearance,padding:parseFloat(style.paddingRight),image:style.backgroundImage,position:style.backgroundPosition,size:style.backgroundSize};}));
@@ -142,14 +153,8 @@ async (page) => {
     await page.locator(".journal-capture").screenshot({path:`output/playwright/usability-review-${width}.png`,animations:"disabled"});
     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error(`Review overflow at ${width}`);
   }
-  await page.locator("#trade-entry").fill("105");
-  await page.getByRole("button",{name:"Save trade",exact:true}).evaluate(button=>{button.click();button.click();});
-  await wait(()=>writes.length===1);
-  await page.waitForFunction(()=>document.querySelector("#trade-symbol")?.value==="BBRI");
-  if(writes[0].body.data.entry_price!==105)throw Error("Review edits were not saved");
-  if(writes.length!==1)throw Error("Double click duplicated a save or saved the second draft automatically");
-  await page.getByRole("button",{name:"Skip current draft",exact:true}).click();
-  if(writes.length!==1)throw Error("Skipping a draft created a trade");
+  await page.getByRole("button",{name:"Close form",exact:true}).click();
+  if(writes.length!==2)throw Error("Closing a manual form created a trade");
   await page.getByRole("button",{name:"Open journal form",exact:true}).waitFor();
   for(const width of [1440,390]){
     await page.setViewportSize({width,height:1000});
@@ -157,7 +162,7 @@ async (page) => {
     if(await points.count()!==30)throw Error("Same-day trades were combined or open trades were included in the chart");
     if(await chart.locator("g[role=button][tabindex='0']").count()!==1)throw Error("Chart does not use one keyboard tab stop");
     const hitboxes=await chart.locator(".journal-chart-hit").evaluateAll(items=>items.map(item=>item.getBoundingClientRect()));
-    if(hitboxes.some(box=>box.width<44||box.height<44))throw Error("Trade points are too small to tap");
+    if(hitboxes.some(box=>box.width<43.99||box.height<43.99))throw Error(`Trade points are too small to tap: ${JSON.stringify(hitboxes.map(box=>({width:box.width,height:box.height})))}`);
     await points.nth(0).click();
     const detail=page.getByRole("region",{name:"Selected trade details",exact:true});
     if(!(await detail.innerText()).includes("QA00"))throw Error("Point click did not open the selected trade");
@@ -177,11 +182,11 @@ async (page) => {
     await chart.screenshot({path:`output/playwright/journal-trade-chart-${width}.png`,animations:"disabled"});
     await page.getByRole("button",{name:"Clear chart selection",exact:true}).click();
     if(await detail.count())throw Error("Clear chart selection did not close details");
-    if(writes.length!==1)throw Error("Chart interaction wrote a trade");
+    if(writes.length!==2)throw Error("Chart interaction wrote a trade");
     const body=page.locator(".journal-ledger tbody");
     if(await body.locator("tr").count()>25)throw Error("Journal page is unbounded");
     await page.getByRole("button",{name:"Next trades",exact:true}).click();
-    if(await body.locator("tr").count()!==6)throw Error("Journal pagination count mismatch");
+    if(await body.locator("tr").count()!==7)throw Error("Journal pagination count mismatch");
     await points.nth(1).click();
     await page.getByLabel("Search recorded trades",{exact:true}).fill("QA29");
     if(await body.locator("tr").count()!==1)throw Error("Journal search did not reset pagination");

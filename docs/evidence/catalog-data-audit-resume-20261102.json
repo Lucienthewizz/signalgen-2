@@ -1,0 +1,152 @@
+{
+  "date": "2026-11-02",
+  "synthetic": false,
+  "kind": "public_catalog_provider_data_qa",
+  "window": {
+    "from_inclusive": "2026-07-01T00:00:00Z",
+    "to_exclusive": "2026-11-02T00:00:00Z",
+    "interval": "1d"
+  },
+  "policy": {
+    "budget_minutes_per_market": 5,
+    "workers": 1,
+    "delay_ms": 1000,
+    "minimum_candles": 20,
+    "rule_evaluation": false
+  },
+  "local_reports": "backend/runtime/catalog-audits/20261102/{IDX,US}/report.json (gitignored)",
+  "limits": "Budgeted provider checks in catalog symbol order, not random sampling or complete coverage. Current catalog is not point-in-time. Valid means OHLCV validated with at least 20 candles, not enough warmup for all rules. No private rule evaluation, API study run, broker execution, total-return adjustment, exchange-calendar reconciliation or data-rights certification. Snapshot collected during implementation; first-day corporate-action timestamp handling additionally verified by final fixtures.",
+  "pass": "second five-minute pass per market, pending only; cumulative totals",
+  "markets": [
+    {
+      "market": "IDX",
+      "catalog_sha256": "aa9e9d5b8ef06d835be2c0f28ed789caa18bfdf94935344495aaf5280a4a5d1b",
+      "counts": {
+        "failed": 19,
+        "insufficient": 0,
+        "pending": 413,
+        "total": 962,
+        "valid": 530
+      },
+      "coverage_complete": false,
+      "all_usable": false,
+      "stopped_reason": "budget_or_cancel",
+      "updated_at": "2026-11-02T15:45:09Z",
+      "failed": [
+        {
+          "symbol": "ARMY.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "BTEL.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "CBMF.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "COWL.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "CPRI.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "DUCK.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "ENVY.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "GAMA.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "GOLL.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "HKMU.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "HOME.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "HOTL.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "IIKP.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "JSKY.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "KBRI.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "LCGP.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "LMAS.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "MABA.JK",
+          "error": "provider_http_404"
+        },
+        {
+          "symbol": "MAGP.JK",
+          "error": "provider_http_404"
+        }
+      ],
+      "insufficient": [],
+      "corporate_action_warning_tickers": 68
+    },
+    {
+      "market": "US",
+      "catalog_sha256": "dd7c571faa65bb303c428af296120d7c42eaac0c15612fdcb18a10fe786ce089",
+      "counts": {
+        "failed": 0,
+        "insufficient": 4,
+        "pending": 5048,
+        "total": 5600,
+        "valid": 548
+      },
+      "coverage_complete": false,
+      "all_usable": false,
+      "stopped_reason": "budget_or_cancel",
+      "updated_at": "2026-11-02T15:50:09Z",
+      "failed": [],
+      "insufficient": [
+        {
+          "symbol": "ACCV",
+          "candles": 19
+        },
+        {
+          "symbol": "ADIL",
+          "candles": 3
+        },
+        {
+          "symbol": "AIOK",
+          "candles": 16
+        },
+        {
+          "symbol": "AMRO",
+          "candles": 12
+        }
+      ],
+      "corporate_action_warning_tickers": 175
+    }
+  ]
+}

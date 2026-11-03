@@ -49,3 +49,20 @@ export function checkJournalScreening(
     };
   return { ok: true as const, row };
 }
+
+/** Bulk review must not guess a direction for legacy matches without one. */
+export function eligibleJournalScreening(
+  draft: JournalScreeningDraft,
+  userId?: string,
+) {
+  const checked = checkJournalScreening(draft, userId);
+  return (
+    checked.ok &&
+    (checked.row.decision.signal_type === "BUY" ||
+      checked.row.decision.signal_type === "SELL") &&
+    ((draft.run.manifest.market === "IDX" &&
+      draft.run.manifest.currency === "IDR") ||
+      (draft.run.manifest.market === "US" &&
+        draft.run.manifest.currency === "USD"))
+  );
+}

@@ -30,6 +30,7 @@ type requestTraffic struct {
 	route    string
 	panicked bool
 	aborted  bool
+	timings  requestTimings
 }
 
 // TrafficCounts contains cumulative counts since this process started. Duration
@@ -146,7 +147,8 @@ func (observer *TrafficObserver) record(request *stdhttp.Request, trace *request
 		observer.logger.Log(context.Background(), level, "http_request",
 			"request_id", RequestID(request.Context()), "method", key.method,
 			"route", key.route, "status", status, "duration_us", elapsed.Microseconds(),
-			"http_response_bytes", size, "panicked", trace.panicked, "aborted", trace.aborted)
+			"http_response_bytes", size, "panicked", trace.panicked, "aborted", trace.aborted,
+			"timings_us", trace.timings.snapshot())
 	}
 }
 

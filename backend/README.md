@@ -1,5 +1,11 @@
 # SignalGen Backend
 
+Ledger portofolio manual tersedia pada API `0.16.0`, terpisah dari jurnal lama:
+BUY/SELL, kepemilikan, weighted-average cost dan realized P&L termasuk biaya.
+[Panduan endpoint, contoh Postman, struktur dan batas](../docs/backend/PORTFOLIO_LEDGER.md).
+Terapkan migration `portfolio_ledger` sebelum menjalankan image baru; readiness
+memeriksa tabel, izin role runtime dan RLS/FORCE RLS.
+
 Backend aktif SignalGen menggunakan Go/Gin, Supabase Auth, dan Supabase Postgres. Login,
 register, profil, forgot password, reset password, app-session, perangkat,
 entitlement, dataset, rules, serta compute grant dilayani Go API pada port
@@ -109,12 +115,24 @@ Frontend harus memverifikasi checksum WASM dan runtime dari
 `signalgen_core.manifest.json` sebelum menjalankan `signalgen_core.wasm`; file
 WASM dan `wasm_exec.js` wajib berasal dari build yang sama.
 
-`internal/auth` menangani register, login, recovery password, pembaruan password,
-dan verifikasi bearer ke Supabase Auth menggunakan publishable key. Package
-tersebut hanya menghasilkan identitas publik (`id`, `email`, dan nama tampilan);
+`internal/auth` menangani register, login, recovery password, dan pembaruan
+password melalui Supabase Auth menggunakan publishable key. API memverifikasi
+bearer ES256/RS256 secara lokal menggunakan public key JWKS proyek (cache key
+maksimum 10 menit); token HS256 lama tetap diperiksa melalui Supabase Auth.
+Signature, issuer, audience, expiry, waktu penerbitan, role authenticated dan
+identitas sesi wajib valid. Package ini hanya menghasilkan identitas publik
+(`id`, `email`, dan nama tampilan);
 role, status akun, sesi aplikasi, dan entitlement tetap dibaca dari storage
 server SignalGen. Metadata user Supabase tidak digunakan untuk keputusan
 otorisasi.
+
+Cache public key bukan cache izin. Sesi aplikasi revoked/expired dan akun
+suspended tetap ditolak pada request berikutnya. Perubahan identitas atau
+pencabutan hanya di Supabase Auth dapat mengikuti masa berlaku access token;
+gunakan alur pencabutan sesi SignalGen untuk penghentian akses aplikasi.
+Log request memisahkan waktu auth lokal/remote, pengambilan key, menunggu pool,
+dan SQL tanpa mencatat token, klaim, SQL atau data pengguna. Lihat
+[bukti dan batas pengukuran](../docs/backend/UI_LOADING_PERFORMANCE.md).
 
 Menjalankan Go API:
 
@@ -183,8 +201,10 @@ lain mencabut sesi perangkat sebelumnya dan hanya boleh sekali per 24 jam.
 System rule tidak dapat diubah/dihapus dan definisi privatnya tidak dikirim oleh
 endpoint rule. Query rule pribadi selalu dibatasi
 oleh pemilik; ID milik akun lain menghasilkan respons not found agar kepemilikan
-tidak bocor. Endpoint jurnal/portfolio dan backtest tetap belum diimplementasikan;
-status fitur lengkap ada di [backend progress](../docs/backend/BACKEND_PROGRESS.md).
+tidak bocor. Jurnal per transaksi, arsip backtest, evaluasi sinyal dan studi
+seluruh pasar berbasis batch tersedia di Go API. Pembukuan portofolio gabungan
+antar transaksi tetap berbeda dari P&L per catatan jurnal. Status dan batas
+fitur ada di [backend progress](../docs/backend/BACKEND_PROGRESS.md).
 
 Go API memakai `pgxpool` untuk profile, entitlement, subscription, sesi, rule,
 audit, dan compute grant. Fitur efektif merupakan gabungan manual grant aktif
@@ -197,7 +217,7 @@ Frontend web hanya dapat memanggil Go API dari origin yang dicantumkan secara
 eksplisit pada `SIGNALGEN_CORS_ORIGINS` (dipisahkan koma). Contoh development:
 
 ```env
-SIGNALGEN_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+SIGNALGEN_CORS_ORIGINS=http://localhost:5174,http://127.0.0.1:5174
 SIGNALGEN_PASSWORD_RESET_REDIRECT_URL=http://127.0.0.1:5174/?view=reset-password
 SIGNALGEN_MAX_ACTIVE_SESSIONS=1
 SIGNALGEN_DEVICE_SWITCH_COOLDOWN_HOURS=24

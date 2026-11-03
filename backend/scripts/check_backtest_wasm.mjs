@@ -99,4 +99,12 @@ for (let offset = 0; offset < indicators.operands.length; offset += 40) {
 assert.equal(JSON.parse(globalThis.signalgenCapabilities()).indicator_catalog_version, 'claudio-indicators-1');
 assert.equal(JSON.parse(globalThis.signalgenCapabilities()).indicators.length, 78);
 console.log('All Claudio indicator families: native/WASM feature results match');
+for(const side of ['BUY','SELL'])for(const horizon of [1,3,100]){
+  const request={schema_version:'signal-study-1',config:{from:fixture.config.from,to:fixture.config.to,n_steps:horizon,...(horizon===3?{take_profit_pct:5,stop_loss_pct:3}:{})},series:fixture.series,entries:fixture.entries.map(e=>({...e,signal_type:side}))};
+  const native=JSON.parse(execFileSync('go',['run','./cmd/signalstudy'],{input:JSON.stringify(request),encoding:'utf8',maxBuffer:16<<20}));
+  const wasm=JSON.parse(globalThis.signalgenRunSignalStudy(JSON.stringify(request)));assert.equal(wasm.ok,true,JSON.stringify(wasm.error));compare(wasm.result,native);
+  assert.equal(wasm.result.events[0].outcomes.length,horizon*3);
+}
+assert.equal(JSON.parse(globalThis.signalgenRunSignalStudy('{}')).ok,false);
+console.log('signal-study-1: native/WASM parity, BUY/SELL, all horizons, TP/SL and missing data verified');
 process.exit(0);

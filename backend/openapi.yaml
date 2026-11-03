@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.14.0
+  version: 0.16.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     The Go API performs email/password and recovery flows through Supabase Auth,
@@ -36,8 +36,157 @@ tags:
     description: Server-role protected account, entitlement and audit administration.
   - name: Workspace
     description: Owner-scoped presentation state; never permissions or authoritative trading records.
+  - name: Portfolio
+    description: Manual long-only BUY/SELL ledger, separate from journal and backtest records.
 
 paths:
+  /api/v1/portfolio:
+    get:
+      tags: [Portfolio]
+      operationId: getPortfolio
+      summary: Recompute recorded holdings and realized P&L for the current owner
+      description: |
+        Weighted-average cost including BUY fees; SELL fees reduce proceeds.
+        Groups and totals are separated by book, market and currency. No FX sum,
+        broker verification, cash balance or automatic corporate-action adjustment.
+        Market value and unrealized P&L are null because no quote is loaded.
+        Private/no-store. Maximum 1000 transactions per owner. Never reads journal records.
+      security: [{supabaseBearer: [], appSession: []}]
+      parameters: &portfolioFilters
+        - in: query
+          name: market
+          schema: {type: string, enum: [IDX, US]}
+        - in: query
+          name: book
+          schema: {type: string, maxLength: 80}
+      responses:
+        "200":
+          description: Complete summary for the requested owner/book/market filter, with unknown valuations explicitly null.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PortfolioSummary"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {description: Inactive account or invalid/revoked application session.}
+        "422": {description: Invalid or unknown query filters.}
+        "429": {description: Owner rate limit; observe Retry-After.}
+        "503": {description: PORTFOLIO_UNAVAILABLE; no placeholder holdings.}
+        "504": {description: REQUEST_TIMEOUT.}
+  /api/v1/portfolio/transactions:
+    get:
+      tags: [Portfolio]
+      operationId: listPortfolioTransactions
+      summary: List the owner's ledger in executed_at then UUID order
+      security: [{supabaseBearer: [], appSession: []}]
+      parameters: *portfolioFilters
+      responses:
+        "200":
+          description: Owner-scoped complete list, private/no-store. An empty ledger returns an empty array.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schema_version, items]
+                properties:
+                  schema_version: {type: string, enum: [portfolio-ledger-1]}
+                  items:
+                    type: array
+                    maxItems: 1000
+                    items: {$ref: "#/components/schemas/PortfolioTransaction"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {description: Inactive account or invalid application session.}
+        "422": {description: Invalid query filters.}
+        "429": {description: Owner rate limit.}
+        "503": {description: PORTFOLIO_UNAVAILABLE.}
+        "504": {description: REQUEST_TIMEOUT.}
+  /api/v1/portfolio/transactions/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: {type: string, format: uuid, description: Canonical lowercase nonzero UUID generated once per draft.}
+    get:
+      tags: [Portfolio]
+      operationId: getPortfolioTransaction
+      security: [{supabaseBearer: [], appSession: []}]
+      responses:
+        "200":
+          description: Owner's transaction, private/no-store.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PortfolioTransaction"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {description: Account/session denied.}
+        "404": {description: "RESOURCE_NOT_FOUND, including other owners' IDs."}
+        "422": {description: Invalid UUID or unexpected query.}
+        "429": {description: Owner rate limit.}
+        "503": {description: PORTFOLIO_UNAVAILABLE.}
+        "504": {description: REQUEST_TIMEOUT.}
+    put:
+      tags: [Portfolio]
+      operationId: savePortfolioTransaction
+      summary: Create at version zero or replace at the current version
+      description: |
+        Generate and reuse one UUID per draft. An identical create retry at version
+        zero returns the original version-one record; a changed payload conflicts.
+        Updates require the current version and increment it. Mutations are serialized
+        per owner and the full candidate history is validated before saving, including
+        later sales affected by a backdated edit. No short/negative holdings.
+        Unknown fields, owner IDs and supplied P&L are rejected. For a timeout or
+        lost response, GET the same ID before resolving an update conflict.
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, data]
+              properties:
+                version: {type: integer, format: int64, minimum: 0}
+                data: {$ref: "#/components/schemas/PortfolioData"}
+      responses:
+        "200":
+          description: Saved transaction; decimal strings are normalized to six fractional places.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PortfolioTransaction"}
+        "400": {description: "Invalid JSON/type or unknown fields."}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {description: Account/session denied.}
+        "404": {description: RESOURCE_NOT_FOUND for an update of a missing/foreign ID.}
+        "409": {description: "VERSION_CONFLICT, INSUFFICIENT_HOLDINGS or PORTFOLIO_LIMIT."}
+        "413": {description: Request exceeds the shared body-size budget.}
+        "422": {description: "Invalid decimal strings, lot size, timestamp, market/currency or version."}
+        "429": {description: Owner rate limit.}
+        "503": {description: PORTFOLIO_UNAVAILABLE; save has not been confirmed.}
+        "504": {description: REQUEST_TIMEOUT; GET the same ID to confirm write outcome.}
+    delete:
+      tags: [Portfolio]
+      operationId: deletePortfolioTransaction
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version: {type: integer, format: int64, minimum: 1}
+      responses:
+        "204": {description: Deleted; the remaining history has no oversells.}
+        "400": {description: Invalid JSON or fields.}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {description: Account/session denied.}
+        "404": {description: "RESOURCE_NOT_FOUND, including other owners' IDs."}
+        "409": {description: VERSION_CONFLICT or INSUFFICIENT_HOLDINGS for later sales.}
+        "413": {description: Request body too large.}
+        "422": {description: Invalid UUID/version/query.}
+        "429": {description: Owner rate limit.}
+        "503": {description: PORTFOLIO_UNAVAILABLE; deletion not confirmed.}
+        "504": {description: REQUEST_TIMEOUT; reload the same ID to confirm outcome.}
   /api/v1/journal/trades:
     get:
       tags: [Account]
@@ -50,7 +199,7 @@ paths:
           description: Owner-scoped items with id, version, bytes and data. Private/no-store.
         "401": {$ref: "#/components/responses/Unauthorized"}
         "403": {description: Inactive account or invalid application session.}
-        "503": {description: RECORDS_UNAVAILABLE, including a missing records migration. No fake or sample records are returned.}
+        "503": {description: "RECORDS_UNAVAILABLE, including a missing records migration. No fake or sample records are returned."}
   /api/v1/journal/trades/{id}:
     parameters: &recordID
       - in: path
@@ -62,7 +211,7 @@ paths:
       operationId: getJournalTrade
       security: [{supabaseBearer: [], appSession: []}]
       responses: &recordGetResponses
-        "200": {description: Owner record envelope with id, data, version and bytes.}
+        "200": {description: "Owner record envelope with id, data, version and bytes."}
         "404": {description: RESOURCE_NOT_FOUND for this account.}
         "403": {description: Account/session denied.}
         "503": {description: Record store unavailable.}
@@ -113,7 +262,7 @@ paths:
                 version: {type: integer, minimum: 0}
       responses: &recordDeleteResponses
         "204": {description: Deleted from the current owner's records.}
-        "409": {description: VERSION_CONFLICT, including missing or foreign-owner record.}
+        "409": {description: "VERSION_CONFLICT, including missing or foreign-owner record."}
         "422": {description: Invalid ID/version.}
         "403": {description: Account/session/feature denied.}
         "503": {description: Deletion not confirmed.}
@@ -1134,11 +1283,104 @@ paths:
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
         "409": {description: Version conflict.}
+  /api/v1/backtests/studies:
+    post:
+      tags: [Analysis]
+      operationId: createSignalStudy
+      summary: Freeze an owner/session rule and daily stock catalog for independent signal analysis
+      description: "At most one active context per account/session pair and 32 per process, TTL two hours. Metadata only; no background job. Current active catalog, not a point-in-time listing universe. Browser processes one batch of ten at a time. Rule changes require a new context."
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SignalStudyInput'}
+      responses:
+        '201':
+          description: Frozen study context
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SignalStudyContext'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /api/v1/backtests/studies/{id}/batches/{batch}/prepare:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+      - {name: batch, in: path, required: true, schema: {type: integer, minimum: 0}}
+    post:
+      tags: [Analysis]
+      operationId: prepareSignalStudyBatch
+      summary: Prepare at most ten frozen stocks with explicit per-ticker failures
+      description: "Send an empty JSON object for the whole frozen batch, or retry_symbols for a unique subset of that batch. Arbitrary symbols and owner identities are rejected. Bounded three provider fetches at a time; request deadline eight seconds before response. Read each manifest/content, issue a bound backtest grant, compute features in WASM and evaluate with signal-close-independent-1. Release this batch before preparing another."
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                retry_symbols: {type: array, maxItems: 10, uniqueItems: true, items: {type: string}, description: Optional subset validated against the frozen batch; omitted or empty prepares all members}
+      responses:
+        '200':
+          description: Partial or complete batch; a 200 is not a claim of full market coverage
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [index, stocks, manifests, failures]
+                properties:
+                  index: {type: integer}
+                  stocks: {type: array, maxItems: 10, items: {type: string}}
+                  manifests: {type: array, maxItems: 10, items: {$ref: '#/components/schemas/DatasetManifest'}}
+                  failures:
+                    type: array
+                    items:
+                      type: object
+                      required: [symbol, code, retryable]
+                      properties:
+                        symbol: {type: string}
+                        code: {type: string, enum: [PROVIDER_UNAVAILABLE, INSUFFICIENT_CANDLES, SNAPSHOT_CAPACITY]}
+                        retryable: {type: boolean}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: "Busy batch, expired/canceled context or changed rule; start again for version mismatch"}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+    delete:
+      tags: [Analysis]
+      operationId: releaseSignalStudyBatch
+      summary: Release this owner's temporary study snapshots without clearing the shared price cache
+      security: [{supabaseBearer: [], appSession: []}]
+      responses:
+        '204': {description: Batch released}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: An active preparation cannot be released until it returns}
+  /api/v1/backtests/studies/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    delete:
+      tags: [Analysis]
+      operationId: cancelSignalStudy
+      summary: Cancel the owner/session study context and invalidate its snapshots
+      security: [{supabaseBearer: [], appSession: []}]
+      responses:
+        '204': {description: Context canceled; late provider results cannot be published}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
   /api/v1/backtests/signals:
     post:
       tags: [Analysis]
       operationId: evaluateBacktestSignals
-      summary: Evaluate one complete symbol feature series using a private long-only rule
+      summary: Evaluate one complete symbol feature series using the private rule
       description: |
         Requires a backtest grant and current backtest entitlement. Features must
         include every eligible snapshot timestamp (candle index 19 onward), in
@@ -1146,6 +1388,8 @@ paths:
         preserves crossover history but does not consume entry-window cooldown.
         Only decisions are computed here; fills and P&L execute in client WASM.
         Client features and results are unverified analysis, not accounting evidence.
+        Legacy holding-next-open-1 is BUY-only. signal-close-independent-1 accepts
+        BUY/SELL only with a study-bound manifest and frozen rule hash.
       security:
         - supabaseBearer: []
           appSession: []
@@ -2024,12 +2268,85 @@ components:
           nullable: true
         version: {type: integer, format: int64, minimum: 1}
         updated_at: {type: string, format: date-time}
+    PortfolioDecimal:
+      type: string
+      pattern: '^[0-9]{1,16}(\.[0-9]{1,6})?$'
+      description: Decimal string, never a JSON float or exponent. Server outputs six fractional places. Quantity/price must be positive; fee may be zero.
+      example: "100.000000"
+    PortfolioData:
+      type: object
+      additionalProperties: false
+      required: [symbol, market, currency, side, quantity, price, fee, executed_at, book]
+      properties:
+        symbol: {type: string, maxLength: 20, example: BBCA.JK, description: Syntax-checked symbol; IDX uses .JK. No catalog-membership or quote guarantee for manual fills.}
+        market: {type: string, enum: [IDX, US]}
+        currency: {type: string, enum: [IDR, USD], description: IDX requires IDR; US requires USD.}
+        side: {type: string, enum: [BUY, SELL]}
+        quantity:
+          allOf: [{$ref: "#/components/schemas/PortfolioDecimal"}]
+          description: Shares, at most 100000000. IDX requires multiples of 100; US accepts fractional shares.
+        price:
+          allOf: [{$ref: "#/components/schemas/PortfolioDecimal"}]
+          description: Currency amount per share, at most 1000000000. Quantity times price must not exceed 1000000000000.
+        fee:
+          allOf: [{$ref: "#/components/schemas/PortfolioDecimal"}]
+          description: Absolute total fee in the same currency, at most 1000000000000.
+        executed_at: {type: string, format: date-time, description: RFC3339 with at most microsecond precision and no more than five minutes into the future. Stored UTC. Equal timestamps sort by UUID; use distinct times when order matters.}
+        book: {type: string, minLength: 1, maxLength: 80, example: Main, description: Trimmed book name with no NUL/newline/tab.}
+        note: {type: string, maxLength: 2000, default: ""}
+    PortfolioTransaction:
+      type: object
+      required: [id, version, data, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        version: {type: integer, format: int64, minimum: 1}
+        data: {$ref: "#/components/schemas/PortfolioData"}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    PortfolioPosition:
+      type: object
+      required: [book, symbol, market, currency, quantity, average_cost, cost_basis, realized_pnl, fees, market_value, unrealized_pnl]
+      properties:
+        book: {type: string}
+        symbol: {type: string}
+        market: {type: string, enum: [IDX, US]}
+        currency: {type: string, enum: [IDR, USD]}
+        quantity: {type: string, example: "100.000000"}
+        average_cost: {type: string, nullable: true, description: Fee-inclusive weighted average; null when the position is closed.}
+        cost_basis: {type: string, example: "451000.000000"}
+        realized_pnl: {type: string, example: "148000.000000", description: Signed realized P&L net of BUY and SELL fees.}
+        fees: {type: string, example: "3000.000000"}
+        market_value: {type: string, nullable: true, description: Always null until a quote valuation is explicitly implemented.}
+        unrealized_pnl: {type: string, nullable: true, description: Unknown without a quote; never substituted with zero.}
+    PortfolioSummary:
+      type: object
+      required: [schema_version, cost_policy, transaction_count, positions, totals, warnings]
+      properties:
+        schema_version: {type: string, enum: [portfolio-ledger-1]}
+        cost_policy: {type: string, enum: [weighted-average-fees-1]}
+        transaction_count: {type: integer, minimum: 0, maximum: 1000}
+        positions:
+          type: array
+          items: {$ref: "#/components/schemas/PortfolioPosition"}
+        totals:
+          type: array
+          items:
+            type: object
+            required: [book, market, currency, cost_basis, realized_pnl, fees]
+            properties:
+              book: {type: string}
+              market: {type: string, enum: [IDX, US]}
+              currency: {type: string, enum: [IDR, USD]}
+              cost_basis: {type: string}
+              realized_pnl: {type: string}
+              fees: {type: string}
+        warnings: {type: array, items: {type: string}}
     APIStatus:
       type: object
       required: [name, version, description, docs, status]
       properties:
         name: {type: string}
-        version: {type: string, enum: [0.14.0]}
+        version: {type: string, enum: [0.16.0]}
         description: {type: string}
         docs: {type: string}
         status: {type: string, enum: [ok]}
@@ -2375,7 +2692,8 @@ components:
       required: [capabilities_version, engine_version, schema_version, feature_schema_version, decision_version, private_protocol, worker_protocol, purposes, markets, timeframes, indicators, operators, rule_logic, max_candles_per_run, max_symbols_per_run, screening]
       properties:
         backtest: {$ref: "#/components/schemas/BacktestCapabilities"}
-        capabilities_version: {type: string, example: capabilities-4}
+        signal_study: {type: object, description: "signal-study-1 / signal-close-independent-1; WASM export signalgenRunSignalStudy; batch_size 10, daily only, max_horizon 100, browser-owned lifecycle."}
+        capabilities_version: {type: string, example: capabilities-5}
         engine_version: {type: string, example: core-0.5.0}
         indicator_catalog_version: {type: string, enum: [claudio-indicators-1]}
         max_indicator_period: {type: integer, enum: [250]}
@@ -2747,6 +3065,47 @@ components:
         to: {type: string, format: date}
         n_steps: {type: integer, minimum: 1, maximum: 100}
         rule_id: {type: string, description: Present only for rule mode; binds grant issuance.}
+        study_id: {type: string, description: Present only for a server-prepared signal study snapshot.}
+        definition_hash: {type: string, description: Frozen rule hash; must also match grant issuance.}
+    SignalStudyConfig:
+      type: object
+      additionalProperties: false
+      required: [from, to, n_steps]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date, description: Inclusive; at most one calendar year from start}
+        n_steps: {type: integer, minimum: 1, maximum: 100, default: 3}
+        take_profit_pct: {type: number, minimum: 0, maximum: 100, exclusiveMinimum: true, exclusiveMaximum: true}
+        stop_loss_pct: {type: number, minimum: 0, maximum: 100, exclusiveMinimum: true, exclusiveMaximum: true}
+    SignalStudyInput:
+      type: object
+      additionalProperties: false
+      required: [source, market, rule_id, config]
+      properties:
+        source: {type: string, enum: [market, universe]}
+        market: {type: string, enum: [IDX, US]}
+        universe_id: {type: string, description: Required only for source universe; ownership is server-checked}
+        rule_id: {type: string}
+        config: {$ref: '#/components/schemas/SignalStudyConfig'}
+    SignalStudyContext:
+      type: object
+      required: [id, schema_version, policy_version, engine_version, rule_schema_version, market, currency, config, rule_id, definition_hash, catalog_hash, total, batch_size, batches, expires_at]
+      properties:
+        id: {type: string}
+        schema_version: {type: string, enum: [signal-study-1]}
+        policy_version: {type: string, enum: [signal-close-independent-1]}
+        engine_version: {type: string}
+        rule_schema_version: {type: string}
+        market: {type: string, enum: [IDX, US]}
+        currency: {type: string, enum: [IDR, USD]}
+        config: {$ref: '#/components/schemas/SignalStudyConfig'}
+        rule_id: {type: string}
+        definition_hash: {type: string}
+        catalog_hash: {type: string}
+        total: {type: integer, minimum: 1, maximum: 20000}
+        batch_size: {type: integer, enum: [10]}
+        batches: {type: integer, minimum: 1}
+        expires_at: {type: string, format: date-time}
     BacktestCapabilities:
       type: object
       required: [schema_version, policy_version, modes, timeframes, signal_types, exit_strategies, max_symbols, max_candles_per_symbol, max_entries, max_horizon, financial_execution, decision_execution]
@@ -2778,7 +3137,7 @@ components:
       properties:
         compute_grant_id: {type: string}
         feature_schema_version: {type: string, enum: [screener-features-1]}
-        policy_version: {type: string, enum: [holding-next-open-1]}
+        policy_version: {type: string, enum: [holding-next-open-1, signal-close-independent-1]}
         candidates:
           type: array
           minItems: 1
@@ -2789,7 +3148,7 @@ components:
       required: [decision_version, policy_version, candidate_count, signals, entries]
       properties:
         decision_version: {type: string, enum: [decision-1]}
-        policy_version: {type: string, enum: [holding-next-open-1]}
+        policy_version: {type: string, enum: [holding-next-open-1, signal-close-independent-1]}
         candidate_count: {type: integer, description: Includes warmup and exit-buffer candidates.}
         signals:
           type: array
@@ -2799,7 +3158,13 @@ components:
           items: {type: object, description: Entry-window rule outcome and reason codes.}
         entries:
           type: array
-          items: {$ref: '#/components/schemas/BacktestEntry'}
+          items:
+            type: object
+            required: [symbol, timestamp, signal_type]
+            properties:
+              symbol: {type: string}
+              timestamp: {type: string, format: date-time}
+              signal_type: {type: string, enum: [BUY, SELL]}
     BacktestFeatureCandidate:
       type: object
       additionalProperties: false

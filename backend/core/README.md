@@ -6,6 +6,12 @@ Scalping** rule using `EMA9`, `EMA20`, `PRICE`, and `RSI14` on completed candles
 
 Current scope:
 
+Update 2 November 2026: the feature catalog now includes the Claudio indicator
+families and dynamic periods/offsets; this introductory baseline is historical.
+`signalgenRunSignalStudy` adds the separate `signal-study-1` independent signal
+analysis contract (close reference, all horizons, BUY/SELL direction and TP/SL).
+Private rules remain outside WASM. See [study contract](../../docs/backend/SIGNAL_STUDY.md).
+
 - deterministic indicator and AND-rule evaluation;
 - separated `ComputeFeatures` (client-heavy stage) and `EvaluateDecision`
   (proposed server-private stage), composed by legacy-compatible `RunSignals`;

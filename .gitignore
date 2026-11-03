@@ -204,3 +204,5 @@ credentials.json
 !.impeccable/config.json
 !.impeccable/design.json
 !.impeccable/live/config.json
+# Operator data-QA reports are local/resumable artifacts, not source fixtures.
+/backend/runtime/catalog-audits/

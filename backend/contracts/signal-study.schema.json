@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "signal-study-1",
+  "title": "Portable independent signal study request",
+  "description": "WASM/native request only. HTTP authorization, frozen context, ownership and grants are checked separately. The core also validates ordered daily candles, exact signal timestamps, one-year inclusive range and finite arithmetic.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "config", "series", "entries"],
+  "properties": {
+    "schema_version": {"const": "signal-study-1"},
+    "config": {"$ref": "#/$defs/config"},
+    "series": {"type":"array","minItems":1,"maxItems":10,"items":{"type":"object","additionalProperties":false,"required":["symbol","candles"],"properties":{"symbol":{"type":"string","minLength":1},"timezone":{"enum":["UTC",""]},"candles":{"type":"array","minItems":20,"maxItems":2500,"items":{"$ref":"#/$defs/candle"}}}}},
+    "entries": {"type":"array","maxItems":25000,"items":{"type":"object","additionalProperties":false,"required":["symbol","timestamp","signal_type"],"properties":{"symbol":{"type":"string"},"timestamp":{"type":"string","format":"date-time"},"signal_type":{"enum":["BUY","SELL"]}}}}
+  },
+  "$defs": {
+    "config": {"type":"object","additionalProperties":false,"required":["from","to","n_steps"],"properties":{"from":{"type":"string","format":"date"},"to":{"type":"string","format":"date"},"n_steps":{"type":"integer","minimum":1,"maximum":100},"take_profit_pct":{"type":["number","null"],"exclusiveMinimum":0,"exclusiveMaximum":100},"stop_loss_pct":{"type":["number","null"],"exclusiveMinimum":0,"exclusiveMaximum":100}}},
+    "candle": {"type":"object","additionalProperties":false,"required":["timestamp","open","high","low","close","volume"],"properties":{"timestamp":{"type":"string","format":"date-time"},"open":{"type":"number","exclusiveMinimum":0},"high":{"type":"number","exclusiveMinimum":0},"low":{"type":"number","exclusiveMinimum":0},"close":{"type":"number","exclusiveMinimum":0},"volume":{"type":"integer","minimum":0}}}
+  }
+}

@@ -61,8 +61,10 @@ func (store *DynamicStore) prepareBacktest(ctx context.Context, owner string, in
 	}
 	keyBytes, _ := json.Marshal(struct {
 		PrepareRequest
-		Operands []string `json:"required_operands"`
-	}{input, input.RequiredOperands})
+		Operands     []string              `json:"required_operands"`
+		StudyHash    string                `json:"study_hash,omitempty"`
+		StudySymbols []universe.Instrument `json:"study_symbols,omitempty"`
+	}{input, input.RequiredOperands, input.StudyRuleHash, input.StudyInstruments})
 	contextKey := "backtest\x00" + string(keyBytes)
 	store.mu.Lock()
 	store.pruneExpiredLocked()
@@ -77,7 +79,11 @@ func (store *DynamicStore) prepareBacktest(ctx context.Context, owner string, in
 	if !available {
 		return Manifest{}, ErrCapacity
 	}
-	instruments, err := store.universes.Instruments(ctx, owner, input.UniverseID)
+	instruments := input.StudyInstruments
+	var err error
+	if input.StudyID == "" {
+		instruments, err = store.universes.Instruments(ctx, owner, input.UniverseID)
+	}
 	if err != nil {
 		if err == universe.ErrNotFound {
 			return Manifest{}, ErrNotFound
@@ -146,7 +152,7 @@ func (store *DynamicStore) prepareBacktest(ctx context.Context, owner string, in
 	if err := ctx.Err(); err != nil {
 		return Manifest{}, err
 	}
-	scope := &BacktestScope{Mode: input.Mode, From: input.From, To: input.To, NSteps: input.NSteps, RuleID: input.RuleID}
+	scope := &BacktestScope{Mode: input.Mode, From: input.From, To: input.To, NSteps: input.NSteps, RuleID: input.RuleID, StudyID: input.StudyID, DefinitionHash: input.StudyRuleHash}
 	content, err := json.Marshal(map[string]any{"schema_version": "ohlcv-multi-1", "purpose": "backtest", "market": market, "currency": currency, "timeframe": "1d", "timezone": "UTC", "adjustment": "none", "backtest": scope, "series": series})
 	if err != nil {
 		return Manifest{}, err
@@ -163,7 +169,7 @@ func (store *DynamicStore) prepareBacktest(ctx context.Context, owner string, in
 	now := store.now().UTC()
 	expires := now.Add(store.limits.TTL)
 	source := marketdata.DescribeSource(store.provider)
-	source.Warnings = append(source.Warnings, "Raw OHLCV; splits/dividends and exchange-calendar completeness are not verified. Exit horizons without enough closed candles remain open.")
+	source.Warnings = append(source.Warnings, "Provider OHLCV without additional adjustment; split/dividend adjustment and exchange-calendar completeness are not certified. Exit horizons without enough closed candles remain open.")
 	for _, item := range series {
 		source.Warnings = append(source.Warnings, item.QualityWarnings...)
 	}

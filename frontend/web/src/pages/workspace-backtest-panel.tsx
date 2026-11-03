@@ -39,6 +39,7 @@ import type {
   BacktestResult,
 } from "@/analysis/backtest-types";
 import type { RuleResource, StockUniverse } from "@/types";
+import { SignalStudyPanel } from "./signal-study-panel";
 
 function initialConfig(): BacktestConfig {
   const end = new Date();
@@ -62,7 +63,39 @@ function initialConfig(): BacktestConfig {
 const dateLabel = (stamp: string) =>
   stamp ? new Date(stamp).toISOString().slice(0, 10) : "—";
 
-export function WorkspaceBacktestPanel({
+export function WorkspaceBacktestPanel(props: {
+  authenticated: boolean;
+  backendOnline: boolean;
+  userId?: string;
+}) {
+  const [mode, setMode] = useState<"study" | "portfolio">("study");
+  return (
+    <>
+      <div className="study-actions" role="group" aria-label="Backtesting mode">
+        <Button
+          variant={mode === "study" ? "default" : "outline"}
+          aria-pressed={mode === "study"}
+          onClick={() => setMode("study")}
+        >
+          Analyse every signal
+        </Button>
+        <Button
+          variant={mode === "portfolio" ? "default" : "outline"}
+          aria-pressed={mode === "portfolio"}
+          onClick={() => setMode("portfolio")}
+        >
+          Portfolio simulation
+        </Button>
+      </div>
+      {mode === "study" ? (
+        <SignalStudyPanel {...props} />
+      ) : (
+        <PortfolioBacktestPanel {...props} />
+      )}
+    </>
+  );
+}
+function PortfolioBacktestPanel({
   authenticated,
   backendOnline,
   userId,
@@ -150,7 +183,13 @@ export function WorkspaceBacktestPanel({
     };
   }, []);
   useEffect(() => {
-    if (!authenticated || !backendOnline) {
+    clearSnapshot();
+    setOwner(null);
+  }, [userId]);
+  useEffect(() => {
+    if (!authenticated) {
+      clearSnapshot();
+      setOwner(null);
       setLoading(false);
       return;
     }
@@ -228,11 +267,8 @@ export function WorkspaceBacktestPanel({
       ignore = true;
       controller.abort();
     };
-  }, [authenticated, backendOnline, userId, reload]);
-  useEffect(() => {
-    clearSnapshot();
-    setOwner(null);
-  }, [authenticated, userId]);
+  }, [authenticated, userId, reload]);
+
   let validationMessage = "";
   try {
     validateBacktestForm(config);

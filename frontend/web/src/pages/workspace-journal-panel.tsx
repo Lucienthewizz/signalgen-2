@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { useActionNotifications } from "@/components/ui/toast";
 import { JournalScreeningVerification } from "@/components/journal-screening-verification";
+import { JournalBatchReview } from "@/components/journal-batch-review";
 import { JournalPnlChart } from "@/components/journal-pnl-chart";
 import { journalPerformance, localJournalDate } from "@/lib/journal";
 import {
@@ -58,6 +59,7 @@ export function JournalPanel({
   userId,
   screeningBatch = [],
   consumeBatch,
+  screeningDrafts = [],
 }: {
   draftSymbol: string | null;
   clearDraft: () => void;
@@ -65,6 +67,7 @@ export function JournalPanel({
   userId?: string;
   screeningBatch?: JournalScreeningDraft[];
   consumeBatch?: () => void;
+  screeningDrafts?: JournalScreeningDraft[];
 }) {
   const [records, setRecords] = useState<{ owner: string; items: Item[] }>({
     owner: "",
@@ -306,6 +309,18 @@ export function JournalPanel({
           controller.signal,
         );
       if (!active()) return;
+      if (remove) {
+        // The server confirmed deletion. A later failed refresh must not revive
+        // this row from the last successfully fetched snapshot.
+        setRecords((current) =>
+          current.owner === owner
+            ? {
+                ...current,
+                items: current.items.filter((item) => item.id !== remove.id),
+              }
+            : current,
+        );
+      }
       setNotice(remove ? "Trade deleted." : "Trade saved to your account.");
       setPendingDelete(null);
       if (!remove && !editing && batchDraft && screeningBatch.length > 1) {
@@ -469,6 +484,15 @@ export function JournalPanel({
           </Button>
         </div>
       </section>
+      {screeningDrafts.length > 0 && (
+        <JournalBatchReview
+          key={screeningDrafts.map((d) => d.symbol + d.screenedAt).join("|")}
+          drafts={screeningDrafts}
+          userId={userId}
+          onClose={clearDraft}
+          onSaved={() => setReload((n) => n + 1)}
+        />
+      )}
       <FieldGroup className="analysis-table-tools">
         <Field>
           <FieldLabel htmlFor="journal-search">

@@ -6,13 +6,30 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
+
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type heartbeatCounter struct{ writes, combinedReads atomic.Int32 }
+
+func (c *heartbeatCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	if strings.HasPrefix(strings.TrimSpace(data.SQL), "update signalgen.app_sessions set last_seen_at=") {
+		c.writes.Add(1)
+	}
+	if strings.HasPrefix(strings.TrimSpace(data.SQL), "select s.id,s.user_id::text,s.installation_id") {
+		c.combinedReads.Add(1)
+	}
+	return ctx
+}
+func (*heartbeatCounter) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
 
 // This opt-in test creates minimal tables only in an explicitly named local
 // scratch DB. Never point it at the cloud/project DB. No real account is used.
@@ -27,16 +44,22 @@ func TestPostgresMultiSessionPolicy(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
+	config, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal("scratch Postgres configuration failed")
+	}
+	counter := &heartbeatCounter{}
+	config.ConnConfig.Tracer = counter
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		t.Fatal("scratch Postgres connection configuration failed")
 	}
 	defer pool.Close()
 	_, err = pool.Exec(ctx, `create schema signalgen;
-create table signalgen.account_profiles(user_id uuid primary key,status text not null);
+create table signalgen.account_profiles(user_id uuid primary key,status text not null,email text not null default 'fixture@example.test',role text not null default 'user',created_at timestamptz not null default now(),updated_at timestamptz not null default now());
 create table signalgen.account_device_state(user_id uuid primary key references signalgen.account_profiles(user_id),current_installation_id text not null,last_switched_at timestamptz,updated_at timestamptz not null);
 create table signalgen.app_sessions(id text primary key,user_id uuid not null references signalgen.account_profiles(user_id),installation_id text not null,label text not null,token_hash bytea not null unique,created_at timestamptz not null,expires_at timestamptz not null,last_seen_at timestamptz not null,revoked_at timestamptz);
-insert into signalgen.account_profiles values
+insert into signalgen.account_profiles(user_id,status) values
 ('11111111-1111-4111-8111-111111111111','active'),
 ('22222222-2222-4222-8222-222222222222','active'),
 ('33333333-3333-4333-8333-333333333333','active');`)
@@ -61,12 +84,59 @@ insert into signalgen.account_profiles values
 			t.Fatal("a rejected sixth browser revoked an existing session")
 		}
 	}
+	if counter.writes.Load() != 0 {
+		t.Fatal("fresh sessions were rewritten on every validation")
+	}
+	checked, profile, err := store.VerifyAccount(ctx, owner, sessions[0].Token)
+	if err != nil || checked.ID != sessions[0].Session.ID || profile.UserID != owner || profile.Role != "user" || counter.combinedReads.Load() != 1 {
+		t.Fatal("combined guard did not return fresh owner-bound session/profile in one read")
+	}
+	if _, _, err := store.VerifyAccount(ctx, other, sessions[0].Token); !errors.Is(err, ErrInvalid) {
+		t.Fatal("combined guard accepted another owner")
+	}
+	if _, err := pool.Exec(ctx, `update signalgen.account_profiles set status='suspended' where user_id=$1::uuid`, owner); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.VerifyAccount(ctx, owner, sessions[0].Token); !errors.Is(err, access.ErrAccountSuspended) {
+		t.Fatal("combined guard cached active account status")
+	}
+	if _, err := pool.Exec(ctx, `update signalgen.account_profiles set status='active' where user_id=$1::uuid`, owner); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `update signalgen.app_sessions set last_seen_at=now()-interval '2 minutes' where id=$1`, sessions[0].Session.ID); err != nil {
+		t.Fatal(err)
+	}
+	counter.writes.Store(0)
+	for i := 0; i < 3; i++ {
+		if _, err := store.Verify(ctx, owner, sessions[0].Token); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if counter.writes.Load() != 1 {
+		t.Fatal("presence should refresh once, not once per request")
+	}
+	// The fresh presence timestamp must never cache the authorization result.
+	if _, err := pool.Exec(ctx, `update signalgen.app_sessions set expires_at=now()-interval '1 second' where id=$1`, sessions[0].Session.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Verify(ctx, owner, sessions[0].Token); !errors.Is(err, ErrExpired) {
+		t.Fatal("fresh heartbeat bypassed expiry")
+	}
+	if _, _, err := store.VerifyAccount(ctx, owner, sessions[0].Token); !errors.Is(err, ErrExpired) {
+		t.Fatal("combined guard bypassed expiry")
+	}
+	if _, err := pool.Exec(ctx, `update signalgen.app_sessions set expires_at=$2 where id=$1`, sessions[0].Session.ID, sessions[0].Session.ExpiresAt); err != nil {
+		t.Fatal(err)
+	}
 	rotated, err := store.Create(ctx, owner, "browser-0", "Same-browser relogin")
 	if err != nil {
 		t.Fatal("same-browser rotation consumed a sixth slot")
 	}
 	if _, err := store.Verify(ctx, owner, sessions[0].Token); !errors.Is(err, ErrRevoked) {
 		t.Fatal("old same-browser token still works")
+	}
+	if _, _, err := store.VerifyAccount(ctx, owner, sessions[0].Token); !errors.Is(err, ErrRevoked) {
+		t.Fatal("combined guard bypassed revocation")
 	}
 	if _, err := store.Verify(ctx, other, rotated.Token); !errors.Is(err, ErrInvalid) {
 		t.Fatal("cross-owner token accepted")

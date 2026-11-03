@@ -1,0 +1,407 @@
+{
+  "synthetic": true,
+  "stocks": 23,
+  "batches": 3,
+  "signalEvents": 92,
+  "realWasm": true,
+  "indexedDB": true,
+  "quotaRollback": true,
+  "widths": [
+    1440,
+    390
+  ],
+  "forcedThemes": [
+    "dark",
+    "light"
+  ],
+  "reports": [
+    {
+      "width": 1440,
+      "forcedTheme": "dark",
+      "kind": "browser_elapsed_stages",
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "logical_cpus": 10,
+      "study": {
+        "id": "study-qa",
+        "engine_version": "core-0.5.0",
+        "rule_schema_version": "signal-baseline-1",
+        "schema_version": "signal-study-1",
+        "policy_version": "signal-close-independent-1",
+        "market": "US",
+        "currency": "USD",
+        "config": {
+          "from": "2026-01-20",
+          "to": "2026-01-23",
+          "n_steps": 3
+        },
+        "rule_id": "qa-rule",
+        "definition_hash": "sha256:rule",
+        "catalog_hash": "sha256:qa-frozen-catalog",
+        "total": 23,
+        "batch_size": 10,
+        "batches": 3,
+        "expires_at": "2027-11-01T00:00:00Z"
+      },
+      "completed": 23,
+      "failed": 0,
+      "traffic": {
+        "decoded_candle_bytes": 121233,
+        "candidate_json_bytes": 105892
+      },
+      "stages": {
+        "react_render_ms": {
+          "count": 107,
+          "retained_samples": 107,
+          "p50": 0.7999999523162842,
+          "p95": 1.100000023841858
+        },
+        "access_ms": {
+          "count": 2,
+          "retained_samples": 2,
+          "p50": 3.800000011920929,
+          "p95": 14.5
+        },
+        "startup_ms": {
+          "count": 2,
+          "retained_samples": 2,
+          "p50": 39.59999996423721,
+          "p95": 60.19999998807907
+        },
+        "prepare_ms": {
+          "count": 4,
+          "retained_samples": 4,
+          "p50": 3.199999988079071,
+          "p95": 4
+        },
+        "transfer_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.899999976158142,
+          "p95": 2.699999988079071
+        },
+        "features_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 0.5,
+          "p95": 6.300000011920929
+        },
+        "grant_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 2.300000011920929,
+          "p95": 3.199999988079071
+        },
+        "scoring_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.800000011920929,
+          "p95": 2.699999988079071
+        },
+        "study_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.399999976158142,
+          "p95": 4.5
+        },
+        "storage_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 0.40000003576278687,
+          "p95": 2.399999976158142
+        }
+      },
+      "limits": "Last 2048 samples per stage; access/prepare/grant/scoring include network and server waiting. React duration excludes paint. No production capacity claim."
+    },
+    {
+      "width": 1440,
+      "forcedTheme": "light",
+      "kind": "browser_elapsed_stages",
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "logical_cpus": 10,
+      "study": {
+        "id": "study-qa",
+        "engine_version": "core-0.5.0",
+        "rule_schema_version": "signal-baseline-1",
+        "schema_version": "signal-study-1",
+        "policy_version": "signal-close-independent-1",
+        "market": "US",
+        "currency": "USD",
+        "config": {
+          "from": "2026-01-20",
+          "to": "2026-01-23",
+          "n_steps": 3
+        },
+        "rule_id": "qa-rule",
+        "definition_hash": "sha256:rule",
+        "catalog_hash": "sha256:qa-frozen-catalog",
+        "total": 23,
+        "batch_size": 10,
+        "batches": 3,
+        "expires_at": "2027-11-01T00:00:00Z"
+      },
+      "completed": 23,
+      "failed": 0,
+      "traffic": {
+        "decoded_candle_bytes": 121233,
+        "candidate_json_bytes": 105892
+      },
+      "stages": {
+        "react_render_ms": {
+          "count": 107,
+          "retained_samples": 107,
+          "p50": 0.7999999523162842,
+          "p95": 1.0000000596046448
+        },
+        "access_ms": {
+          "count": 2,
+          "retained_samples": 2,
+          "p50": 2.300000011920929,
+          "p95": 13.5
+        },
+        "startup_ms": {
+          "count": 2,
+          "retained_samples": 2,
+          "p50": 43.59999996423721,
+          "p95": 55.700000047683716
+        },
+        "prepare_ms": {
+          "count": 4,
+          "retained_samples": 4,
+          "p50": 1.800000011920929,
+          "p95": 2.899999976158142
+        },
+        "transfer_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 2.199999988079071,
+          "p95": 3.399999976158142
+        },
+        "features_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.399999976158142,
+          "p95": 7.300000011920929
+        },
+        "grant_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.699999988079071,
+          "p95": 2.700000047683716
+        },
+        "scoring_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.800000011920929,
+          "p95": 2.5
+        },
+        "study_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.399999976158142,
+          "p95": 3.199999988079071
+        },
+        "storage_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 0.3999999761581421,
+          "p95": 1
+        }
+      },
+      "limits": "Last 2048 samples per stage; access/prepare/grant/scoring include network and server waiting. React duration excludes paint. No production capacity claim."
+    },
+    {
+      "width": 390,
+      "forcedTheme": "dark",
+      "kind": "browser_elapsed_stages",
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "logical_cpus": 10,
+      "study": {
+        "id": "study-qa",
+        "engine_version": "core-0.5.0",
+        "rule_schema_version": "signal-baseline-1",
+        "schema_version": "signal-study-1",
+        "policy_version": "signal-close-independent-1",
+        "market": "US",
+        "currency": "USD",
+        "config": {
+          "from": "2026-01-20",
+          "to": "2026-01-23",
+          "n_steps": 3
+        },
+        "rule_id": "qa-rule",
+        "definition_hash": "sha256:rule",
+        "catalog_hash": "sha256:qa-frozen-catalog",
+        "total": 23,
+        "batch_size": 10,
+        "batches": 3,
+        "expires_at": "2027-11-01T00:00:00Z"
+      },
+      "completed": 23,
+      "failed": 0,
+      "traffic": {
+        "decoded_candle_bytes": 121233,
+        "candidate_json_bytes": 105892
+      },
+      "stages": {
+        "react_render_ms": {
+          "count": 107,
+          "retained_samples": 107,
+          "p50": 0.699999988079071,
+          "p95": 1
+        },
+        "access_ms": {
+          "count": 2,
+          "retained_samples": 2,
+          "p50": 2.399999976158142,
+          "p95": 16.100000023841858
+        },
+        "startup_ms": {
+          "count": 2,
+          "retained_samples": 2,
+          "p50": 41.69999998807907,
+          "p95": 47.80000001192093
+        },
+        "prepare_ms": {
+          "count": 4,
+          "retained_samples": 4,
+          "p50": 2.399999976158142,
+          "p95": 4.400000035762787
+        },
+        "transfer_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.899999976158142,
+          "p95": 2.699999988079071
+        },
+        "features_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.2000000476837158,
+          "p95": 5.899999976158142
+        },
+        "grant_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.5,
+          "p95": 2.5
+        },
+        "scoring_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.600000023841858,
+          "p95": 2.800000011920929
+        },
+        "study_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.300000011920929,
+          "p95": 3.299999952316284
+        },
+        "storage_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 0.40000003576278687,
+          "p95": 2.400000035762787
+        }
+      },
+      "limits": "Last 2048 samples per stage; access/prepare/grant/scoring include network and server waiting. React duration excludes paint. No production capacity claim."
+    },
+    {
+      "width": 390,
+      "forcedTheme": "light",
+      "kind": "browser_elapsed_stages",
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "logical_cpus": 10,
+      "study": {
+        "id": "study-qa",
+        "engine_version": "core-0.5.0",
+        "rule_schema_version": "signal-baseline-1",
+        "schema_version": "signal-study-1",
+        "policy_version": "signal-close-independent-1",
+        "market": "US",
+        "currency": "USD",
+        "config": {
+          "from": "2026-01-20",
+          "to": "2026-01-23",
+          "n_steps": 3
+        },
+        "rule_id": "qa-rule",
+        "definition_hash": "sha256:rule",
+        "catalog_hash": "sha256:qa-frozen-catalog",
+        "total": 23,
+        "batch_size": 10,
+        "batches": 3,
+        "expires_at": "2027-11-01T00:00:00Z"
+      },
+      "completed": 23,
+      "failed": 0,
+      "traffic": {
+        "decoded_candle_bytes": 121233,
+        "candidate_json_bytes": 105892
+      },
+      "stages": {
+        "react_render_ms": {
+          "count": 107,
+          "retained_samples": 107,
+          "p50": 0.699999988079071,
+          "p95": 1
+        },
+        "access_ms": {
+          "count": 2,
+          "retained_samples": 2,
+          "p50": 2.400000035762787,
+          "p95": 16.299999952316284
+        },
+        "startup_ms": {
+          "count": 2,
+          "retained_samples": 2,
+          "p50": 38.40000003576279,
+          "p95": 40
+        },
+        "prepare_ms": {
+          "count": 4,
+          "retained_samples": 4,
+          "p50": 1.800000011920929,
+          "p95": 2.699999988079071
+        },
+        "transfer_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 2,
+          "p95": 2.600000023841858
+        },
+        "features_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.0999999642372131,
+          "p95": 7.199999988079071
+        },
+        "grant_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.800000011920929,
+          "p95": 2.699999988079071
+        },
+        "scoring_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.600000023841858,
+          "p95": 2.700000047683716
+        },
+        "study_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 1.300000011920929,
+          "p95": 4.100000023841858
+        },
+        "storage_ms": {
+          "count": 23,
+          "retained_samples": 23,
+          "p50": 0.30000001192092896,
+          "p95": 1.699999988079071
+        }
+      },
+      "limits": "Last 2048 samples per stage; access/prepare/grant/scoring include network and server waiting. React duration excludes paint. No production capacity claim."
+    }
+  ]
+}

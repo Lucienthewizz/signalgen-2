@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-02",
+  "source": "manual-account-navigation-after-local-jwt",
+  "synthetic": false,
+  "environment": "local Go Docker API, remote Supabase, user-operated browser",
+  "method": "Successful GET http_request events since backend restart; nearest-rank p50/p95. Only route, status, durations and stage timings aggregated.",
+  "stages_overlap": true,
+  "observations": [
+    {"route": "/api/auth/me", "samples": 3, "http_p50_ms": 0.808, "http_p95_ms": 149.365, "auth_local_p50_ms": 0.285, "cold_jwks_samples": 1, "cold_jwks_ms": 148.837},
+    {"route": "/api/v1/account/me", "samples": 8, "http_p50_ms": 749.455, "http_p95_ms": 2735.514, "auth_local_p50_ms": 0.121, "db_query_p50_ms": 614.696, "db_acquire_p95_ms": 1474.892},
+    {"route": "/api/v1/rules", "samples": 11, "http_p50_ms": 1126.655, "http_p95_ms": 3023.400, "auth_local_p50_ms": 0.125, "db_query_p50_ms": 939.816, "db_acquire_p95_ms": 1326.368},
+    {"route": "/api/v1/stock-universes", "samples": 12, "http_p50_ms": 741.099, "http_p95_ms": 2425.162, "auth_local_p50_ms": 0.125, "db_query_p50_ms": 563.461, "db_acquire_p95_ms": 1309.264},
+    {"route": "/api/v1/subscription", "samples": 4, "http_p50_ms": 839.420, "http_p95_ms": 1697.984, "auth_local_p50_ms": 0.145, "db_query_p50_ms": 822.258, "db_acquire_p95_ms": 205.348}
+  ],
+  "connection_creation_ms": [1266.237, 1138.750, 1124.077, 1349.735],
+  "warm_signature_benchmark": {
+    "synthetic": true,
+    "cpu": "Apple M5",
+    "platform": "darwin/arm64",
+    "go": "1.27.2",
+    "ns_per_operation": [112679, 104194, 71227],
+    "bytes_per_operation": [5856, 5852, 5852],
+    "allocations_per_operation": [97, 97, 97]
+  },
+  "limits": "Small observational cloud samples with mixed cold/warm connections, not a controlled before/after experiment or production benchmark. Stage times may overlap and stage medians cannot be summed. Public-key verification does not bypass current app-session/account/ownership/entitlement checks."
+}

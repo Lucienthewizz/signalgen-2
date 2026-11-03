@@ -321,6 +321,7 @@ async (page) => {
   async function ready() {
     await page.goto(`${origin}/#app/backtest`);
     await page.reload();
+    await page.getByRole("button",{name:"Portfolio simulation",exact:true}).click();
     await page
       .getByLabel("Entry mode", { exact: true })
       .waitFor({ timeout: 20000 });
@@ -747,6 +748,7 @@ async (page) => {
   await page.getByText("No saved backtests for this account yet.",{exact:true}).waitFor();
   mode = "denied";
   await page.reload();
+  await page.getByRole("button",{name:"Portfolio simulation",exact:true}).click();
   await page.getByRole("alert").filter({ hasText: "not enabled" }).waitFor();
   if (
     await page

@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
 )
 
 const maxUserResponseBytes = 1 << 20
@@ -21,6 +23,7 @@ type SupabaseVerifier struct {
 	userEndpoint   string
 	publishableKey string
 	client         HTTPClient
+	local          *publicKeyVerifier
 }
 
 func NewSupabaseVerifier(projectURL, publishableKey string, client HTTPClient) (*SupabaseVerifier, error) {
@@ -42,13 +45,28 @@ func NewSupabaseVerifier(projectURL, publishableKey string, client HTTPClient) (
 	}, nil
 }
 
-// Verify asks Supabase Auth for the current user. This deliberately performs a
-// network validation so the API does not trust an unverified JWT payload.
+// EnableLocalVerification must run once before serving requests. Only public
+// signing keys are cached; HS256 tokens still require Supabase Auth validation.
+func (verifier *SupabaseVerifier) EnableLocalVerification() {
+	verifier.local = newPublicKeyVerifier(strings.TrimSuffix(verifier.userEndpoint, "/user"), verifier.client)
+}
+
+// Verify never treats a decoded JWT payload as authenticated before signature
+// and claim validation. App-session and account checks remain in the API guard.
 func (verifier *SupabaseVerifier) Verify(ctx context.Context, accessToken string) (Principal, error) {
 	accessToken = strings.TrimSpace(accessToken)
 	if accessToken == "" {
 		return Principal{}, ErrTokenRequired
 	}
+	if verifier.local != nil {
+		return verifier.local.verify(ctx, accessToken, verifier.verifyRemote)
+	}
+	return verifier.verifyRemote(ctx, accessToken)
+}
+
+func (verifier *SupabaseVerifier) verifyRemote(ctx context.Context, accessToken string) (Principal, error) {
+	started := time.Now()
+	defer func() { platformhttp.RecordTiming(ctx, platformhttp.AuthRemote, time.Since(started)) }()
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, verifier.userEndpoint, nil)
 	if err != nil {

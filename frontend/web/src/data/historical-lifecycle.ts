@@ -1,5 +1,6 @@
 import { session } from "../api/client";
 import { disposeScreenerEngine } from "../analysis/screener-engine";
+import { clearAllStudyResults } from "../analysis/signal-study-storage";
 import {
   historicalCache,
   CACHE_RESET_EVENT,
@@ -9,7 +10,10 @@ import {
 /** No tokens, prices or key material are broadcast. Other tabs discard in-flight work too. */
 export function clearHistoricalCache(broadcast = true): Promise<void> {
   disposeScreenerEngine();
-  const cleared = historicalCache.clear();
+  const cleared = Promise.all([
+    historicalCache.clear(),
+    clearAllStudyResults(),
+  ]).then(() => {});
   window.dispatchEvent(new Event(CACHE_RESET_EVENT));
   if (broadcast) {
     try {

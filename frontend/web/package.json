@@ -5,6 +5,7 @@
   "description": "SignalGen 2.0 website and account portal",
   "scripts": {
     "test:usability": "node scripts/test-browser.mjs --usability",
+    "test:study": "node scripts/test-browser.mjs --study",
     "test:monitor": "node scripts/test-browser.mjs --monitor",
     "test:browser": "node scripts/test-browser.mjs",
     "test:catalog": "node scripts/test-browser.mjs --catalog",
@@ -27,6 +28,7 @@
     "@fontsource-variable/saira": "^5.3.0",
     "@fontsource/saira-condensed": "^5.3.0",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/query-core": "5.105.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cn": "^0.3.0",

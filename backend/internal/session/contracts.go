@@ -3,6 +3,8 @@ package session
 import (
 	"context"
 	"time"
+
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 )
 
 // Repository is the persistence contract for owner-scoped sessions and devices.
@@ -25,4 +27,10 @@ type Repository interface {
 // repositories do not silently pretend to rotate security credentials.
 type TokenRotator interface {
 	Rotate(ctx context.Context, userID, sessionID, currentToken string) (Created, error)
+}
+
+// AccountVerifier lets Postgres read session and current account together.
+// It never reuses permission state across requests; legacy adapters stay separate.
+type AccountVerifier interface {
+	VerifyAccount(ctx context.Context, userID, token string) (Session, access.Account, error)
 }

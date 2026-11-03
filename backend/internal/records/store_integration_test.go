@@ -18,7 +18,14 @@ func TestPostgresOwnerCASAndRLS(t *testing.T) {
 		t.Skip("disposable Postgres URL not provided")
 	}
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, url)
+	config, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Force reads to reuse the same connection, so RLS leakage cannot hide
+	// behind acquiring a different clean connection from the pool.
+	config.MaxConns = 1
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,6 +66,39 @@ func TestPostgresOwnerCASAndRLS(t *testing.T) {
 	rows, e := s.List(ctx, a, "journal")
 	if e != nil || len(rows) != 1 || rows[0].Version != 2 {
 		t.Fatalf("list: %+v %v", rows, e)
+	}
+	if _, e := s.Get(ctx, a, "journal", "invalid-uuid"); e == nil {
+		t.Fatal("invalid batch read was accepted")
+	}
+	if _, e := s.Get(ctx, a, "journal", id); e != nil {
+		t.Fatalf("connection did not recover after batch error: %v", e)
+	}
+	foreign, e := s.List(ctx, b, "journal")
+	if e != nil || len(foreign) != 0 {
+		t.Fatalf("batch owner leaked into next read: %v", e)
+	}
+	// Deliberately target A in the SQL predicate while the batch owner is B.
+	// This checks RLS itself, independently of the normal explicit predicate.
+	for _, owner := range []string{a, b, a} {
+		batch := s.read(ctx, owner, `select count(*) from signalgen.user_records where user_id=$1::uuid`, a)
+		if _, e := batch.Exec(); e != nil {
+			_ = batch.Close()
+			t.Fatal(e)
+		}
+		var visible int
+		err := batch.QueryRow().Scan(&visible)
+		closeErr := batch.Close()
+		want := 0
+		if owner == a {
+			want = 1
+		}
+		if err != nil || closeErr != nil || visible != want {
+			t.Fatalf("batch RLS ignored owner: visible=%d want=%d err=%v close=%v", visible, want, err, closeErr)
+		}
+	}
+	var ownerContext string
+	if e := pool.QueryRow(ctx, `select coalesce(current_setting('signalgen.owner_id',true),'')`).Scan(&ownerContext); e != nil || ownerContext != "" {
+		t.Fatalf("batch RLS context persisted after close: %v", e)
 	}
 	if e := s.Delete(ctx, a, "journal", id, 1); !errors.Is(e, ErrConflict) {
 		t.Fatal(e)

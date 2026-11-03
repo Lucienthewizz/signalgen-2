@@ -2,6 +2,7 @@ package apitests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -87,15 +88,25 @@ func TestPrivateRouteRejectsSuspendedAccount(t *testing.T) {
 	assertErrorCode(t, response, http.StatusForbidden, "ACCOUNT_SUSPENDED")
 }
 
+type countedAccountAccess struct {
+	*fakeAccess
+	reads int
+}
+
+func (store *countedAccountAccess) RequireActive(ctx context.Context, owner string) (access.Account, error) {
+	store.reads++
+	return store.fakeAccess.RequireActive(ctx, owner)
+}
+
 func TestAccountMeReturnsServerSideAccessState(t *testing.T) {
 	sessions := &fakeSessions{verified: session.Session{
 		ID: "ses_1", InstallationID: "install-a", Label: "Chrome",
 		ExpiresAt: time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC),
 	}}
-	accountStore := &fakeAccess{
+	accountStore := &countedAccountAccess{fakeAccess: &fakeAccess{
 		account:  access.Account{UserID: "user-a", Email: "user@example.com", Role: access.RoleUser, Status: access.StatusActive},
 		features: []string{access.FeatureScreener},
-	}
+	}}
 	server, err := api.NewServer(fakeIdentity{principal: auth.Principal{ID: "user-a"}}, sessions, accountStore, &fakeDatasets{}, &fakeCompute{})
 	if err != nil {
 		t.Fatal(err)
@@ -122,6 +133,16 @@ func TestAccountMeReturnsServerSideAccessState(t *testing.T) {
 	}
 	if payload.User.Role != access.RoleUser || len(payload.Features) != 1 || payload.Device.InstallationID != "install-a" {
 		t.Fatalf("payload = %+v", payload)
+	}
+	if accountStore.reads != 1 {
+		t.Fatal("account GET read the same authorization profile twice")
+	}
+	accountStore.err = access.ErrAccountSuspended
+	denied := httptest.NewRecorder()
+	server.ServeHTTP(denied, request)
+	assertErrorCode(t, denied, http.StatusForbidden, "ACCOUNT_SUSPENDED")
+	if accountStore.reads != 2 {
+		t.Fatal("authorization was cached across requests")
 	}
 }
 

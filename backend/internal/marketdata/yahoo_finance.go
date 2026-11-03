@@ -63,7 +63,7 @@ func (provider *YahooFinance) dailyOne(ctx context.Context, instrument universe.
 	query := endpoint.Query()
 	query.Set("range", yahooRange(outputSize))
 	query.Set("interval", "1d")
-	query.Set("events", "history")
+	query.Set("events", "div,splits")
 	query.Set("includeAdjustedClose", "true")
 	endpoint.RawQuery = query.Encode()
 
@@ -79,6 +79,9 @@ func (provider *YahooFinance) dailyOne(ctx context.Context, instrument universe.
 		return Series{}, ErrInvalidData
 	}
 	chart := payload.Chart.Result[0]
+	if err := validateChartMetadata(chart.Meta, instrument, "1d"); err != nil {
+		return Series{}, err
+	}
 	quote := chart.Indicators.Quote[0]
 	length := minimumLength(len(chart.Timestamp), len(quote.Open), len(quote.High), len(quote.Low), len(quote.Close), len(quote.Volume))
 	if length != len(chart.Timestamp) || length != len(quote.Open) || length != len(quote.High) || length != len(quote.Low) || length != len(quote.Close) || length != len(quote.Volume) {
@@ -115,6 +118,7 @@ func (provider *YahooFinance) dailyOne(ctx context.Context, instrument universe.
 	}
 	series := Series{Symbol: instrument.Symbol, Candles: candles, Timezone: "UTC",
 		QualityWarnings: dailyQualityWarnings(instrument.Symbol, skippedNull, excludedOpen, finality.fallback)}
+	series.QualityWarnings = append(series.QualityWarnings, historicalQualityWarnings(instrument.Symbol, candles, chart.Events)...)
 	if err := ValidateSeries([]Series{series}, []universe.Instrument{instrument}, outputSize); err != nil {
 		return Series{}, err
 	}
@@ -210,6 +214,7 @@ type yahooChartResponse struct {
 	Chart struct {
 		Result []struct {
 			Meta       yahooMarketMeta `json:"meta"`
+			Events     yahooEvents     `json:"events"`
 			Timestamp  []int64         `json:"timestamp"`
 			Indicators struct {
 				Quote []struct {

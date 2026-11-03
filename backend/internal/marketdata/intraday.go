@@ -67,6 +67,9 @@ func (provider *YahooFinance) intradayOne(ctx context.Context, instrument univer
 			return Series{}, ErrIntervalUnavailable
 		}
 		chart := payload.Chart.Result[0]
+		if err := validateChartMetadata(chart.Meta, instrument, timeframe); err != nil {
+			return Series{}, err
+		}
 		if chart.Meta.ExchangeTimezoneName == "" {
 			return Series{}, ErrIntervalUnavailable
 		}

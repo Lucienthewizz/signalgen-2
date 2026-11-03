@@ -16,11 +16,13 @@ export function useWorkspaceSync(userId?: string) {
   const [ready, setReady] = useState(!userId);
   const [epoch, setEpoch] = useState(0);
   const [attempt, setAttempt] = useState(0);
+  const hydratedOwner = useRef<string | undefined>(undefined);
   const resolve = useRef<(choice: "account" | "device") => Promise<void>>(
     async () => {},
   );
   useEffect(() => {
     if (!userId) {
+      hydratedOwner.current = undefined;
       setReady(true);
       setState("local");
       return;
@@ -31,7 +33,9 @@ export function useWorkspaceSync(userId?: string) {
     const conflicts = new Set<WorkspaceKind>();
     const pending = new Set<WorkspaceKind>();
     const versions = new Map<WorkspaceKind, number>();
-    setReady(false);
+    // An explicit retry is background synchronization, not a new route mount.
+    // A different account must still wait for its own initial hydration.
+    if (hydratedOwner.current !== userId) setReady(false);
     setState("loading");
     async function flush() {
       if (!active || busy || conflicts.size) return;
@@ -146,7 +150,10 @@ export function useWorkspaceSync(userId?: string) {
       } catch {
         if (active) setState("local");
       } finally {
-        if (active) setReady(true);
+        if (active) {
+          hydratedOwner.current = userId;
+          setReady(true);
+        }
       }
     })();
     return () => {

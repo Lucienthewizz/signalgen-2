@@ -1,5 +1,11 @@
 # Postman test — SignalGen Go API
 
+Kontrak aktual API **0.16.0** menambahkan ledger terpisah melalui
+`/api/v1/portfolio` dan `/api/v1/portfolio/transactions/{id}`. Header bearer dan
+app-session memakai environment di bawah. [Contoh PUT/SELL/GET, expected P&L,
+idempotensi dan error](../../docs/backend/PORTFOLIO_LEDGER.md). Jurnal lama tetap
+di `/api/v1/journal/trades`; keduanya tidak dikonversi otomatis.
+
 Kontrak intraday: OpenAPI 0.11.0. Tambahkan field opsional `timeframe` pada
 Prepare dataset: `1m`, `5m`, `15m`, `1h`, `1d`; tidak dikirim berarti harian.
 Contoh `"timeframe":"5m"`. Range ditentukan server. Start–Stop berjalan di

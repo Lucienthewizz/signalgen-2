@@ -229,7 +229,7 @@ export function WorkspaceScreenerPanel({
   const evidenceRule = historicalRun?.context?.ruleSnapshot ?? runContext?.rule;
 
   async function loadResources() {
-    if (!authenticated || !backendOnline) return;
+    if (!authenticated) return;
     if (resourceOperation.current && !resourceOperation.current.signal.aborted)
       return;
     const controller = new AbortController();
@@ -251,6 +251,8 @@ export function WorkspaceScreenerPanel({
           api.listStockUniverses(),
         ]);
       if (!mounted.current || version !== resourceVersion.current) return;
+      if (accountResponse.user.id !== userId)
+        throw new Error("The account changed. Reload your selections.");
       setAccount(accountResponse);
       setRules(ruleResponse.items);
       setUniverses(universeResponse.items);
@@ -324,7 +326,7 @@ export function WorkspaceScreenerPanel({
       setState("idle");
       restoredUser.current = null;
     }
-    if (authenticated && backendOnline) void loadResources();
+    if (authenticated) void loadResources();
     else setLoadingResources(false);
     return () => {
       mounted.current = false;
@@ -332,7 +334,7 @@ export function WorkspaceScreenerPanel({
       resourceOperation.current?.abort();
       monitor.stop();
     };
-  }, [authenticated, backendOnline, userId]);
+  }, [authenticated, userId]);
 
   useEffect(() => {
     const stop = () => monitor.stop();
@@ -429,7 +431,13 @@ export function WorkspaceScreenerPanel({
   }
 
   function execute() {
-    if (!selectedRule || !selectedUniverse || !canScreen || monitorState.active)
+    if (
+      !backendOnline ||
+      !selectedRule ||
+      !selectedUniverse ||
+      !canScreen ||
+      monitorState.active
+    )
       return;
     let previous: LiveScreenerRun | null = null;
     let failurePresented = false;
@@ -531,7 +539,7 @@ export function WorkspaceScreenerPanel({
         : loadResources());
   }
 
-  if (!authenticated || !backendOnline) {
+  if (!authenticated) {
     return (
       <Empty className="workspace-empty-state">
         <EmptyHeader>
@@ -558,6 +566,13 @@ export function WorkspaceScreenerPanel({
 
   return (
     <div className="screener-workspace" tabIndex={-1}>
+      {!backendOnline && (
+        <p role="status">
+          Connection interrupted. Previous screening results remain visible and
+          have not been updated. New requests still require server
+          authorization.
+        </p>
+      )}
       <ConfirmDialog
         open={Boolean(pendingHistoryDelete) || deleteAllHistory}
         title={
@@ -949,6 +964,7 @@ export function WorkspaceScreenerPanel({
                 onClick={() => void execute()}
                 disabled={
                   loadingResources ||
+                  !backendOnline ||
                   !canScreen ||
                   !selectedRule ||
                   !selectedUniverse

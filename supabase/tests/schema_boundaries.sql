@@ -28,7 +28,10 @@ begin
       'subscription_events',
       'stock_catalog',
       'stock_universes',
-      'stock_universe_members'
+      'stock_universe_members',
+      'workspace_state',
+      'user_records',
+      'portfolio_transactions'
     ]);
 
   if misplaced_tables is not null then
@@ -55,6 +58,11 @@ begin
     or has_table_privilege('anon', 'signalgen.audit_events', 'select')
     or has_table_privilege('anon', 'signalgen.audit_events', 'insert') then
     raise exception 'audit ledger must remain backend-only, even for application operators';
+  end if;
+
+  if has_table_privilege('authenticated', 'signalgen.portfolio_transactions', 'SELECT,INSERT,UPDATE,DELETE')
+    or has_table_privilege('anon', 'signalgen.portfolio_transactions', 'SELECT,INSERT,UPDATE,DELETE') then
+    raise exception 'manual portfolio ledger must only be accessed through the backend owner boundary';
   end if;
 
   select string_agg(c.relname, ', ' order by c.relname)
