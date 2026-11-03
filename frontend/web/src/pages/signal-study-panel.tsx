@@ -2,6 +2,16 @@ import { Profiler, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, session, ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldDescription,
+  FieldSet,
+  FieldLegend,
+} from "@/components/ui/field";
+import { SlidersHorizontal, Play, Square, RefreshCw } from "lucide-react";
 import { runSignalStudy, type StudyProgress } from "@/analysis/signal-study";
 import {
   clearStudyOwner,
@@ -395,12 +405,18 @@ export function SignalStudyPanel({
       }
     >
       <section className="signal-study-panel" aria-labelledby="study-heading">
-        <header>
-          <h2 id="study-heading">Analyse every signal</h2>
-          <p>
-            Independent daily observations from the signal candle’s close. Not a
-            cash portfolio or executed trades.
-          </p>
+        <header className="study-config-heading">
+          <span className="study-config-heading__icon" aria-hidden="true">
+            <SlidersHorizontal />
+          </span>
+          <div>
+            <h2 id="study-heading">Analyse every signal</h2>
+            <p>
+              Independent daily observations from the signal candle’s close. Not
+              a cash portfolio or executed trades.
+            </p>
+          </div>
+          <Badge variant="outline">Daily candles</Badge>
         </header>
         <form
           onSubmit={(e: FormEvent) => {
@@ -409,126 +425,176 @@ export function SignalStudyPanel({
           }}
         >
           <fieldset disabled={busy} className="study-fields">
-            <legend>Historical study settings</legend>
-            <label>
-              Stock source
-              <select
-                aria-label="Stock source"
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-              >
-                <option value="IDX">Entire IDX catalog · IDR</option>
-                <option value="US">Entire US catalog · USD</option>
-                <option value="universe" disabled={!universes.length}>
-                  My stock universe
-                </option>
-              </select>
-            </label>
-            {source === "universe" && (
-              <label>
-                Stock universe
-                <select
-                  aria-label="Stock universe"
-                  required
-                  value={universe}
-                  onChange={(e) => setUniverse(e.target.value)}
-                >
-                  {universes.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
+            <legend className="sr-only">Historical study settings</legend>
+            <FieldSet className="study-settings-section">
+              <FieldLegend>Source &amp; rule</FieldLegend>
+              <FieldGroup className="study-form-grid" data-columns="2">
+                <Field>
+                  <FieldLabel htmlFor="study-source">Stock source</FieldLabel>
+                  <select
+                    id="study-source"
+                    aria-label="Stock source"
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                  >
+                    <option value="IDX">Entire IDX catalog · IDR</option>
+                    <option value="US">Entire US catalog · USD</option>
+                    <option value="universe" disabled={!universes.length}>
+                      My stock universe
                     </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <label>
-              Screening rule
-              <select
-                aria-label="Screening rule"
-                required
-                value={rule}
-                onChange={(e) => setRule(e.target.value)}
-              >
-                <option value="default-scalping-v1">Default Scalping</option>
-                {rules
-                  .filter((r) => r.id !== "default-scalping-v1")
-                  .map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} · {r.definition?.signal_type ?? "System rule"}
+                  </select>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="study-rule">Screening rule</FieldLabel>
+                  <select
+                    id="study-rule"
+                    aria-label="Screening rule"
+                    required
+                    value={rule}
+                    onChange={(e) => setRule(e.target.value)}
+                  >
+                    <option value="default-scalping-v1">
+                      Default Scalping
                     </option>
-                  ))}
-              </select>
-            </label>
-            <label>
-              From (daily session, UTC)
-              <Input
-                required
-                type="date"
-                value={config.from}
-                onChange={(e) => setConfig({ ...config, from: e.target.value })}
-              />
-            </label>
-            <label>
-              To (inclusive, UTC)
-              <Input
-                required
-                type="date"
-                value={config.to}
-                onChange={(e) => setConfig({ ...config, to: e.target.value })}
-              />
-            </label>
-            <label>
-              Trading candles after signal
-              <Input
-                required
-                type="number"
-                min={1}
-                max={100}
-                value={config.n_steps}
-                onChange={(e) =>
-                  setConfig({ ...config, n_steps: Number(e.target.value) })
-                }
-              />
-            </label>
-            <label>
-              Take profit % (optional)
-              <Input
-                type="number"
-                min="0.01"
-                max="99.99"
-                step="any"
-                value={config.take_profit_pct ?? ""}
-                onChange={(e) =>
-                  setConfig({
-                    ...config,
-                    take_profit_pct: e.target.value
-                      ? Number(e.target.value)
-                      : undefined,
-                  })
-                }
-              />
-            </label>
-            <label>
-              Stop loss % (optional)
-              <Input
-                type="number"
-                min="0.01"
-                max="99.99"
-                step="any"
-                value={config.stop_loss_pct ?? ""}
-                onChange={(e) =>
-                  setConfig({
-                    ...config,
-                    stop_loss_pct: e.target.value
-                      ? Number(e.target.value)
-                      : undefined,
-                  })
-                }
-              />
-            </label>
+                    {rules
+                      .filter((r) => r.id !== "default-scalping-v1")
+                      .map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} ·{" "}
+                          {r.definition?.signal_type ?? "System rule"}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
+                {source === "universe" && (
+                  <Field className="study-universe-field">
+                    <FieldLabel htmlFor="study-universe">
+                      Stock universe
+                    </FieldLabel>
+                    <select
+                      id="study-universe"
+                      aria-label="Stock universe"
+                      required
+                      value={universe}
+                      onChange={(e) => setUniverse(e.target.value)}
+                    >
+                      {universes.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+              </FieldGroup>
+            </FieldSet>
+            <FieldSet className="study-settings-section">
+              <FieldLegend>Test period</FieldLegend>
+              <FieldGroup className="study-form-grid" data-columns="3">
+                <Field>
+                  <FieldLabel htmlFor="study-from">
+                    From (daily session, UTC)
+                  </FieldLabel>
+                  <Input
+                    id="study-from"
+                    required
+                    type="date"
+                    value={config.from}
+                    onChange={(e) =>
+                      setConfig({ ...config, from: e.target.value })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="study-to">
+                    To (inclusive, UTC)
+                  </FieldLabel>
+                  <Input
+                    id="study-to"
+                    required
+                    type="date"
+                    value={config.to}
+                    onChange={(e) =>
+                      setConfig({ ...config, to: e.target.value })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="study-horizon">
+                    Trading candles after signal
+                  </FieldLabel>
+                  <Input
+                    id="study-horizon"
+                    required
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={config.n_steps}
+                    onChange={(e) =>
+                      setConfig({ ...config, n_steps: Number(e.target.value) })
+                    }
+                  />
+                  <FieldDescription>
+                    1–100 completed daily candles, not calendar days.
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+            </FieldSet>
+            <FieldSet className="study-settings-section">
+              <FieldLegend>Take profit &amp; stop loss</FieldLegend>
+              <FieldGroup className="study-form-grid" data-columns="2">
+                <Field>
+                  <FieldLabel htmlFor="study-tp">
+                    Take profit % (optional)
+                  </FieldLabel>
+                  <Input
+                    id="study-tp"
+                    type="number"
+                    min="0.01"
+                    max="99.99"
+                    step="any"
+                    value={config.take_profit_pct ?? ""}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        take_profit_pct: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="study-sl">
+                    Stop loss % (optional)
+                  </FieldLabel>
+                  <Input
+                    id="study-sl"
+                    type="number"
+                    min="0.01"
+                    max="99.99"
+                    step="any"
+                    value={config.stop_loss_pct ?? ""}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        stop_loss_pct: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                  />
+                </Field>
+              </FieldGroup>
+              <p className="study-settings-note">
+                Leave a target empty to skip it. If both are touched in the same
+                candle, stop loss comes first.
+              </p>
+            </FieldSet>
           </fieldset>
-          <div className="study-actions">
+          <div className="study-actions study-config-actions">
             <Button type="submit" disabled={busy || !backendOnline}>
+              <Play data-icon="inline-start" />
               Start signal study
             </Button>
             <Button
@@ -537,14 +603,16 @@ export function SignalStudyPanel({
               disabled={!busy}
               onClick={cancel}
             >
+              <Square data-icon="inline-start" />
               Stop study
             </Button>
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               disabled={busy}
               onClick={() => setReload((n) => n + 1)}
             >
+              <RefreshCw data-icon="inline-start" />
               Reload selections
             </Button>
           </div>

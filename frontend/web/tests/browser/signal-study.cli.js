@@ -47,6 +47,25 @@ async(page)=>{
   }
   return respond({error:{code:"UNMOCKED",message:p}},404);
  });
+ // Empty configuration layout, keyboard order and conditional universe selection.
+ for(const width of [1440,1218,390]){
+  await page.setViewportSize({width,height:1000});await page.goto(origin+"/#app/backtest");await page.reload();
+  const source=page.getByLabel("Stock source",{exact:true});await source.waitFor({timeout:20000});
+  await page.evaluate(async()=>{await document.fonts.ready;await Promise.all(document.getAnimations().filter(a=>a.effect?.getComputedTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})))});
+  for(const name of ["Source & rule","Test period","Take profit & stop loss"])if(await page.getByRole("group",{name,exact:true}).count()!==1)throw Error("Missing settings group: "+name);
+  const tp=await page.getByLabel("Take profit % (optional)",{exact:true}).boundingBox(),sl=await page.getByLabel("Stop loss % (optional)",{exact:true}).boundingBox();
+  if(!tp||!sl||(width>480?(Math.abs(tp.y-sl.y)>1||Math.abs(tp.width-sl.width)>1):sl.y<=tp.y))throw Error("Target fields not aligned at "+width);
+  const from=await page.getByLabel("From (daily session, UTC)",{exact:true}).boundingBox(),to=await page.getByLabel("To (inclusive, UTC)",{exact:true}).boundingBox();
+  if(!from||!to||(width>760?Math.abs(from.y-to.y)>1:to.y<=from.y))throw Error("Period fields not aligned at "+width);
+  const arrow=await source.evaluate(el=>{const s=getComputedStyle(el);return{appearance:s.appearance,padding:parseFloat(s.paddingRight),image:s.backgroundImage}});
+  if(arrow.appearance!=="none"||arrow.padding<40||arrow.image==="none")throw Error("Dropdown arrow spacing incorrect");
+  await source.focus();await page.keyboard.press("Tab");if(!await page.getByLabel("Screening rule",{exact:true}).evaluate(el=>el===document.activeElement))throw Error("Source/rule keyboard order incorrect");
+  await source.selectOption("universe");await page.getByLabel("Stock universe",{exact:true}).selectOption("qa-universe");
+  await source.selectOption("IDX");if(await page.getByLabel("Stock universe",{exact:true}).count())throw Error("Universe field should be conditional");
+  await source.selectOption("universe");if(await page.getByLabel("Stock universe",{exact:true}).inputValue()!=="qa-universe")throw Error("Universe selection lost");await source.selectOption("IDX");
+  if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error("Configuration overflow "+width);
+  await page.screenshot({path:`output/playwright/signal-study-layout-${width}.png`,fullPage:true});
+ }
  for(const width of [1440,390]){
   for(const theme of ["dark","light"]){
    partial=true;prepares=[];scored=[];

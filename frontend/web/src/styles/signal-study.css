@@ -25,23 +25,91 @@
 }
 .study-fields {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
   border: 0;
   padding: 0;
-  margin: 20px 0;
+  margin: 0;
   min-width: 0;
 }
-.study-fields legend {
+.study-fields .study-settings-section {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  gap: 0;
+}
+.study-settings-section > legend {
+  width: 100%;
   padding: 0 0 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
   font-weight: 600;
   font-size: 0.9rem;
 }
-.study-fields label {
+.study-form-grid[data-slot="field-group"] {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px 20px;
+}
+.study-form-grid[data-columns="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.study-fields [data-slot="field-label"] {
   font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+.study-fields [data-slot="field-description"],
+.signal-study-panel .study-settings-note {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.signal-study-panel .study-settings-note {
+  margin-top: 12px;
+  max-width: 75ch;
+}
+.study-universe-field {
+  grid-column: 1 / -1;
+}
+.demo-workbench .signal-study-panel {
+  background-image: var(--workspace-card-gradient);
+}
+.study-config-heading {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.study-config-heading > div {
   min-width: 0;
+}
+.study-config-heading h2 {
+  margin-bottom: 4px;
+  font-size: 1.375rem;
+}
+.study-config-heading p {
+  max-width: 70ch;
+}
+.study-config-heading__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  background: var(--accent-surface);
+  color: var(--green);
+}
+.study-config-heading__icon svg {
+  width: 20px;
+  height: 20px;
 }
 .study-fields select {
   width: 100%;
@@ -54,6 +122,24 @@
   color: var(--text);
   font: inherit;
 }
+.demo-workbench .signal-study-panel .study-fields select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-inline: 14px 42px;
+  text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a4ada7' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px 16px;
+}
+@media (forced-colors: active) {
+  .demo-workbench .signal-study-panel .study-fields select {
+    appearance: auto;
+    -webkit-appearance: auto;
+    background-image: none;
+    padding-inline: 14px;
+  }
+}
 .study-fields :is(select, input):focus-visible,
 .study-confirm input:focus-visible {
   outline: 2px solid var(--green);
@@ -65,6 +151,17 @@
   gap: 10px;
   flex-wrap: wrap;
   margin-block: 8px;
+}
+.study-config-actions {
+  margin-block: 24px 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.study-config-actions > :last-child {
+  margin-inline-start: auto;
+}
+.signal-study-panel > p:empty {
+  display: none;
 }
 .study-table-scroll {
   overflow-x: auto;
@@ -164,13 +261,27 @@
   }
 }
 @media (max-width: 760px) {
-  .study-fields {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .study-form-grid[data-columns="3"] {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 480px) {
-  .study-fields {
+  .study-form-grid[data-slot="field-group"] {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .study-config-heading {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+  .study-config-heading > [data-slot="badge"] {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .study-config-actions > button {
+    flex: 1 1 130px;
+  }
+  .study-config-actions > :last-child {
+    margin-inline-start: 0;
+    flex-basis: 100%;
   }
   .signal-study-panel,
   .journal-batch-review {
