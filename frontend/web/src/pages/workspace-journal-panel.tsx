@@ -1,5 +1,13 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, X, RefreshCw, Save, Pencil, Trash2 } from "lucide-react";
+import {
+  Plus,
+  X,
+  RefreshCw,
+  Save,
+  Pencil,
+  Trash2,
+  NotebookTabs,
+} from "lucide-react";
 import { api, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -345,6 +353,50 @@ export function JournalPanel({
   }
   return (
     <div className="journal-workspace">
+      <header className="journal-page-header">
+        <div className="page-heading">
+          <span className="page-heading__icon" aria-hidden="true">
+            <NotebookTabs />
+          </span>
+          <div>
+            <h2 id="workspace-route-heading" tabIndex={-1}>
+              Trade journal
+            </h2>
+            <p>Record your trade plans and review positions.</p>
+          </div>
+        </div>
+        <FieldGroup
+          className="journal-quick-controls"
+          aria-label="Search and sort trades"
+        >
+          <Field>
+            <FieldLabel htmlFor="journal-search" className="sr-only">
+              Search recorded trades
+            </FieldLabel>
+            <Input
+              id="journal-search"
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search trades…"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="journal-sort" className="sr-only">
+              Sort trades
+            </FieldLabel>
+            <select
+              id="journal-sort"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+            >
+              <option value="newest">Newest first</option>
+              <option value="symbol">Stock symbol</option>
+              <option value="pnl">Highest realized P&amp;L</option>
+            </select>
+          </Field>
+        </FieldGroup>
+      </header>
       <JournalScreeningVerification
         draft={screeningDraft}
         userId={userId}
@@ -493,32 +545,6 @@ export function JournalPanel({
           onSaved={() => setReload((n) => n + 1)}
         />
       )}
-      <FieldGroup className="analysis-table-tools">
-        <Field>
-          <FieldLabel htmlFor="journal-search">
-            Search recorded trades
-          </FieldLabel>
-          <Input
-            id="journal-search"
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Stock, journal or note"
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="journal-sort">Sort trades</FieldLabel>
-          <select
-            id="journal-sort"
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value)}
-          >
-            <option value="newest">Newest first</option>
-            <option value="symbol">Stock symbol</option>
-            <option value="pnl">Highest realized P&amp;L</option>
-          </select>
-        </Field>
-      </FieldGroup>
       {loading && loadedOwner === userId && (
         <p role="status">
           Refreshing journal. Previous records remain visible.

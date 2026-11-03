@@ -163,8 +163,17 @@ async (page) => {
   if(writes.length!==2)throw Error('Double click duplicated reviewed trades');
   await review.getByRole('button',{name:'Close review',exact:true}).click();
   await page.getByRole('button',{name:'Open journal form',exact:true}).click();
-  for(const width of [1440,390]){
+  for(const width of [1440,1218,390]){
     await page.setViewportSize({width,height:1000});
+    await page.evaluate(async()=>{await document.fonts.ready;await Promise.all(document.getAnimations().filter(a=>a.effect?.getComputedTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})))});
+    const header=page.locator(".journal-page-header"),searchControl=page.getByLabel("Search recorded trades",{exact:true}),sortControl=page.getByLabel("Sort trades",{exact:true});
+    if(await page.getByRole("heading",{name:"Trade journal",exact:true}).count()!==1)throw Error("Journal heading duplicated");
+    const headingBox=await header.locator(".page-heading").boundingBox(),searchBox=await searchControl.boundingBox(),sortBox=await sortControl.boundingBox();
+    if(!headingBox||!searchBox||!sortBox||Math.abs(searchBox.y-sortBox.y)>1||searchBox.height<43.99||sortBox.height<43.99||searchBox.height>49||sortBox.height>49)throw Error("Journal quick controls are not compact/aligned at "+width);
+    if(width>=1218&&(searchBox.x<headingBox.x+headingBox.width-1||searchBox.y>headingBox.y+headingBox.height||searchBox.width>225||sortBox.width>195))throw Error("Journal controls are not beside the title at "+width);
+    await searchControl.focus();await page.keyboard.press("Tab");if(!await sortControl.evaluate(el=>el===document.activeElement))throw Error("Search/sort keyboard order incorrect");
+    await sortControl.evaluate(el=>el.blur());
+    await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:`output/playwright/journal-compact-header-${width}.png`,animations:"disabled"});
     const journalArrows=await page.locator(".journal-workspace select").evaluateAll(items=>items.map(item=>{const style=getComputedStyle(item);return {appearance:style.appearance,padding:parseFloat(style.paddingRight),image:style.backgroundImage,position:style.backgroundPosition,size:style.backgroundSize};}));
     if(journalArrows.length<6 || journalArrows.some(item=>item.appearance!=="none" || item.padding<40 || !item.image.includes("svg") || !item.position.includes("14px") || item.size!=="16px 16px"))throw Error(`Journal select arrows are inconsistent: ${JSON.stringify(journalArrows)}`);
     await page.locator(".journal-capture").screenshot({path:`output/playwright/usability-review-${width}.png`,animations:"disabled"});
@@ -210,6 +219,13 @@ async (page) => {
     if(await detail.count())throw Error("Filtering out a selected trade left stale chart details visible");
     if(!await page.getByRole("region",{name:"Trading performance",exact:true}).isVisible())throw Error("Filtered performance disappeared");
     await page.getByLabel("Search recorded trades",{exact:true}).fill("");
+    const sortControl=page.getByLabel("Sort trades",{exact:true});
+    await sortControl.selectOption("symbol");
+    const firstSymbol=items.map(item=>item.data.symbol).sort((a,b)=>a.localeCompare(b))[0];
+    if(!(await body.locator("tr").first().innerText()).includes(firstSymbol))throw Error("Stock symbol ordering failed");
+    await sortControl.selectOption("pnl");
+    if(await sortControl.inputValue()!=="pnl")throw Error("P&L sort option unavailable");
+    await sortControl.selectOption("newest");
     await page.locator(".journal-ledger").screenshot({path:`output/playwright/usability-journal-${width}.png`,animations:"disabled"});
     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error(`Journal overflow at ${width}`);
   }

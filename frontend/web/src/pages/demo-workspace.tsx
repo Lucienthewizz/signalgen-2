@@ -2004,55 +2004,61 @@ export function DemoWorkspace({
         </header>
         <div className="workspace__content demo-content">
           <DemoNotice view={view} />
-          <div className="workspace-page-intro">
-            <div className="page-heading">
-              <span className="page-heading__icon" aria-hidden="true">
-                <PageIcon />
-              </span>
-              <div>
-                <h2 id="workspace-route-heading" tabIndex={-1}>
-                  {meta.title}
-                </h2>
-                <p>{meta.description}</p>
-              </div>
-            </div>
-            {authenticated && view !== "journal" && sync.state !== "saved" && (
-              <div className="workspace-sync" role="status" aria-live="polite">
-                <span>
-                  {sync.state === "loading"
-                    ? "Syncing your preferences…"
-                    : sync.state === "saving"
-                      ? "Saving changes…"
-                      : sync.state === "conflict"
-                        ? "Changes were made on another device. Choose which copy to keep."
-                        : "A local copy is available. Sync is not complete."}
+          {view !== "journal" && (
+            <div className="workspace-page-intro">
+              <div className="page-heading">
+                <span className="page-heading__icon" aria-hidden="true">
+                  <PageIcon />
                 </span>
-                {sync.state === "local" && (
-                  <Button variant="ghost" size="sm" onClick={sync.retry}>
-                    Retry sync
-                  </Button>
-                )}
-                {sync.state === "conflict" && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void sync.useAccount()}
-                    >
-                      Use account copy
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void sync.useDevice()}
-                    >
-                      Keep this device's copy
-                    </Button>
-                  </>
-                )}
+                <div>
+                  <h2 id="workspace-route-heading" tabIndex={-1}>
+                    {meta.title}
+                  </h2>
+                  <p>{meta.description}</p>
+                </div>
               </div>
-            )}
-          </div>
+              {authenticated && sync.state !== "saved" && (
+                <div
+                  className="workspace-sync"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span>
+                    {sync.state === "loading"
+                      ? "Syncing your preferences…"
+                      : sync.state === "saving"
+                        ? "Saving changes…"
+                        : sync.state === "conflict"
+                          ? "Changes were made on another device. Choose which copy to keep."
+                          : "A local copy is available. Sync is not complete."}
+                  </span>
+                  {sync.state === "local" && (
+                    <Button variant="ghost" size="sm" onClick={sync.retry}>
+                      Retry sync
+                    </Button>
+                  )}
+                  {sync.state === "conflict" && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void sync.useAccount()}
+                      >
+                        Use account copy
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void sync.useDevice()}
+                      >
+                        Keep this device's copy
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <div
             className="route-stage"
             key={`${view}:${user?.id ?? "guest"}:${sync.epoch}`}
