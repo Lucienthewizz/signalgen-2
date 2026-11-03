@@ -1438,7 +1438,11 @@ export function WorkspaceScreenerPanel({
                     screeningStatusLabels,
                   ) as (keyof typeof screeningStatusLabels)[]
                 ).map((status) => (
-                  <ToggleGroupItem key={status} value={status}>
+                  <ToggleGroupItem
+                    key={status}
+                    value={status}
+                    data-signal-status={status}
+                  >
                     {screeningStatusLabels[status]}{" "}
                     <span>
                       {

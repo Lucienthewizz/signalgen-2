@@ -459,6 +459,40 @@
   border-radius: 4px;
   background: var(--surface-3);
 }
+.screener-signal-filters [data-signal-status] {
+  --signal-color: var(--text);
+  color: var(--signal-color);
+  border-color: color-mix(in srgb, var(--signal-color) 35%, var(--line));
+  background: color-mix(in srgb, var(--signal-color) 6%, var(--surface));
+}
+.screener-signal-filters [data-signal-status="matched"] {
+  --signal-color: var(--green-soft);
+}
+.screener-signal-filters [data-signal-status="buy"] {
+  --signal-color: var(--green);
+}
+.screener-signal-filters [data-signal-status="sell"] {
+  --signal-color: var(--danger);
+}
+.screener-signal-filters [data-signal-status="cooldown"] {
+  --signal-color: var(--warning);
+}
+.screener-signal-filters [data-signal-status="rejected"] {
+  --signal-color: var(--danger-text);
+}
+.screener-signal-filters [data-signal-status]:hover {
+  background: color-mix(in srgb, var(--signal-color) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--signal-color) 65%, var(--line));
+}
+.screener-signal-filters [data-signal-status][aria-pressed="true"] {
+  color: var(--signal-color);
+  background: color-mix(in srgb, var(--signal-color) 18%, var(--surface));
+  border-color: var(--signal-color);
+}
+.screener-signal-filters [data-signal-status] span {
+  color: inherit;
+  background: color-mix(in srgb, var(--signal-color) 14%, var(--surface));
+}
 .screener-history-filters {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(140px, 0.5fr);

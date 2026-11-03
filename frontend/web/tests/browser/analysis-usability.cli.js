@@ -87,6 +87,23 @@ async (page) => {
     await summary.evaluate(el=>el.scrollIntoView({block:'center'}));
     await summary.screenshot({path:`output/playwright/usability-rule-summary-${width}.png`,animations:'disabled'});
     const statusbar=page.locator(".screener-result-statusbar");
+    const statusFilters=statusbar.locator('[data-signal-status]');
+    if(await statusFilters.count()!==6)throw Error('Status color mapping is incomplete');
+    for(const status of ['all','matched','buy','sell','cooldown','rejected']){
+      const filter=statusbar.locator(`[data-signal-status="${status}"]`);
+      await filter.click();
+      if(await filter.getAttribute('aria-pressed')!=='true')throw Error(`Status ${status} cannot be selected`);
+      const contrast=await filter.evaluate(el=>{
+        const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const ctx=canvas.getContext('2d');
+        const lum=color=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=color;ctx.fillRect(0,0,1,1);return [...ctx.getImageData(0,0,1,1).data].slice(0,3).map(n=>{const s=n/255;return s<=.04045?s/12.92:((s+.055)/1.055)**2.4}).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0)};
+        const style=getComputedStyle(el),text=lum(style.color),background=lum(style.backgroundColor),count=getComputedStyle(el.querySelector('span'));
+        return {ratio:(Math.max(text,background)+.05)/(Math.min(text,background)+.05),countRatio:(Math.max(text,lum(count.backgroundColor))+.05)/(Math.min(text,lum(count.backgroundColor))+.05),same:style.color===count.color};
+      });
+      if(contrast.ratio<4.5||contrast.countRatio<4.5||!contrast.same)throw Error(`Status ${status} lost readable label/count colors: ${JSON.stringify(contrast)}`);
+    }
+    await statusbar.locator('[data-signal-status="all"]').click();
+    const colors=await statusFilters.evaluateAll(items=>Object.fromEntries(items.map(el=>[el.dataset.signalStatus,getComputedStyle(el).color])));
+    if(colors.buy===colors.sell||colors.cooldown===colors.buy||colors.rejected===colors.all)throw Error('Status tones are indistinguishable');
     const filtersBox=await statusbar.locator(".screener-signal-filters").boundingBox();
     const actionsBox=await statusbar.locator(".screener-result-actions").boundingBox();
     if(width>=1218 && Math.abs(filtersBox.y+filtersBox.height/2-actionsBox.y-actionsBox.height/2)>1)throw Error(`Quality and export actions wrapped at ${width}: ${JSON.stringify({filtersBox,actionsBox,button:await statusbar.locator('[data-slot="toggle-group-item"]').first().evaluate(el=>({font:getComputedStyle(el).fontSize,height:getComputedStyle(el).height,minheight:getComputedStyle(el).minHeight,padding:getComputedStyle(el).padding}))})}`);
