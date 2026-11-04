@@ -490,18 +490,17 @@ export function StockUniversesPanel({
                     onClick={() => edit(universe)}
                     disabled={saving || loading}
                     aria-label={`Edit ${universe.name}`}
-                    className="workspace-glass-action"
                   >
                     <Pencil data-icon="inline-start" />
                     Edit
                   </Button>
                   <Button
-                    variant="destructive"
+                    variant="ghost"
                     size="icon"
                     onClick={() => void remove(universe)}
                     disabled={saving || loading}
                     aria-label={`Delete ${universe.name}`}
-                    className="workspace-glass-action"
+                    className="workspace-row-delete"
                     data-destructive="true"
                   >
                     <Trash2 />

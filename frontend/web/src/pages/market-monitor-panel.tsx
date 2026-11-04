@@ -381,6 +381,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
         <Button
           variant="outline"
           size="sm"
+          className="monitor-lineup-toggle"
           aria-expanded={showCards}
           aria-controls="monitor-stock-lineup"
           onClick={() => setShowCards((value) => !value)}

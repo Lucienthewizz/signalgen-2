@@ -2005,9 +2005,10 @@ export function DemoWorkspace({
           </div>
         </header>
         <div className="workspace__content demo-content">
-          <DemoNotice view={view} />
           {view !== "journal" && (
-            <div className="workspace-page-intro">
+            <div
+              className={`workspace-page-intro ${view === "realtime" ? "workspace-page-intro--market" : ""}`}
+            >
               <div className="page-heading">
                 <span className="page-heading__icon" aria-hidden="true">
                   <PageIcon />
@@ -2019,6 +2020,7 @@ export function DemoWorkspace({
                   <p>{meta.description}</p>
                 </div>
               </div>
+              <DemoNotice view={view} />
               {authenticated && sync.state !== "saved" && (
                 <div
                   className="workspace-sync"

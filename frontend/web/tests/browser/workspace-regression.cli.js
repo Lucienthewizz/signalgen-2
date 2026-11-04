@@ -423,6 +423,15 @@ async (page) => {
         if (surfaceContrast.min < 4.5) throw Error(`Shared surface text contrast below AA: ${JSON.stringify(surfaceContrast)}`);
         await page.screenshot({ path: `/private/tmp/signalgen-${view}-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
         if (view === "realtime") {
+          const notice=page.locator('.workspace-page-intro--market .demo-notice--market');
+          if(await notice.count()!==1)throw Error('Market disclaimer must be in its title header');
+          const titleBox=await page.locator('.workspace-page-intro--market .page-heading').boundingBox(),noticeBox=await notice.boundingBox();
+          if(width===1440&&(noticeBox.x<titleBox.x+titleBox.width-1||noticeBox.width<280))throw Error('Market disclaimer must sit right of the title without shrinking its text column');
+          const noticeText=await notice.locator('div').boundingBox();
+          if(noticeText.width<noticeBox.width-36||noticeBox.height>150)throw Error('Market disclaimer text is squeezed into a hidden icon column');
+          await page.locator('.workspace-page-intro--market').screenshot({path:`output/playwright/market-heading-${width}.png`,animations:'disabled'});
+          const stockCard=await page.locator('#monitor-stock-lineup > button').first().boundingBox();
+          if(stockCard&&(stockCard.width>145||stockCard.height>140))throw Error('Stock lineup cards are not compact');
           if (!await page.locator('.monitor-ledger table th, .monitor-ledger table td').evaluateAll(items=>items.length>0 && items.every(el=>getComputedStyle(el).textAlign==='center'))) throw Error('Every monitor table header and cell must be centered');
           if (!await page.locator('.monitor-ledger .monitor-result').evaluateAll(items=>items.every(el=>getComputedStyle(el).justifyItems==='center'))) throw Error('Monitor result badges must be centered');
           if (!await page.locator(".monitor-change").first().evaluate(el => getComputedStyle(el).fontFamily.includes("Geist Mono Variable") && document.fonts.check('13px "Geist Mono Variable"'))) throw Error("Market numbers must use loaded Geist Mono");
@@ -833,6 +842,13 @@ async (page) => {
     await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
     await page.waitForFunction(expected => document.documentElement.dataset.typography === expected, route === "home" ? "landing" : "workspace");
     const family = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
+    if(route==='home'){
+      await page.emulateMedia({reducedMotion:'no-preference'});
+      await page.locator('.market-hero').hover();
+      if(!await page.locator('.market-hero .trace-line').evaluate(el=>getComputedStyle(el).animationName.includes('market-hover-wave')))throw Error('Hero hover wave missing');
+      await page.emulateMedia({reducedMotion:'reduce'});
+      if(!await page.locator('.market-hero .trace-line').evaluate(el=>getComputedStyle(el).animationName==='none'))throw Error('Hero wave ignores reduced motion');
+    }
     if (!family.includes(route === "home" ? "Manrope Variable" : "Saira Variable")) throw Error(`Public route font mismatch: ${route} ${family}`);
     if (await page.locator(".auth-layout").count() && !await page.locator(".auth-layout").evaluate(el => getComputedStyle(el).backgroundImage.includes("gradient"))) throw Error(`Auth surface gradient missing: ${route}`);
     await page.screenshot({ path: `/private/tmp/signalgen-public-${route}.png`, animations: "disabled", timeout: 10000 });

@@ -27,6 +27,7 @@ import type {
 import type { RuleResource, StockUniverse } from "@/types";
 import { csvCell, downloadCsv } from "@/lib/csv";
 import { CACHE_RESET_EVENT } from "@/data/historical-cache";
+import { StudyEstimate } from "@/components/study-estimate";
 
 function defaults(): StudyConfig {
   const now = new Date(`${singaporeDateTime().slice(0, 10)}T00:00:00Z`),
@@ -630,6 +631,7 @@ export function SignalStudyPanel({
           {message}
         </p>
         {error && <p role="alert">{error}</p>}
+        {busy && <StudyEstimate progress={progress} />}
         {progress && (
           <>
             <progress

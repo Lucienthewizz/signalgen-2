@@ -1944,7 +1944,7 @@ export function WorkspaceScreenerPanel({
                 </div>
                 <div className="screener-history-actions">
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     disabled={monitorState.active}
                     onClick={() => {
@@ -1962,7 +1962,7 @@ export function WorkspaceScreenerPanel({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="workspace-glass-action"
+                    className="workspace-row-delete"
                     data-destructive="true"
                     aria-label={`Delete history for ${item.rule}`}
                     disabled={monitorState.active || !userId}

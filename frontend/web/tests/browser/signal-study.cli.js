@@ -6,7 +6,7 @@ async(page)=>{
  const errors=[],reports=[];page.on("pageerror",e=>errors.push(e.message));
  await page.emulateMedia({reducedMotion:"reduce"});
  await page.addInitScript(()=>{sessionStorage.setItem("signalgen.access-token","synthetic-study-only");sessionStorage.setItem("signalgen.app-session","synthetic-session");sessionStorage.setItem("signalgen.app-session-origin","same-origin")});
- let frozen,partial=true,prepares=[],scored=[],counter=0,hold=false,release,entered;
+ let frozen,partial=true,prepares=[],scored=[],counter=0,hold=false,release,entered,etaProbe=false;
  const snapshots=new Map();
  await page.route("**/*",async route=>{
   const request=route.request(),url=new URL(request.url()),p=url.pathname,method=request.method();
@@ -27,7 +27,8 @@ async(page)=>{
   if(p.endsWith("/prepare")&&p.includes("/studies/")){
    if(method==="DELETE")return route.fulfill({status:204});
    const index=Number(p.split("/").at(-2));prepares.push(index);
-   if(hold){entered?.();await new Promise(r=>release=r)}
+   if(etaProbe&&index===0)await new Promise(r=>setTimeout(r,3000));
+   if(hold&&(!etaProbe||index>0)){entered?.();await new Promise(r=>release=r)}
    const stocks=[],manifests=[],failures=[];
    for(let i=index*10;i<Math.min((index+1)*10,23);i++){
     const symbol="TEST"+String(i).padStart(2,"0");if(request.postDataJSON().retry_symbols&&!request.postDataJSON().retry_symbols.includes(symbol))continue;stocks.push(symbol);
@@ -103,8 +104,19 @@ async(page)=>{
  // Stop during provider preparation; a late response must never publish rows.
  hold=true;partial=false;await page.reload();await page.getByLabel("Stock source",{exact:true}).waitFor();
  const started=new Promise(r=>entered=r);await page.getByRole("button",{name:"Start signal study",exact:true}).click();await started;
+ await page.getByLabel("Estimated study completion",{exact:true}).waitFor();
+ if(!await page.getByLabel("Estimated study completion",{exact:true}).innerText().then(t=>t.includes("Estimating completion")))throw Error("Study ETA should wait for measured processing speed");
+ await page.getByLabel("Estimated study completion",{exact:true}).screenshot({path:"output/playwright/study-estimate-processing.png"});
  const count=scored.length;await page.getByRole("button",{name:"Stop study",exact:true}).click();release?.();hold=false;
  await page.getByText("Stopped. Completed results remain available; this is not a complete-market result.",{exact:true}).waitFor();await page.waitForTimeout(300);if(scored.length!==count)throw Error("Late canceled response was scored");
+ if(await page.getByLabel("Estimated study completion",{exact:true}).count())throw Error("Stopped study retained a running ETA");
+ // Measured throughput produces an SGT completion time after the first batch.
+ etaProbe=true;hold=true;
+ const measured=new Promise(r=>entered=r);await page.getByRole("button",{name:"Start signal study",exact:true}).click();await measured;
+ await page.waitForFunction(()=>document.querySelector('.study-estimate')?.textContent.includes('Estimated finish')&&document.querySelector('.study-estimate')?.textContent.includes('SGT'));
+ await page.getByLabel("Estimated study completion",{exact:true}).screenshot({path:"output/playwright/study-estimate-measured.png"});
+ await page.getByRole("button",{name:"Stop study",exact:true}).click();release?.();hold=false;etaProbe=false;
+ await page.getByText("Stopped. Completed results remain available; this is not a complete-market result.",{exact:true}).waitFor();
  await page.goto(origin+"/#app/overview");
  const left=await page.evaluate(async owner=>(await(await import("/src/analysis/signal-study-storage.ts")).studyEventPage(owner,"study-qa")).total,user.id);if(left!==0)throw Error("Navigation retained temporary study details");
  if(errors.length)throw Error(errors.join("; "));
