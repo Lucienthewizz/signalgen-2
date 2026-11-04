@@ -55,3 +55,21 @@ test("heatmap separates missing, flat, gains and losses without turning unknown 
   assert.equal(heatmap.heatmapTone(-1), "loss-medium");
   assert.equal(heatmap.heatmapTone(-3), "loss-strong");
 });
+test("heatmap avoids narrow strips and abrupt breakpoint height changes", () => {
+  for (const count of [1, 3, 10, 30])
+    for (const width of [284, 350, 599, 600, 601, 880, 1200]) {
+      const height = heatmap.heatmapHeight(count, width);
+      const tiles = heatmap.heatmapLayout(count, width, height);
+      assert.ok(
+        tiles.every(
+          (tile) =>
+            (tile.width * width) / 100 >= 80 &&
+            (tile.height * height) / 100 >= 75,
+        ),
+      );
+      assert.ok(
+        Math.abs(height - heatmap.heatmapHeight(count, width + 1)) <= 6,
+      );
+    }
+  assert.equal(heatmap.heatmapLayout(10, NaN, 200).length, 0);
+});

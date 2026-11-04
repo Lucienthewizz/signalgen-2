@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
-import { heatmapLayout, heatmapTone } from "@/lib/stock-heatmap";
+import { heatmapHeight, heatmapLayout, heatmapTone } from "@/lib/stock-heatmap";
 import { formatSignedPercent } from "@/lib/market-monitor";
 import "./stock-heatmap.css";
 
@@ -26,19 +26,28 @@ export function StockHeatmap({
 }) {
   const canvas = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(1000);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = canvas.current;
-    if (!element) return;
+    if (!element || hidden) return;
+    const measure = (next: number) => {
+      if (next > 0)
+        setWidth((previous) =>
+          Math.abs(previous - next) >= 1 ? next : previous,
+        );
+    };
+    measure(element.getBoundingClientRect().width);
+    let frame = 0;
     const observer = new ResizeObserver(([entry]) => {
-      if (entry.contentRect.width > 0) setWidth(entry.contentRect.width);
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => measure(entry.contentRect.width));
     });
     observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-  const height =
-    width < 600
-      ? Math.max(240, Math.ceil(stocks.length / 3) * 100)
-      : Math.max(240, Math.min(460, Math.ceil(stocks.length / 6) * 100));
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [hidden]);
+  const height = heatmapHeight(stocks.length, width);
   const rects = heatmapLayout(stocks.length, width, height);
   return (
     <section

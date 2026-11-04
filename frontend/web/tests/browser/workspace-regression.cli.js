@@ -1272,6 +1272,32 @@ async (page) => {
   }
   const heatTile=page.locator('.stock-heatmap__tile').filter({hasText:'TLKM'});await heatTile.focus();await page.keyboard.press('Enter');
   if(await heatTile.getAttribute('aria-pressed')!=='true'||await page.locator('.monitor-chart h3').innerText()!=='TLKM')throw Error('Keyboard heatmap selection must update chart');
+  // Responsive boundaries, hide/show and sidebar animation must not clip tiles.
+  for(const width of [890,891,1024,1440,390]){
+    await page.setViewportSize({width,height:1000});
+    await page.getByRole('button',{name:'Hide heatmap',exact:true}).click();
+    await page.getByRole('button',{name:'Show heatmap',exact:true}).click();
+    await page.waitForFunction(()=>[...document.querySelectorAll('.stock-heatmap__tile')].every(el=>el.getBoundingClientRect().width>=80));
+    const clipped=await page.locator('.stock-heatmap__canvas').evaluate(canvas=>{
+      const area=canvas.getBoundingClientRect();
+      return [...canvas.querySelectorAll('button')].some(tile=>{
+        const box=tile.getBoundingClientRect(),label=tile.querySelector('strong').getBoundingClientRect();
+        return box.left<area.left-1||box.right>area.right+1||box.bottom>area.bottom+1||label.left<box.left||label.right>box.right;
+      });
+    });
+    if(clipped)throw Error('Heatmap tile or ticker clipped after resize '+width);
+    if(await heatTile.getAttribute('aria-pressed')!=='true')throw Error('Resize/hide lost the selected stock');
+  }
+  await page.setViewportSize({width:1024,height:1000});await page.emulateMedia({reducedMotion:'no-preference'});
+  for(let toggle=0;toggle<2;toggle++){
+    await page.locator('.sidebar-boundary-toggle').click();
+    await page.evaluate(async()=>{
+      await Promise.all(document.getAnimations().filter(a=>a.effect?.getComputedTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    });
+    if(await heatTile.getAttribute('aria-pressed')!=='true'||await page.locator('.stock-heatmap__tile').count()!==10)throw Error('Sidebar toggle disrupted the heatmap selection');
+    if(await page.locator('.stock-heatmap__tile').evaluateAll(tiles=>tiles.some(tile=>tile.getBoundingClientRect().width<80)))throw Error('Sidebar toggle produced thin heatmap tiles');
+  }
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));
 }

@@ -12,26 +12,45 @@ export function heatmapLayout(
   width: number,
   height: number,
 ): HeatmapRect[] {
-  if (!Number.isInteger(count) || count <= 0 || width <= 0 || height <= 0)
+  if (
+    !Number.isInteger(count) ||
+    count <= 0 ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  )
     return [];
   const tiles: HeatmapRect[] = [];
-  function split(n: number, x: number, y: number, w: number, h: number) {
-    if (n === 1) {
-      tiles.push({ x, y, width: w, height: h });
-      return;
+  // Balanced strips avoid the thin slivers produced by recursive bisection.
+  // Each row's height follows its stock count, retaining equal tile areas.
+  const rows = Math.min(
+    count,
+    Math.max(1, Math.round(Math.sqrt((count * height) / width))),
+  );
+  let y = 0;
+  for (let row = 0; row < rows; row++) {
+    const columns = Math.floor(count / rows) + (row < count % rows ? 1 : 0);
+    const rowHeight = (100 * columns) / count;
+    for (let column = 0; column < columns; column++) {
+      tiles.push({
+        x: (column * 100) / columns,
+        y,
+        width: 100 / columns,
+        height: rowHeight,
+      });
     }
-    const a = Math.ceil(n / 2),
-      fraction = a / n;
-    if (w * width >= h * height) {
-      split(a, x, y, w * fraction, h);
-      split(n - a, x + w * fraction, y, w * (1 - fraction), h);
-    } else {
-      split(a, x, y, w, h * fraction);
-      split(n - a, x, y + h * fraction, w, h * (1 - fraction));
-    }
+    y += rowHeight;
   }
-  split(count, 0, 0, 100, 100);
   return tiles;
+}
+
+export function heatmapHeight(count: number, width: number): number {
+  // Continuous sizing removes the 160px jump at the old 600px breakpoint.
+  return Math.max(
+    count <= 3 ? 160 : 240,
+    Math.min(960, Math.round((count * 14_000) / Math.max(280, width))),
+  );
 }
 
 export function heatmapTone(change: number | null): string {
