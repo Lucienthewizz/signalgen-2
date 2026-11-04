@@ -11,32 +11,6 @@
 .monitor-stock-selector > [data-slot="field-label"] {
   flex: 0 0 auto;
 }
-.market-monitor .monitor-strip {
-  gap: 12px;
-}
-.market-monitor .monitor-strip button {
-  width: 140px;
-  min-width: 140px;
-  min-height: 116px;
-  flex-basis: 140px;
-  padding: 14px 12px;
-  gap: 6px;
-}
-.market-monitor .monitor-stock-mark {
-  width: 28px;
-  height: 28px;
-}
-.market-monitor .monitor-stock-mark svg {
-  width: 18px;
-  height: 18px;
-}
-.market-monitor .monitor-strip small {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  line-height: 1.35;
-}
 .workbench .monitor-lineup-toggle {
   background: var(--accent-surface);
   color: var(--green);

@@ -1,0 +1,192 @@
+.stock-heatmap {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.stock-heatmap[hidden] {
+  display: none;
+}
+.stock-heatmap__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+}
+.stock-heatmap__heading strong {
+  display: block;
+  font-size: 16px;
+}
+.stock-heatmap__heading > div > span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.stock-heatmap__legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.stock-heatmap__legend span[data-direction="loss"] {
+  color: var(--danger);
+}
+.stock-heatmap__legend span[data-direction="gain"] {
+  color: var(--green);
+}
+.stock-heatmap__canvas {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  background: var(--line);
+}
+.stock-heatmap .stock-heatmap__tile {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 14px 10px;
+  border: 1px solid var(--surface);
+  border-radius: 0;
+  color: var(--text);
+  background: var(--surface-3);
+  cursor: pointer;
+  overflow: hidden;
+  transition: filter 160ms ease-out;
+  text-align: center;
+}
+.stock-heatmap__tile[data-tone^="gain"] {
+  color: #fff;
+}
+.stock-heatmap__tile[data-tone="gain-soft"] {
+  background: #20513c;
+}
+.stock-heatmap__tile[data-tone="gain-medium"] {
+  background: #09633b;
+}
+.stock-heatmap__tile[data-tone="gain-strong"] {
+  background: #087c44;
+}
+.stock-heatmap__tile[data-tone^="loss"] {
+  color: #fff;
+}
+.stock-heatmap__tile[data-tone="loss-soft"] {
+  background: #633036;
+}
+.stock-heatmap__tile[data-tone="loss-medium"] {
+  background: #8e2838;
+}
+.stock-heatmap__tile[data-tone="loss-strong"] {
+  background: #a52238;
+}
+.stock-heatmap__tile:hover {
+  filter: brightness(0.9);
+}
+.stock-heatmap__tile[aria-pressed="true"] {
+  outline: 2px solid currentColor;
+  outline-offset: -5px;
+}
+.stock-heatmap__tile:focus-visible {
+  z-index: 1;
+  outline: 3px solid var(--green);
+  outline-offset: -3px;
+}
+.stock-heatmap__tile > strong {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.stock-heatmap__tile > small {
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.stock-heatmap__mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #0003;
+}
+.stock-heatmap__mark svg {
+  width: 22px;
+  height: 22px;
+}
+.stock-heatmap__change {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 16px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.stock-heatmap__change svg {
+  width: 16px;
+  height: 16px;
+}
+.stock-heatmap__note {
+  font-size: 11px;
+}
+.stock-heatmap__selected {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 16px;
+  height: 16px;
+}
+.stock-heatmap__tile[data-compact="true"] {
+  gap: 3px;
+  padding: 8px 6px;
+}
+.stock-heatmap__tile[data-compact="true"] > strong {
+  font-size: 16px;
+}
+.stock-heatmap__tile[data-compact="true"] .stock-heatmap__change {
+  font-size: 13px;
+}
+.stock-heatmap__tile[data-compact="true"] > small {
+  display: none;
+}
+.stock-heatmap__tile[data-compact="true"] .stock-heatmap__mark {
+  width: 24px;
+  height: 24px;
+}
+.stock-heatmap__tile[data-compact="true"] .stock-heatmap__mark svg {
+  width: 16px;
+  height: 16px;
+}
+.stock-heatmap__hint {
+  margin: 0;
+  padding: 12px 20px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (max-width: 600px) {
+  .stock-heatmap__heading {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px 16px;
+    gap: 10px;
+  }
+  .stock-heatmap__hint {
+    padding: 12px 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stock-heatmap__tile {
+    transition: none;
+  }
+}

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TradingViewChart } from "@/components/tradingview-chart";
+import { StockHeatmap } from "@/components/stock-heatmap";
 import { screenerIntervals } from "@/analysis/screener-monitor";
 import { marketCandleDate, marketTimezone } from "@/lib/data-freshness";
 import { decisionLabel } from "@/lib/workspace-feedback";
@@ -382,34 +383,43 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           variant="outline"
           size="sm"
           className="monitor-lineup-toggle"
+          disabled={!activeStocks.length}
           aria-expanded={showCards}
-          aria-controls="monitor-stock-lineup"
+          aria-controls={
+            activeStocks.length ? "monitor-stock-lineup" : undefined
+          }
           onClick={() => setShowCards((value) => !value)}
         >
-          {showCards ? "Hide stock cards" : "Show stock cards"}
+          {showCards ? "Hide heatmap" : "Show heatmap"}
         </Button>
       </div>
-      <nav
-        id="monitor-stock-lineup"
-        className="monitor-strip"
-        aria-label="Stock selection"
-        hidden={!showCards}
-      >
-        {activeStocks.map((ticker) => (
-          <button
-            type="button"
-            key={ticker}
-            aria-pressed={selected === ticker}
-            onClick={() => setSelected(ticker)}
-          >
-            <span className="monitor-stock-mark" aria-hidden="true">
-              <StockMark ticker={ticker} />
-            </span>
-            <strong>{ticker}</strong>
-            <small>{stockName(ticker)}</small>
-          </button>
-        ))}
-      </nav>
+      {activeStocks.length > 0 && (
+        <StockHeatmap
+          stocks={activeStocks.map((ticker) => {
+            const snapshot = snapshots.get(ticker);
+            const age = snapshotAge(snapshot?.decision.timestamp, now);
+            return {
+              ticker,
+              name: stockName(ticker),
+              change:
+                age === "future"
+                  ? null
+                  : openCloseChange(
+                      snapshot?.latestOpen,
+                      snapshot?.latestClose,
+                    ),
+              timestamp: snapshot
+                ? `${date(snapshot.decision.timestamp)} SGT`
+                : undefined,
+              stale: age === "old",
+              icon: <StockMark ticker={ticker} />,
+            };
+          })}
+          selected={selected}
+          onSelect={setSelected}
+          hidden={!showCards}
+        />
+      )}
       {!activeStocks.length && (
         <p>
           This universe has no stocks.{" "}

@@ -318,10 +318,10 @@ async (page) => {
   await page.goto(`${origin}/#app/realtime`);
   await page.getByLabel("Stock universe", { exact: true }).waitFor();
   await page.waitForFunction(() => document.querySelector("#monitor-universe")?.textContent.includes("Bank pilihan"));
-  if (await page.locator(".monitor-strip button").count() !== 2) throw Error("Monitor ignored saved universe");
-  await page.getByRole("button", { name: "Hide stock cards", exact: true }).click();
-  if (!await page.locator(".monitor-strip").isHidden()) throw Error("Hide cards did not hide the lineup");
-  await page.getByRole("button", { name: "Show stock cards", exact: true }).click();
+  if (await page.locator(".stock-heatmap__tile").count() !== 2) throw Error("Heatmap ignored saved universe");
+  await page.getByRole("button", { name: "Hide heatmap", exact: true }).click();
+  if (!await page.locator(".stock-heatmap").isHidden()) throw Error("Hide heatmap did not hide the lineup");
+  await page.getByRole("button", { name: "Show heatmap", exact: true }).click();
   if (!await page.getByRole("button", { name: "Previous stock", exact: true }).isDisabled()) throw Error("Previous stock boundary must be disabled");
   await page.getByRole("button", { name: "Next stock", exact: true }).click();
   if (await page.locator(".monitor-detail-card h4").innerText() !== "BBRI") throw Error("Next stock did not update detail card");
@@ -331,13 +331,14 @@ async (page) => {
   if (!await page.locator(".monitor-ledger").evaluate(el => el === document.activeElement)) throw Error("Compare action did not focus the table");
   await page.getByRole("button", { name: "Analyze stock", exact: true }).click();
   if (!await page.locator(".monitor-board").evaluate(el => el === document.activeElement)) throw Error("Analyze action did not focus the board");
-  await page.locator(".monitor-strip button").filter({ hasText: "BBRI" }).click();
+  await page.locator(".stock-heatmap__tile").filter({ hasText: "BBRI" }).click();
   if (await page.locator(".monitor-chart h3").innerText() !== "BBRI") throw Error("Stock card did not switch chart");
   if (!await page.locator('.monitor-ledger tr[data-state="selected"]').innerText().then(text => text.includes("BBRI"))) throw Error("Stock card did not select table row");
   if (await page.locator(".monitor-window-dots i").count() !== 3 || !await page.locator(".monitor-chart .tradingview-chart").count()) throw Error("TradingView Mac layout missing");
   await page.getByLabel("Stock universe", { exact: true }).click();
   await page.getByRole("option", { name: "Energy selection", exact: true }).click();
-  if (await page.locator(".monitor-strip button").count() !== 1 || await page.locator(".monitor-chart h3").innerText() !== "PTBA") throw Error("Universe switch retained unrelated stocks");
+  if (await page.locator(".stock-heatmap__tile").count() !== 1 || await page.locator(".monitor-chart h3").innerText() !== "PTBA") throw Error("Universe switch retained unrelated stocks");
+  if(await page.locator('.stock-heatmap__tile[data-tone="missing"]').count()!==1)throw Error('No-snapshot stock should have a neutral heatmap tile');
   if (!await page.getByText("Not evaluated", { exact: true }).count()) throw Error("Missing snapshot must remain unevaluated");
   await page.getByLabel("Stock universe", { exact: true }).click();
   await page.getByRole("option", { name: "Bank pilihan", exact: true }).click();
@@ -438,8 +439,9 @@ async (page) => {
             await page.locator('.monitor-history').screenshot({path:`output/playwright/monitor-history-${width}-${statusTheme}.png`,animations:'disabled'});
           }
           await page.evaluate(()=>document.documentElement.dataset.theme='dark');
-          const stockCard=await page.locator('#monitor-stock-lineup > button').first().boundingBox();
-          if(stockCard&&(stockCard.width>145||stockCard.height>140))throw Error('Stock lineup cards are not compact');
+          await page.locator('.stock-heatmap').screenshot({path:`output/playwright/stock-heatmap-${width}.png`,animations:'disabled'});
+          const tiles=await page.locator('.stock-heatmap__tile').evaluateAll(items=>items.map(el=>({w:el.getBoundingClientRect().width,h:el.getBoundingClientRect().height,tone:el.dataset.tone,text:el.textContent})));
+          if(tiles.some(t=>t.w<44||t.h<44)||!tiles.some(t=>t.tone==='gain-strong'&&t.text.includes('%')))throw Error('Heatmap price or touch targets missing');
           if (!await page.locator('.monitor-ledger table th, .monitor-ledger table td').evaluateAll(items=>items.length>0 && items.every(el=>getComputedStyle(el).textAlign==='center'))) throw Error('Every monitor table header and cell must be centered');
           if (!await page.locator('.monitor-ledger .monitor-result').evaluateAll(items=>items.every(el=>getComputedStyle(el).justifyItems==='center'))) throw Error('Monitor result badges must be centered');
           if (!await page.locator(".monitor-change").first().evaluate(el => getComputedStyle(el).fontFamily.includes("Geist Mono Variable") && document.fonts.check('13px "Geist Mono Variable"'))) throw Error("Market numbers must use loaded Geist Mono");
@@ -1251,6 +1253,25 @@ async (page) => {
   await page.goto(`${origin}/#register`);
   await page.getByLabel('Full name', {exact:true}).waitFor();
   if (await page.getByLabel('Password', {exact:true}).inputValue() || await page.getByLabel('Full name', {exact:true}).inputValue()) throw Error('Registration data survived reopening the form');
+  // Full heatmap mix uses only synthetic snapshots, never live account data.
+  const heatSymbols=['BBCA','BBRI','TLKM','BMRI','ASII','ANTM','INDF','AADI','PTBA','ICBP'];
+  const heatChanges=[5,-4,2,-2,.5,-.5,0,1,-1];
+  const heatRows=heatChanges.map((change,index)=>({...rows[0],decision:{...rows[0].decision,symbol:heatSymbols[index]+'.JK'},latestOpen:100,latestClose:100+change}));
+  const heatRun={...run,rows:heatRows,manifest:{...run.manifest,symbols:heatRows.map(row=>row.decision.symbol)},result:{...run.result,results:heatRows.map(row=>row.decision)}};
+  const heatHistory=[{rule:'Heatmap fixture',recordedAt:now,run:heatRun}];
+  await page.route('**/api/v1/stock-universes',route=>route.fulfill({json:{items:[{...universe,symbols:heatSymbols.map(t=>t+'.JK')}]}}));
+  await page.route('**/api/v1/workspace',route=>route.fulfill({json:{items:[{kind:'monitor-history',data:heatHistory,version:10,updated_at:now}]}}));
+  await page.goto(`${origin}/#app/realtime`);await page.reload();
+  await page.waitForFunction(()=>document.querySelectorAll('.stock-heatmap__tile').length===10&&document.querySelector('[data-tone="loss-strong"]'));
+  for(const width of [1440,390])for(const theme of ['dark','light']){
+    await page.setViewportSize({width,height:1000});await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+    await page.waitForFunction(()=>[...document.querySelectorAll('.stock-heatmap__tile')].every(el=>el.getBoundingClientRect().width>=44&&el.getBoundingClientRect().height>=44));
+    if(await page.locator('.stock-heatmap__tile[data-tone="missing"]').count()!==1||await page.locator('.stock-heatmap__tile[data-tone="flat"]').count()!==1)throw Error('Heatmap zero and missing must remain separate');
+    if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error('Heatmap overflows '+width);
+    await page.locator('.stock-heatmap').screenshot({path:`output/playwright/stock-heatmap-mixed-${width}-${theme}.png`,animations:'disabled'});
+  }
+  const heatTile=page.locator('.stock-heatmap__tile').filter({hasText:'TLKM'});await heatTile.focus();await page.keyboard.press('Enter');
+  if(await heatTile.getAttribute('aria-pressed')!=='true'||await page.locator('.monitor-chart h3').innerText()!=='TLKM')throw Error('Keyboard heatmap selection must update chart');
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));
 }
