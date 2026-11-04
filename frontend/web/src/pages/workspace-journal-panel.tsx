@@ -29,6 +29,7 @@ import { useActionNotifications } from "@/components/ui/toast";
 import { JournalScreeningVerification } from "@/components/journal-screening-verification";
 import { JournalBatchReview } from "@/components/journal-batch-review";
 import { JournalPnlChart } from "@/components/journal-pnl-chart";
+import { JournalMonthPicker } from "@/components/journal-month-picker";
 import { journalPerformance, localJournalDate } from "@/lib/journal";
 import {
   checkJournalScreening,
@@ -488,12 +489,7 @@ export function JournalPanel({
           <Field className="journal-month-filter">
             <FieldLabel htmlFor="journal-month">Month</FieldLabel>
             <div>
-              <Input
-                id="journal-month"
-                type="month"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-              />
+              <JournalMonthPicker value={month} onChange={setMonth} />
               <Button
                 variant="ghost"
                 size="icon"
@@ -899,9 +895,9 @@ export function JournalPanel({
                             </small>
                           </TableCell>
                           <TableCell>
-                            <div className="backtest-actions">
+                            <div className="journal-row-actions">
                               <Button
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
                                 disabled={busy || Boolean(batchDraft)}
                                 aria-label={`Edit trade ${r.data.symbol}`}
@@ -921,8 +917,9 @@ export function JournalPanel({
                                 Edit
                               </Button>
                               <Button
-                                variant="destructive"
-                                size="sm"
+                                variant="ghost"
+                                size="icon"
+                                className="journal-row-delete"
                                 disabled={busy}
                                 aria-label={`Delete trade ${r.data.symbol}`}
                                 onClick={(e) => {

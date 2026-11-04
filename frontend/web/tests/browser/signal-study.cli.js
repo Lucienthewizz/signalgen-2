@@ -72,11 +72,13 @@ async(page)=>{
    await page.setViewportSize({width,height:1000});await page.goto(origin+"/#app/backtest");await page.reload();
    await page.getByLabel("Stock source",{exact:true}).waitFor({timeout:20000});
    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
-   await page.getByLabel("Stock source",{exact:true}).selectOption("US");
+   const market=width===1440&&theme==="dark"?"IDX":"US";
+   await page.getByLabel("Stock source",{exact:true}).selectOption(market);
    await page.getByLabel("Screening rule",{exact:true}).selectOption("qa-rule");
    await page.getByLabel("From (daily session, UTC)",{exact:true}).fill("2026-01-20");await page.getByLabel("To (inclusive, UTC)",{exact:true}).fill("2026-01-23");
    await page.getByRole("button",{name:"Start signal study",exact:true}).click();
    await page.getByText("Partial result. Failed or remaining stocks are not counted as successfully evaluated.",{exact:true}).waitFor({timeout:30000});
+   if(frozen.market!==market)throw Error("Entire-catalog market selection incorrect");
    if(JSON.stringify(prepares)!=="[0,1,2]"||new Set(scored).size!==22)throw Error("Full market batch coverage incorrect");
    partial=false;await page.getByRole("button",{name:"Retry failed stocks",exact:true}).click();
    await page.getByText("Completed the frozen catalog. Review data-quality limits before interpreting results.",{exact:true}).waitFor({timeout:30000});

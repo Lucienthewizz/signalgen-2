@@ -123,6 +123,107 @@
   color: var(--muted);
   font-weight: 400;
 }
+.demo-workbench .journal-month-trigger {
+  flex: 1;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
+  padding-inline: 14px;
+  font-size: 14px;
+}
+.journal-month-trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.journal-month-popup {
+  width: min(304px, calc(100vw - 32px));
+  max-height: var(--available-height);
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 120ms ease-out,
+    transform 120ms ease-out;
+}
+.journal-month-popup:is([data-starting-style], [data-ending-style]) {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+.journal-month-popup h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.journal-month-popup p {
+  margin: 4px 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.journal-month-year {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.journal-month-year input {
+  width: 100px;
+  height: 44px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.journal-month-popup button {
+  min-height: 44px;
+}
+.journal-month-year button {
+  min-width: 44px;
+}
+.journal-month-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+.journal-month-grid button[aria-pressed="true"] {
+  background: var(--accent-surface);
+  color: var(--green);
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+.journal-month-all {
+  width: 100%;
+  margin-top: 12px;
+}
+.journal-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.demo-workbench .journal-row-actions > button {
+  height: 44px;
+  min-height: 44px;
+  border-color: transparent;
+  box-shadow: none;
+}
+.demo-workbench .journal-row-actions > .journal-row-delete {
+  width: 44px;
+  min-width: 44px;
+  color: var(--danger);
+}
+.journal-row-delete:not(:disabled):hover {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .journal-month-popup {
+    transition: none;
+  }
+}
 .journal-capture .journal-capture-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

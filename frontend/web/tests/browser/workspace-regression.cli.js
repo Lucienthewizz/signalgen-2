@@ -249,7 +249,10 @@ async (page) => {
   await page.getByText('Screening verified',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Close journal form',exact:true}).click();
   await page.getByRole('button',{name:'Open journal form',exact:true}).waitFor();
-  await page.getByLabel('Month',{exact:true}).fill('2026-10');
+  await page.getByLabel('Month',{exact:true}).click();
+  const monthPicker=page.getByRole('dialog',{name:'Filter by month',exact:true});
+  await monthPicker.getByLabel('Calendar year',{exact:true}).fill('2026');
+  await monthPicker.getByRole('button',{name:'October 2026',exact:true}).click();
   await page.getByText('No closed trades in this period',{exact:true}).waitFor();
   await page.getByText(/No recorded trades match these filters/).waitFor();
   await page.getByRole('button',{name:'Clear month filter',exact:true}).click();
