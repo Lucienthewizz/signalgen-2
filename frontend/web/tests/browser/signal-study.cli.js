@@ -55,8 +55,10 @@ async(page)=>{
   for(const name of ["Source & rule","Test period","Take profit & stop loss"])if(await page.getByRole("group",{name,exact:true}).count()!==1)throw Error("Missing settings group: "+name);
   const tp=await page.getByLabel("Take profit % (optional)",{exact:true}).boundingBox(),sl=await page.getByLabel("Stop loss % (optional)",{exact:true}).boundingBox();
   if(!tp||!sl||(width>480?(Math.abs(tp.y-sl.y)>1||Math.abs(tp.width-sl.width)>1):sl.y<=tp.y))throw Error("Target fields not aligned at "+width);
-  const from=await page.getByLabel("From (daily session, UTC)",{exact:true}).boundingBox(),to=await page.getByLabel("To (inclusive, UTC)",{exact:true}).boundingBox();
+  const from=await page.getByLabel("From (daily session, SGT)",{exact:true}).boundingBox(),to=await page.getByLabel("To (inclusive, SGT)",{exact:true}).boundingBox();
   if(!from||!to||(width>760?Math.abs(from.y-to.y)>1:to.y<=from.y))throw Error("Period fields not aligned at "+width);
+  const targetColors=await page.locator('[data-study-target] [data-slot="field-label"]').evaluateAll(items=>items.map(item=>getComputedStyle(item).color.match(/\d+/g).map(Number)));
+  if(targetColors.length!==2||targetColors[0][1]<=targetColors[0][0]||targetColors[1][0]<=targetColors[1][1])throw Error("Take profit/stop loss semantic colors missing");
   const arrow=await source.evaluate(el=>{const s=getComputedStyle(el);return{appearance:s.appearance,padding:parseFloat(s.paddingRight),image:s.backgroundImage}});
   if(arrow.appearance!=="none"||arrow.padding<40||arrow.image==="none")throw Error("Dropdown arrow spacing incorrect");
   await source.focus();await page.keyboard.press("Tab");if(!await page.getByLabel("Screening rule",{exact:true}).evaluate(el=>el===document.activeElement))throw Error("Source/rule keyboard order incorrect");
@@ -75,7 +77,7 @@ async(page)=>{
    const market=width===1440&&theme==="dark"?"IDX":"US";
    await page.getByLabel("Stock source",{exact:true}).selectOption(market);
    await page.getByLabel("Screening rule",{exact:true}).selectOption("qa-rule");
-   await page.getByLabel("From (daily session, UTC)",{exact:true}).fill("2026-01-20");await page.getByLabel("To (inclusive, UTC)",{exact:true}).fill("2026-01-23");
+   await page.getByLabel("From (daily session, SGT)",{exact:true}).fill("2026-01-20");await page.getByLabel("To (inclusive, SGT)",{exact:true}).fill("2026-01-23");
    await page.getByRole("button",{name:"Start signal study",exact:true}).click();
    await page.getByText("Partial result. Failed or remaining stocks are not counted as successfully evaluated.",{exact:true}).waitFor({timeout:30000});
    if(frozen.market!==market)throw Error("Entire-catalog market selection incorrect");

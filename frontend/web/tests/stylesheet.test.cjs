@@ -21,6 +21,7 @@ const modules = [
   "backtesting",
   "signal-study",
   "admin-access",
+  "calendar",
 ];
 
 test("stylesheet entry keeps explicit cascade order and imports each module once", () => {
@@ -28,6 +29,7 @@ test("stylesheet entry keeps explicit cascade order and imports each module once
   assert.ok(root.nodes.every(node => node.type === "atrule" && node.name === "import"));
   assert.deepEqual(root.nodes.map(node => node.params), [
     '"tailwindcss"',
+    '"react-day-picker/style.css"',
     ...modules.map(name => `"./styles/${name}.css"`),
   ]);
 });

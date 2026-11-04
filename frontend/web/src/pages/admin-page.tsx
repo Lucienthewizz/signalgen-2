@@ -29,6 +29,8 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/date-input";
+import { SINGAPORE_TIME_ZONE, singaporeToUTC } from "@/lib/calendar";
 import {
   Select,
   SelectContent,
@@ -84,6 +86,7 @@ function dateLabel(value: string) {
     : new Intl.DateTimeFormat("en-GB", {
         dateStyle: "medium",
         timeStyle: "short",
+        timeZone: SINGAPORE_TIME_ZONE,
       }).format(date);
 }
 
@@ -332,7 +335,7 @@ export function AdminPage({
       value,
       until:
         action === "grant" || action === "subscription"
-          ? new Date(until).toISOString()
+          ? singaporeToUTC(until)
           : "",
       title: titles[action],
       expectedStatus: action === "status" ? targetAccount?.status : undefined,
@@ -696,19 +699,19 @@ export function AdminPage({
                   <FieldLabel htmlFor="admin-grant-expiry">
                     Access expires
                   </FieldLabel>
-                  <Input
+                  <DateInput
                     id="admin-grant-expiry"
                     type="datetime-local"
                     value={grantUntil}
                     disabled={!editable || !uuidValid}
-                    onChange={(event) => {
-                      setGrantUntil(event.target.value);
+                    onValueChange={(value) => {
+                      setGrantUntil(value);
                       setPending(null);
                       setError(null);
                     }}
                   />
                   <FieldDescription>
-                    Choose a future date in your local timezone.
+                    Choose a future date in Singapore Time (SGT, UTC+8).
                   </FieldDescription>
                   <div
                     className="admin-duration-presets"
@@ -873,13 +876,13 @@ export function AdminPage({
                   <FieldLabel htmlFor="admin-period-end">
                     Subscription period ends
                   </FieldLabel>
-                  <Input
+                  <DateInput
                     id="admin-period-end"
                     type="datetime-local"
                     value={periodEnd}
                     disabled={!editable}
-                    onChange={(event) => {
-                      setPeriodEnd(event.target.value);
+                    onValueChange={(value) => {
+                      setPeriodEnd(value);
                       setPending(null);
                     }}
                   />

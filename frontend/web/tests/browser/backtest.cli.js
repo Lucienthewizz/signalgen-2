@@ -329,9 +329,9 @@ async (page) => {
   }
   async function dates() {
     await page
-      .getByLabel("From date (UTC)", { exact: true })
+      .getByLabel("From date (SGT)", { exact: true })
       .fill("2026-01-20");
-    await page.getByLabel("To date (UTC)", { exact: true }).fill("2026-01-23");
+    await page.getByLabel("To date (SGT)", { exact: true }).fill("2026-01-23");
   }
   async function result() {
     await page
@@ -339,6 +339,10 @@ async (page) => {
       .waitFor({ timeout: 60000 });
   }
   async function assertLayout(width) {
+    if (width > 760 && await page.getByLabel("From date (SGT)",{exact:true}).count()) {
+      const controls = await Promise.all(["From date (SGT)", "To date (SGT)", "Holding period (candles)"].map(name => page.getByLabel(name,{exact:true}).boundingBox()));
+      if(controls.some(box=>!box)||Math.max(...controls.map(box=>box.y))-Math.min(...controls.map(box=>box.y))>1)throw Error("Backtest period controls are not aligned");
+    }
     if (
       await page.evaluate(
         () => document.documentElement.scrollWidth > innerWidth + 1,
@@ -392,7 +396,7 @@ async (page) => {
     const firstRun=history.locator("li").first();
     await firstRun.locator("h4").waitFor();
     if((await firstRun.locator("h4").textContent()).includes("2026-01-20–2026-01-23")) throw Error("History title still contains the unformatted date range");
-    if((await firstRun.locator("dt").allTextContents()).join("|")!=="Test period|Saved (UTC)|Currency|File size") throw Error("History metadata fields are incomplete");
+    if((await firstRun.locator("dt").allTextContents()).join("|")!=="Test period|Saved (SGT)|Currency|File size") throw Error("History metadata fields are incomplete");
     if(!(await firstRun.locator("time").getAttribute("datetime")) || !(await firstRun.getByText("Server synced",{exact:true}).count())) throw Error("History lost saved time or sync status");
     for(const button of [firstRun.getByRole("button",{name:/Delete saved run/}),page.getByRole("button",{name:"Reset results",exact:true})]) {
       if(!(await button.getAttribute("class")).includes("text-destructive")) throw Error("Backtest clear/delete action lost its destructive color");
@@ -419,7 +423,7 @@ async (page) => {
     await skippedSummary.click();
     const skipped=page.getByRole("region",{name:"Skipped backtest entries",exact:true});
     await skipped.waitFor();
-    if((await skipped.locator("thead th").allTextContents()).join("|")!=="Stock|Signal (UTC)|Reason skipped") throw Error("Skipped entries are not organized into columns");
+    if((await skipped.locator("thead th").allTextContents()).join("|")!=="Stock|Signal (SGT)|Reason skipped") throw Error("Skipped entries are not organized into columns");
     if(!await skipped.locator("tbody tr").count() || !(await skipped.locator("tbody td").last().textContent()).includes("Another position was open")) throw Error("Skipped entry reasons were lost");
     if(await skipped.locator("time").first().getAttribute("datetime")===null) throw Error("Skipped entry timestamp is missing");
     await assertLayout(width);
@@ -487,7 +491,7 @@ async (page) => {
         .waitFor();
       await assertSelectArrows();
       await page
-        .getByLabel("Signal candle (UTC)", { exact: true })
+        .getByLabel("Signal candle (SGT)", { exact: true })
         .selectOption({ label: "2026-01-20 · close 100" });
       await page
         .getByRole("button", { name: "Add entry", exact: true })
@@ -538,10 +542,10 @@ async (page) => {
         throw Error("Results were retained after a cost change");
       if (width === 1440 && theme === "dark") {
         await page
-          .getByLabel("To date (UTC)", { exact: true })
+          .getByLabel("To date (SGT)", { exact: true })
           .fill("2026-01-29");
         await page
-          .getByLabel("From date (UTC)", { exact: true })
+          .getByLabel("From date (SGT)", { exact: true })
           .fill("2026-01-28");
         await page
           .getByLabel("Holding period (candles)", { exact: true })
@@ -553,7 +557,7 @@ async (page) => {
           .getByRole("heading", { name: "Manual entries", exact: true })
           .waitFor();
         await page
-          .getByLabel("Signal candle (UTC)", { exact: true })
+          .getByLabel("Signal candle (SGT)", { exact: true })
           .selectOption({ label: "2026-01-28 · close 100" });
         await page
           .getByRole("button", { name: "Add entry", exact: true })
@@ -627,8 +631,8 @@ async (page) => {
   // Pagination and a failed archive save must leave the complete result/export usable.
   mode="healthy";
   await page.getByLabel("Entry mode",{exact:true}).selectOption("rule");
-  await page.getByLabel("From date (UTC)",{exact:true}).fill("2026-01-01");
-  await page.getByLabel("To date (UTC)",{exact:true}).fill("2026-01-29");
+  await page.getByLabel("From date (SGT)",{exact:true}).fill("2026-01-01");
+  await page.getByLabel("To date (SGT)",{exact:true}).fill("2026-01-29");
   await page.getByLabel("Holding period (candles)",{exact:true}).fill("12");
   await page.evaluate(()=>{window.__btPut=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...args){if(this.transaction.db.name==="signalgen-backtest-history-v1")throw new DOMException("Synthetic full history","QuotaExceededError");return window.__btPut.apply(this,args);};});
   await page.getByRole("button",{name:"Run backtest",exact:true}).click();await result();

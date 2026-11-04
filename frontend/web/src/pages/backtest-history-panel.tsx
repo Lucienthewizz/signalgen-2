@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { Badge } from "@/components/ui/badge";
 import { Cloud, HardDrive } from "lucide-react";
 import { backtestHistoryTitle } from "@/analysis/backtest-presentation";
@@ -299,7 +300,7 @@ export function BacktestHistoryPanel({
                     </div>
                   )}
                   <div>
-                    <dt>Saved (UTC)</dt>
+                    <dt>Saved (SGT)</dt>
                     <dd>
                       <time dateTime={item.saved_at}>
                         {new Date(item.saved_at).toLocaleString("en-GB", {
@@ -309,7 +310,7 @@ export function BacktestHistoryPanel({
                           hour: "2-digit",
                           minute: "2-digit",
                           hour12: false,
-                          timeZone: "UTC",
+                          timeZone: SINGAPORE_TIME_ZONE,
                         })}
                       </time>
                     </dd>

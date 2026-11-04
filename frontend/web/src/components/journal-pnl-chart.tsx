@@ -1,3 +1,4 @@
+import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useState, useRef, useLayoutEffect, useEffect, useMemo } from "react";
 import { journalTimeline } from "@/lib/journal";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,7 @@ const date = (value: string) =>
   new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
-    timeZone: "Asia/Jakarta",
+    timeZone: SINGAPORE_TIME_ZONE,
   }).format(new Date(value));
 
 export function JournalPnlChart({

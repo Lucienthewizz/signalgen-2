@@ -1,3 +1,4 @@
+import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
@@ -264,7 +265,9 @@ export function WorkspaceOverviewPanel({
               >
                 <p>
                   Last screen · {latest.run.manifest.market} ·{" "}
-                  {new Date(latest.recordedAt).toLocaleString("en-GB")}
+                  {new Date(latest.recordedAt).toLocaleString("en-GB", {
+                    timeZone: SINGAPORE_TIME_ZONE,
+                  })}
                 </p>
                 <ul>
                   {(["buy", "sell", "cooldown"] as const).map((status) => (
@@ -424,6 +427,7 @@ export function WorkspaceOverviewPanel({
                     {new Date(item.recordedAt).toLocaleString("en-GB", {
                       day: "numeric",
                       month: "short",
+                      timeZone: SINGAPORE_TIME_ZONE,
                       hour: "2-digit",
                       minute: "2-digit",
                     })}

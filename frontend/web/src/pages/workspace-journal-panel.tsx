@@ -11,6 +11,7 @@ import {
 import { api, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -668,13 +669,13 @@ export function JournalPanel({
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="trade-entry-date">Entry date</FieldLabel>
-                  <Input
+                  <DateInput
                     id="trade-entry-date"
                     type="date"
                     required
                     max={localJournalDate()}
                     value={form.entry_date}
-                    onChange={(e) => change("entry_date", e.target.value)}
+                    onValueChange={(value) => change("entry_date", value)}
                   />
                 </Field>
                 <Field>
@@ -697,14 +698,14 @@ export function JournalPanel({
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="trade-exit-date">Exit date</FieldLabel>
-                  <Input
+                  <DateInput
                     id="trade-exit-date"
                     type="date"
                     required={form.exit_price !== null}
                     min={form.entry_date}
                     max={localJournalDate()}
                     value={form.exit_date}
-                    onChange={(e) => change("exit_date", e.target.value)}
+                    onValueChange={(value) => change("exit_date", value)}
                   />
                 </Field>
                 <Field>

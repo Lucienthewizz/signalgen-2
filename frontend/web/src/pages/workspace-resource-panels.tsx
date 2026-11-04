@@ -67,6 +67,8 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/date-input";
+import { SINGAPORE_TIME_ZONE, singaporeToUTC } from "@/lib/calendar";
 import {
   Select,
   SelectContent,
@@ -108,6 +110,7 @@ function formatDate(value?: string) {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    timeZone: SINGAPORE_TIME_ZONE,
   }).format(date);
 }
 
@@ -1052,8 +1055,7 @@ export function OperatorPanel({
 
   const isoDate = useMemo(() => {
     if (!validUntil) return "";
-    const date = new Date(validUntil);
-    return Number.isNaN(date.valueOf()) ? "" : date.toISOString();
+    return singaporeToUTC(validUntil);
   }, [validUntil]);
 
   async function execute(action: () => Promise<unknown>, success: string) {
@@ -1174,11 +1176,11 @@ export function OperatorPanel({
             </Field>
             <Field>
               <FieldLabel htmlFor="grant-until">Valid until</FieldLabel>
-              <Input
+              <DateInput
                 id="grant-until"
                 type="datetime-local"
                 value={validUntil}
-                onChange={(event) => setValidUntil(event.target.value)}
+                onValueChange={setValidUntil}
               />
             </Field>
           </div>
@@ -1266,11 +1268,11 @@ export function OperatorPanel({
             </Field>
             <Field>
               <FieldLabel htmlFor="subscription-until">Period end</FieldLabel>
-              <Input
+              <DateInput
                 id="subscription-until"
                 type="datetime-local"
                 value={validUntil}
-                onChange={(event) => setValidUntil(event.target.value)}
+                onValueChange={setValidUntil}
               />
             </Field>
           </div>

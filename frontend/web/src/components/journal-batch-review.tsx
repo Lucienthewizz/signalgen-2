@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/date-input";
 import {
   checkJournalScreening,
   type JournalScreeningDraft,
@@ -210,13 +211,13 @@ export function JournalBatchReview({
                     />
                   </td>
                   <td>
-                    <Input
+                    <DateInput
                       aria-label={`Trade date ${r.input.symbol}`}
                       required
                       type="date"
                       disabled={busy || r.status === "saved"}
                       value={r.input.entry_date}
-                      onChange={(e) => edit(r.id, "entry_date", e.target.value)}
+                      onValueChange={(value) => edit(r.id, "entry_date", value)}
                     />
                   </td>
                   <td>

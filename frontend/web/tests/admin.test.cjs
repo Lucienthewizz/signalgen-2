@@ -66,9 +66,9 @@ test("revocation and role changes do not require an expiry", () => {
   );
 });
 
-test("access presets use local dates while retaining the intended duration", () => {
+test("access presets use Singapore dates while retaining the intended duration", () => {
   for (const days of [7, 30, 90]) {
-    const end = new Date(accessExpiry(days, now)).valueOf();
+    const end = new Date(`${accessExpiry(days, now)}+08:00`).valueOf();
     assert.ok(end <= now + days * 86400000);
     assert.ok(end > now + days * 86400000 - 60000);
   }

@@ -3,6 +3,7 @@ import { Popover } from "@base-ui/react/popover";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { parseCalendarDate, singaporeDateTime } from "@/lib/calendar";
 
 const months = Array.from({ length: 12 }, (_, index) => ({
   short: new Intl.DateTimeFormat("en", { month: "short" }).format(
@@ -21,7 +22,7 @@ export function JournalMonthPicker({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const today = new Date();
+  const today = parseCalendarDate(singaporeDateTime().slice(0, 10))!;
   const [open, setOpen] = useState(false);
   const [year, setYear] = useState(today.getFullYear());
   const preferredMonth = useRef<HTMLButtonElement>(null);
@@ -65,7 +66,7 @@ export function JournalMonthPicker({
           >
             <Popover.Title>Filter by month</Popover.Title>
             <Popover.Description>
-              Exit month, or entry month for open trades.
+              Exit month, or entry month for open trades. Singapore Time (SGT).
             </Popover.Description>
             <div className="journal-month-year">
               <Button

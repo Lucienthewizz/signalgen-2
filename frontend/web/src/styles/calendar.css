@@ -1,0 +1,175 @@
+/* Shared date/month surfaces: Signalgen materials, Singapore display timezone. */
+.signalgen-date-control[data-slot="input-group"] {
+  height: 48px;
+  min-height: 44px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: var(--control-bg);
+  color: var(--text);
+}
+.demo-workbench
+  .signalgen-date-control
+  > input[data-slot="input-group-control"],
+.signalgen-date-control > input[data-slot="input-group-control"] {
+  min-width: 0;
+  min-height: 44px;
+  height: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+}
+.signalgen-date-control > [data-slot="input-group-addon"] {
+  padding: 0;
+  margin: 0;
+}
+.signalgen-date-control [data-slot="button"] {
+  height: 44px;
+  min-height: 44px;
+  width: 44px;
+  min-width: 44px;
+  margin: 0;
+  padding: 0;
+}
+.signalgen-date-control[data-disabled] {
+  opacity: 0.5;
+}
+.signalgen-date-popup {
+  width: min(352px, calc(100vw - 8px));
+  max-height: var(--available-height);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 120ms ease-out,
+    transform 120ms ease-out;
+}
+.signalgen-date-popup:is([data-starting-style], [data-ending-style]) {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+.signalgen-date-popup h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.signalgen-date-popup p {
+  margin: 4px 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.signalgen-date-popup .rdp-root {
+  --rdp-accent-color: var(--green);
+  --rdp-accent-background-color: var(--accent-surface);
+  --rdp-today-color: var(--green);
+  --rdp-day-width: 44px;
+  --rdp-day-height: 44px;
+  --rdp-day_button-width: 44px;
+  --rdp-day_button-height: 44px;
+  --rdp-day_button-border-radius: 8px;
+  --rdp-nav_button-width: 44px;
+  --rdp-nav_button-height: 44px;
+  --rdp-nav-height: 44px;
+  --rdp-selected-border: 1px solid var(--green);
+  font-family: inherit;
+  font-size: 14px;
+}
+.signalgen-date-popup .rdp-months,
+.signalgen-date-popup .rdp-month_grid {
+  width: 100%;
+}
+.signalgen-date-popup .rdp-month_caption {
+  padding-inline: 0;
+}
+.signalgen-date-popup .rdp-dropdowns {
+  gap: 4px;
+}
+.signalgen-date-popup .rdp-dropdown_root {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+.signalgen-date-popup select {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.signalgen-date-popup .rdp-day_button {
+  color: var(--text);
+  font: inherit;
+}
+.signalgen-date-popup .rdp-selected .rdp-day_button {
+  background: var(--accent-surface);
+  color: var(--green);
+}
+.signalgen-date-popup
+  :is(.rdp-day_button, .rdp-button_previous, .rdp-button_next):not(
+    :disabled
+  ):hover {
+  background: var(--surface-3);
+}
+.signalgen-date-popup button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+}
+.signalgen-date-time {
+  display: grid;
+  grid-template-columns: 1fr 140px;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.signalgen-date-time input {
+  height: 44px;
+  color-scheme: dark;
+}
+.signalgen-date-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.signalgen-date-footer button {
+  min-height: 44px;
+}
+.backtest-config-section .backtest-fields {
+  align-items: start;
+}
+.study-fields [data-study-target="profit"] [data-slot="field-label"] {
+  color: var(--green);
+}
+.study-fields [data-study-target="loss"] [data-slot="field-label"] {
+  color: var(--danger);
+}
+.demo-workbench .study-fields [data-study-target="profit"] input {
+  border-color: var(--accent-border);
+  background-color: var(--accent-surface);
+}
+.demo-workbench .study-fields [data-study-target="loss"] input {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+  background-color: color-mix(in srgb, var(--danger) 5%, var(--control-bg));
+}
+@media (max-width: 360px) {
+  .signalgen-date-popup {
+    padding: 0;
+  }
+  .signalgen-date-popup > :not(.rdp-root) {
+    margin-inline: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signalgen-date-popup {
+    transition: none;
+  }
+}

@@ -1,3 +1,4 @@
+import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useState } from "react";
 import { api, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -108,7 +109,9 @@ export function AdminAuditPanel({
                 </small>
               </div>
               <time dateTime={item.created_at}>
-                {new Date(item.created_at).toLocaleString()}
+                {new Date(item.created_at).toLocaleString("en-GB", {
+                  timeZone: SINGAPORE_TIME_ZONE,
+                })}
               </time>
             </li>
           ))}

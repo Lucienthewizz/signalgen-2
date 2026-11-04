@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useMemo } from "react";
+import { singaporeDateTime } from "@/lib/calendar";
 import { Input } from "@/components/ui/input";
 import { FieldGroup } from "@/components/ui/field";
 import { backtestTradeRows } from "@/lib/analysis-table";
@@ -33,7 +34,7 @@ import {
   backtestValueTone,
 } from "@/analysis/backtest-presentation";
 const dateLabel = (stamp: string) =>
-  stamp ? new Date(stamp).toISOString().slice(0, 10) : "—";
+  stamp ? singaporeDateTime(new Date(stamp)).slice(0, 10) : "—";
 const skippedLabels: Record<string, string> = {
   POSITION_OPEN: "Another position was open",
   NO_NEXT_CANDLE: "No next candle available",
@@ -192,7 +193,7 @@ export function BacktestResults({
         <summary>Run configuration & source</summary>
         <p>
           {result.config.mode} · {result.config.timeframe} ·{" "}
-          {result.config.from} to {result.config.to} UTC ·{" "}
+          {result.config.from} to {result.config.to} SGT ·{" "}
           {result.config.n_steps} horizons. Allocation{" "}
           {result.config.position_size}
           {result.config.position_sizing === "percent_equity"
@@ -488,9 +489,9 @@ export function BacktestResults({
                 <tr>
                   {[
                     "Stock",
-                    "Signal (UTC)",
-                    "Entry (UTC)",
-                    "Exit (UTC)",
+                    "Signal (SGT)",
+                    "Entry (SGT)",
+                    "Exit (SGT)",
                     "Quantity",
                     "Entry price",
                     "Exit price",
@@ -597,7 +598,7 @@ export function BacktestResults({
                 <TableHeader>
                   <TableRow>
                     <TableHead scope="col">Stock</TableHead>
-                    <TableHead scope="col">Signal (UTC)</TableHead>
+                    <TableHead scope="col">Signal (SGT)</TableHead>
                     <TableHead scope="col">Reason skipped</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -637,7 +638,7 @@ export function BacktestResults({
           <table>
             <thead>
               <tr>
-                <th scope="col">UTC date</th>
+                <th scope="col">SGT date</th>
                 <th scope="col">Equity</th>
               </tr>
             </thead>

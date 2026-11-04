@@ -1,3 +1,4 @@
+import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, Newspaper, Play, RefreshCw, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ import {
 const newsDateFormat = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
   timeStyle: "short",
+  timeZone: SINGAPORE_TIME_ZONE,
 });
 
 export function WorkspaceNewsPanel({ userId }: { userId?: string }) {

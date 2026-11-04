@@ -31,7 +31,7 @@ export function journalPerformance(records: ClosedTrade[]) {
 }
 
 export function localJournalDate(now = new Date()) {
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return new Date(now.valueOf() + 8 * 60 * 60000).toISOString().slice(0, 10);
 }
 
 export function filterJournalMonth<T extends { closedAt: string }>(

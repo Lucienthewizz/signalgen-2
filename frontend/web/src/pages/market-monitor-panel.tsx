@@ -1,3 +1,4 @@
+import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Building2,
@@ -107,6 +108,7 @@ const date = (value: string) => {
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: SINGAPORE_TIME_ZONE,
   }).format(parsed);
 };
 

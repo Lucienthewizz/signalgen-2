@@ -3,9 +3,7 @@ export type AdminAction =
 
 export function accessExpiry(days: number, now = Date.now()) {
   const end = new Date(now + days * 86400000);
-  return new Date(end.valueOf() - end.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16);
+  return new Date(end.valueOf() + 8 * 60 * 60000).toISOString().slice(0, 16);
 }
 
 export function validateAdminChange(
@@ -27,7 +25,11 @@ export function validateAdminChange(
   if (/[\x00-\x1f\x7f-\x9f]/.test(reason))
     return "Use a single-line reason without control characters.";
   if (action === "grant" || action === "subscription") {
-    const expiry = new Date(expiresAt).valueOf();
+    const expiry = new Date(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(expiresAt)
+        ? `${expiresAt}+08:00`
+        : expiresAt,
+    ).valueOf();
     if (!Number.isFinite(expiry) || expiry <= now)
       return "Choose an expiry date and time in the future.";
   }

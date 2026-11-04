@@ -105,8 +105,16 @@ async (page) => {
     await page.getByLabel("Feature",{exact:true}).click();
     await page.getByRole("option",{name:"Backtest",exact:true}).click();
     await page.getByRole("button",{name:"7 days",exact:true}).click();
-    const end = new Date(await page.getByLabel("Access expires",{exact:true}).inputValue()).valueOf();
-    if (Math.abs(end-Date.now()-7*86400000)>120000) throw Error("Access preset used the wrong timezone or duration");
+    const expiryInput=page.getByLabel("Access expires",{exact:true}), expiryValue=await expiryInput.inputValue();
+    const end = new Date(expiryValue+"+08:00").valueOf();
+    if (Math.abs(end-Date.now()-7*86400000)>120000) throw Error("Access preset used the wrong timezone or duration: "+JSON.stringify({expiryValue,end,now:Date.now()}));
+    await page.locator('.signalgen-date-control').filter({has:expiryInput}).getByRole('button',{name:'Open calendar',exact:true}).click();
+    const datePopup=page.getByRole('dialog',{name:'Choose date and time',exact:true});await datePopup.waitFor();
+    if(!(await datePopup.innerText()).includes('Singapore Time (SGT, UTC+8)'))throw Error('Admin calendar timezone missing');
+    await datePopup.getByLabel('Time (SGT)',{exact:true}).fill('09:30');
+    await datePopup.getByRole('button',{name:'Done',exact:true}).click();
+    if(!(await expiryInput.inputValue()).endsWith('T09:30'))throw Error('Admin calendar did not retain Singapore time');
+    await expiryInput.fill(expiryValue);
     await page.getByLabel("Reason for this change",{exact:true}).fill("Approved synthetic testing access");
     const before = writes.length;
     await page.getByRole("button",{name:"Review access grant",exact:true}).click();

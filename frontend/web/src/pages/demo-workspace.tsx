@@ -1,3 +1,4 @@
+import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import {
   type Dispatch,
   type FormEvent,
@@ -1713,6 +1714,7 @@ function formatDeviceTime(value: string): string {
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: SINGAPORE_TIME_ZONE,
   }).format(parsed);
 }
 

@@ -2,6 +2,8 @@ import { Profiler, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, session, ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/date-input";
+import { singaporeDateTime, SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { Badge } from "@/components/ui/badge";
 import {
   Field,
@@ -27,7 +29,7 @@ import { csvCell, downloadCsv } from "@/lib/csv";
 import { CACHE_RESET_EVENT } from "@/data/historical-cache";
 
 function defaults(): StudyConfig {
-  const now = new Date(),
+  const now = new Date(`${singaporeDateTime().slice(0, 10)}T00:00:00Z`),
     end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)),
     start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
   return {
@@ -285,7 +287,7 @@ export function SignalStudyPanel({
             setProgress(p);
             setMessage(
               p.waitingUntil
-                ? `Server rate limit. Waiting until ${new Date(p.waitingUntil).toLocaleTimeString()} before retrying; Stop remains available.`
+                ? `Server rate limit. Waiting until ${new Date(p.waitingUntil).toLocaleTimeString("en-GB", { timeZone: SINGAPORE_TIME_ZONE })} SGT before retrying; Stop remains available.`
                 : `Processed ${p.completed}/${p.context.total} stocks; ${p.failures.length} failed, ${p.failedBatches.length} interrupted batches.`,
             );
           }
@@ -493,29 +495,29 @@ export function SignalStudyPanel({
               <FieldGroup className="study-form-grid" data-columns="3">
                 <Field>
                   <FieldLabel htmlFor="study-from">
-                    From (daily session, UTC)
+                    From (daily session, SGT)
                   </FieldLabel>
-                  <Input
+                  <DateInput
                     id="study-from"
                     required
                     type="date"
                     value={config.from}
-                    onChange={(e) =>
-                      setConfig({ ...config, from: e.target.value })
+                    onValueChange={(value) =>
+                      setConfig({ ...config, from: value })
                     }
                   />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="study-to">
-                    To (inclusive, UTC)
+                    To (inclusive, SGT)
                   </FieldLabel>
-                  <Input
+                  <DateInput
                     id="study-to"
                     required
                     type="date"
                     value={config.to}
-                    onChange={(e) =>
-                      setConfig({ ...config, to: e.target.value })
+                    onValueChange={(value) =>
+                      setConfig({ ...config, to: value })
                     }
                   />
                 </Field>
@@ -543,7 +545,7 @@ export function SignalStudyPanel({
             <FieldSet className="study-settings-section">
               <FieldLegend>Take profit &amp; stop loss</FieldLegend>
               <FieldGroup className="study-form-grid" data-columns="2">
-                <Field>
+                <Field data-study-target="profit">
                   <FieldLabel htmlFor="study-tp">
                     Take profit % (optional)
                   </FieldLabel>
@@ -564,7 +566,7 @@ export function SignalStudyPanel({
                     }
                   />
                 </Field>
-                <Field>
+                <Field data-study-target="loss">
                   <FieldLabel htmlFor="study-sl">
                     Stop loss % (optional)
                   </FieldLabel>

@@ -11,6 +11,8 @@ import {
 import { api, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/date-input";
+import { singaporeDateTime } from "@/lib/calendar";
 import { Badge } from "@/components/ui/badge";
 import {
   Field,
@@ -42,7 +44,7 @@ import type { RuleResource, StockUniverse } from "@/types";
 import { SignalStudyPanel } from "./signal-study-panel";
 
 function initialConfig(): BacktestConfig {
-  const end = new Date();
+  const end = new Date(`${singaporeDateTime().slice(0, 10)}T00:00:00Z`);
   end.setUTCDate(end.getUTCDate() - 1);
   const start = new Date(end);
   start.setUTCMonth(start.getUTCMonth() - 6);
@@ -61,7 +63,7 @@ function initialConfig(): BacktestConfig {
   };
 }
 const dateLabel = (stamp: string) =>
-  stamp ? new Date(stamp).toISOString().slice(0, 10) : "—";
+  stamp ? singaporeDateTime(new Date(stamp)).slice(0, 10) : "—";
 
 export function WorkspaceBacktestPanel(props: {
   authenticated: boolean;
@@ -653,26 +655,26 @@ function PortfolioBacktestPanel({
                 <legend>Test period</legend>
                 <FieldGroup className="backtest-fields">
                   <Field className="backtest-field">
-                    <FieldLabel htmlFor="bt-from">From date (UTC)</FieldLabel>
-                    <Input
+                    <FieldLabel htmlFor="bt-from">From date (SGT)</FieldLabel>
+                    <DateInput
                       id="bt-from"
                       type="date"
                       required
                       max={config.to}
                       value={config.from}
-                      onChange={(event) => update("from", event.target.value)}
+                      onValueChange={(value) => update("from", value)}
                     />
                   </Field>
                   <Field className="backtest-field">
-                    <FieldLabel htmlFor="bt-to">To date (UTC)</FieldLabel>
-                    <Input
+                    <FieldLabel htmlFor="bt-to">To date (SGT)</FieldLabel>
+                    <DateInput
                       id="bt-to"
                       type="date"
                       required
                       min={config.from}
-                      max={new Date().toISOString().slice(0, 10)}
+                      max={singaporeDateTime().slice(0, 10)}
                       value={config.to}
-                      onChange={(event) => update("to", event.target.value)}
+                      onValueChange={(value) => update("to", value)}
                     />
                   </Field>
                   <Field className="backtest-field">
@@ -918,7 +920,7 @@ function PortfolioBacktestPanel({
                 </select>
               </div>
               <div className="backtest-field">
-                <label htmlFor="bt-entry-time">Signal candle (UTC)</label>
+                <label htmlFor="bt-entry-time">Signal candle (SGT)</label>
                 <select
                   id="bt-entry-time"
                   required

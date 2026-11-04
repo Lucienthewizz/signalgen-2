@@ -1,3 +1,4 @@
+import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
@@ -210,7 +211,7 @@ export function WorkspaceScreenerPanel({
       (historyMarket === "all" || item.run.manifest.market === historyMarket) &&
       (historyTimeframe === "all" ||
         item.run.manifest.timeframe === historyTimeframe) &&
-      `${item.rule} ${item.context?.universeName ?? ""} ${item.recordedAt} ${new Date(item.recordedAt).toLocaleString("en-GB")}`
+      `${item.rule} ${item.context?.universeName ?? ""} ${item.recordedAt} ${new Date(item.recordedAt).toLocaleString("en-GB", { timeZone: SINGAPORE_TIME_ZONE })}`
         .toLowerCase()
         .includes(historySearch.toLowerCase().trim()),
   );
@@ -931,6 +932,7 @@ export function WorkspaceScreenerPanel({
                 {monitorState.lastCheckedAt
                   ? new Date(monitorState.lastCheckedAt).toLocaleTimeString(
                       "en-GB",
+                      { timeZone: SINGAPORE_TIME_ZONE },
                     )
                   : "—"}
               </strong>
@@ -941,6 +943,7 @@ export function WorkspaceScreenerPanel({
                 {monitorState.nextCheckAt
                   ? new Date(monitorState.nextCheckAt).toLocaleTimeString(
                       "en-GB",
+                      { timeZone: SINGAPORE_TIME_ZONE },
                     )
                   : monitorState.busy
                     ? "After this check finishes"
@@ -1896,7 +1899,9 @@ export function WorkspaceScreenerPanel({
                       <dt>Saved</dt>
                       <dd>
                         <time dateTime={item.recordedAt}>
-                          {new Date(item.recordedAt).toLocaleString("en-GB")}
+                          {new Date(item.recordedAt).toLocaleString("en-GB", {
+                            timeZone: SINGAPORE_TIME_ZONE,
+                          })}
                         </time>
                       </dd>
                     </div>
@@ -1989,7 +1994,7 @@ export function WorkspaceScreenerPanel({
                   <SelectTrigger id="compare-run">
                     <SelectValue>
                       {history[Number(compareIndex)]
-                        ? `${history[Number(compareIndex)].rule} · ${new Date(history[Number(compareIndex)].recordedAt).toLocaleString("en-GB")}`
+                        ? `${history[Number(compareIndex)].rule} · ${new Date(history[Number(compareIndex)].recordedAt).toLocaleString("en-GB", { timeZone: SINGAPORE_TIME_ZONE })}`
                         : "Choose a past run"}
                     </SelectValue>
                   </SelectTrigger>
@@ -2001,7 +2006,9 @@ export function WorkspaceScreenerPanel({
                           value={String(index + 1)}
                         >
                           {item.rule} ·{" "}
-                          {new Date(item.recordedAt).toLocaleString("en-GB")}
+                          {new Date(item.recordedAt).toLocaleString("en-GB", {
+                            timeZone: SINGAPORE_TIME_ZONE,
+                          })}
                         </SelectItem>
                       ))}
                     </SelectGroup>

@@ -1,3 +1,4 @@
+import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import type { RefObject } from "react";
 import { InfoDialog } from "@/components/ui/info-dialog";
 import { Button } from "@/components/ui/button";
@@ -132,7 +133,11 @@ export function JournalScreeningVerification({
               </div>
               <div>
                 <dt>Screened at</dt>
-                <dd>{new Date(draft.screenedAt).toLocaleString("en-GB")}</dd>
+                <dd>
+                  {new Date(draft.screenedAt).toLocaleString("en-GB", {
+                    timeZone: SINGAPORE_TIME_ZONE,
+                  })}
+                </dd>
               </div>
               <div>
                 <dt>Indicators</dt>
