@@ -242,24 +242,6 @@ const navGroups: Array<{
   },
 ];
 
-function DemoNotice({ view }: { view: DemoView }) {
-  if (view !== "realtime") return null;
-
-  return (
-    <div className="demo-notice demo-notice--market" role="note">
-      <Activity />
-      <div>
-        <strong>TradingView market preview</strong>
-        <span>
-          The chart uses TradingView&apos;s external widget. Exchange delay and
-          availability follow TradingView&apos;s market coverage.
-        </span>
-      </div>
-      <Badge variant="outline">External feed</Badge>
-    </div>
-  );
-}
-
 function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
   const matchingSignals = demoSignals.filter(
     (signal) => signal.state === "Match",
@@ -2006,9 +1988,7 @@ export function DemoWorkspace({
         </header>
         <div className="workspace__content demo-content">
           {view !== "journal" && (
-            <div
-              className={`workspace-page-intro ${view === "realtime" ? "workspace-page-intro--market" : ""}`}
-            >
+            <div className="workspace-page-intro">
               <div className="page-heading">
                 <span className="page-heading__icon" aria-hidden="true">
                   <PageIcon />
@@ -2020,7 +2000,6 @@ export function DemoWorkspace({
                   <p>{meta.description}</p>
                 </div>
               </div>
-              <DemoNotice view={view} />
               {authenticated && sync.state !== "saved" && (
                 <div
                   className="workspace-sync"

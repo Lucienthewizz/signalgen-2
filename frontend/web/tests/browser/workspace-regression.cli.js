@@ -423,13 +423,21 @@ async (page) => {
         if (surfaceContrast.min < 4.5) throw Error(`Shared surface text contrast below AA: ${JSON.stringify(surfaceContrast)}`);
         await page.screenshot({ path: `/private/tmp/signalgen-${view}-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
         if (view === "realtime") {
-          const notice=page.locator('.workspace-page-intro--market .demo-notice--market');
-          if(await notice.count()!==1)throw Error('Market disclaimer must be in its title header');
-          const titleBox=await page.locator('.workspace-page-intro--market .page-heading').boundingBox(),noticeBox=await notice.boundingBox();
-          if(width===1440&&(noticeBox.x<titleBox.x+titleBox.width-1||noticeBox.width<280))throw Error('Market disclaimer must sit right of the title without shrinking its text column');
-          const noticeText=await notice.locator('div').boundingBox();
-          if(noticeText.width<noticeBox.width-36||noticeBox.height>150)throw Error('Market disclaimer text is squeezed into a hidden icon column');
-          await page.locator('.workspace-page-intro--market').screenshot({path:`output/playwright/market-heading-${width}.png`,animations:'disabled'});
+          if(await page.locator('.demo-notice--market').count())throw Error('Removed TradingView notice is still rendered');
+          const stockSelector=await page.locator('#monitor-active-stock').boundingBox();
+          if(!stockSelector||stockSelector.width<200||stockSelector.height<44)throw Error('Stock selector is too small: '+JSON.stringify({width,stockSelector}));
+          await page.locator('.monitor-board-toolbar').screenshot({path:`output/playwright/monitor-stock-selector-${width}.png`,animations:'disabled'});
+          for(const statusTheme of ['dark','light']){
+            await page.evaluate(value=>document.documentElement.dataset.theme=value,statusTheme);
+            const badges=await page.locator('.monitor-history ol [data-slot="badge"]').evaluateAll(items=>items.map(el=>({variant:el.dataset.variant,color:getComputedStyle(el).color})));
+            if(!badges.some(b=>b.variant==='success')||!badges.some(b=>b.variant==='destructive'))throw Error('History must cover matched and not matched status variants');
+            for(const badge of badges){
+              const [r,g]=badge.color.match(/[\d.]+/g).map(Number);
+              if(badge.variant==='success'?g<=r:r<=g)throw Error('History status color incorrect: '+JSON.stringify(badge));
+            }
+            await page.locator('.monitor-history').screenshot({path:`output/playwright/monitor-history-${width}-${statusTheme}.png`,animations:'disabled'});
+          }
+          await page.evaluate(()=>document.documentElement.dataset.theme='dark');
           const stockCard=await page.locator('#monitor-stock-lineup > button').first().boundingBox();
           if(stockCard&&(stockCard.width>145||stockCard.height>140))throw Error('Stock lineup cards are not compact');
           if (!await page.locator('.monitor-ledger table th, .monitor-ledger table td').evaluateAll(items=>items.length>0 && items.every(el=>getComputedStyle(el).textAlign==='center'))) throw Error('Every monitor table header and cell must be centered');

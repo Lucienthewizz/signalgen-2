@@ -436,7 +436,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                 Compare stocks
               </Button>
             </div>
-            <Field orientation="horizontal">
+            <Field orientation="horizontal" className="monitor-stock-selector">
               <FieldLabel htmlFor="monitor-active-stock">Stock</FieldLabel>
               <Select
                 value={selected}
@@ -964,7 +964,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                   {date(record.recordedAt)}
                 </time>
                 <strong>{record.rule}</strong>
-                <Badge variant={decision.matched ? "secondary" : "outline"}>
+                <Badge variant={decision.matched ? "success" : "destructive"}>
                   {decisionLabel(decision)}
                 </Badge>
                 <Button
