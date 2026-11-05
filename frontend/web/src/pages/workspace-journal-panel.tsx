@@ -250,28 +250,36 @@ export function JournalPanel({
     page,
     Math.max(0, Math.ceil(visible.length / 25) - 1),
   );
-  const closed = visible
-    .filter((r) => r.data.net_pl !== null && r.data.exit_price !== null)
-    .map((r) => ({
-      id: r.id,
-      closedAt: r.data.exit_date + "T12:00:00Z",
-      symbol: r.data.symbol,
-      openedAt: r.data.entry_date,
-      entry: r.data.entry_price,
-      side: r.data.side,
-      quantity: r.data.quantity,
-      book: r.data.book,
-      note: r.data.note,
-      exit: r.data.exit_price!,
-      pnl: r.data.net_pl!,
-    }));
-  const metrics = journalPerformance(closed);
-  const money = (n: number) =>
-    new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format(n);
+  const closed = useMemo(
+    () =>
+      visible
+        .filter((r) => r.data.net_pl !== null && r.data.exit_price !== null)
+        .map((r) => ({
+          id: r.id,
+          closedAt: r.data.exit_date + "T12:00:00Z",
+          symbol: r.data.symbol,
+          openedAt: r.data.entry_date,
+          entry: r.data.entry_price,
+          side: r.data.side,
+          quantity: r.data.quantity,
+          book: r.data.book,
+          note: r.data.note,
+          exit: r.data.exit_price!,
+          pnl: r.data.net_pl!,
+        })),
+    [visible],
+  );
+  const metrics = useMemo(() => journalPerformance(closed), [closed]);
+  const currencyFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat("en-GB", {
+        style: "currency",
+        currency,
+        maximumFractionDigits: 2,
+      }),
+    [currency],
+  );
+  const money = (n: number) => currencyFormatter.format(n);
   function reset() {
     setDirectionConfirmed(true);
     newRecordID.current = crypto.randomUUID();

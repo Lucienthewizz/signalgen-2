@@ -20,6 +20,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TradingViewChart } from "@/components/tradingview-chart";
 import { StockHeatmap } from "@/components/stock-heatmap";
 import { Skeleton } from "@/components/ui/skeleton";
+import { visibleInterval } from "@/lib/visible-interval";
 import {
   readMonitorSelection,
   saveMonitorSelection,
@@ -32,7 +33,7 @@ import { screenerIntervals } from "@/analysis/screener-monitor";
 import { marketCandleDate, marketTimezone } from "@/lib/data-freshness";
 import { decisionLabel, decisionReasons } from "@/lib/workspace-feedback";
 import { snapshotChartSymbol } from "@/lib/stock-market";
-import { api } from "@/api/client";
+import { ui } from "@/api/client";
 import type { StockInstrument, StockUniverse } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -142,6 +143,8 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   const [universeId, setUniverseId] = useState("watchlist");
   const [loadingUniverses, setLoadingUniverses] = useState(false);
   const [universeError, setUniverseError] = useState(false);
+  const [catalogError, setCatalogError] = useState(false);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [showCards, setShowCards] = useState(true);
   const [loadedOwner, setLoadedOwner] = useState<string>();
   const [preview, setPreview] = useState(false);
@@ -151,28 +154,38 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   );
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 60000);
-    return () => window.clearInterval(timer);
+    return visibleInterval(() => setNow(Date.now()), 60000);
   }, []);
   const boardRef = useRef<HTMLDivElement>(null);
   const ledgerRef = useRef<HTMLElement>(null);
   const universe = universes.find((item) => item.id === universeId);
-  const activeStocks = universe
-    ? [
-        ...new Set(
-          universe.symbols
-            .map((symbol) => watchTicker(symbol) ?? idxTicker(symbol))
-            .filter((ticker): ticker is string => Boolean(ticker)),
-        ),
-      ]
-    : watchlist;
+  const activeStocks = useMemo(
+    () =>
+      universe
+        ? [
+            ...new Set(
+              universe.symbols
+                .map((symbol) => watchTicker(symbol) ?? idxTicker(symbol))
+                .filter((ticker): ticker is string => Boolean(ticker)),
+            ),
+          ]
+        : watchlist,
+    [universe, watchlist],
+  );
+  const catalogNames = useMemo(
+    () =>
+      new Map(
+        catalog.map((stock) => [
+          watchTicker(stock.symbol) ?? idxTicker(stock.symbol),
+          stock.name,
+        ]),
+      ),
+    [catalog],
+  );
   const stockName = (ticker: string) =>
-    catalog.find(
-      (stock) =>
-        (watchTicker(stock.symbol) ?? idxTicker(stock.symbol)) === ticker,
-    )?.name ??
-    names[ticker] ??
-    "Stock";
+    catalogNames.get(ticker) ?? names[ticker] ?? "Stock";
+  const selectionRef = useRef({ universeId, selected });
+  selectionRef.current = { universeId, selected };
   useEffect(() => {
     let cancelled = false;
     setUniverses([]);
@@ -180,48 +193,79 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
     setUniverseId("watchlist");
     setLoadingUniverses(false);
     setUniverseError(false);
+    setCatalogError(false);
     setLoadedOwner(undefined);
     setPreview(false);
     if (!userId) return;
     setLoadingUniverses(true);
     setUniverseError(false);
-    Promise.all([api.listStockUniverses(), api.listStocks()])
-      .then(([groups, stocks]) => {
-        if (cancelled) return;
-        setUniverses(groups.items);
-        setCatalog(stocks.items);
-        const remembered = readMonitorSelection(userId);
-        const preferred =
-          remembered?.universeId ?? readScreenerPreferences(userId).universeId;
-        const first =
-          groups.items.find((group) => group.id === preferred) ??
-          groups.items.find((group) => group.symbols.length);
-        if (remembered?.universeId === "watchlist") {
-          setUniverseId("watchlist");
-          setSelected(
-            watchlistRef.current.includes(remembered.ticker)
-              ? remembered.ticker
-              : (watchlistRef.current[0] ?? "BBCA"),
-          );
-          return;
-        }
-        if (first) {
-          setUniverseId(first.id);
-          const firstTicker =
-            first.symbols
-              .map((symbol) => watchTicker(symbol) ?? idxTicker(symbol))
-              .find((ticker): ticker is string => Boolean(ticker)) ?? "BBCA";
-          setSelected(
-            first.symbols.some(
-              (symbol) =>
-                (watchTicker(symbol) ?? idxTicker(symbol)) ===
-                remembered?.ticker,
-            )
-              ? remembered!.ticker
-              : firstTicker,
-          );
-        }
-      })
+    let restored = false;
+    const applyUniverses = (groups: { items: StockUniverse[] }) => {
+      if (cancelled) return;
+      setUniverses(groups.items);
+      const remembered = restored
+        ? {
+            universeId: selectionRef.current.universeId,
+            ticker: selectionRef.current.selected,
+          }
+        : readMonitorSelection(userId);
+      restored = true;
+      setLoadingUniverses(false);
+      setLoadedOwner(userId);
+      const preferred =
+        remembered?.universeId ?? readScreenerPreferences(userId).universeId;
+      const first =
+        groups.items.find((group) => group.id === preferred) ??
+        groups.items.find((group) => group.symbols.length);
+      if (remembered?.universeId === "watchlist") {
+        setUniverseId("watchlist");
+        setSelected(
+          watchlistRef.current.includes(remembered.ticker)
+            ? remembered.ticker
+            : (watchlistRef.current[0] ?? "BBCA"),
+        );
+        selectionRef.current = {
+          universeId: "watchlist",
+          selected: watchlistRef.current.includes(remembered.ticker)
+            ? remembered.ticker
+            : (watchlistRef.current[0] ?? "BBCA"),
+        };
+        return;
+      }
+      if (first) {
+        setUniverseId(first.id);
+        const firstTicker =
+          first.symbols
+            .map((symbol) => watchTicker(symbol) ?? idxTicker(symbol))
+            .find((ticker): ticker is string => Boolean(ticker)) ?? "BBCA";
+        setSelected(
+          first.symbols.some(
+            (symbol) =>
+              (watchTicker(symbol) ?? idxTicker(symbol)) === remembered?.ticker,
+          )
+            ? remembered!.ticker
+            : firstTicker,
+        );
+        selectionRef.current = {
+          universeId: first.id,
+          selected: first.symbols.some(
+            (symbol) =>
+              (watchTicker(symbol) ?? idxTicker(symbol)) === remembered?.ticker,
+          )
+            ? remembered!.ticker
+            : firstTicker,
+        };
+      } else {
+        setUniverseId("watchlist");
+        setSelected(watchlistRef.current[0] ?? "BBCA");
+      }
+    };
+    const cachedGroups = ui.peekUniverses(userId);
+    const cachedStocks = ui.peekStocks(userId);
+    if (cachedGroups) applyUniverses(cachedGroups);
+    if (cachedStocks) setCatalog(cachedStocks.items);
+    ui.listStockUniverses(userId, refreshVersion > 0)
+      .then(applyUniverses)
       .catch(() => {
         if (!cancelled) setUniverseError(true);
       })
@@ -231,10 +275,18 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           setLoadedOwner(userId);
         }
       });
+    // Catalogue names are supplementary: never block the universe/chart on them.
+    ui.listStocks(userId, refreshVersion > 0)
+      .then((stocks) => {
+        if (!cancelled) setCatalog(stocks.items);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogError(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, refreshVersion]);
   useEffect(() => {
     if (userId && !loading && !universeError && loadedOwner === userId)
       saveMonitorSelection(userId, universeId, selected);
@@ -324,8 +376,19 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
     } catch {
       /* Corrupt or blocked storage falls back to the starter watchlist. */
     }
+    watchlistRef.current = items;
     setWatchlist(items);
-    setSelected(items[0] ?? "BBCA");
+    const remembered = readMonitorSelection(userId);
+    if (remembered?.universeId === "watchlist") {
+      const ticker = items.includes(remembered.ticker)
+        ? remembered.ticker
+        : (items[0] ?? "BBCA");
+      setSelected(ticker);
+      selectionRef.current = { universeId: "watchlist", selected: ticker };
+    } else if (!userId || !ui.peekUniverses(userId)) {
+      // A cache-first universe may already have restored its selected ticker.
+      setSelected(items[0] ?? "BBCA");
+    }
     setRuns(monitorRuns(userId));
     const update = () => setRuns(monitorRuns(userId));
     window.addEventListener("signalgen:monitor-run", update);
@@ -363,15 +426,29 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
     save(next);
     if (selected === ticker) setSelected(next[0] ?? "BBCA");
   }
-  const entries = runs.flatMap((record) =>
-    record.run.rows
-      .filter(
-        (row) =>
-          monitorTicker(row.decision.symbol, record.run.manifest.market) ===
-          selected,
-      )
-      .map((row) => ({ ...row, record })),
-  );
+  const entriesByTicker = useMemo(() => {
+    const index = new Map<
+      string,
+      Array<
+        (typeof runs)[number]["run"]["rows"][number] & {
+          record: (typeof runs)[number];
+        }
+      >
+    >();
+    for (const record of runs)
+      for (const row of record.run.rows) {
+        const ticker = monitorTicker(
+          row.decision.symbol,
+          record.run.manifest.market,
+        );
+        if (!ticker) continue;
+        const entries = index.get(ticker) ?? [];
+        entries.push({ ...row, record });
+        index.set(ticker, entries);
+      }
+    return index;
+  }, [runs]);
+  const entries = entriesByTicker.get(selected) ?? [];
   const selectedSnapshot = snapshots.get(selected);
   const selectedChange = openCloseChange(
     selectedSnapshot?.latestOpen,
@@ -443,6 +520,14 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           <Button
             variant="outline"
             size="sm"
+            disabled={loading || preview}
+            onClick={() => setRefreshVersion((value) => value + 1)}
+          >
+            Refresh data
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             disabled={loading}
             aria-pressed={preview}
             onClick={() => {
@@ -467,8 +552,14 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
       </header>
       {universeError && (
         <p role="alert">
-          Stock universes could not be loaded. Your personal watchlist is still
-          available. Reopen Market Monitor to retry.
+          Stock universes could not be refreshed. Previously loaded data remains
+          available when present. Use Refresh data to retry.
+        </p>
+      )}
+      {catalogError && (
+        <p role="status">
+          Company names could not be refreshed. Stock tickers and available
+          snapshots remain usable. Use Refresh data to retry.
         </p>
       )}
       {loading ? (
@@ -643,6 +734,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                   symbol={chartSymbol}
                   label={selectedSymbol}
                   initialRange="12M"
+                  deferUntilVisible
                 />
               </section>
               <aside

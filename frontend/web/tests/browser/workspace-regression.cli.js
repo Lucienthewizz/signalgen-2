@@ -317,6 +317,7 @@ async (page) => {
   await page.route("**/api/v1/stock-universes", route => route.fulfill({ json: { items: [universe, { ...universe, id: "fixture-energy", name: "Energy selection", symbols: ["PTBA.JK"] }] } }));
   await page.goto(`${origin}/#app/realtime`);
   await page.getByLabel("Stock universe", { exact: true }).waitFor();
+  await page.getByRole('button',{name:'Refresh data',exact:true}).click();
   await page.waitForFunction(() => document.querySelector("#monitor-universe")?.textContent.includes("Bank pilihan"));
   if (await page.locator(".stock-heatmap__tile").count() !== 2) throw Error("Heatmap ignored saved universe");
   await page.getByRole("button", { name: "Hide heatmap", exact: true }).click();
@@ -333,6 +334,7 @@ async (page) => {
   if (!await page.locator(".monitor-board").evaluate(el => el === document.activeElement)) throw Error("Analyze action did not focus the board");
   await page.locator(".stock-heatmap__tile").filter({ hasText: "BBRI" }).click();
   await page.getByRole('button',{name:'Close stock details',exact:true}).click();
+  await page.locator('.monitor-chart .tradingview-chart').scrollIntoViewIfNeeded();
   const chartConfig=await page.locator('.monitor-chart .tradingview-widget-container script').textContent().then(JSON.parse);
   if(chartConfig.interval!=='D'||chartConfig.range!=='12M')throw Error('Monitor initial zoom must show normal-sized daily candles');
   const screeningDetails=page.locator('.monitor-detail-result');
@@ -1326,6 +1328,9 @@ async (page) => {
   }
   // Hover/tap details, explicit preview isolation, remembered selection, loading and CTA.
   await page.emulateMedia({reducedMotion:'reduce'});
+  await page.goto(`${origin}/#app/overview`);await page.goto(`${origin}/#app/realtime`);
+  await heatTile.waitFor();
+  if(await heatTile.getAttribute('aria-pressed')!=='true')throw Error('Cache-first return lost the selected ticker');
   await page.setViewportSize({width:1218,height:1000});
   await heatTile.hover();
   const candleDetails=page.locator('.heatmap-popover').filter({hasText:'Latest screening candle'});
@@ -1392,6 +1397,22 @@ async (page) => {
     const box=await longDetails.boundingBox();if(box.x<0||box.x+box.width>391||box.y<0||box.y+box.height>1001)throw Error('Long-name popup outside mobile viewport');
     await page.getByRole('button',{name:'Close stock details',exact:true}).click();
   }
+  // Catalogue failures cannot block a usable universe. Both reads are independent.
+  let releaseCatalog;const catalogGate=new Promise(resolve=>releaseCatalog=resolve);
+  await page.route('**/api/v1/stocks',async route=>{await catalogGate;await route.fulfill({status:503,json:{error:{code:'UNAVAILABLE',message:'Synthetic catalogue outage'}}});});
+  await page.reload();
+  await page.waitForFunction(()=>document.querySelectorAll('.stock-heatmap__tile').length===30);
+  if(await page.getByRole('status',{name:'Loading market monitor',exact:true}).isVisible())throw Error('Supplementary catalogue blocked monitor');
+  releaseCatalog();await page.getByText('Company names could not be refreshed.',{exact:false}).waitFor();
+  if(await page.locator('.stock-heatmap__tile').count()!==30)throw Error('Catalogue failure hid existing tickers');
+  // Deferred widgets are neither downloaded nor timed out while genuinely offscreen.
+  await page.addStyleTag({content:'.monitor-board { margin-top: 2000px !important; }'});
+  await page.goto(`${origin}/#app/overview`);await page.goto(`${origin}/#app/realtime`);
+  await page.waitForFunction(()=>document.querySelectorAll('.stock-heatmap__tile').length===30);
+  if(await page.locator('.monitor-chart script').count())throw Error('Offscreen chart loaded eagerly');
+  await page.locator('.monitor-chart .tradingview-chart').scrollIntoViewIfNeeded();
+  await page.locator('.monitor-chart script').waitFor({state:'attached'});
+  if(await page.locator('.monitor-chart script').count()!==1)throw Error('Deferred chart initialized more than once');
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));
 }

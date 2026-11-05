@@ -20,29 +20,55 @@ const modules = [
   "workspace-review",
   "backtesting",
   "signal-study",
-  "admin-access",
   "calendar",
   "workspace-polish",
 ];
 
 test("stylesheet entry keeps explicit cascade order and imports each module once", () => {
-  const root = postcss.parse(fs.readFileSync(path.join(src, "styles.css"), "utf8"));
-  assert.ok(root.nodes.every(node => node.type === "atrule" && node.name === "import"));
-  assert.deepEqual(root.nodes.map(node => node.params), [
-    '"tailwindcss"',
-    '"react-day-picker/style.css"',
-    ...modules.map(name => `"./styles/${name}.css"`),
-  ]);
+  const root = postcss.parse(
+    fs.readFileSync(path.join(src, "styles.css"), "utf8"),
+  );
+  assert.ok(
+    root.nodes.every(
+      (node) => node.type === "atrule" && node.name === "import",
+    ),
+  );
+  assert.deepEqual(
+    root.nodes.map((node) => node.params),
+    [
+      '"tailwindcss"',
+      '"react-day-picker/style.css"',
+      ...modules.map((name) => `"./styles/${name}.css"`),
+    ],
+  );
 });
 
 test("stylesheet modules parse independently and do not introduce hidden imports", () => {
-  for (const name of modules) {
-    const root = postcss.parse(fs.readFileSync(path.join(src, "styles", name + ".css"), "utf8"));
+  for (const name of [...modules, "admin-access"]) {
+    const root = postcss.parse(
+      fs.readFileSync(path.join(src, "styles", name + ".css"), "utf8"),
+    );
     assert.ok(root.nodes.length > 0, `${name} must not be empty`);
     root.walkAtRules("import", () => assert.fail(`Nested import in ${name}`));
-    root.walkDecls(decl => {
+    root.walkDecls((decl) => {
       for (const [, url] of decl.value.matchAll(/url\(\s*["']?([^)'"\s]+)/g))
-        assert.ok(url.startsWith("#") || url.startsWith("data:") || url.startsWith("https:"), `Rebase relative URL in ${name}: ${url}`);
+        assert.ok(
+          url.startsWith("#") ||
+            url.startsWith("data:") ||
+            url.startsWith("https:"),
+          `Rebase relative URL in ${name}: ${url}`,
+        );
     });
   }
+});
+
+test("admin stylesheet is loaded only by the lazy admin page", () => {
+  assert.match(
+    fs.readFileSync(path.join(src, "pages/admin-page.tsx"), "utf8"),
+    /import "@\/styles\/admin-access.css"/,
+  );
+  assert.doesNotMatch(
+    fs.readFileSync(path.join(src, "styles.css"), "utf8"),
+    /admin-access/,
+  );
 });

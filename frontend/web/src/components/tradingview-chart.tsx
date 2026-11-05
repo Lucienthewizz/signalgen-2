@@ -8,11 +8,15 @@ export function TradingViewChart({
   symbol,
   label,
   initialRange,
+  deferUntilVisible = false,
 }: {
   symbol: string;
   label: string;
   initialRange?: "12M";
+  deferUntilVisible?: boolean;
 }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [activated, setActivated] = useState(!deferUntilVisible);
   const containerRef = useRef<HTMLDivElement>(null);
   const [widgetState, setWidgetState] = useState<WidgetState>("loading");
   const [theme, setTheme] = useState<Theme>(() =>
@@ -31,8 +35,34 @@ export function TradingViewChart({
   }, []);
 
   useEffect(() => {
+    if (activated) return;
+    const host = hostRef.current;
+    if (!host || !("IntersectionObserver" in window)) {
+      setActivated(true);
+      return;
+    }
+    let near = false;
+    const activate = () => {
+      if (near && document.visibilityState === "visible") setActivated(true);
+    };
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        near = entry.isIntersecting && entry.intersectionRatio >= 0.1;
+        activate();
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(host);
+    document.addEventListener("visibilitychange", activate);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", activate);
+    };
+  }, [activated]);
+
+  useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || !activated) return;
 
     let mounted = true;
     let activeFrame: HTMLIFrameElement | null = null;
@@ -123,10 +153,10 @@ export function TradingViewChart({
       observer.disconnect();
       container.replaceChildren();
     };
-  }, [label, symbol, theme, initialRange]);
+  }, [label, symbol, theme, initialRange, activated]);
 
   return (
-    <div className="tradingview-chart">
+    <div className="tradingview-chart" ref={hostRef}>
       <div
         className="tradingview-widget-container"
         ref={containerRef}
@@ -152,9 +182,15 @@ export function TradingViewChart({
             </>
           ) : (
             <>
-              <i aria-hidden="true" />
-              <strong>Loading TradingView</strong>
-              <span>Preparing {label} · daily interval</span>
+              {activated && <i aria-hidden="true" />}
+              <strong>
+                {activated ? "Loading TradingView" : "Chart ready to load"}
+              </strong>
+              <span>
+                {activated
+                  ? `Preparing ${label} · daily interval`
+                  : "Scroll to the chart to load it."}
+              </span>
             </>
           )}
         </div>

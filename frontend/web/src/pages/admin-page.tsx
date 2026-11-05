@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import "@/styles/admin-access.css";
 import {
   Activity,
   BadgeCheck,

@@ -1,8 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import "@fontsource-variable/manrope";
-import "@fontsource-variable/saira";
-import "@fontsource-variable/geist-mono";
+import "./styles/fonts.css";
 import "@fontsource/saira-condensed/latin-500.css";
 import "@fontsource/saira-condensed/latin-600.css";
 import "@fontsource/saira-condensed/latin-700.css";
