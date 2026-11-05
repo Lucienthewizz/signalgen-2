@@ -30,7 +30,7 @@ import {
 } from "@/lib/screener-preferences";
 import { screenerIntervals } from "@/analysis/screener-monitor";
 import { marketCandleDate, marketTimezone } from "@/lib/data-freshness";
-import { decisionLabel } from "@/lib/workspace-feedback";
+import { decisionLabel, decisionReasons } from "@/lib/workspace-feedback";
 import { snapshotChartSymbol } from "@/lib/stock-market";
 import { api } from "@/api/client";
 import type { StockInstrument, StockUniverse } from "@/types";
@@ -639,7 +639,11 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                     <ExternalLink data-icon="inline-end" />
                   </Button>
                 </header>
-                <TradingViewChart symbol={chartSymbol} label={selectedSymbol} />
+                <TradingViewChart
+                  symbol={chartSymbol}
+                  label={selectedSymbol}
+                  initialRange="12M"
+                />
               </section>
               <aside
                 className="monitor-stock-detail"
@@ -731,12 +735,17 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                       </div>
                     </dl>
                     <div className="monitor-detail-result">
-                      <span>Latest rule result</span>
+                      <h5>Screening details</h5>
                       <Badge
                         variant={
                           selectedSnapshot?.decision.matched
-                            ? "secondary"
-                            : "outline"
+                            ? "success"
+                            : selectedSnapshot &&
+                                !selectedSnapshot.decision.reason_codes.includes(
+                                  "COOLDOWN_ACTIVE",
+                                )
+                              ? "destructive"
+                              : "outline"
                         }
                       >
                         {selectedSnapshot
@@ -744,22 +753,52 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                           : "Not evaluated"}
                       </Badge>
                       <p>
-                        {selectedSnapshot?.record.rule ??
-                          "Run the screener to add a snapshot for this stock."}
+                        {selectedSnapshot
+                          ? decisionReasons(
+                              selectedSnapshot.decision.reason_codes,
+                            )
+                          : "Run the screener to add a snapshot for this stock."}
                       </p>
                       {selectedSnapshot && (
-                        <time dateTime={selectedSnapshot.decision.timestamp}>
-                          Candle{" "}
-                          {marketCandleDate(
-                            selectedSnapshot.decision.timestamp,
-                            selectedMarket,
-                            selectedSnapshot.record.run.manifest.timeframe,
-                          )}{" "}
-                          · {marketTimezone(selectedMarket)}
-                          {" · "}
-                          {selectedSnapshot.record.run.manifest.timeframe}{" "}
-                          candles
-                        </time>
+                        <dl className="monitor-screening-facts">
+                          <div>
+                            <dt>Rule</dt>
+                            <dd>{selectedSnapshot.record.rule}</dd>
+                          </div>
+                          <div>
+                            <dt>Candle session</dt>
+                            <dd>
+                              {marketCandleDate(
+                                selectedSnapshot.decision.timestamp,
+                                selectedMarket,
+                                selectedSnapshot.record.run.manifest.timeframe,
+                              )}
+                              <span>{marketTimezone(selectedMarket)}</span>
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Interval</dt>
+                            <dd>
+                              {screenerIntervals.find(
+                                (item) =>
+                                  item.value ===
+                                  selectedSnapshot.record.run.manifest
+                                    .timeframe,
+                              )?.label ??
+                                selectedSnapshot.record.run.manifest.timeframe}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Last screened</dt>
+                            <dd>
+                              <time
+                                dateTime={selectedSnapshot.record.recordedAt}
+                              >
+                                {date(selectedSnapshot.record.recordedAt)} SGT
+                              </time>
+                            </dd>
+                          </div>
+                        </dl>
                       )}
                       {selectedSnapshot &&
                         now - Date.parse(selectedSnapshot.record.recordedAt) >
@@ -771,13 +810,6 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                             )?.periodMs ?? 900000) && (
                           <Badge variant="outline">Not recently screened</Badge>
                         )}
-                      {selectedSnapshot && (
-                        <p className="monitor-company">
-                          Last screened{" "}
-                          {date(selectedSnapshot.record.recordedAt)} · not a
-                          live quote
-                        </p>
-                      )}
                     </div>
                   </CardContent>
                   <CardFooter>

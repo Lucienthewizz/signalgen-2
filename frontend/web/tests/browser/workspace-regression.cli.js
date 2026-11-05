@@ -333,6 +333,17 @@ async (page) => {
   if (!await page.locator(".monitor-board").evaluate(el => el === document.activeElement)) throw Error("Analyze action did not focus the board");
   await page.locator(".stock-heatmap__tile").filter({ hasText: "BBRI" }).click();
   await page.getByRole('button',{name:'Close stock details',exact:true}).click();
+  const chartConfig=await page.locator('.monitor-chart .tradingview-widget-container script').textContent().then(JSON.parse);
+  if(chartConfig.interval!=='D'||chartConfig.range!=='12M')throw Error('Monitor initial zoom must show normal-sized daily candles');
+  const screeningDetails=page.locator('.monitor-detail-result');
+  for(const label of ['Screening details','Rule','Candle session','Interval','Last screened','SGT'])if(!(await screeningDetails.innerText()).includes(label))throw Error('Missing screening information '+label);
+  for(const width of [1218,390])for(const theme of ['dark','light']){
+    await page.setViewportSize({width,height:1000});await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+    const clipped=await page.locator('.monitor-screening-facts dd').evaluateAll(fields=>fields.some(field=>field.scrollWidth>field.clientWidth+1||getComputedStyle(field).textOverflow==='ellipsis'));
+    if(clipped)throw Error('Screening detail is truncated at '+width);
+    await page.locator('.monitor-detail-card').screenshot({path:`output/playwright/monitor-screening-details-${width}-${theme}.png`,animations:'disabled'});
+  }
+  await page.setViewportSize({width:1440,height:1000});await page.evaluate(()=>document.documentElement.dataset.theme='dark');
   if (await page.locator(".monitor-chart h3").innerText() !== "BBRI") throw Error("Stock card did not switch chart");
   if (!await page.locator('.monitor-ledger tr[data-state="selected"]').innerText().then(text => text.includes("BBRI"))) throw Error("Stock card did not select table row");
   if (await page.locator(".monitor-window-dots i").count() !== 3 || !await page.locator(".monitor-chart .tradingview-chart").count()) throw Error("TradingView Mac layout missing");

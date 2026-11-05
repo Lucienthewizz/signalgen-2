@@ -118,6 +118,45 @@
   flex-wrap: wrap;
   gap: 16px;
 }
+.monitor-detail-result h5 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.monitor-screening-facts {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  margin: 8px 0;
+}
+.monitor-screening-facts > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.monitor-screening-facts dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.monitor-screening-facts dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.monitor-screening-facts dd > span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.monitor-detail-result .monitor-screening-facts time {
+  color: inherit;
+  font: inherit;
+}
 .monitor-controls > [data-slot="field"] {
   width: 280px;
   max-width: 100%;

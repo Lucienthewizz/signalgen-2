@@ -7,9 +7,11 @@ type Theme = "dark" | "light";
 export function TradingViewChart({
   symbol,
   label,
+  initialRange,
 }: {
   symbol: string;
   label: string;
+  initialRange?: "12M";
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [widgetState, setWidgetState] = useState<WidgetState>("loading");
@@ -85,6 +87,8 @@ export function TradingViewChart({
       autosize: true,
       symbol,
       interval: "D",
+      // Initial horizontal zoom only; daily candle resolution stays unchanged.
+      ...(initialRange ? { range: initialRange } : {}),
       timezone: "Asia/Jakarta",
       theme,
       backgroundColor:
@@ -119,7 +123,7 @@ export function TradingViewChart({
       observer.disconnect();
       container.replaceChildren();
     };
-  }, [label, symbol, theme]);
+  }, [label, symbol, theme, initialRange]);
 
   return (
     <div className="tradingview-chart">
