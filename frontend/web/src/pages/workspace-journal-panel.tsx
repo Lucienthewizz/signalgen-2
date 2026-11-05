@@ -1,23 +1,17 @@
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Plus,
-  X,
-  RefreshCw,
-  Save,
-  Pencil,
-  Trash2,
-  NotebookTabs,
-} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { NotebookTabs, SearchCheck } from "lucide-react";
 import { api, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { DateInput } from "@/components/date-input";
-import { Textarea } from "@/components/ui/textarea";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import {
   Table,
   TableHeader,
@@ -26,126 +20,104 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import { useActionNotifications } from "@/components/ui/toast";
-import { JournalScreeningVerification } from "@/components/journal-screening-verification";
-import { JournalBatchReview } from "@/components/journal-batch-review";
-import { JournalPnlChart } from "@/components/journal-pnl-chart";
-import { JournalMonthPicker } from "@/components/journal-month-picker";
-import { journalPerformance, localJournalDate } from "@/lib/journal";
 import {
-  checkJournalScreening,
+  journalScreeningReceipt,
   type JournalScreeningDraft,
 } from "@/lib/journal-screening";
-import type {
-  RecordedTrade,
-  TradeInput,
-  ServerRecord,
-} from "@/lib/server-records";
+import {
+  isScreeningJournalRecord,
+  type ScreeningJournalEntry,
+} from "@/lib/screening-journal";
+import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
+import type { ServerRecord } from "@/lib/server-records";
 
-const blank = (): TradeInput => ({
-  symbol: "",
-  market: "IDX",
-  currency: "IDR",
-  side: "BUY",
-  quantity: 100,
-  entry_price: 0,
-  exit_price: null,
-  entry_fee: 0,
-  exit_fee: 0,
-  entry_date: localJournalDate(),
-  exit_date: "",
-  book: "Trading journal",
-  note: "",
-});
-type Item = ServerRecord<RecordedTrade>;
+type Item = ServerRecord<ScreeningJournalEntry>;
 const message = (e: unknown) =>
-  e instanceof Error
-    ? e.message
-    : "Journal request failed. Retry when the server is available.";
+  e instanceof Error ? e.message : "Journal is unavailable. Please try again.";
+const time = (value: string) =>
+  new Date(value).toLocaleString("en-GB", {
+    timeZone: SINGAPORE_TIME_ZONE,
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+const price = (value: number, currency: string) =>
+  new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: currency === "IDR" ? 0 : 2,
+  }).format(value);
+
 export function JournalPanel({
-  draftSymbol,
-  clearDraft,
   screeningDraft,
-  userId,
-  screeningBatch = [],
-  consumeBatch,
   screeningDrafts = [],
+  userId,
+  clearDraft,
 }: {
-  draftSymbol: string | null;
-  clearDraft: () => void;
   screeningDraft: JournalScreeningDraft | null;
-  userId?: string;
-  screeningBatch?: JournalScreeningDraft[];
-  consumeBatch?: () => void;
   screeningDrafts?: JournalScreeningDraft[];
+  userId?: string;
+  clearDraft: () => void;
 }) {
   const [records, setRecords] = useState<{ owner: string; items: Item[] }>({
     owner: "",
     items: [],
   });
-  const [loading, setLoading] = useState(true),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState<string | null>(null),
-    [notice, setNotice] = useState<string | null>(null),
-    [reload, setReload] = useState(0);
-  const [captureOpen, setCaptureOpen] = useState(
-      Boolean(draftSymbol) && !screeningDraft,
-    ),
-    [form, setForm] = useState<TradeInput>(blank),
-    [editing, setEditing] = useState<Item | null>(null),
-    [pendingDelete, setPendingDelete] = useState<Item | null>(null);
-  const [month, setMonth] = useState(""),
-    [instrument, setInstrument] = useState(""),
-    [book, setBook] = useState(""),
-    [currency, setCurrency] = useState("IDR");
-  const captureTrigger = useRef<HTMLButtonElement>(null),
-    returnFocus = useRef<HTMLButtonElement | null>(null),
-    operation = useRef<AbortController | null>(null),
-    lock = useRef(false);
-  const newRecordID = useRef(crypto.randomUUID());
-  const [search, setSearch] = useState("");
-  const [sortOrder, setSortOrder] = useState("newest");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<string[]>([]);
+  const [saveError, setSaveError] = useState("");
+  const [reload, setReload] = useState(0);
   const [page, setPage] = useState(0);
-  const [loadedOwner, setLoadedOwner] = useState("");
-  const [refreshMs, setRefreshMs] = useState<number | null>(null);
-  const [directionConfirmed, setDirectionConfirmed] = useState(true);
-  const batchDraft =
-    screeningBatch[0]?.ownerId === userId ? screeningBatch[0] : undefined;
-  useActionNotifications(notice, error);
-  const ownerRef = useRef(userId);
-  ownerRef.current = userId;
+  const operation = useRef<AbortController | null>(null);
+  const owner = useRef(userId);
+  owner.current = userId;
+  const items = records.owner === userId ? records.items : [];
+  const lastPage = Math.max(0, Math.ceil(items.length / 25) - 1);
+  const currentPage = Math.min(page, lastPage);
+  const visibleItems = items.slice(currentPage * 25, (currentPage + 1) * 25);
+  const selected = useMemo(() => {
+    const unique = new Set<string>();
+    return [
+      ...(screeningDraft ? [screeningDraft] : []),
+      ...screeningDrafts,
+    ].filter((d) => {
+      const receipt = journalScreeningReceipt(d, userId);
+      if (!receipt || unique.has(receipt)) return false;
+      unique.add(receipt);
+      return true;
+    });
+  }, [screeningDraft, screeningDrafts, userId]);
+  const pending = selected.filter(
+    (d) => !saved.includes(journalScreeningReceipt(d, userId)!),
+  );
+
   useEffect(() => {
     const controller = new AbortController(),
       revision = session.getIdentityRevision();
-    const started = performance.now();
     let alive = true;
     const active = () =>
       alive &&
       !controller.signal.aborted &&
-      session.getIdentityRevision() === revision &&
-      ownerRef.current === userId;
+      owner.current === userId &&
+      session.getIdentityRevision() === revision;
     setLoading(true);
-    setError(null);
-    setRecords((current) =>
-      current.owner === userId ? current : { owner: userId ?? "", items: [] },
-    );
+    setError("");
     if (userId)
       void api
-        .listRecords<RecordedTrade>("journal", controller.signal)
-        .then((r) => {
-          if (active()) {
-            setRecords({ owner: userId, items: r.items });
-            setLoadedOwner(userId);
-          }
+        .listScreeningJournal(controller.signal)
+        .then((response) => {
+          if (active())
+            setRecords({
+              owner: userId,
+              items: response.items.filter(isScreeningJournalRecord),
+            });
         })
         .catch((e) => {
           if (active()) setError(message(e));
         })
         .finally(() => {
-          if (active()) {
-            setLoading(false);
-            setRefreshMs(performance.now() - started);
-          }
+          if (active()) setLoading(false);
         });
     else setLoading(false);
     return () => {
@@ -153,851 +125,266 @@ export function JournalPanel({
       controller.abort();
     };
   }, [userId, reload]);
+
   useEffect(() => {
-    operation.current?.abort();
-    operation.current = null;
-    lock.current = false;
-    setBusy(false);
-    newRecordID.current = crypto.randomUUID();
-    setForm({ ...blank(), symbol: draftSymbol ?? "" });
-    setEditing(null);
-    setPendingDelete(null);
-    const stop = session.onIdentityChange(() => {
+    const stop = () => {
       operation.current?.abort();
       operation.current = null;
-      lock.current = false;
-      setBusy(false);
-      newRecordID.current = crypto.randomUUID();
-      setRecords({ owner: "", items: [] });
-      setForm(blank());
-      setEditing(null);
-      setPendingDelete(null);
-      setCaptureOpen(false);
-      setLoadedOwner("");
-      setSearch("");
+      setSaving(false);
+      setSaved([]);
       setPage(0);
-      setNotice(null);
-      setError(null);
-    });
+      setSaveError("");
+      setRecords({ owner: "", items: [] });
+    };
+    stop();
+    const unsubscribe = session.onIdentityChange(stop);
     return () => {
       operation.current?.abort();
-      stop();
+      operation.current = null;
+      unsubscribe();
     };
   }, [userId]);
-  useEffect(() => {
-    if (draftSymbol && !screeningDraft) {
-      setForm((f) => ({ ...f, symbol: draftSymbol }));
-      setCaptureOpen(true);
-    }
-  }, [draftSymbol, screeningDraft]);
-  function applyScreeningDraft(draft: JournalScreeningDraft) {
-    const check = checkJournalScreening(draft, userId);
-    if (!check.ok) {
-      setError(check.reason);
-      return;
-    }
-    newRecordID.current = crypto.randomUUID();
-    setDirectionConfirmed(
-      check.row.decision.signal_type === "BUY" ||
-        check.row.decision.signal_type === "SELL",
-    );
-    setEditing(null);
-    setForm({
-      ...blank(),
-      symbol: draft.symbol.replace(/\.JK$/, ""),
-      side: check.row.decision.signal_type ?? "BUY",
-      entry_price: check.row.latestClose,
-      market: draft.run.manifest.market as "IDX" | "US",
-      currency: draft.run.manifest.currency as "IDR" | "USD",
-      quantity: draft.run.manifest.market === "IDX" ? 100 : 1,
-    });
-    setCaptureOpen(true);
-  }
-  useEffect(() => {
-    if (batchDraft) applyScreeningDraft(batchDraft);
-  }, [batchDraft, userId]);
-  const items = records.owner === userId ? records.items : [];
-  const visible = useMemo(
-    () =>
-      items
-        .filter(
-          (r) =>
-            r.data.currency === currency &&
-            (!instrument || r.data.symbol === instrument) &&
-            (!book || r.data.book === book) &&
-            (!month ||
-              (r.data.exit_date || r.data.entry_date).slice(0, 7) === month) &&
-            `${r.data.symbol} ${r.data.book} ${r.data.note}`
-              .toLowerCase()
-              .includes(search.trim().toLowerCase()),
-        )
-        .sort(
-          (a, b) =>
-            (sortOrder === "symbol"
-              ? a.data.symbol.localeCompare(b.data.symbol)
-              : sortOrder === "pnl"
-                ? (b.data.net_pl ?? -Infinity) - (a.data.net_pl ?? -Infinity)
-                : (b.data.exit_date || b.data.entry_date).localeCompare(
-                    a.data.exit_date || a.data.entry_date,
-                  )) || a.id.localeCompare(b.id),
-        ),
-    [items, currency, instrument, book, month, search, sortOrder],
-  );
-  useEffect(() => {
-    setPage(0);
-  }, [currency, instrument, book, month, search, sortOrder]);
-  const currentPage = Math.min(
-    page,
-    Math.max(0, Math.ceil(visible.length / 25) - 1),
-  );
-  const closed = visible
-    .filter((r) => r.data.net_pl !== null && r.data.exit_price !== null)
-    .map((r) => ({
-      id: r.id,
-      closedAt: r.data.exit_date + "T12:00:00Z",
-      symbol: r.data.symbol,
-      openedAt: r.data.entry_date,
-      entry: r.data.entry_price,
-      side: r.data.side,
-      quantity: r.data.quantity,
-      book: r.data.book,
-      note: r.data.note,
-      exit: r.data.exit_price!,
-      pnl: r.data.net_pl!,
-    }));
-  const metrics = journalPerformance(closed);
-  const money = (n: number) =>
-    new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format(n);
-  function reset() {
-    setDirectionConfirmed(true);
-    newRecordID.current = crypto.randomUUID();
-    setForm(blank());
-    setEditing(null);
-    setCaptureOpen(false);
-    clearDraft();
-  }
-  async function mutate(remove?: Item) {
-    if (!remove && !directionConfirmed) {
-      setError(
-        "Choose the trade direction before saving this legacy screening draft.",
-      );
-      return;
-    }
-    if (lock.current || !userId) return;
-    lock.current = true;
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-    const controller = new AbortController();
-    operation.current = controller;
-    const owner = userId,
+
+  async function save() {
+    if (operation.current || loading || !userId || !pending.length) return;
+    const controller = new AbortController(),
+      id = userId,
       revision = session.getIdentityRevision();
     const active = () =>
       !controller.signal.aborted &&
-      ownerRef.current === owner &&
+      owner.current === id &&
       session.getIdentityRevision() === revision;
+    operation.current = controller;
+    setSaving(true);
+    setSaveError("");
     try {
       await api.ensureAppSession();
-      if (!active()) return;
-      if (remove)
-        await api.deleteRecord(
-          "journal",
-          remove.id,
-          remove.version,
-          controller.signal,
-        );
-      else
-        await api.saveRecord<RecordedTrade>(
-          "journal",
-          editing?.id ?? newRecordID.current,
-          editing?.version ?? 0,
-          form,
-          controller.signal,
-        );
-      if (!active()) return;
-      if (remove) {
-        // The server confirmed deletion. A later failed refresh must not revive
-        // this row from the last successfully fetched snapshot.
-        setRecords((current) =>
-          current.owner === owner
-            ? {
-                ...current,
-                items: current.items.filter((item) => item.id !== remove.id),
-              }
-            : current,
-        );
+      for (const draft of pending) {
+        if (!active()) return;
+        const receipt = journalScreeningReceipt(draft, id);
+        if (!receipt)
+          throw Error("Run screening again and select a matched result.");
+        const item = await api.saveScreeningJournal(receipt, controller.signal);
+        if (!active()) return;
+        if (!isScreeningJournalRecord(item))
+          throw Error(
+            "The server returned an invalid screening journal entry.",
+          );
+        setRecords((current) => ({
+          owner: id,
+          items: [
+            item,
+            ...(current.owner === id ? current.items : []).filter(
+              (existing) => existing.id !== item.id,
+            ),
+          ],
+        }));
+        setSaved((current) => [...current, receipt]);
+        setPage(0);
       }
-      setNotice(remove ? "Trade deleted." : "Trade saved to your account.");
-      setPendingDelete(null);
-      if (!remove && !editing && batchDraft && screeningBatch.length > 1) {
-        consumeBatch?.();
-      } else reset();
-      setReload((n) => n + 1);
     } catch (e) {
-      if (active()) setError(message(e));
+      if (active()) setSaveError(message(e));
     } finally {
       if (operation.current === controller) {
         operation.current = null;
-        lock.current = false;
-        if (active()) setBusy(false);
+        setSaving(false);
       }
     }
   }
-  const change = <K extends keyof TradeInput>(key: K, value: TradeInput[K]) =>
-    setForm((f) => ({ ...f, [key]: value }));
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    void mutate();
-  }
+
+  if (!userId) return <p>Sign in to view your screening journal.</p>;
   return (
-    <div className="journal-workspace">
-      <header className="journal-page-header">
-        <div className="page-heading">
-          <span className="page-heading__icon" aria-hidden="true">
-            <NotebookTabs />
-          </span>
-          <div>
-            <h2 id="workspace-route-heading" tabIndex={-1}>
-              Trade journal
-            </h2>
-            <p>Record your trade plans and review positions.</p>
-          </div>
+    <section
+      className="workspace-panel screening-journal"
+      aria-label="Screening journal"
+    >
+      <div className="journal-toolbar screening-journal__intro">
+        <div>
+          <h1 id="workspace-route-heading" tabIndex={-1}>
+            Saved screening results
+          </h1>
+          <p>
+            Keep the matched results you choose in Screener. Prices and signals
+            are captured from that screening.
+          </p>
         </div>
-        <FieldGroup
-          className="journal-quick-controls"
-          aria-label="Search and sort trades"
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<a href="#app/analysis" />}
         >
-          <Field>
-            <FieldLabel htmlFor="journal-search" className="sr-only">
-              Search recorded trades
-            </FieldLabel>
-            <Input
-              id="journal-search"
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search trades…"
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="journal-sort" className="sr-only">
-              Sort trades
-            </FieldLabel>
-            <select
-              id="journal-sort"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
-            >
-              <option value="newest">Newest first</option>
-              <option value="symbol">Stock symbol</option>
-              <option value="pnl">Highest realized P&amp;L</option>
-            </select>
-          </Field>
-        </FieldGroup>
-      </header>
-      <JournalScreeningVerification
-        draft={screeningDraft}
-        userId={userId}
-        returnFocus={captureTrigger}
-        onClose={clearDraft}
-        onVerified={(draft) => {
-          applyScreeningDraft(draft);
-          clearDraft();
-        }}
-      />
-      {batchDraft && (
-        <Alert>
-          <AlertTitle>
-            Review selected screening drafts ({screeningBatch.length} remaining)
-          </AlertTitle>
-          <AlertDescription>
-            <p>
-              Reviewing {batchDraft.symbol.replace(/\.JK$/, "")} from{" "}
-              {batchDraft.ruleName}. Screening prices are references, not
-              executed trades. Check the actual price, date and quantity, then
-              save each trade separately. Nothing is saved automatically.
-            </p>
-            <ul
-              className="journal-draft-queue"
-              aria-label="Selected screening drafts"
-            >
-              {screeningBatch.map((item, index) => (
-                <li key={item.symbol}>
-                  <Badge variant={index === 0 ? "success" : "outline"}>
-                    {item.symbol.replace(/\.JK$/, "")} ·{" "}
-                    {index === 0 ? "Reviewing" : "Pending"}
-                  </Badge>
+          <SearchCheck /> Open screener
+        </Button>
+      </div>
+      {selected.length > 0 && (
+        <section
+          className="screening-journal__selection"
+          aria-label="Selected screening results"
+        >
+          <div className="screening-journal__selection-heading">
+            <h3>
+              {selected.length} matched{" "}
+              {selected.length === 1 ? "result" : "results"} selected
+            </h3>
+            <Badge>From screening</Badge>
+          </div>
+          <ul>
+            {selected.map((d) => {
+              const row = d.run.rows.find(
+                (r) => r.decision.symbol === d.symbol,
+              )!;
+              const complete = saved.includes(
+                journalScreeningReceipt(d, userId)!,
+              );
+              return (
+                <li key={journalScreeningReceipt(d, userId)!}>
+                  <strong>{d.symbol.replace(/\.JK$/, "")}</strong>
+                  <span>{d.ruleName}</span>
+                  <span>
+                    {price(row.features.price, d.run.manifest.currency)}
+                  </span>
+                  <span>{complete ? "Saved" : "Ready to save"}</span>
                 </li>
-              ))}
-            </ul>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => {
-                if (screeningBatch.length > 1) consumeBatch?.();
-                else reset();
-              }}
-            >
-              Skip current draft
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-      <section className="journal-toolbar" aria-label="Journal filters">
-        <FieldGroup className="journal-toolbar__filters">
-          <Field>
-            <FieldLabel htmlFor="journal-currency">Currency</FieldLabel>
-            <select
-              id="journal-currency"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-            >
-              <option>IDR</option>
-              <option>USD</option>
-            </select>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="journal-book">Journal</FieldLabel>
-            <select
-              id="journal-book"
-              value={book}
-              onChange={(e) => setBook(e.target.value)}
-            >
-              <option value="">All journals</option>
-              {[...new Set(items.map((r) => r.data.book))].map((b) => (
-                <option key={b}>{b}</option>
-              ))}
-            </select>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="journal-instrument">Instrument</FieldLabel>
-            <select
-              id="journal-instrument"
-              value={instrument}
-              onChange={(e) => setInstrument(e.target.value)}
-            >
-              <option value="">All instruments</option>
-              {[...new Set(items.map((r) => r.data.symbol))].map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
-          </Field>
-          <Field className="journal-month-filter">
-            <FieldLabel htmlFor="journal-month">Month</FieldLabel>
-            <div>
-              <JournalMonthPicker value={month} onChange={setMonth} />
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Clear month filter"
-                disabled={!month}
-                onClick={() => setMonth("")}
-              >
-                <X />
+              );
+            })}
+          </ul>
+          {saveError && (
+            <Alert variant="destructive">
+              <AlertTitle>Some results could not be saved</AlertTitle>
+              <AlertDescription>
+                {saveError} Results already saved will not be saved again.
+              </AlertDescription>
+            </Alert>
+          )}
+          <div className="screening-journal__actions">
+            {pending.length > 0 ? (
+              <Button onClick={() => void save()} disabled={saving || loading}>
+                {saving
+                  ? "Saving screening results…"
+                  : saveError
+                    ? "Retry unsaved results"
+                    : `Save ${pending.length} ${pending.length === 1 ? "result" : "results"} to journal`}
               </Button>
-            </div>
-          </Field>
-        </FieldGroup>
-        <div className="journal-toolbar__actions">
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Refresh journal"
-            disabled={loading || busy}
-            onClick={() => setReload((n) => n + 1)}
-          >
-            <RefreshCw />
-          </Button>
-          <Button
-            ref={captureTrigger}
-            variant={captureOpen ? "destructive" : "default"}
-            disabled={busy}
-            aria-expanded={captureOpen}
-            onClick={() =>
-              captureOpen
-                ? reset()
-                : (setEditing(null), setForm(blank()), setCaptureOpen(true))
-            }
-          >
-            {captureOpen ? (
-              <X data-icon="inline-start" />
             ) : (
-              <Plus data-icon="inline-start" />
+              <>
+                <p role="status">Selected results saved to your journal.</p>
+                <Button variant="outline" onClick={clearDraft}>
+                  Done
+                </Button>
+              </>
             )}
-            {captureOpen ? "Close journal form" : "Open journal form"}
-          </Button>
-        </div>
-      </section>
-      {screeningDrafts.length > 0 && (
-        <JournalBatchReview
-          key={screeningDrafts.map((d) => d.symbol + d.screenedAt).join("|")}
-          drafts={screeningDrafts}
-          userId={userId}
-          onClose={clearDraft}
-          onSaved={() => setReload((n) => n + 1)}
-        />
-      )}
-      {loading && loadedOwner === userId && (
-        <p role="status">
-          Refreshing journal. Previous records remain visible.
-        </p>
+          </div>
+        </section>
       )}
       {error && (
         <Alert variant="destructive">
           <AlertTitle>Journal unavailable</AlertTitle>
           <AlertDescription>
             {error}{" "}
-            <Button
-              variant="outline"
-              disabled={loading || busy}
-              onClick={() => setReload((n) => n + 1)}
-            >
-              Retry journal
-            </Button>
+            {items.length > 0 && "Previously loaded results remain visible."}
           </AlertDescription>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setReload((v) => v + 1)}
+          >
+            Retry journal
+          </Button>
         </Alert>
       )}
-      {captureOpen && (
-        <section className="panel journal-capture">
-          <div className="panel-heading">
-            <div>
-              <h3>{editing ? "Edit recorded trade" : "Record a trade"}</h3>
-              <p>
-                User-recorded transactions, not broker-verified fills. Leave
-                exit fields empty for an open position. P&amp;L is calculated by
-                the server after fees.
-              </p>
-            </div>
-            <Badge variant="outline">{form.currency}</Badge>
+      {loading && items.length === 0 ? (
+        <div
+          className="screening-journal__loading"
+          aria-label="Loading screening journal"
+          aria-busy="true"
+        >
+          <Skeleton />
+          <Skeleton />
+          <Skeleton />
+        </div>
+      ) : items.length === 0 && !error ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <NotebookTabs />
+            </EmptyMedia>
+            <EmptyTitle>No screening results saved yet</EmptyTitle>
+            <EmptyDescription>
+              Run a screening, select matched stocks, then choose Add to
+              journal.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : items.length > 0 ? (
+        <div className="journal-ledger">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Stock</TableHead>
+                <TableHead>Market</TableHead>
+                <TableHead>Rule</TableHead>
+                <TableHead>Signal</TableHead>
+                <TableHead>Interval</TableHead>
+                <TableHead>Candle time (SGT)</TableHead>
+                <TableHead>Screening price</TableHead>
+                <TableHead>Screened at (SGT)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visibleItems.map((item) => {
+                const d = item.data;
+                return (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <strong>{d.symbol.replace(/\.JK$/, "")}</strong>
+                    </TableCell>
+                    <TableCell>
+                      {d.market} / {d.currency}
+                    </TableCell>
+                    <TableCell>{d.rule_name}</TableCell>
+                    <TableCell>
+                      <Badge>{d.signal_type ?? "Match"}</Badge>
+                    </TableCell>
+                    <TableCell>{d.timeframe}</TableCell>
+                    <TableCell>{time(d.candle_at)}</TableCell>
+                    <TableCell>{price(d.price, d.currency)}</TableCell>
+                    <TableCell>{time(d.screened_at)}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      ) : null}
+      {items.length > 25 && (
+        <nav className="screening-journal__actions" aria-label="Journal pages">
+          <p>
+            {currentPage * 25 + 1}–
+            {Math.min((currentPage + 1) * 25, items.length)} of {items.length}{" "}
+            results
+          </p>
+          <div>
+            <Button
+              variant="outline"
+              disabled={currentPage === 0}
+              onClick={() => setPage(currentPage - 1)}
+            >
+              Previous results
+            </Button>
+            <Button
+              variant="outline"
+              disabled={currentPage === lastPage}
+              onClick={() => setPage(currentPage + 1)}
+            >
+              Next results
+            </Button>
           </div>
-          <form className="control-grid" onSubmit={submit}>
-            <fieldset
-              className="journal-trade-fields control-wide"
-              disabled={busy}
-            >
-              <FieldGroup className="control-grid">
-                <Field>
-                  <FieldLabel htmlFor="trade-market">Market</FieldLabel>
-                  <select
-                    id="trade-market"
-                    value={form.market}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        market: e.target.value as "IDX" | "US",
-                        currency: e.target.value === "IDX" ? "IDR" : "USD",
-                        quantity: e.target.value === "IDX" ? 100 : 1,
-                      }))
-                    }
-                  >
-                    <option>IDX</option>
-                    <option>US</option>
-                  </select>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="trade-symbol">Symbol</FieldLabel>
-                  <Input
-                    id="trade-symbol"
-                    required
-                    maxLength={20}
-                    placeholder="e.g. BBCA"
-                    value={form.symbol}
-                    onChange={(e) =>
-                      change("symbol", e.target.value.toUpperCase())
-                    }
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="trade-side">Side</FieldLabel>
-                  <select
-                    id="trade-side"
-                    required
-                    aria-invalid={!directionConfirmed}
-                    value={directionConfirmed ? form.side : ""}
-                    onChange={(e) => {
-                      setDirectionConfirmed(true);
-                      change("side", e.target.value as "BUY" | "SELL");
-                    }}
-                  >
-                    {!directionConfirmed && (
-                      <option value="">Choose trade direction</option>
-                    )}
-                    <option value="BUY">BUY / Long</option>
-                    <option value="SELL">SELL / Short</option>
-                  </select>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="trade-quantity">
-                    {form.market === "IDX" ? "Lot" : "Shares"}
-                  </FieldLabel>
-                  <Input
-                    id="trade-quantity"
-                    type="number"
-                    required
-                    min={form.market === "IDX" ? 1 : 0.000001}
-                    step={form.market === "IDX" ? 1 : "any"}
-                    value={form.quantity / (form.market === "IDX" ? 100 : 1)}
-                    onChange={(e) =>
-                      change(
-                        "quantity",
-                        Number(e.target.value) *
-                          (form.market === "IDX" ? 100 : 1),
-                      )
-                    }
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="trade-entry">
-                    Entry price ({form.currency})
-                  </FieldLabel>
-                  <Input
-                    id="trade-entry"
-                    type="number"
-                    required
-                    min="0.000001"
-                    step="any"
-                    value={form.entry_price || ""}
-                    onChange={(e) =>
-                      change("entry_price", Number(e.target.value))
-                    }
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="trade-entry-date">Entry date</FieldLabel>
-                  <DateInput
-                    id="trade-entry-date"
-                    type="date"
-                    required
-                    max={localJournalDate()}
-                    value={form.entry_date}
-                    onValueChange={(value) => change("entry_date", value)}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="trade-exit">
-                    Exit price ({form.currency}, optional)
-                  </FieldLabel>
-                  <Input
-                    id="trade-exit"
-                    type="number"
-                    min="0.000001"
-                    step="any"
-                    value={form.exit_price ?? ""}
-                    onChange={(e) =>
-                      change(
-                        "exit_price",
-                        e.target.value === "" ? null : Number(e.target.value),
-                      )
-                    }
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="trade-exit-date">Exit date</FieldLabel>
-                  <DateInput
-                    id="trade-exit-date"
-                    type="date"
-                    required={form.exit_price !== null}
-                    min={form.entry_date}
-                    max={localJournalDate()}
-                    value={form.exit_date}
-                    onValueChange={(value) => change("exit_date", value)}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="trade-entry-fee">
-                    Entry fee ({form.currency})
-                  </FieldLabel>
-                  <Input
-                    id="trade-entry-fee"
-                    type="number"
-                    min="0"
-                    step="any"
-                    required
-                    value={form.entry_fee}
-                    onChange={(e) =>
-                      change("entry_fee", Number(e.target.value))
-                    }
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="trade-exit-fee">
-                    Exit fee ({form.currency})
-                  </FieldLabel>
-                  <Input
-                    id="trade-exit-fee"
-                    type="number"
-                    min="0"
-                    step="any"
-                    required
-                    value={form.exit_fee}
-                    onChange={(e) => change("exit_fee", Number(e.target.value))}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="trade-book">Journal name</FieldLabel>
-                  <Input
-                    id="trade-book"
-                    required
-                    maxLength={80}
-                    value={form.book}
-                    onChange={(e) => change("book", e.target.value)}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="trade-note">Trade note</FieldLabel>
-                  <Textarea
-                    id="trade-note"
-                    maxLength={2000}
-                    value={form.note}
-                    onChange={(e) => change("note", e.target.value)}
-                  />
-                </Field>
-              </FieldGroup>
-              <div className="journal-capture-actions">
-                <Button
-                  type="submit"
-                  disabled={!userId || loading || !directionConfirmed}
-                >
-                  <Save data-icon="inline-start" />
-                  {busy ? "Saving…" : editing ? "Update trade" : "Save trade"}
-                </Button>
-                <Button type="button" variant="outline" onClick={reset}>
-                  Close form
-                </Button>
-              </div>
-            </fieldset>
-          </form>
-        </section>
+        </nav>
       )}
-      {loading && loadedOwner !== userId ? (
-        <Skeleton className="journal-loading" />
-      ) : (
-        (loadedOwner === userId || !error) && (
-          <>
-            <section
-              className="journal-performance"
-              aria-label="Trading performance"
-            >
-              <div className="journal-performance__summary">
-                <div>
-                  <span>Performance of displayed trades</span>
-                  <strong
-                    className={metrics.totalPnl >= 0 ? "positive" : "negative"}
-                  >
-                    {money(metrics.totalPnl)}
-                  </strong>
-                  <small>
-                    {closed.length} closed trades · {currency} only · after
-                    recorded fees
-                  </small>
-                </div>
-                <dl>
-                  <div>
-                    <dt>Win rate</dt>
-                    <dd>{closed.length ? `${metrics.winRate}%` : "—"}</dd>
-                  </div>
-                  <div>
-                    <dt>Profit factor</dt>
-                    <dd>
-                      {metrics.profitFactor === null
-                        ? "—"
-                        : `${metrics.profitFactor.toFixed(2)}×`}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Average win</dt>
-                    <dd>{closed.length ? money(metrics.averageWin) : "—"}</dd>
-                  </div>
-                </dl>
-              </div>
-              <JournalPnlChart records={closed} currency={currency} />
-            </section>
-            <section
-              className="journal-ledger"
-              aria-label="Recorded trade history"
-            >
-              <header>
-                <div>
-                  <h3>Recorded trades</h3>
-                  <p>
-                    Open positions are excluded from realized P&amp;L. Up to
-                    1,000 trades per account.
-                  </p>
-                </div>
-                <Badge variant="outline">{visible.length} records</Badge>
-              </header>
-              <div
-                className="journal-ledger__table"
-                role="region"
-                aria-label="Recorded trades table, scroll horizontally on smaller screens"
-                tabIndex={0}
-              >
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {[
-                        "Instrument",
-                        "Position",
-                        "Entry / exit",
-                        "Dates",
-                        "Net P&L",
-                        "Actions",
-                      ].map((h) => (
-                        <TableHead key={h}>{h}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {visible
-                      .slice(currentPage * 25, (currentPage + 1) * 25)
-                      .map((r) => (
-                        <TableRow key={r.id}>
-                          <TableCell>
-                            <strong>{r.data.symbol}</strong>
-                            <small>{r.data.book}</small>
-                          </TableCell>
-                          <TableCell>
-                            {r.data.side === "BUY" ? "Long" : "Short"}
-                            <small>
-                              {r.data.quantity.toLocaleString()} shares
-                            </small>
-                          </TableCell>
-                          <TableCell>
-                            {money(r.data.entry_price)} /{" "}
-                            {r.data.exit_price === null
-                              ? "Open"
-                              : money(r.data.exit_price)}
-                          </TableCell>
-                          <TableCell>
-                            {r.data.entry_date}
-                            <small>{r.data.exit_date || "Still open"}</small>
-                          </TableCell>
-                          <TableCell>
-                            <strong
-                              className={
-                                (r.data.net_pl ?? 0) >= 0
-                                  ? "positive"
-                                  : "negative"
-                              }
-                            >
-                              {r.data.net_pl === null
-                                ? "—"
-                                : money(r.data.net_pl)}
-                            </strong>
-                            <small>
-                              {r.data.return_pct === null
-                                ? "Unrealized not estimated"
-                                : `${r.data.return_pct.toFixed(2)}%`}
-                            </small>
-                          </TableCell>
-                          <TableCell>
-                            <div className="journal-row-actions">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={busy || Boolean(batchDraft)}
-                                aria-label={`Edit trade ${r.data.symbol}`}
-                                onClick={() => {
-                                  setEditing(r);
-                                  setDirectionConfirmed(true);
-                                  const {
-                                    net_pl: _,
-                                    return_pct: __,
-                                    ...input
-                                  } = r.data;
-                                  setForm(input);
-                                  setCaptureOpen(true);
-                                }}
-                              >
-                                <Pencil data-icon="inline-start" />
-                                Edit
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="journal-row-delete"
-                                disabled={busy}
-                                aria-label={`Delete trade ${r.data.symbol}`}
-                                onClick={(e) => {
-                                  returnFocus.current = e.currentTarget;
-                                  setPendingDelete(r);
-                                }}
-                              >
-                                <Trash2 />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    {!visible.length && (
-                      <TableRow>
-                        <TableCell colSpan={6}>
-                          No recorded trades match these filters. Record your
-                          first trade above.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-              {visible.length > 25 && (
-                <nav className="analysis-pagination" aria-label="Journal pages">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage === 0}
-                    onClick={() => setPage(currentPage - 1)}
-                  >
-                    Previous trades
-                  </Button>
-                  <span role="status">
-                    Page {currentPage + 1} of {Math.ceil(visible.length / 25)} ·{" "}
-                    {visible.length} filtered trades
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={(currentPage + 1) * 25 >= visible.length}
-                    onClick={() => setPage(currentPage + 1)}
-                  >
-                    Next trades
-                  </Button>
-                </nav>
-              )}
-            </section>
-            {refreshMs !== null && (
-              <details className="analysis-performance">
-                <summary>Browser performance details</summary>
-                <p>
-                  Journal fetch and response processing: {Math.round(refreshMs)}{" "}
-                  ms. Includes network and server wait; this is not server CPU
-                  time. Table renders at most 25 records per page; summaries use
-                  all filtered records.
-                </p>
-              </details>
-            )}
-          </>
-        )
-      )}
-      <ConfirmDialog
-        open={pendingDelete !== null}
-        title="Delete recorded trade?"
-        description="This removes the trade from your account and recalculates performance. This cannot be undone."
-        destructive
-        confirmLabel="Delete trade"
-        returnFocus={returnFocus}
-        onCancel={() => {
-          if (!busy) setPendingDelete(null);
-        }}
-        onConfirm={() => {
-          if (pendingDelete) void mutate(pendingDelete);
-        }}
-      />
-    </div>
+      <p className="screening-journal__note">
+        A saved signal is a screening snapshot. It does not record a broker
+        transaction.
+      </p>
+    </section>
   );
 }

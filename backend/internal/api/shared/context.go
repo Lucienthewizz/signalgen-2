@@ -4,12 +4,14 @@ import (
 	"context"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/account"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/journal"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 )
 
 // Context holds backend-owned dependencies shared by HTTP feature adapters.
 // Construct it once at startup; do not mutate dependencies during live requests.
 type Context struct {
+	JournalReceipts   *journal.Issuer
 	Profiles          account.ProfileRepository
 	Management        account.ManagementRepository
 	Identity          IdentityVerifier

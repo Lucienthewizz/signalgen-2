@@ -23,6 +23,7 @@ const modules = [
   "admin-access",
   "calendar",
   "workspace-polish",
+  "screening-journal",
 ];
 
 test("stylesheet entry keeps explicit cascade order and imports each module once", () => {

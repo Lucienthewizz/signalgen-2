@@ -167,7 +167,7 @@ console.log(
   studyOnly
     ? "PASS: batched signal-study browser regression with real Go/WASM; synthetic API/account/provider fixtures."
     : usabilityOnly
-      ? "PASS: FE-only selection/review queue, explicit individual journal saves, retained refresh/error state, filtering/paging, density and responsive keyboard controls, 1440/390px dark theme. Synthetic API/account fixtures only."
+      ? "PASS: screening-only journal selection, receipt-only writes, failed-row retry, double-click prevention, bounded paging and outage recovery; desktop/mobile, dark/light. Synthetic API/account/evaluator fixtures only."
       : adminOnly
         ? "PASS: verified-role sidebar navigation, admin search/paging, reviewed grant/revoke, validation focus, contrast and 44px controls, denied/forged/suspended roles, 1440/375px and 844x390 landscape, dark theme. Synthetic account/API fixtures only."
         : backtestOnly

@@ -618,6 +618,22 @@ export const api = {
       }),
     }),
   me: (signal?: AbortSignal) => request<User>("/api/auth/me", { signal }),
+  listScreeningJournal: (signal?: AbortSignal) =>
+    request<{
+      items: import("@/lib/server-records").ServerRecord<
+        import("@/lib/screening-journal").ScreeningJournalEntry
+      >[];
+    }>("/api/v1/journal/screenings", { signal }),
+  saveScreeningJournal: (receipt: string, signal?: AbortSignal) =>
+    request<
+      import("@/lib/server-records").ServerRecord<
+        import("@/lib/screening-journal").ScreeningJournalEntry
+      >
+    >("/api/v1/journal/screenings", {
+      method: "POST",
+      body: JSON.stringify({ receipt }),
+      signal,
+    }),
   listRecords: <T>(kind: "backtest" | "journal", signal?: AbortSignal) =>
     request<{ items: import("@/lib/server-records").ServerRecord<T>[] }>(
       kind === "backtest"

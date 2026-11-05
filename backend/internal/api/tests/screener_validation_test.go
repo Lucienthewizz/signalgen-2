@@ -139,6 +139,14 @@ func TestScreenerRequiresCompleteNumericFeaturesAndMatchesJSONSchema(t *testing.
 				if response.Results[0].SignalType != wantDirection {
 					t.Fatalf("incorrect signal direction: %s", raw)
 				}
+				if tc.matched {
+					receipt, err := server.JournalReceipts.Verify(response.Results[0].JournalReceipt, "user-a", "ses-1")
+					if err != nil || receipt.Data.Symbol != "BBCA.JK" || receipt.Data.Price != 128 || receipt.Data.SignalType != tc.direction || receipt.Data.DefinitionHash != rule.DefinitionHash {
+						t.Fatal("matched wire result did not carry the evaluated journal snapshot")
+					}
+				} else if response.Results[0].JournalReceipt != "" {
+					t.Fatal("a no-match decision received a journal receipt")
+				}
 			}
 			var instance any
 			if err := json.Unmarshal(raw, &instance); err != nil {

@@ -32,6 +32,10 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if kind == "journal" && r.Method != http.MethodGet {
+		shared.WriteError(w, r, http.StatusGone, "JOURNAL_SCREENING_ONLY", "Journal accepts matched screening results only. Save a screening receipt through /api/v1/journal/screenings.")
+		return
+	}
 	if !h.AllowRate(w, r, "records:"+strings.ToLower(r.Method), p.ID) {
 		return
 	}

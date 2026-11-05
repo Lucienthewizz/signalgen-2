@@ -82,6 +82,10 @@
         "timestamp": { "type": "string", "format": "date-time" },
         "matched": { "type": "boolean" },
         "signal_type": { "type": "string", "enum": ["BUY", "SELL"] },
+        "journal_receipt": {
+          "type": "string", "minLength": 1, "maxLength": 32768,
+          "description": "Optional server-attested snapshot for the latest matched candle; not a broker fill or proof of trusted client computation."
+        },
         "reason_codes": {
           "type": "array",
           "maxItems": 16,
@@ -90,7 +94,7 @@
       },
       "if": { "properties": { "matched": { "const": true } } },
       "then": { "required": ["signal_type"] },
-      "else": { "not": { "required": ["signal_type"] } }
+      "else": { "not": { "anyOf": [{ "required": ["signal_type"] }, { "required": ["journal_receipt"] }] } }
     },
     "resultMessage": {
       "type": "object",
@@ -129,6 +133,7 @@
             "INVALID_MESSAGE",
             "PAYLOAD_TOO_LARGE",
             "RATE_LIMITED",
+            "JOURNAL_RECEIPT_UNAVAILABLE",
             "INTERNAL_ERROR"
           ]
         },

@@ -9,11 +9,13 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/core"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/api/shared"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/journal"
 	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
 	platformws "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/websocket"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
@@ -159,16 +161,40 @@ func (server *Handler) ScreenerWebSocket(writer http.ResponseWriter, request *ht
 		evalMap[eval.Symbol+"\x00"+eval.Timestamp] = eval
 	}
 	results := make([]Decision, 0, len(message.Candidates))
+	// Only the latest candle per stock can be selected in the live screener.
+	// Historical warmup candidates must not inflate the response with receipts.
+	latest := make(map[string]core.FeatureCandidate)
+	for _, candidate := range message.Candidates {
+		next, _ := time.Parse(time.RFC3339Nano, candidate.Timestamp)
+		previous, _ := time.Parse(time.RFC3339Nano, latest[candidate.Symbol].Timestamp)
+		if next.After(previous) {
+			latest[candidate.Symbol] = candidate
+		}
+	}
 	for _, candidate := range message.Candidates {
 		key := candidate.Symbol + "\x00" + candidate.Timestamp
 		if eval, ok := evalMap[key]; ok {
-			results = append(results, Decision{
+			result := Decision{
 				Symbol:      candidate.Symbol,
 				Timestamp:   candidate.Timestamp,
 				Matched:     eval.Matched,
 				SignalType:  eval.SignalType,
 				ReasonCodes: eval.ReasonCodes,
-			})
+			}
+			if eval.Matched && latest[candidate.Symbol].Timestamp == candidate.Timestamp {
+				result.JournalReceipt, err = server.JournalReceipts.Issue(binding.UserID, binding.SessionID, journal.Entry{
+					Symbol: candidate.Symbol, Market: manifest.Market, Currency: manifest.Currency,
+					RuleID: binding.RuleID, RuleName: rule.Name, DefinitionHash: binding.DefinitionHash,
+					Timeframe: manifest.Timeframe, CandleAt: candidate.Timestamp, SignalType: eval.SignalType,
+					Matched: true, Price: candidate.Features.Price, Features: candidate.Features,
+					ReasonCodes: eval.ReasonCodes, DatasetChecksum: manifest.Checksum,
+				})
+				if err != nil {
+					writeObservedSocketError(trace, ctx, connection, message.RequestID, "JOURNAL_RECEIPT_UNAVAILABLE", "Screening result could not be prepared for the journal. Run screening again.", true)
+					return
+				}
+			}
+			results = append(results, result)
 		} else {
 			results = append(results, Decision{
 				Symbol:      candidate.Symbol,

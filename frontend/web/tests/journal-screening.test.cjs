@@ -37,6 +37,15 @@ function fixture() {
     },
   };
 }
+test("saving requires a server receipt for a matched result from this account", () => {
+  const draft = fixture();
+  assert.equal(api.journalScreeningReceipt(draft, "owner"), null);
+  draft.run.rows[0].decision.journal_receipt = "synthetic-signed-receipt";
+  assert.equal(api.journalScreeningReceipt(draft, "owner"), "synthetic-signed-receipt");
+  assert.equal(api.journalScreeningReceipt(draft, "other"), null);
+  draft.run.rows[0].decision.matched = false;
+  assert.equal(api.journalScreeningReceipt(draft, "owner"), null);
+});
 test("only matched valid snapshots from the current account can be verified", () => {
   const draft = fixture();
   assert.equal(api.checkJournalScreening(draft, "owner").ok, true);

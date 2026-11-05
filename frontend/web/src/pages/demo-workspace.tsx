@@ -181,8 +181,8 @@ const viewMeta: Record<
     icon: Newspaper,
   },
   journal: {
-    title: "Trade journal",
-    description: "Record your trade plans and review positions.",
+    title: "Screening journal",
+    description: "Save matched screening results and revisit their snapshots.",
     icon: NotebookTabs,
   },
   access: {
@@ -223,7 +223,7 @@ const navGroups: Array<{
     items: [
       { view: "analysis", label: "Screener", icon: SearchCheck },
       { view: "backtest", label: "Backtesting", icon: CalendarRange },
-      { view: "journal", label: "Trade journal", icon: NotebookTabs },
+      { view: "journal", label: "Screening journal", icon: NotebookTabs },
     ],
   },
   {
@@ -280,7 +280,12 @@ function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
   const quickActions = [
     ["Open analysis", "Run a fixture screening", "analysis", BarChart3],
     ["Manage rules", "Review logic and versions", "rules", Braces],
-    ["Open journal", "Turn a signal into a position", "journal", BookOpenCheck],
+    [
+      "Open journal",
+      "Revisit saved screening results",
+      "journal",
+      BookOpenCheck,
+    ],
     ["Review access", "Check sessions and devices", "access", ShieldCheck],
   ] as const;
 
@@ -293,8 +298,8 @@ function OverviewPanel({ go }: { go: (view: DemoView) => void }) {
           </span>
           <h2>Read the market from one screen.</h2>
           <p>
-            Track screening results, active rules, and journal positions without
-            losing the evidence behind each signal.
+            Track screening results, active rules, and saved screening results
+            without losing the evidence behind each signal.
           </p>
         </div>
         <div className="overview-summary__status" aria-label="Workspace status">
@@ -1795,14 +1800,12 @@ export function DemoWorkspace({
       document.getElementById("workspace-route-heading")?.focus();
   }, [view]);
 
-  const [draftSymbol, setDraftSymbol] = useState<string | null>(null);
   const [screeningDraft, setScreeningDraft] =
     useState<JournalScreeningDraft | null>(null);
   const [screeningDrafts, setScreeningDrafts] = useState<
     JournalScreeningDraft[]
   >([]);
   useEffect(() => {
-    setDraftSymbol(null);
     setScreeningDraft(null);
     setScreeningDrafts([]);
   }, [user?.id]);
@@ -1812,9 +1815,9 @@ export function DemoWorkspace({
     if (window.matchMedia("(max-width: 860px)").matches) setMenuOpen(false);
     location.hash = `app/${next}`;
   }
-  function draft(symbol: string, evidence?: JournalScreeningDraft) {
+  function draft(_symbol: string, evidence?: JournalScreeningDraft) {
+    if (!evidence) return;
     setScreeningDrafts([]);
-    setDraftSymbol(symbol);
     setScreeningDraft(evidence ?? null);
     go("journal");
   }
@@ -2066,7 +2069,6 @@ export function DemoWorkspace({
                         key={user?.id ?? "guest"}
                         onDraft={draft}
                         onDraftBatch={(items) => {
-                          setDraftSymbol(null);
                           setScreeningDraft(null);
                           setScreeningDrafts(items);
                           go("journal");
@@ -2104,12 +2106,10 @@ export function DemoWorkspace({
                     {view === "journal" && (
                       <JournalPanel
                         key={user?.id ?? "guest"}
-                        draftSymbol={draftSymbol}
                         screeningDraft={screeningDraft}
                         screeningDrafts={screeningDrafts}
                         userId={user?.id}
                         clearDraft={() => {
-                          setDraftSymbol(null);
                           setScreeningDraft(null);
                           setScreeningDrafts([]);
                         }}

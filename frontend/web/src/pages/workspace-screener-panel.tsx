@@ -36,7 +36,7 @@ import { marketCandleDate, marketTimezone } from "@/lib/data-freshness";
 import { ScreeningDataQuality } from "@/components/screening-data-quality";
 import { InfoDialog } from "@/components/ui/info-dialog";
 import {
-  checkJournalScreening,
+  journalScreeningReceipt,
   type JournalScreeningDraft,
 } from "@/lib/journal-screening";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -403,7 +403,7 @@ export function WorkspaceScreenerPanel({
     ? displayedRows
         .filter(
           (row) =>
-            checkJournalScreening(evidenceFor(row.decision.symbol), userId).ok,
+            !!journalScreeningReceipt(evidenceFor(row.decision.symbol), userId),
         )
         .map((row) => row.decision.symbol)
     : [];
@@ -1594,7 +1594,7 @@ export function WorkspaceScreenerPanel({
                       const drafts = selectedSymbols.map(evidenceFor);
                       if (
                         !drafts.every(
-                          (item) => checkJournalScreening(item, userId).ok,
+                          (item) => !!journalScreeningReceipt(item, userId),
                         )
                       )
                         return;
@@ -1606,7 +1606,7 @@ export function WorkspaceScreenerPanel({
                       else onDraftBatch(drafts);
                     }}
                   >
-                    Review {selectedSymbols.length || "selected"} in journal
+                    Add {selectedSymbols.length || "selected"} to journal
                   </Button>
                 </div>
               </div>
@@ -1737,7 +1737,9 @@ export function WorkspaceScreenerPanel({
                           title={
                             selectable.includes(row.decision.symbol)
                               ? "Select for journal review"
-                              : "Only verified matched results can be selected"
+                              : row.decision.matched
+                                ? "Run screening again to prepare this result for the journal"
+                                : "Only matched screening results can be selected"
                           }
                           checked={selectedSymbols.includes(
                             row.decision.symbol,

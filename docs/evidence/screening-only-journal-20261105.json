@@ -1,0 +1,57 @@
+{
+  "date_local": "2026-11-05",
+  "branch": "frontend/screening-only-journal",
+  "api_version": "0.17.0",
+  "schema": "screening-journal-1",
+  "behavior": [
+    "only selected matched live screening snapshots can be added",
+    "manual inputs and transaction edit/delete/close/P&L UI removed",
+    "old records and local drafts preserved without conversion",
+    "legacy manual PUT/DELETE return 410",
+    "new server receipt bound to owner/session; immutable snapshot and idempotent retry",
+    "history sanitizer excludes receipts; new screening needed after reload/history restore"
+  ],
+  "verification": {
+    "go_race_all_packages": "passed",
+    "go_vet": "passed",
+    "web_tests": {
+      "passed": 232,
+      "failed": 0
+    },
+    "typecheck_production_build": "passed",
+    "openapi_validation": "passed",
+    "workspace_browser": "10 routes and desktop/mobile; synthetic API/accounts/evaluator",
+    "journal_browser": "single/bulk selection, no autosave, double-click prevention, partial failure retry only unsaved, paging, reload, outage, desktop/mobile dark/light; synthetic API/accounts/evaluator",
+    "websocket_integration": "real local socket response carries matching journal receipt; no-match omits receipt; signature/binding/expiry/restart/tampering verified",
+    "runtime_preflight": "8 checks passed: API/proxy 0.17, cloud/schema readiness, existing WASM compatibility, auth denial and JSON errors"
+  },
+  "data_safety": {
+    "new_migration": false,
+    "old_records_deleted": false,
+    "journal_converted_to_trades": false,
+    "real_account_journal_writes_tested": false,
+    "environment_changed": false
+  },
+  "limits": [
+    "receipts expire after 24h and API process restart; existing saved entries remain readable",
+    "Model A feature authenticity is not guaranteed by an evaluation receipt",
+    "1000 journal records/account including preserved legacy rows",
+    "UI does not expose transaction/P&L tools; separate portfolio ledger API remains unchanged"
+  ],
+  "tooling": {
+    "used": [
+      "codebase-memory with source fallback",
+      "frontend-design",
+      "ui-ux-pro-max",
+      "Context7 official React docs",
+      "project Playwright CLI tests"
+    ],
+    "unavailable_local": [
+      "impeccable",
+      "apple-design",
+      "shadcn skill",
+      "DESIGNmd CLI"
+    ],
+    "approach": "reused existing components and design; no unrelated dependency or design-system installation"
+  }
+}

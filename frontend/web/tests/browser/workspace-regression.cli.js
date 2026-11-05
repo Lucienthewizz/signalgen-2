@@ -13,7 +13,7 @@ async (page) => {
   const definition = { name: "Rule fixture", logic: "AND", signal_type: "BUY", cooldown_sec: 0, conditions: [{ left: "PRICE", op: ">", right: "EMA20" }, { left: "EMA9", op: ">", right: "EMA20" }] };
   const rule = { id: "fixture-rule", name: definition.name, owner_type: "user", read_only: false, version: 2, definition_hash: "fixture-hash", schema_version: "rule-1", engine_version: "core-0.5.0", definition };
   const universe = { id: "fixture-universe", name: "Bank pilihan", version: 1, symbols: ["BBCA.JK", "BBRI.JK"] };
-  const rows = [true, false].map((matched, i) => ({ decision: { symbol: universe.symbols[i], timestamp: now, matched, reason_codes: [matched ? "RULE_MATCHED" : "CONDITIONS_NOT_MET"] }, features: { price: 100 + i, ema9: matched ? 99 : 95, ema20: 98, rsi14: 60 }, latestOpen: 95, latestClose: 100 + i }));
+  const rows = [true, false].map((matched, i) => ({ decision: { symbol: universe.symbols[i], timestamp: now, matched, journal_receipt: matched ? "fixture-bbca" : undefined, reason_codes: [matched ? "RULE_MATCHED" : "CONDITIONS_NOT_MET"] }, features: { price: 100 + i, ema9: matched ? 99 : 95, ema20: 98, rsi14: 60 }, latestOpen: 95, latestClose: 100 + i }));
   const run = { rows, latestDecision: rows[0].decision, features: rows[0].features, latestOpen: 95, latestClose: 100, result: { type: "screener.result", protocol: "screener-private-1", request_id: "fixture-request", decision_version: "fixture-decision", results: rows.map(row => row.decision) }, manifest: { dataset_id: "fixture-dataset", version: "1", schema_version: "ohlcv-multi-1", provider: "yahoo_finance", purpose: "screen", market: "IDX", currency: "IDR", symbols: universe.symbols, timeframe: "1d", timezone: "UTC", requested_range: { from: day, to: day }, available_range: { from: day, to: day }, warmup_candles: 20, adjustment: "split", candle_count: 100, decoded_bytes: 1000, checksum: "fixture-checksum", quality: { status: "complete", warnings: [] } }, execution: "client_wasm+server_private_scoring" };
   const before = JSON.parse(JSON.stringify(run));
   before.rows.forEach(row => { row.decision.matched = !row.decision.matched; });
@@ -35,7 +35,9 @@ async (page) => {
   let journalUnavailable = false;
   let journalReadFailure=false;
   const journalWrites = [];
-  const journalItems = [198600,90000,-32000,70000].map((pnl,i)=>({id:`77777777-7777-4777-8777-${String(i+1).padStart(12,"0")}`,version:1,bytes:1000,data:{symbol:["BBCA","TLKM","ASII","BMRI"][i],market:"IDX",currency:"IDR",side:"BUY",quantity:1000,entry_price:1000,exit_price:1000+pnl/1000,entry_fee:0,exit_fee:0,entry_date:`2026-09-${[16,15,12,10][i]}`,exit_date:`2026-09-${[16,15,12,10][i]}`,book:"Trading journal",note:"Synthetic user-recorded trade",net_pl:pnl,return_pct:pnl/10000}}));
+  const journalData = (symbol, ruleName = "Saved rule") => ({schema_version:"screening-journal-1",source:"screening",symbol,market:"IDX",currency:"IDR",rule_id:rule.id,rule_name:ruleName,definition_hash:rule.definition_hash,timeframe:"1d",candle_at:now,screened_at:now,matched:true,signal_type:"BUY",price:100,features:{price:100,ema9:99,ema20:98,rsi14:60},reason_codes:["RULE_MATCHED"],dataset_checksum:"fixture-checksum"});
+  const journalItems = ["TLKM.JK","ASII.JK","BMRI.JK","BBNI.JK"].map((symbol,i)=>({id:`77777777-7777-4777-8777-${String(i+1).padStart(12,"0")}`,version:1,bytes:1000,data:journalData(symbol)}));
+
   const sessionFixtures = [
     { id: "fixture-current", label: "Current browser", status: "active", current: true, last_seen_at: now },
     { id: "fixture-active", label: "Other active browser", status: "active", current: false, last_seen_at: now },
@@ -71,17 +73,17 @@ async (page) => {
     const url = new URL(route.request().url());
     if (url.hostname !== "127.0.0.1") return route.abort();
     const p = url.pathname;
+    if(p==="/src/analysis/screener.ts")return route.fulfill({contentType:"application/javascript",body:`export async function runLiveScreener(){return ${JSON.stringify(run)};}`});
     if(p==='/api/v1/account/me')accountReads++;
-    if(p.startsWith("/api/v1/journal/trades")){
-      if(route.request().method()==="GET"){if(journalReadFailure){await new Promise(r=>setTimeout(r,100));return route.fulfill({status:503,json:{error:{code:"RECORDS_UNAVAILABLE",request_id:"qa-journal-outage"}}})}return route.fulfill({json:{items:journalItems}});}
-      const id=p.split("/").at(-1),body=route.request().postDataJSON();journalWrites.push({id,body});
-      if(journalUnavailable)return route.fulfill({status:503,json:{error:{code:"RECORDS_UNAVAILABLE",message:"Synthetic storage interruption. Nothing was reported as saved."}}});
-      const index=journalItems.findIndex(r=>r.id===id);
-      if(route.request().method()==="DELETE"){if(index>=0)journalItems.splice(index,1);return route.fulfill({status:204});}
-      const d=body.data,net=d.exit_price===null?null:Math.round(((d.exit_price-d.entry_price)*(d.side==="BUY"?1:-1)*d.quantity-d.entry_fee-d.exit_fee)*100)/100;
-      const row={id,version:(body.version??0)+1,bytes:1000,data:{...d,net_pl:net,return_pct:net===null?null:net/(d.quantity*d.entry_price+d.entry_fee)*100}};
-      if(index>=0)journalItems[index]=row;else journalItems.push(row);return route.fulfill({json:row});
+    if(p==="/api/v1/journal/screenings"){
+      if(route.request().method()==="GET"){if(journalReadFailure)return route.fulfill({status:503,json:{error:{code:"JOURNAL_UNAVAILABLE",request_id:"qa-journal-outage"}}});return route.fulfill({json:{schema_version:"screening-journal-1",items:journalItems}});}
+      const body=route.request().postDataJSON();journalWrites.push({body});
+      if(route.request().method()!=="POST"||body.receipt!=="fixture-bbca"||Object.keys(body).length!==1)throw Error("Manual or fabricated data reached journal save");
+      if(journalUnavailable)return route.fulfill({status:503,json:{error:{code:"JOURNAL_UNAVAILABLE",message:"Synthetic storage interruption."}}});
+      const id="88888888-8888-4888-8888-888888888888";let item=journalItems.find(r=>r.id===id);
+      if(!item){item={id,version:1,bytes:1000,data:journalData("BBCA.JK",rule.name)};journalItems.push(item);}return route.fulfill({json:item});
     }
+    if(p.startsWith("/api/v1/journal/trades")&&route.request().method()!=="GET")throw Error("Legacy journal mutation requested");
     if (healthOffline && p === "/api") return route.fulfill({ status: 503, json: { error: { code: "UNAVAILABLE", message: "Fixture health interruption" } } });
     if (p === "/api/v1/rules" && route.request().method() === "POST") {
       ruleWrite = route.request().postDataJSON();
@@ -222,98 +224,35 @@ async (page) => {
   await page.getByRole("button", { name: "Export CSV" }).click({ timeout: 5000 });
   if ((await download).suggestedFilename() !== "signalgen-screening.csv") throw Error("CSV download failed");
   const journalKey = `signalgen:journal-drafts:${user.id}`;
-  await page.evaluate(key => localStorage.setItem(key, "preserve-existing-drafts"), journalKey);
-  await page.getByRole("checkbox", { name: "Select BBCA for journal", exact: true }).check({ timeout: 5000 });
-  await page.getByRole("button", { name: "Review 1 in journal", exact: true }).click({ timeout: 5000 });
+  await page.evaluate(key=>localStorage.setItem(key,"preserve-existing-drafts"),journalKey);
+  await page.getByRole('button',{name:'Start screening',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('input[aria-label="Select BBCA for journal"]')?.disabled===false);
+  await page.getByRole('button',{name:'Stop',exact:true}).click();
+  await page.getByRole("checkbox",{name:"Select BBCA for journal",exact:true}).check();
+  await page.getByRole("button",{name:"Add 1 to journal",exact:true}).click();
   await page.waitForURL('**/#app/journal');
-  const journalVerification = page.getByRole('dialog',{name:'Verify screening details',exact:true});
-  await journalVerification.waitFor();
-  if (!(await journalVerification.innerText()).includes('BBCA') || await journalVerification.locator('tbody tr').count() !== 2) throw Error('Journal verification omitted captured condition evidence');
-  const verificationTheme = await page.evaluate(()=>document.documentElement.dataset.theme);
-  for (const width of [1440,390]) for (const theme of ["dark"]) {
-    await page.setViewportSize({width,height:1000});
-    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
-    const box=await journalVerification.boundingBox();
-    if (!box || box.x<0 || box.x+box.width>width+1) throw Error('Journal verification popup exceeds viewport');
-    await page.screenshot({path:`/private/tmp/signalgen-journal-verification-${width}-${theme}.png`,animations:'disabled'});
-  }
-  await page.evaluate(theme=>document.documentElement.dataset.theme=theme,verificationTheme);
-  await journalVerification.getByRole('button',{name:'Use in journal form',exact:true}).click();
-  await page.getByRole("heading", { name: "Record a trade", exact: true }).waitFor({ timeout: 5000 });
-  if (await page.locator(".journal-capture input").first().inputValue() !== "BBCA") throw Error("Screener did not prefill journal symbol");
-  await page.getByRole('button',{name:'Close journal form',exact:true}).waitFor();
-  if (await page.getByLabel('Entry price (IDR)',{exact:true}).inputValue() !== '100') throw Error('Journal price differs from screening snapshot');
-  if(await page.getByLabel('Side',{exact:true}).inputValue()!=="" || !await page.getByRole('button',{name:'Save trade',exact:true}).isDisabled())throw Error('Legacy screening silently assumed a trade direction');
-  await page.getByLabel('Side',{exact:true}).selectOption('BUY');
-  if(!await page.getByRole('button',{name:'Save trade',exact:true}).isEnabled())throw Error('Explicit trade direction did not enable the reviewed form');
-  await page.getByText('Screening verified',{exact:true}).waitFor();
-  await page.getByRole('button',{name:'Close journal form',exact:true}).click();
-  await page.getByRole('button',{name:'Open journal form',exact:true}).waitFor();
-  await page.getByLabel('Month',{exact:true}).click();
-  const monthPicker=page.getByRole('dialog',{name:'Filter by month',exact:true});
-  await monthPicker.getByLabel('Calendar year',{exact:true}).fill('2026');
-  await monthPicker.getByRole('button',{name:'October 2026',exact:true}).click();
-  await page.getByText('No closed trades in this period',{exact:true}).waitFor();
-  await page.getByText(/No recorded trades match these filters/).waitFor();
-  await page.getByRole('button',{name:'Clear month filter',exact:true}).click();
-  await page.getByText(/No recorded trades match these filters/).waitFor({state:'hidden'});
-  if (await page.locator('.journal-ledger tbody tr').count() !== 4) throw Error('Clearing month did not restore table');
-  const summaryText = await page.locator('.journal-performance__summary').innerText();
-  if (!summaryText.includes('326,600') || !summaryText.includes('4 closed trades') || summaryText.includes('sample')) throw Error('Journal total does not match server records');
-  if (!(await page.locator('.journal-pnl-chart svg').textContent()).includes('Cumulative P&L (IDR)')) throw Error('Chart axis labels missing');
-  await page.getByRole('button',{name:'Open journal form',exact:true}).click();
-  const saveBox=await page.getByRole('button',{name:'Save trade',exact:true}).boundingBox();
-  const closeBox=await page.getByRole('button',{name:'Close form',exact:true}).boundingBox();
-  if (!saveBox || !closeBox || Math.abs(saveBox.width-closeBox.width)>1 || Math.abs(saveBox.height-closeBox.height)>1) throw Error('Journal form actions differ in size');
-  await page.getByLabel('Symbol',{exact:true}).fill('TEST');
-  await page.getByLabel('Lot',{exact:true}).fill('1');
-  await page.getByLabel('Entry price (IDR)',{exact:true}).fill('100');
-  await page.getByLabel('Exit price (IDR, optional)',{exact:true}).fill('110');
-  await page.getByLabel('Entry date',{exact:true}).fill('2026-09-18');
-  await page.getByLabel('Exit date',{exact:true}).fill('2026-09-19');
-  await page.getByLabel('Entry fee (IDR)',{exact:true}).fill('1');
-  await page.getByLabel('Exit fee (IDR)',{exact:true}).fill('1');
+  await page.getByRole("heading",{name:"Saved screening results",exact:true}).waitFor();
+  const journalSelection=page.getByRole("region",{name:"Selected screening results",exact:true});
+  await journalSelection.waitFor();
+  if(!(await journalSelection.innerText()).includes('BBCA'))throw Error('Captured screening missing');
+  for(const label of ['Open journal form','Save trade','Update trade','Close position'])if(await page.getByRole('button',{name:label,exact:true}).count())throw Error('Removed journal action remains');
+  if(await page.locator('.journal-capture,.journal-pnl-chart').count())throw Error('Trade form or P&L chart remains');
+  if(await page.getByLabel('Quantity',{exact:true}).count())throw Error('Manual quantity remains');
   journalUnavailable=true;
-  await page.getByRole('button',{name:'Save trade',exact:true}).click();
-  await page.getByText('Journal unavailable',{exact:true}).waitFor();
-  if(journalItems.length!==4||await page.getByLabel('Symbol',{exact:true}).inputValue()!=='TEST')throw Error('Failed save lost input or created a record');
-  const retryID=journalWrites.at(-1).id;
+  await page.getByRole('button',{name:'Save 1 result to journal',exact:true}).click();
+  await page.getByText('Some results could not be saved',{exact:true}).waitFor();
+  if(journalItems.length!==4)throw Error('Failed save created a record');
+  const retryReceipt=journalWrites.at(-1).body.receipt;
   journalUnavailable=false;
-  await page.getByRole('button',{name:'Save trade',exact:true}).click();
-  await page.getByRole('button',{name:'Edit trade TEST',exact:true}).waitFor();
-  if(journalWrites.at(-1).id!==retryID||journalItems.length!==5)throw Error('Retry changed trade ID or duplicated a record');
-  if(!(await page.locator('.journal-performance__summary').innerText()).includes('327,598'))throw Error('Recorded trade did not update P&L');
-  await page.getByRole('button',{name:'Edit trade TEST',exact:true}).click();
-  await page.getByLabel('Exit price (IDR, optional)',{exact:true}).fill('');
-  await page.getByLabel('Exit date',{exact:true}).fill('');
-  await page.getByLabel('Exit fee (IDR)',{exact:true}).fill('0');
-  await page.getByRole('button',{name:'Update trade',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelector('.journal-performance__summary')?.textContent?.includes('326,600'));
-  if(journalWrites.at(-1).body.version!==1||'net_pl' in journalWrites.at(-1).body.data)throw Error('Journal update supplied a computed P&L or lost its version');
-  if(!(await page.locator('.journal-performance__summary').innerText()).includes('326,600'))throw Error('Open position was counted in realized P&L');
-  await page.getByRole('button',{name:'Delete trade TEST',exact:true}).click();
-  await page.getByRole('alertdialog',{name:'Delete recorded trade?',exact:true}).getByRole('button',{name:'Cancel',exact:true}).click();
-  if(journalItems.length!==5)throw Error('Cancel deleted a trade');
-  await page.getByRole('button',{name:'Delete trade TEST',exact:true}).click();
-  await page.getByRole('alertdialog',{name:'Delete recorded trade?',exact:true}).getByRole('button',{name:'Delete trade',exact:true}).click();
-  await page.getByRole('button',{name:'Edit trade TEST',exact:true}).waitFor({state:'hidden'});
-  if(journalItems.length!==4)throw Error('Confirmed trade delete failed');
-  await page.getByLabel('Currency',{exact:true}).selectOption('USD');
-  if((await page.locator('.journal-performance__summary').innerText()).includes('326,600'))throw Error('Journal mixed IDR and USD');
-  await page.getByLabel('Currency',{exact:true}).selectOption('IDR');
-  journalReadFailure=true;
-  await page.getByRole('button',{name:'Refresh journal',exact:true}).click();
-  await page.getByText('Refreshing journal. Previous records remain visible.',{exact:true}).waitFor();
-  await page.getByText('Journal unavailable',{exact:true}).waitFor();
-  if(await page.locator('.journal-ledger tbody tr').count()!==4)throw Error('A transient journal read removed the existing rows (qa-journal-outage)');
-  journalReadFailure=false;await page.getByRole('button',{name:'Retry journal',exact:true}).click();
-  await page.getByText('Journal unavailable',{exact:true}).waitFor({state:'hidden'});
-  // Multi-row review, explicit quantities, duplicate-click prevention and saves
-  // are covered by analysis-usability; partial-failure UUID retry by journal-batch unit tests.
-  if (await page.locator(".journal-drafts").count()) throw Error("Local draft workflow still visible");
+  await page.getByRole('button',{name:'Retry unsaved results',exact:true}).click();
+  await page.getByText('Selected results saved to your journal.',{exact:true}).waitFor();
+  if(journalWrites.at(-1).body.receipt!==retryReceipt||journalItems.length!==5)throw Error('Retry changed receipt or duplicated record');
+  if(await page.locator('.journal-ledger tbody tr').count()!==5)throw Error('Saved snapshot missing');
+  await page.getByRole('button',{name:'Done',exact:true}).click();
   await page.reload();
-  if (await page.evaluate(key => localStorage.getItem(key), journalKey) !== "preserve-existing-drafts") throw Error("Old drafts were overwritten");
-  if (await page.locator(".journal-capture").count()) throw Error("Journal form was persisted");
+  await page.getByRole('heading',{name:'Saved screening results',exact:true}).waitFor();
+  if(await page.evaluate(key=>localStorage.getItem(key),journalKey)!=='preserve-existing-drafts')throw Error('Legacy drafts were changed');
+  if(await page.locator('.journal-capture,.journal-pnl-chart').count())throw Error('Manual journal restored after reload');
   await page.route("**/api/v1/stock-universes", route => route.fulfill({ json: { items: [universe, { ...universe, id: "fixture-energy", name: "Energy selection", symbols: ["PTBA.JK"] }] } }));
   await page.goto(`${origin}/#app/realtime`);
   await page.getByLabel("Stock universe", { exact: true }).waitFor();
@@ -632,7 +571,7 @@ async (page) => {
           if (controlAlignment.heights > 2 || (width >= 1440 && controlAlignment.bottoms > 2)) throw Error(`Journal controls misaligned: ${JSON.stringify(controlAlignment)}`);
           await page.locator(".journal-toolbar").screenshot({ path: `/private/tmp/signalgen-journal-toolbar-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           await page.locator(".journal-ledger").screenshot({ path: `/private/tmp/signalgen-journal-records-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
-          if(await page.locator('.journal-ledger tbody tr').count()!==4)throw Error('Journal did not restore server records');
+          if(await page.locator('.journal-ledger tbody tr').count()!==5)throw Error('Journal did not restore saved screenings');
         }
         if (view === "realtime") {
           const offset = await page.evaluate(() => {

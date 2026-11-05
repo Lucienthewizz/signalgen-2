@@ -54,11 +54,11 @@ func TestRecordsOwnerStrictValidationAndPermissions(t *testing.T) {
 		status             int
 	}{
 		{"GET", base, "", 200}, {"GET", base + "?user_id=user-b", "", 422},
-		{"PUT", base + "/" + id, `{"version":0,"data":` + trade + `}`, 200},
-		{"PUT", base + "/" + id, `{"version":0,"user_id":"user-b","data":` + trade + `}`, 422},
-		{"PUT", base + "/" + id, `{"version":0,"data":` + strings.Replace(trade, `"note":`, `"net_pl":999,"note":`, 1) + `}`, 422},
-		{"DELETE", base + "/" + id, `{"version":1}`, 204},
-		{"DELETE", base + "/" + id, `{}`, 422}, {"GET", base + "/not-uuid", "", 422},
+		{"PUT", base + "/" + id, `{"version":0,"data":` + trade + `}`, 410},
+		{"PUT", base + "/" + id, `{"version":0,"user_id":"user-b","data":` + trade + `}`, 410},
+		{"PUT", base + "/" + id, `{"version":0,"data":` + strings.Replace(trade, `"note":`, `"net_pl":999,"note":`, 1) + `}`, 410},
+		{"DELETE", base + "/" + id, `{"version":1}`, 410},
+		{"DELETE", base + "/" + id, `{}`, 410}, {"GET", base + "/not-uuid", "", 422},
 		{"GET", "/api/v1/backtests/history", "", 403},
 	} {
 		r := httptest.NewRequest(c.method, c.path, strings.NewReader(c.body))
@@ -73,11 +73,10 @@ func TestRecordsOwnerStrictValidationAndPermissions(t *testing.T) {
 	if store.owner != "user-a" {
 		t.Fatal("client controlled owner")
 	}
-	var saved records.Trade
-	_ = json.Unmarshal(store.data, &saved)
-	if saved.NetPL == nil || *saved.NetPL != 198 {
-		t.Fatal(string(store.data))
+	if store.data != nil {
+		t.Fatal("retired manual journal write reached storage")
 	}
+
 	r := httptest.NewRequest("GET", base, nil)
 	w := httptest.NewRecorder()
 	server.ServeHTTP(w, r)
@@ -90,5 +89,5 @@ func TestRecordsOwnerStrictValidationAndPermissions(t *testing.T) {
 	r.Header.Set("X-App-Session", "fixture")
 	w = httptest.NewRecorder()
 	server.ServeHTTP(w, r)
-	assertErrorCode(t, w, 409, "VERSION_CONFLICT")
+	assertErrorCode(t, w, 410, "JOURNAL_SCREENING_ONLY")
 }

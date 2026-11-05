@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.16.0
+  version: 0.17.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     The Go API performs email/password and recovery flows through Supabase Auth,
@@ -40,6 +40,71 @@ tags:
     description: Manual long-only BUY/SELL ledger, separate from journal and backtest records.
 
 paths:
+  /api/v1/journal/screenings:
+    get:
+      tags: [Analysis]
+      operationId: listScreeningJournal
+      summary: Read the owner's saved matched screening snapshots
+      description: Append-only archive. Existing manual trade records are preserved but excluded. No portfolio accounting or P&L. Private/no-store.
+      security: [{supabaseBearer: [], appSession: []}]
+      responses:
+        "200":
+          description: Owner-scoped screening journal records.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schema_version, items]
+                properties:
+                  schema_version: {type: string, enum: [screening-journal-1]}
+                  items:
+                    type: array
+                    maxItems: 1000
+                    items: {$ref: "#/components/schemas/ScreeningJournalRecord"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {description: Account/session denied.}
+        "422": {description: Query parameters are not accepted.}
+        "429": {description: Owner rate limit.}
+        "503": {description: JOURNAL_UNAVAILABLE. Previously loaded data can remain visible.}
+    post:
+      tags: [Analysis]
+      operationId: saveScreeningJournal
+      summary: Save a matched screening result using its server receipt
+      description: |
+        Accepts only a receipt issued after server-side screener evaluation for
+        the latest matched candle per symbol. It is bound to owner and app-session,
+        expires after 24 hours, and is invalid after this API process restarts.
+        Run screening again when invalid. Receipt IDs make identical retries
+        idempotent. Prices/features/rule context come from the signed payload,
+        never a manual trade body. Active screener entitlement is rechecked.
+        Attestation proves the server evaluated the submitted features; Model A
+        client features are not independently verified market prices or broker fills.
+        Backtest results and no-match candidates do not produce journal receipts.
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [receipt]
+              properties:
+                receipt: {type: string, minLength: 1, maxLength: 32768, description: Opaque journal_receipt from a matched screener decision; never log it.}
+      responses:
+        "200":
+          description: Saved snapshot or original record on an identical retry.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ScreeningJournalRecord"}
+        "400": {description: Invalid JSON/type or unknown fields.}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {description: Account/session or screener entitlement denied.}
+        "409": {description: RECORD_LIMIT or VERSION_CONFLICT.}
+        "413": {description: Request body exceeds receipt limit.}
+        "422": {description: SCREENING_RECEIPT_INVALID; rerun screening in this session.}
+        "429": {description: Owner rate limit.}
+        "503": {description: JOURNAL_UNAVAILABLE; retry the same receipt without duplicating already saved rows.}
   /api/v1/portfolio:
     get:
       tags: [Portfolio]
@@ -191,7 +256,7 @@ paths:
     get:
       tags: [Account]
       operationId: listJournalTrades
-      summary: List the authenticated owner's recorded trades (maximum 1000)
+      summary: Read preserved legacy journal records (not used by the screening journal UI)
       description: User-recorded fills, not broker verification. Net P&L and return are calculated by the server; open positions have null realized P&L. Currencies must be aggregated separately.
       security: [{supabaseBearer: [], appSession: []}]
       responses: &recordListResponses
@@ -218,15 +283,69 @@ paths:
     put:
       tags: [Account]
       operationId: saveJournalTrade
-      summary: Create (version zero) or update (current version) a recorded trade
+      deprecated: true
+      summary: Retired manual trade write; journal only accepts screening receipts
+      security: [{supabaseBearer: [], appSession: []}]
+      responses:
+        "410": {description: JOURNAL_SCREENING_ONLY. Save a matched result through /api/v1/journal/screenings.}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {description: Account/session denied.}
+    delete:
+      tags: [Account]
+      operationId: deleteJournalTrade
+      deprecated: true
+      summary: Retired journal mutation; existing records are preserved
+      security: [{supabaseBearer: [], appSession: []}]
+      responses:
+        "410": {description: JOURNAL_SCREENING_ONLY. Journal is an append-only screening archive.}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {description: Account/session denied.}
+  /api/v1/backtests/history:
+    get:
+      tags: [Analysis]
+      operationId: listBacktestArchives
+      description: Backtest entitlement required. Newest 10 archives, maximum 50 MiB total. Data contains metadata only (no result); archives are unverified client simulations, never authoritative trading records.
+      security: [{supabaseBearer: [], appSession: []}]
+      responses: *recordListResponses
+    delete:
+      tags: [Analysis]
+      operationId: deleteAllBacktestArchives
+      summary: Delete all backtest archives for the authenticated owner
+      description: Requires explicit UI confirmation, a JSON version of zero, and current backtest entitlement. Does not delete journal records or candle datasets.
+      security: [{supabaseBearer: [], appSession: []}]
+      requestBody: &recordDeleteBody
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              additionalProperties: false
+              properties:
+                version: {type: integer, minimum: 0}
+      responses: &recordDeleteResponses
+        "204": {description: Deleted from the current owner's records.}
+        "409": {description: "VERSION_CONFLICT, including missing or foreign-owner record."}
+        "422": {description: Invalid ID/version.}
+        "403": {description: Account/session/feature denied.}
+        "503": {description: Deletion not confirmed.}
+  /api/v1/backtests/history/{id}:
+    parameters: *recordID
+    get:
+      tags: [Analysis]
+      operationId: getBacktestArchive
+      security: [{supabaseBearer: [], appSession: []}]
+      responses: *recordGetResponses
+    put:
+      tags: [Analysis]
+      operationId: saveBacktestArchive
       description: |
-        Data accepts only symbol, market (IDX/US), currency (IDR/USD), side (BUY/SELL),
-        quantity in shares (IDX multiples of 100), entry_price, exit_price (null for open),
-        entry_fee, exit_fee, entry_date, exit_date, book and note.
-        Dates are YYYY-MM-DD; exit cannot precede entry. Fees are absolute currency amounts.
-        Short P&L reverses the price delta but includes both fees. No automatic broker orders.
-        Unknown fields, owner IDs, supplied P&L, invalid prices and over-limit notionals are rejected.
-        The same ID and identical create payload are idempotent; updates use optimistic concurrency.
+        Immutable unverified archive, version zero only, maximum upload 8 MiB.
+        Data uses format_version=1, id matching the path UUID, saved_at RFC3339,
+        title, currency, source (dataset ID/version/checksum, universe ID/name/version/symbols,
+        optional rule ID/name/version/definition_hash), and a backtest-2 holding-next-open-1 result.
+        Private rule definitions, raw candles, credentials and owner_id are not accepted.
+        The oldest archives are pruned atomically to ten / 50 MiB per owner.
       security: [{supabaseBearer: [], appSession: []}]
       requestBody: &recordWriteBody
         required: true
@@ -246,61 +365,6 @@ paths:
         "422": {description: Invalid or unknown record fields/version.}
         "403": {description: Account/session/feature denied.}
         "503": {description: Record store unavailable; save not confirmed.}
-    delete:
-      tags: [Account]
-      operationId: deleteJournalTrade
-      security: [{supabaseBearer: [], appSession: []}]
-      requestBody: &recordDeleteBody
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [version]
-              additionalProperties: false
-              properties:
-                version: {type: integer, minimum: 0}
-      responses: &recordDeleteResponses
-        "204": {description: Deleted from the current owner's records.}
-        "409": {description: "VERSION_CONFLICT, including missing or foreign-owner record."}
-        "422": {description: Invalid ID/version.}
-        "403": {description: Account/session/feature denied.}
-        "503": {description: Deletion not confirmed.}
-  /api/v1/backtests/history:
-    get:
-      tags: [Analysis]
-      operationId: listBacktestArchives
-      description: Backtest entitlement required. Newest 10 archives, maximum 50 MiB total. Data contains metadata only (no result); archives are unverified client simulations, never authoritative trading records.
-      security: [{supabaseBearer: [], appSession: []}]
-      responses: *recordListResponses
-    delete:
-      tags: [Analysis]
-      operationId: deleteAllBacktestArchives
-      summary: Delete all backtest archives for the authenticated owner
-      description: Requires explicit UI confirmation, a JSON version of zero, and current backtest entitlement. Does not delete journal records or candle datasets.
-      security: [{supabaseBearer: [], appSession: []}]
-      requestBody: *recordDeleteBody
-      responses: *recordDeleteResponses
-  /api/v1/backtests/history/{id}:
-    parameters: *recordID
-    get:
-      tags: [Analysis]
-      operationId: getBacktestArchive
-      security: [{supabaseBearer: [], appSession: []}]
-      responses: *recordGetResponses
-    put:
-      tags: [Analysis]
-      operationId: saveBacktestArchive
-      description: |
-        Immutable unverified archive, version zero only, maximum upload 8 MiB.
-        Data uses format_version=1, id matching the path UUID, saved_at RFC3339,
-        title, currency, source (dataset ID/version/checksum, universe ID/name/version/symbols,
-        optional rule ID/name/version/definition_hash), and a backtest-2 holding-next-open-1 result.
-        Private rule definitions, raw candles, credentials and owner_id are not accepted.
-        The oldest archives are pruned atomically to ten / 50 MiB per owner.
-      security: [{supabaseBearer: [], appSession: []}]
-      requestBody: *recordWriteBody
-      responses: *recordWriteResponses
     delete:
       tags: [Analysis]
       operationId: deleteBacktestArchive
@@ -2268,6 +2332,43 @@ components:
           nullable: true
         version: {type: integer, format: int64, minimum: 1}
         updated_at: {type: string, format: date-time}
+    ScreeningJournalEntry:
+      type: object
+      required: [schema_version, source, symbol, market, currency, rule_id, rule_name, definition_hash, timeframe, candle_at, screened_at, matched, price, features, reason_codes, dataset_checksum]
+      properties:
+        schema_version: {type: string, enum: [screening-journal-1]}
+        source: {type: string, enum: [screening]}
+        symbol: {type: string}
+        market: {type: string, enum: [IDX, US]}
+        currency: {type: string, enum: [IDR, USD]}
+        rule_id: {type: string}
+        rule_name: {type: string}
+        definition_hash: {type: string}
+        timeframe: {type: string, enum: [1m, 5m, 15m, 1h, 1d]}
+        candle_at: {type: string, format: date-time}
+        screened_at: {type: string, format: date-time}
+        signal_type: {type: string, enum: [BUY, SELL]}
+        matched: {type: boolean, enum: [true]}
+        price: {type: number, minimum: 0, exclusiveMinimum: true}
+        features:
+          type: object
+          required: [price, ema9, ema20, rsi14]
+          properties:
+            price: {type: number}
+            ema9: {type: number}
+            ema20: {type: number}
+            rsi14: {type: number}
+            values: {type: object, additionalProperties: {type: number}}
+        reason_codes: {type: array, items: {type: string}}
+        dataset_checksum: {type: string}
+    ScreeningJournalRecord:
+      type: object
+      required: [id, version, data, bytes]
+      properties:
+        id: {type: string, format: uuid}
+        version: {type: integer, enum: [1]}
+        data: {$ref: "#/components/schemas/ScreeningJournalEntry"}
+        bytes: {type: integer, minimum: 0}
     PortfolioDecimal:
       type: string
       pattern: '^[0-9]{1,16}(\.[0-9]{1,6})?$'
@@ -2346,7 +2447,7 @@ components:
       required: [name, version, description, docs, status]
       properties:
         name: {type: string}
-        version: {type: string, enum: [0.16.0]}
+        version: {type: string, enum: [0.17.0]}
         description: {type: string}
         docs: {type: string}
         status: {type: string, enum: [ok]}

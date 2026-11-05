@@ -1,5 +1,10 @@
 # SignalGen — Frontend MVP PRD
 
+Revisi aktif 5 November 2026: jurnal hanya menerima hasil screening Match yang
+dipilih pengguna. Hapus form/CRUD transaksi dan grafik P&L dari alur aktif;
+[screening-journal-1](../backend/SCREENING_JOURNAL.md) menggantikan kebutuhan jurnal
+manual di baseline dokumen ini. Catatan lama tetap disimpan.
+
 Versi 2.0 · 16 September 2026 · Target implementasi web berdasarkan revisi voice memo. Owner: frontend developer. Scope/priority mengikuti [PRD utama](../PRD.md); arsitektur mengikuti [context](../PROJECT_CONTEXT.md); API dan worker mengikuti [kontrak bersama](../backend/MVP_API_CONTRACT.md).
 
 ## 1. Tujuan dan toolchain
@@ -27,7 +32,7 @@ Route berikut adalah desain UI yang diusulkan, bukan klaim route sudah ada:
 | Workspace | `/app` | P0 | Pilih screen/backtest, rule, dataset/saham/periode; configure/run/cancel |
 | Rule management | `/app/rules` | P1 | List sistem/milik user, create/edit/delete subset, unsupported warning |
 | Results | panel/route dalam workspace | P0 | Summary, alasan match, signal/trade, assumptions, data quality |
-| Journal | `/app/journal` | P1 | Form manual, draft hasil, transaksi, posisi/P&L server |
+| Journal | `/app/journal` | P1 | Pilih hasil Match dari screener, simpan snapshot, lihat arsip tanpa transaksi/P&L |
 | Account | `/app/account` | P0/P1 | Identitas/hak fitur, sesi/perangkat, revoke, clear cache |
 
 Tidak membuat screen admin lengkap, watchlist suite atau settings realtime untuk memenuhi MVP. Operator grant P0 dapat CLI; minimal grant tooling P1 sesuai BE, UI operator bukan syarat.
@@ -116,7 +121,7 @@ Validasi layout 1366×768, 1024×768 dan 390×844. Laptop flow analisis penuh; l
 
 ## 10. Testing, handoff dan DoD
 
-Unit/contract: API error codes, auth single-flight, worker correlation/cancel/stale messages, schema validation, cache scope/corruption, draft journal mapping. E2E: login → screen/backtest → hasil; denied direct API; A/B isolation; cancel/rerun; revoked; journal CRUD and invalid SELL; user switch/cache cleanup. Test ini target, belum dijalankan oleh revisi dokumentasi.
+Unit/contract: API error codes, auth single-flight, worker correlation/cancel/stale messages, schema validation, cache scope/corruption, draft journal mapping. E2E: login → screen/backtest → hasil; denied direct API; A/B isolation; cancel/rerun; revoked; screening-only journal, receipt ownership and retry idempotency; user switch/cache cleanup. Test ini target, belum dijalankan oleh revisi dokumentasi.
 
 Backend menyerahkan OpenAPI, stable errors, capabilities, fixture profiles/grants dan dataset tanpa secrets. Core menyerahkan versioned WASM + runtime yang sesuai, schema, fixture dan parity report. FE menyerahkan routes, state machine, production build, integration tests dan profile report.
 
