@@ -106,7 +106,7 @@ export function StockHeatmap({
               }
               data-compact={
                 (box.width * width) / 100 < 140 ||
-                (box.height * height) / 100 < 120
+                (box.height * height) / 100 < 180
                   ? "true"
                   : undefined
               }

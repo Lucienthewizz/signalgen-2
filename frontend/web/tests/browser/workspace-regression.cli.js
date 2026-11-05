@@ -1263,7 +1263,7 @@ async (page) => {
   await page.route('**/api/v1/workspace',route=>route.fulfill({json:{items:[{kind:'monitor-history',data:heatHistory,version:10,updated_at:now}]}}));
   await page.goto(`${origin}/#app/realtime`);await page.reload();
   await page.waitForFunction(()=>document.querySelectorAll('.stock-heatmap__tile').length===10&&document.querySelector('[data-tone="loss-strong"]'));
-  for(const width of [1440,390])for(const theme of ['dark','light']){
+  for(const width of [1440,1218,390])for(const theme of ['dark','light']){
     await page.setViewportSize({width,height:1000});await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
     await page.waitForFunction(()=>[...document.querySelectorAll('.stock-heatmap__tile')].every(el=>el.getBoundingClientRect().width>=44&&el.getBoundingClientRect().height>=44));
     if(await page.locator('.stock-heatmap__tile[data-tone="missing"]').count()!==1||await page.locator('.stock-heatmap__tile[data-tone="flat"]').count()!==1)throw Error('Heatmap zero and missing must remain separate');
@@ -1276,6 +1276,8 @@ async (page) => {
       if(pg<=pr||nr<=ng)throw Error('Heatmap positive must be green and negative red');
     }
     if(geometry[6].area<=geometry[8].area)throw Error('Nonzero move should be larger than the minimum neutral tile');
+    const clippedNames=await page.locator('.stock-heatmap__tile > small').evaluateAll(names=>names.some(name=>getComputedStyle(name).display!=='none'&&name.getBoundingClientRect().height+1<parseFloat(getComputedStyle(name).lineHeight)));
+    if(clippedNames)throw Error('Company name is clipped into white fragments at '+width);
     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error('Heatmap overflows '+width);
     await page.locator('.stock-heatmap').screenshot({path:`output/playwright/stock-heatmap-mixed-${width}-${theme}.png`,animations:'disabled'});
   }
