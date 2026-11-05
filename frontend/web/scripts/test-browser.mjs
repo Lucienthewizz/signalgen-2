@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const authOnly = process.argv.includes("--auth");
 const adminOnly = process.argv.includes("--admin");
 const studyOnly = process.argv.includes("--study");
 const backtestOnly = process.argv.includes("--backtest");
@@ -14,7 +15,7 @@ const recoveryOnly = process.argv.includes("--recovery");
 const monitorOnly = process.argv.includes("--monitor");
 const usabilityOnly = process.argv.includes("--usability");
 const baseURL = process.env.SIGNALGEN_TEST_BASE_URL || "http://127.0.0.1:5174";
-const testFilename = studyOnly
+const testFilename = authOnly ? "tests/browser/google-auth.cli.js" : studyOnly
   ? "tests/browser/signal-study.cli.js"
   : usabilityOnly
     ? "tests/browser/analysis-usability.cli.js"
@@ -31,7 +32,7 @@ const testFilename = studyOnly
               : catalogOnly
                 ? "tests/browser/stock-catalog.cli.js"
                 : "tests/browser/workspace-regression.cli.js";
-const attributeName = studyOnly
+const attributeName = authOnly ? "data-signalgen-auth-tests" : studyOnly
   ? "data-signalgen-study-tests"
   : usabilityOnly
     ? "data-signalgen-usability-tests"
@@ -164,7 +165,7 @@ if (usedCli) {
 }
 
 console.log(
-  studyOnly
+  authOnly ? "PASS: Google PKCE login, duplicate click, session handoff, disabled provider, cancelled/expired/unsolicited callback; 1440/390px dark/light. Synthetic API/provider/account fixtures only." : studyOnly
     ? "PASS: batched signal-study browser regression with real Go/WASM; synthetic API/account/provider fixtures."
     : usabilityOnly
       ? "PASS: screening-only journal selection, receipt-only writes, failed-row retry, double-click prevention, bounded paging and outage recovery; desktop/mobile, dark/light. Synthetic API/account/evaluator fixtures only."

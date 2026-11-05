@@ -7,6 +7,8 @@ type RouteRegistrar interface {
 }
 
 type RouteHandlers struct {
+	StartGoogle          http.HandlerFunc
+	ExchangeGoogle       http.HandlerFunc
 	Register             http.HandlerFunc
 	Login                http.HandlerFunc
 	Refresh              http.HandlerFunc
@@ -16,6 +18,8 @@ type RouteHandlers struct {
 }
 
 func RegisterRoutes(router RouteRegistrar, handlers RouteHandlers) {
+	router.Handle(http.MethodPost, "/api/auth/google/start", handlers.StartGoogle)
+	router.Handle(http.MethodPost, "/api/auth/google/exchange", handlers.ExchangeGoogle)
 	router.Handle(http.MethodPost, "/api/auth/register", handlers.Register)
 	router.Handle(http.MethodPost, "/api/auth/login", handlers.Login)
 	router.Handle(http.MethodPost, "/api/auth/refresh", handlers.Refresh)

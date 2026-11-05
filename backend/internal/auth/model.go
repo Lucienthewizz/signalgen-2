@@ -3,6 +3,7 @@ package auth
 import "errors"
 
 var (
+	ErrGoogleNotConfigured  = errors.New("Google provider is not configured")
 	ErrTokenRequired        = errors.New("access token is required")
 	ErrTokenInvalid         = errors.New("access token is invalid or expired")
 	ErrRefreshInvalid       = errors.New("refresh token is invalid or revoked")

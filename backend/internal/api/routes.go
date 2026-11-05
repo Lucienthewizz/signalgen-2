@@ -85,6 +85,7 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	router.Handle(http.MethodGet, "/api/v1/capabilities", systemHandler.Capabilities)
 
 	auth.RegisterRoutes(router, auth.RouteHandlers{
+		StartGoogle: authHandler.StartGoogle(config.allowedOrigins), ExchangeGoogle: authHandler.ExchangeGoogle,
 		Register: authHandler.Register, Login: authHandler.Login, Refresh: authHandler.RefreshAuth, Me: authHandler.Me,
 		RequestPasswordReset: authHandler.RequestPasswordReset(config.resetRedirect),
 		ResetPassword:        authHandler.ResetPassword,

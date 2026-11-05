@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SignalGen Go API
-  version: 0.17.0
+  version: 0.18.0
   description: |
     Implemented API surface for the incremental SignalGen Go backend.
     The Go API performs email/password and recovery flows through Supabase Auth,
@@ -535,6 +535,89 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/auth/google/start:
+    post:
+      tags: [Authentication]
+      operationId: startGoogleSignIn
+      summary: Begin Google sign-in through Supabase using PKCE S256
+      description: |
+        Returns a Supabase authorization URL. The callback must be exactly
+        /auth/google/callback on an origin in SIGNALGEN_CORS_ORIGINS.
+        The browser retains the verifier in sessionStorage for at most ten minutes.
+        No Google client secret, roles, app session or entitlements are returned.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [redirect_to, code_challenge]
+              properties:
+                redirect_to: {type: string, format: uri}
+                code_challenge: {type: string, pattern: '^[A-Za-z0-9_-]{43}$'}
+      responses:
+        "200":
+          description: Authorization URL; private, no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url: {type: string, format: uri}
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/auth/google/exchange:
+    post:
+      tags: [Authentication]
+      operationId: exchangeGoogleCode
+      summary: Exchange a one-time Supabase authorization code and PKCE verifier
+      description: |
+        POST body only; never put codes/verifiers in API URLs or logs.
+        Returns the same identity-only response as email login. The frontend must
+        subsequently create a SignalGen app session through the existing API.
+        Codes are single-use. Do not automatically retry this exchange.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code, code_verifier]
+              properties:
+                code: {type: string, minLength: 1, maxLength: 4096, writeOnly: true}
+                code_verifier: {type: string, minLength: 43, maxLength: 128, pattern: '^[A-Za-z0-9._~-]{43,128}$', writeOnly: true}
+      responses:
+        "200":
+          description: Supabase identity session; private, no-store. Google API tokens are discarded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
         "429":
           $ref: "#/components/responses/RateLimited"
         "503":
@@ -2447,7 +2530,7 @@ components:
       required: [name, version, description, docs, status]
       properties:
         name: {type: string}
-        version: {type: string, enum: [0.17.0]}
+        version: {type: string, enum: [0.18.0]}
         description: {type: string}
         docs: {type: string}
         status: {type: string, enum: [ok]}

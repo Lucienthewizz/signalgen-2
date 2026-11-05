@@ -4,6 +4,7 @@ import {
   loadUiResource,
   peekUiResource,
 } from "./ui-cache";
+import { clearGoogleProof } from "./google-oauth";
 import type {
   BacktestManifest,
   BacktestScope,
@@ -134,6 +135,7 @@ export const session = {
     return created;
   },
   clear: () => {
+    clearGoogleProof(sessionStorage);
     ++authGeneration;
     identityChanged();
     sessionStorage.removeItem(TOKEN_KEY);
@@ -420,7 +422,7 @@ async function performRequest<T>(
   init.signal?.throwIfAborted();
   if (
     session.needsRefresh() &&
-    !/^\/api\/auth\/(login|register|refresh|password)/.test(path)
+    !/^\/api\/auth\/(login|register|refresh|password|google)/.test(path)
   )
     await refreshAuth();
   init.signal?.throwIfAborted();
@@ -593,6 +595,20 @@ export const api = {
     request<LoginResponse>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
+    }),
+  startGoogle: (
+    proof: { code_challenge: string; redirect_to: string },
+    signal?: AbortSignal,
+  ) =>
+    request<{ url: string }>("/api/auth/google/start", {
+      method: "POST",
+      body: JSON.stringify(proof),
+      signal,
+    }),
+  exchangeGoogleCode: (code: string, codeVerifier: string) =>
+    request<LoginResponse>("/api/auth/google/exchange", {
+      method: "POST",
+      body: JSON.stringify({ code, code_verifier: codeVerifier }),
     }),
   register: (fullName: string, email: string, password: string) =>
     request<RegisterResponse>("/api/auth/register", {

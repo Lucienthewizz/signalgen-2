@@ -23,13 +23,18 @@ function client(reply, timers = {}) {
   }).outputText;
   const exports = {};
   const cache = {};
+  const google = {};
+  vm.runInNewContext(ts.transpileModule(
+    fs.readFileSync(path.join(__dirname, "../src/api/google-oauth.ts"), "utf8"),
+    { compilerOptions: { module: ts.ModuleKind.CommonJS } },
+  ).outputText, { exports: google });
   vm.runInNewContext(ts.transpileModule(
     fs.readFileSync(path.join(__dirname, "../src/api/ui-cache.ts"), "utf8"),
     { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
   ).outputText, { exports: cache, require, structuredClone, AbortController, Date });
   vm.runInNewContext(compiled, {
     exports,
-    require: name => name === "./ui-cache" ? cache : require(name),
+    require: name => name === "./ui-cache" ? cache : name === "./google-oauth" ? google : require(name),
     Headers,
     Event,
     AbortController,
@@ -62,6 +67,18 @@ function client(reply, timers = {}) {
 }
 const response = (payload, status = 200) =>
   new Response(JSON.stringify(payload), { status });
+
+test("Google exchange is a one-shot public auth request; it never refreshes unrelated identity", async t => {
+  const c=client(()=>response({error:{code:"AUTH_INVALID",message:"Expired code"}},401));
+  t.after(()=>c.session.clear());
+  c.session.setAuth({access_token:"old-identity",refresh_token:"old-refresh",expires_in:3600});
+  c.session.needsRefresh=()=>true;
+  await assert.rejects(c.api.exchangeGoogleCode("code","proof"),/Expired code/);
+  assert.equal(c.calls.length,1);
+  assert.equal(c.calls[0].url,"https://api.example.test/api/auth/google/exchange");
+  assert.deepEqual(JSON.parse(c.calls[0].init.body),{code:"code",code_verifier:"proof"});
+  assert.equal(c.session.getToken(),"old-identity");
+});
 
 test("UI cache reuses owned lists while authorization stays uncached and writes invalidate", async t => {
   let version=1,reads=0,accounts=0;

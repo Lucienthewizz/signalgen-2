@@ -169,3 +169,8 @@ Gates: parity core, API/worker contract tests, ownership/role/entitlement, migra
 main stabil, develop integrasi; PR kecil dengan review anggota lain. Ikuti branch yang diminta; default branch agent codex/. Tidak push/merge atau migration production hanya karena PRD berubah.
 
 Saat mulai: baca acuan terkait, cek git status, kontrak runtime, pilih slice, tulis tes dan verifikasi. Preserve perubahan user. Keputusan terbuka PRD diselesaikan pada gate-nya tanpa menghentikan pekerjaan independen yang aman.
+
+
+## Google sign-in (5 November 2026)
+
+Login/register mendukung pilihan Google melalui Supabase PKCE, di samping email/password. Callback web `/auth/google/callback`, gateway Go `POST /api/auth/google/start` dan `POST /api/auth/google/exchange` (API 0.18.0). Sesi aplikasi, ownership, status, dan entitlement memakai alur backend yang sama. Google Client Secret hanya berada di konfigurasi provider Supabase. Aktivasi provider dan smoke test akun asli tetap perlu dibuktikan terpisah. Panduan: [Google sign-in](backend/GOOGLE_SIGN_IN.md).

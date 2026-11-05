@@ -25,6 +25,7 @@ import {
 import { Brand } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { api, ApiError, session } from "@/api/client";
+import { createGoogleProof, clearGoogleProof } from "@/api/google-oauth";
 import type { User } from "@/types";
 
 export type AuthView =
@@ -46,6 +47,9 @@ export function AuthPage({
   onAuthenticated: (user: User) => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const googlePending = useRef(false);
+  const googleRequest = useRef<AbortController | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerConfirmation, setRegisterConfirmation] = useState("");
@@ -57,6 +61,15 @@ export function AuthPage({
     setRegistrationComplete(false);
     setRegisterPassword("");
     setRegisterConfirmation("");
+    setGoogleLoading(false);
+    return () => {
+      if (googleRequest.current) {
+        googleRequest.current.abort();
+        clearGoogleProof(sessionStorage);
+        googleRequest.current = null;
+        googlePending.current = false;
+      }
+    };
   }, [view]);
   useEffect(() => {
     if (registrationComplete) successRef.current?.focus();
@@ -78,7 +91,7 @@ export function AuthPage({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (loading || registrationComplete) return;
+    if (loading || googlePending.current || registrationComplete) return;
     const form = event.currentTarget;
     const data = new FormData(form);
     const email = String(data.get("email") ?? "").trim();
@@ -161,6 +174,36 @@ export function AuthPage({
       });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function signInWithGoogle() {
+    if (loading || googlePending.current) return;
+    googlePending.current = true;
+    const controller = new AbortController();
+    googleRequest.current = controller;
+    setGoogleLoading(true);
+    setNotice(null);
+    try {
+      const proof = await createGoogleProof(
+        sessionStorage,
+        location.origin,
+        controller.signal,
+      );
+      controller.signal.throwIfAborted();
+      const result = await api.startGoogle(proof, controller.signal);
+      controller.signal.throwIfAborted();
+      location.assign(result.url);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      clearGoogleProof(sessionStorage);
+      setNotice({
+        kind: "error",
+        title: "Google sign-in unavailable",
+        detail: error instanceof Error ? error.message : "Please try again.",
+      });
+      googlePending.current = false;
+      setGoogleLoading(false);
     }
   }
 
@@ -417,7 +460,7 @@ export function AuthPage({
               )}
               <Button
                 className="ui-button ui-button--primary auth-submit"
-                disabled={loading || !backendOnline}
+                disabled={loading || googleLoading || !backendOnline}
                 type="submit"
               >
                 {loading
@@ -431,6 +474,24 @@ export function AuthPage({
                         : "Save new password"}
                 <ArrowRight />
               </Button>
+              {(view === "login" || view === "register") && (
+                <>
+                  <div className="auth-or" aria-hidden="true">
+                    or
+                  </div>
+                  <Button
+                    className="ui-button auth-google"
+                    type="button"
+                    onClick={() => void signInWithGoogle()}
+                    disabled={loading || googleLoading || !backendOnline}
+                  >
+                    <span aria-hidden="true" className="auth-google__mark">
+                      G
+                    </span>
+                    {googleLoading ? "Opening Google…" : "Continue with Google"}
+                  </Button>
+                </>
+              )}
             </form>
           )}
           {view === "login" && (

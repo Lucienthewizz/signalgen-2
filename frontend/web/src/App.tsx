@@ -1,4 +1,11 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { api, session } from "@/api/client";
 import {
   monitorBackendStatus,
@@ -7,6 +14,7 @@ import {
 import { Brand } from "@/components/brand";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AuthView } from "@/pages/auth-page";
+import { GOOGLE_CALLBACK_PATH } from "@/api/google-oauth";
 import type { DemoView } from "@/pages/demo-workspace";
 import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
 import { startHistoricalCacheLifecycle } from "@/data/historical-lifecycle";
@@ -15,6 +23,11 @@ const AccountPage = lazy(() =>
 );
 const AuthPage = lazy(() =>
   import("@/pages/auth-page").then((m) => ({ default: m.AuthPage })),
+);
+const GoogleCallbackPage = lazy(() =>
+  import("@/pages/google-callback-page").then((m) => ({
+    default: m.GoogleCallbackPage,
+  })),
 );
 const DemoWorkspace = lazy(() =>
   import("@/pages/demo-workspace").then((m) => ({ default: m.DemoWorkspace })),
@@ -29,9 +42,16 @@ const PublicWorkspace = lazy(() =>
 );
 import type { User } from "@/types";
 
-type Route = "home" | "account" | "creators" | AuthView | `app/${DemoView}`;
+type Route =
+  | "home"
+  | "account"
+  | "creators"
+  | "google-callback"
+  | AuthView
+  | `app/${DemoView}`;
 
 function currentRoute(): Route {
+  if (location.pathname === GOOGLE_CALLBACK_PATH) return "google-callback";
   const queryView = new URLSearchParams(location.search).get("view");
   if (queryView === "reset-password") return "reset-password";
   const hashParams = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -108,7 +128,7 @@ function RoutedApp() {
       setConnection,
     );
     Promise.allSettled([
-      session.getToken()
+      session.getToken() && currentRoute() !== "google-callback"
         ? Promise.all([api.me(), api.ensureAppSession()]).then(([profile]) => {
             if (active) {
               setUser(profile);
@@ -131,10 +151,10 @@ function RoutedApp() {
     };
   }, []);
 
-  function authenticated(nextUser: User) {
+  const authenticated = useCallback((nextUser: User) => {
     setUser(nextUser);
     location.hash = "app/overview";
-  }
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -181,6 +201,8 @@ function RoutedApp() {
       </main>
     );
   }
+  if (route === "google-callback")
+    return <GoogleCallbackPage onAuthenticated={authenticated} />;
   if (route === "account" && user)
     return (
       <AccountPage

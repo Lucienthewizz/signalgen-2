@@ -187,3 +187,8 @@ MVP selesai: **seluruh P0/P1** lulus; slice API Go teruji; provider berizin, mig
 | Benefit/harga/provider pembayaran | Product | P2 komersial; tidak memblokir grant MVP |
 
 Usulan teknik bukan ucapan pembimbing. Perubahan berikutnya memperbarui scope, dampak, acceptance dan kontrak bersama. Review/merge tetap lewat PR. Revisi ini tidak membuat commit/push, menghapus legacy, atau menjalankan migration production.
+
+
+## Google sign-in (5 November 2026)
+
+Login/register mendukung pilihan Google melalui Supabase PKCE, di samping email/password. Callback web `/auth/google/callback`, gateway Go `POST /api/auth/google/start` dan `POST /api/auth/google/exchange` (API 0.18.0). Sesi aplikasi, ownership, status, dan entitlement memakai alur backend yang sama. Google Client Secret hanya berada di konfigurasi provider Supabase. Aktivasi provider dan smoke test akun asli tetap perlu dibuktikan terpisah. Panduan: [Google sign-in](backend/GOOGLE_SIGN_IN.md).
