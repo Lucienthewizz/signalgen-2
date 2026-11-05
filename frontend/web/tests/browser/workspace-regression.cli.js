@@ -1255,7 +1255,7 @@ async (page) => {
   if (await page.getByLabel('Password', {exact:true}).inputValue() || await page.getByLabel('Full name', {exact:true}).inputValue()) throw Error('Registration data survived reopening the form');
   // Full heatmap mix uses only synthetic snapshots, never live account data.
   const heatSymbols=['BBCA','BBRI','TLKM','BMRI','ASII','ANTM','INDF','AADI','PTBA','ICBP'];
-  const heatChanges=[5,-4,2,-2,.5,-.5,0,1,-1];
+  const heatChanges=[10,-10,5,-5,2,-2,1,-1,0];
   const heatRows=heatChanges.map((change,index)=>({...rows[0],decision:{...rows[0].decision,symbol:heatSymbols[index]+'.JK'},latestOpen:100,latestClose:100+change}));
   const heatRun={...run,rows:heatRows,manifest:{...run.manifest,symbols:heatRows.map(row=>row.decision.symbol)},result:{...run.result,results:heatRows.map(row=>row.decision)}};
   const heatHistory=[{rule:'Heatmap fixture',recordedAt:now,run:heatRun}];
@@ -1267,6 +1267,15 @@ async (page) => {
     await page.setViewportSize({width,height:1000});await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
     await page.waitForFunction(()=>[...document.querySelectorAll('.stock-heatmap__tile')].every(el=>el.getBoundingClientRect().width>=44&&el.getBoundingClientRect().height>=44));
     if(await page.locator('.stock-heatmap__tile[data-tone="missing"]').count()!==1||await page.locator('.stock-heatmap__tile[data-tone="flat"]').count()!==1)throw Error('Heatmap zero and missing must remain separate');
+    const geometry=await page.locator('.stock-heatmap__tile').evaluateAll(tiles=>tiles.map(tile=>{const r=tile.getBoundingClientRect();return{area:r.width*r.height,background:getComputedStyle(tile).backgroundColor};}));
+    for(let i=0;i<8;i+=2){
+      const positive=geometry[i],negative=geometry[i+1];
+      if(Math.abs(positive.area-negative.area)>positive.area*.005)throw Error('Equal positive/negative changes need equal areas');
+      if(i<6&&positive.area<=geometry[i+2].area)throw Error('Larger absolute move must get a larger tile');
+      const [pr,pg]=positive.background.match(/[\d.]+/g).map(Number),[nr,ng]=negative.background.match(/[\d.]+/g).map(Number);
+      if(pg<=pr||nr<=ng)throw Error('Heatmap positive must be green and negative red');
+    }
+    if(geometry[6].area<=geometry[8].area)throw Error('Nonzero move should be larger than the minimum neutral tile');
     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error('Heatmap overflows '+width);
     await page.locator('.stock-heatmap').screenshot({path:`output/playwright/stock-heatmap-mixed-${width}-${theme}.png`,animations:'disabled'});
   }
@@ -1277,7 +1286,7 @@ async (page) => {
     await page.setViewportSize({width,height:1000});
     await page.getByRole('button',{name:'Hide heatmap',exact:true}).click();
     await page.getByRole('button',{name:'Show heatmap',exact:true}).click();
-    await page.waitForFunction(()=>[...document.querySelectorAll('.stock-heatmap__tile')].every(el=>el.getBoundingClientRect().width>=80));
+    await page.waitForFunction(()=>[...document.querySelectorAll('.stock-heatmap__tile')].every(el=>el.getBoundingClientRect().width>=44));
     const clipped=await page.locator('.stock-heatmap__canvas').evaluate(canvas=>{
       const area=canvas.getBoundingClientRect();
       return [...canvas.querySelectorAll('button')].some(tile=>{
@@ -1296,7 +1305,7 @@ async (page) => {
       await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
     });
     if(await heatTile.getAttribute('aria-pressed')!=='true'||await page.locator('.stock-heatmap__tile').count()!==10)throw Error('Sidebar toggle disrupted the heatmap selection');
-    if(await page.locator('.stock-heatmap__tile').evaluateAll(tiles=>tiles.some(tile=>tile.getBoundingClientRect().width<80)))throw Error('Sidebar toggle produced thin heatmap tiles');
+    if(await page.locator('.stock-heatmap__tile').evaluateAll(tiles=>tiles.some(tile=>tile.getBoundingClientRect().width<44)))throw Error('Sidebar toggle produced inaccessible heatmap tiles');
   }
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));

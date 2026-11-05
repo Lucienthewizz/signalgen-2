@@ -167,6 +167,25 @@
   width: 16px;
   height: 16px;
 }
+.stock-heatmap__tile[data-compact="true"] .stock-heatmap__change svg {
+  display: none;
+}
+.stock-heatmap__tile[data-dense="true"] {
+  padding: 4px;
+  gap: 2px;
+}
+.stock-heatmap__tile[data-dense="true"]
+  :is(.stock-heatmap__mark, .stock-heatmap__note, .stock-heatmap__selected) {
+  display: none;
+}
+.stock-heatmap__tile[data-dense="true"] > strong {
+  font-size: 14px;
+  line-height: 1.2;
+}
+.stock-heatmap__tile[data-dense="true"] .stock-heatmap__change {
+  font-size: 12px;
+  line-height: 1.2;
+}
 .stock-heatmap__hint {
   margin: 0;
   padding: 12px 20px;

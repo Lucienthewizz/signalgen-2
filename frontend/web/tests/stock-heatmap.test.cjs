@@ -73,3 +73,51 @@ test("heatmap avoids narrow strips and abrupt breakpoint height changes", () => 
     }
   assert.equal(heatmap.heatmapLayout(10, NaN, 200).length, 0);
 });
+test("scenario: negative red, positive green, larger absolute change means larger area", () => {
+  const changes = [10, -10, 5, -5, 2, -2, 1, -1, 0, null];
+  const weights = heatmap.heatmapWeights(changes);
+  for (const [width, height] of [
+    [1200, 300],
+    [350, 500],
+  ]) {
+    const tiles = heatmap.heatmapLayout(changes.length, width, height, changes);
+    const areas = tiles.map((tile) => tile.width * tile.height);
+    for (let i = 0; i < 8; i += 2) {
+      assert.ok(heatmap.heatmapTone(changes[i]).startsWith("gain"));
+      assert.ok(heatmap.heatmapTone(changes[i + 1]).startsWith("loss"));
+      assert.ok(Math.abs(areas[i] - areas[i + 1]) < 0.000001);
+      if (i < 6) assert.ok(areas[i] > areas[i + 2]);
+    }
+    assert.ok(areas[6] > areas[8]);
+    for (let i = 0; i < tiles.length; i++)
+      assert.ok(Math.abs(areas[i] - weights[i] * 10000) < 0.000001);
+  }
+});
+test("weighted scenarios keep all stocks inside the canvas with clickable targets", () => {
+  for (const count of [3, 10, 30])
+    for (const width of [284, 350, 600, 1200]) {
+      for (const changes of [
+        Array.from({ length: count }, (_, i) => (i % 2 ? -i : i)),
+        Array.from({ length: count }, (_, i) => (i === 0 ? 1000 : 0)),
+      ]) {
+        const height = heatmap.heatmapHeight(count, width),
+          tiles = heatmap.heatmapLayout(count, width, height, changes);
+        for (const [index, tile] of tiles.entries()) {
+          assert.ok(
+            (tile.width * width) / 100 >= 44 &&
+              (tile.height * height) / 100 >= 44,
+            JSON.stringify({ count, width, index, tile, height }),
+          );
+          for (const other of tiles.slice(index + 1))
+            assert.ok(
+              Math.min(tile.x + tile.width, other.x + other.width) -
+                Math.max(tile.x, other.x) <
+                0.000001 ||
+                Math.min(tile.y + tile.height, other.y + other.height) -
+                  Math.max(tile.y, other.y) <
+                  0.000001,
+            );
+        }
+      }
+    }
+});

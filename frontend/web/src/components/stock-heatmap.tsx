@@ -48,7 +48,12 @@ export function StockHeatmap({
     };
   }, [hidden]);
   const height = heatmapHeight(stocks.length, width);
-  const rects = heatmapLayout(stocks.length, width, height);
+  const rects = heatmapLayout(
+    stocks.length,
+    width,
+    height,
+    stocks.map((stock) => stock.change),
+  );
   return (
     <section
       className="stock-heatmap"
@@ -59,7 +64,9 @@ export function StockHeatmap({
       <header className="stock-heatmap__heading">
         <div>
           <strong>Stock heatmap</strong>
-          <span>Equal tile size · latest screening candle, not live</span>
+          <span>
+            Size follows absolute price change · screening snapshots, not live
+          </span>
         </div>
         <div className="stock-heatmap__legend" aria-label="Price change legend">
           <span data-direction="loss">−3% or less</span>
@@ -89,6 +96,14 @@ export function StockHeatmap({
               type="button"
               className="stock-heatmap__tile"
               data-tone={tone}
+              data-dense={
+                Math.min(
+                  (box.width * width) / 100,
+                  (box.height * height) / 100,
+                ) < 100
+                  ? "true"
+                  : undefined
+              }
               data-compact={
                 (box.width * width) / 100 < 140 ||
                 (box.height * height) / 100 < 120
@@ -129,7 +144,9 @@ export function StockHeatmap({
       </nav>
       <p className="stock-heatmap__hint">
         Select a stock to update the chart and details. Tile colors compare each
-        stock’s own screening candle; dates and intervals may differ.
+        stock’s own screening candle; dates and intervals may differ. Larger
+        moves get more area, with a minimum area reserved to keep small or
+        missing values readable.
       </p>
     </section>
   );
