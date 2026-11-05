@@ -46,7 +46,6 @@ import {
   XCircle,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
-import { JournalPanel } from "@/pages/workspace-journal-panel";
 import { AccountMenu } from "@/components/account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HistoricalCachePanel } from "@/components/historical-cache-panel";
@@ -83,6 +82,11 @@ import { api } from "@/api/client";
 import { useWorkspaceSync } from "@/lib/use-workspace-sync";
 import type { AccountDevice, AccountSession, AccountState } from "@/types";
 import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
+const JournalPanel = lazy(() =>
+  import("@/pages/workspace-journal-panel").then((m) => ({
+    default: m.JournalPanel,
+  })),
+);
 const StockUniversesPanel = lazy(() =>
   import("@/pages/workspace-resource-panels").then((m) => ({
     default: m.StockUniversesPanel,

@@ -1,0 +1,8 @@
+{
+  "entryJsGzipBytes": 105000,
+  "workspaceStaticJsGzipBytes": 175000,
+  "entryCssGzipBytes": 65000,
+  "mobileLcpMs": 6000,
+  "mobileCls": 0.1,
+  "mobileObservedInteractionMs": 500
+}

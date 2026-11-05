@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "react-day-picker/style.css";
 @import "./styles/resource-quota.css";
 
 @import "./styles/foundation-shell.css";
@@ -15,5 +14,4 @@
 @import "./styles/workspace-review.css";
 @import "./styles/backtesting.css";
 @import "./styles/signal-study.css";
-@import "./styles/calendar.css";
 @import "./styles/workspace-polish.css";

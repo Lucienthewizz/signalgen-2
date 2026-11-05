@@ -13,7 +13,9 @@ const decisionsOnly = process.argv.includes("--decisions");
 const recoveryOnly = process.argv.includes("--recovery");
 const monitorOnly = process.argv.includes("--monitor");
 const usabilityOnly = process.argv.includes("--usability");
-const performanceOnly = process.argv.includes("--performance");
+const mobilePerformance = process.argv.includes("--mobile-performance");
+const performanceOnly =
+  process.argv.includes("--performance") || mobilePerformance;
 let performanceFilename;
 if (performanceOnly) {
   const fixture = fs.readFileSync(
@@ -35,7 +37,8 @@ if (performanceOnly) {
   );
   writeFileSync(
     performanceFilename,
-    fixture.slice(0, split) + `await (${body})({page,origin});\n}`,
+    fixture.slice(0, split) +
+      `await (${body})({page,origin,profile:${JSON.stringify(mobilePerformance ? "mobile" : "desktop")}});\n}`,
   );
 }
 const baseURL = process.env.SIGNALGEN_TEST_BASE_URL || "http://127.0.0.1:5174";
@@ -83,6 +86,20 @@ const chromePath =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : undefined);
 
+function recordPerformance(json) {
+  const label =
+    process.env.SIGNALGEN_PERF_LABEL === "before" ? "before" : "after";
+  fs.mkdirSync(path.join(root, "output/playwright"), { recursive: true });
+  writeFileSync(
+    path.join(
+      root,
+      `output/playwright/loading-${mobilePerformance ? "mobile-" : ""}${label}.json`,
+    ),
+    JSON.stringify(json, null, 2),
+  );
+  console.log(JSON.stringify(json, null, 2));
+}
+
 const cliExecutable =
   process.env.SIGNALGEN_TEST_PLAYWRIGHT_CLI || "playwright-cli";
 let usedCli = false;
@@ -103,7 +120,14 @@ if (usedCli) {
           headless: true,
           ...(chromePath ? { executablePath: chromePath } : {}),
         },
-        contextOptions: { viewport: { width: 1440, height: 1000 } },
+        contextOptions: mobilePerformance
+          ? {
+              viewport: { width: 390, height: 844 },
+              isMobile: true,
+              hasTouch: true,
+              deviceScaleFactor: 1,
+            }
+          : { viewport: { width: 1440, height: 1000 } },
       },
     }),
   );
@@ -134,15 +158,7 @@ if (usedCli) {
       ]);
       const match = report.match(/### Result\s+("[^\n]+")/);
       if (!match) throw Error(report);
-      const json = JSON.parse(JSON.parse(match[1]));
-      const label =
-        process.env.SIGNALGEN_PERF_LABEL === "before" ? "before" : "after";
-      fs.mkdirSync(path.join(root, "output/playwright"), { recursive: true });
-      writeFileSync(
-        path.join(root, `output/playwright/loading-${label}.json`),
-        JSON.stringify(json, null, 2),
-      );
-      console.log(JSON.stringify(json, null, 2));
+      recordPerformance(JSON.parse(JSON.parse(match[1])));
     }
     const result = cli([
       "eval",
@@ -174,15 +190,28 @@ if (usedCli) {
     ...(chromePath ? { executablePath: chromePath } : {}),
   });
   try {
-    const context = await browser.newContext({
-      viewport: { width: 1440, height: 1000 },
-    });
+    const context = await browser.newContext(
+      mobilePerformance
+        ? {
+            viewport: { width: 390, height: 844 },
+            isMobile: true,
+            hasTouch: true,
+            deviceScaleFactor: 1,
+          }
+        : { viewport: { width: 1440, height: 1000 } },
+    );
     const page = await context.newPage();
     await page.goto(baseURL);
-    const code = fs.readFileSync(path.join(root, testFilename), "utf8");
+    const code = fs.readFileSync(path.resolve(root, testFilename), "utf8");
     const fn = eval("(" + code.trim().replace(/;$/, "") + ")");
     try {
       const evidence = await fn(page);
+      if (performanceOnly)
+        recordPerformance(
+          await page.evaluate(() =>
+            JSON.parse(document.body.dataset.signalgenPerformance),
+          ),
+        );
       if (studyOnly)
         writeFileSync(
           path.join(root, "output/playwright/signal-study-browser.json"),

@@ -1,6 +1,81 @@
 // Runs inside workspace-regression's synthetic API setup, without its UI suite.
-async ({ page, origin }) => {
-  await page.setViewportSize({ width: 1218, height: 853 });
+async ({ page, origin, profile = "desktop" }) => {
+  const mobile = profile === "mobile";
+  await page.setViewportSize(
+    mobile ? { width: 390, height: 844 } : { width: 1218, height: 853 },
+  );
+  if (mobile) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Network.enable");
+    await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
+    await cdp.send("Network.emulateNetworkConditions", {
+      offline: false,
+      latency: 150,
+      downloadThroughput: 200000,
+      uploadThroughput: 93750,
+    });
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  }
+  await page.addInitScript(() => {
+    const metrics = {
+      lcpMs: null,
+      cls: 0,
+      interactionLatencyMsMax: null,
+      interactionSamples: 0,
+      supported: PerformanceObserver.supportedEntryTypes,
+    };
+    let sessionStart = 0,
+      lastShift = 0,
+      sessionScore = 0;
+    const interactions = new Map();
+    const observe = (type, callback, options = {}) => {
+      if (metrics.supported.includes(type))
+        new PerformanceObserver((list) => callback(list.getEntries())).observe({
+          type,
+          buffered: true,
+          ...options,
+        });
+    };
+    observe("largest-contentful-paint", (entries) => {
+      metrics.lcpMs = entries.at(-1).startTime;
+    });
+    observe("layout-shift", (entries) => {
+      for (const entry of entries) {
+        if (entry.hadRecentInput) continue;
+        if (
+          !sessionStart ||
+          entry.startTime - lastShift > 1000 ||
+          entry.startTime - sessionStart > 5000
+        ) {
+          sessionStart = entry.startTime;
+          sessionScore = 0;
+        }
+        lastShift = entry.startTime;
+        sessionScore += entry.value;
+        metrics.cls = Math.max(metrics.cls, sessionScore);
+      }
+    });
+    observe(
+      "event",
+      (entries) => {
+        for (const entry of entries)
+          if (entry.interactionId)
+            interactions.set(
+              entry.interactionId,
+              Math.max(
+                interactions.get(entry.interactionId) ?? 0,
+                entry.duration,
+              ),
+            );
+        metrics.interactionSamples = interactions.size;
+        metrics.interactionLatencyMsMax = interactions.size
+          ? Math.max(...interactions.values())
+          : null;
+      },
+      { durationThreshold: 16 },
+    );
+    window.__signalgenLabMetrics = metrics;
+  });
   let universes = 0,
     catalogs = 0,
     widgets = 0;
@@ -76,11 +151,32 @@ async ({ page, origin }) => {
   const initialChartScripts = await page
     .locator(".monitor-chart script")
     .count();
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(350);
+  for (let i = 0; i < 2; i++) {
+    await page
+      .getByRole("button", { name: "Hide heatmap", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Show heatmap", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Preview test data", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Exit test preview", exact: true })
+      .click();
+  }
+  await page.waitForTimeout(150);
+  const labMetrics = await page.evaluate(() => window.__signalgenLabMetrics);
   const response = await page.request.get(origin + "/");
   const html = await response.text();
   const result = {
-    scenario:
-      "synthetic API: universe 300ms, catalog 1200ms; production preview; 1218x853",
+    scenario: mobile
+      ? "mobile emulation 390x844, CPU 4x, network 1.6Mbps down/0.75Mbps up/150ms; synthetic API delay 300/1200ms; not a physical phone or field INP"
+      : "synthetic API: universe 300ms, catalog 1200ms; production preview; 1218x853",
+    labMetrics,
+    scriptedInteractions: 8,
     freshReadyMs,
     revisitMedianMs: sorted[2],
     revisitRequests: visits,

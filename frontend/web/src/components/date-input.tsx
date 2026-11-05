@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { DayPicker } from "react-day-picker";
+import "react-day-picker/style.css";
+import "@/styles/calendar.css";
 import { CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

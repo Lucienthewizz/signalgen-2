@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import "@/styles/calendar.css";
 import { Popover } from "@base-ui/react/popover";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";

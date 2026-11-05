@@ -20,7 +20,6 @@ const modules = [
   "workspace-review",
   "backtesting",
   "signal-study",
-  "calendar",
   "workspace-polish",
 ];
 
@@ -35,16 +34,12 @@ test("stylesheet entry keeps explicit cascade order and imports each module once
   );
   assert.deepEqual(
     root.nodes.map((node) => node.params),
-    [
-      '"tailwindcss"',
-      '"react-day-picker/style.css"',
-      ...modules.map((name) => `"./styles/${name}.css"`),
-    ],
+    ['"tailwindcss"', ...modules.map((name) => `"./styles/${name}.css"`)],
   );
 });
 
 test("stylesheet modules parse independently and do not introduce hidden imports", () => {
-  for (const name of [...modules, "admin-access"]) {
+  for (const name of [...modules, "admin-access", "calendar"]) {
     const root = postcss.parse(
       fs.readFileSync(path.join(src, "styles", name + ".css"), "utf8"),
     );
@@ -60,6 +55,22 @@ test("stylesheet modules parse independently and do not introduce hidden imports
         );
     });
   }
+});
+
+test("calendar CSS follows date controls instead of the initial stylesheet", () => {
+  const root = fs.readFileSync(path.join(src, "styles.css"), "utf8");
+  assert.doesNotMatch(root, /calendar\.css|react-day-picker/);
+  assert.match(
+    fs.readFileSync(path.join(src, "components/date-input.tsx"), "utf8"),
+    /import "react-day-picker\/style.css"/,
+  );
+  assert.match(
+    fs.readFileSync(
+      path.join(src, "components/journal-month-picker.tsx"),
+      "utf8",
+    ),
+    /import "@\/styles\/calendar.css"/,
+  );
 });
 
 test("admin stylesheet is loaded only by the lazy admin page", () => {

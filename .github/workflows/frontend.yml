@@ -1,0 +1,66 @@
+name: Frontend
+
+on:
+  pull_request:
+    paths:
+      - "frontend/web/**"
+      - ".github/workflows/frontend.yml"
+  push:
+    paths:
+      - "frontend/web/**"
+      - ".github/workflows/frontend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend/web
+    env:
+      SIGNALGEN_TEST_BASE_URL: http://127.0.0.1:5174
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/web/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build and unit tests
+        run: |
+          npm run build
+          npm test
+      - name: Enforce bundle budgets and lazy-route boundary
+        run: npm run check:budgets
+      - name: Install Chromium
+        run: npm exec -- playwright install --with-deps chromium
+      - name: Start production preview
+        run: |
+          npm exec -- vite preview --host 127.0.0.1 --port 5174 --strictPort > /tmp/signalgen-frontend-preview.log 2>&1 &
+          node --input-type=module -e 'for(let i=0;i<30;i++){try{if((await fetch("http://127.0.0.1:5174")).ok)process.exit(0);}catch{}await new Promise(r=>setTimeout(r,500));}process.exit(1);'
+      - name: Workspace, responsive layout and admin regressions
+        run: |
+          npm run test:browser
+          npm run test:admin
+      - name: Mobile lab and performance budgets
+        run: |
+          npm run test:mobile-performance
+          npm run check:lab
+      - name: Save synthetic test reports and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-verification
+          path: frontend/web/output/playwright/
+          retention-days: 7
+          if-no-files-found: warn
