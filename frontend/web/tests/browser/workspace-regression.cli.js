@@ -332,6 +332,7 @@ async (page) => {
   await page.getByRole("button", { name: "Analyze stock", exact: true }).click();
   if (!await page.locator(".monitor-board").evaluate(el => el === document.activeElement)) throw Error("Analyze action did not focus the board");
   await page.locator(".stock-heatmap__tile").filter({ hasText: "BBRI" }).click();
+  await page.getByRole('button',{name:'Close stock details',exact:true}).click();
   if (await page.locator(".monitor-chart h3").innerText() !== "BBRI") throw Error("Stock card did not switch chart");
   if (!await page.locator('.monitor-ledger tr[data-state="selected"]').innerText().then(text => text.includes("BBRI"))) throw Error("Stock card did not select table row");
   if (await page.locator(".monitor-window-dots i").count() !== 3 || !await page.locator(".monitor-chart .tradingview-chart").count()) throw Error("TradingView Mac layout missing");
@@ -1283,6 +1284,7 @@ async (page) => {
   }
   const heatTile=page.locator('.stock-heatmap__tile').filter({hasText:'TLKM'});await heatTile.focus();await page.keyboard.press('Enter');
   if(await heatTile.getAttribute('aria-pressed')!=='true'||await page.locator('.monitor-chart h3').innerText()!=='TLKM')throw Error('Keyboard heatmap selection must update chart');
+  await page.keyboard.press('Escape');
   // Responsive boundaries, hide/show and sidebar animation must not clip tiles.
   for(const width of [890,891,1024,1440,390]){
     await page.setViewportSize({width,height:1000});
@@ -1308,6 +1310,74 @@ async (page) => {
     });
     if(await heatTile.getAttribute('aria-pressed')!=='true'||await page.locator('.stock-heatmap__tile').count()!==10)throw Error('Sidebar toggle disrupted the heatmap selection');
     if(await page.locator('.stock-heatmap__tile').evaluateAll(tiles=>tiles.some(tile=>tile.getBoundingClientRect().width<44)))throw Error('Sidebar toggle produced inaccessible heatmap tiles');
+  }
+  // Hover/tap details, explicit preview isolation, remembered selection, loading and CTA.
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.setViewportSize({width:1218,height:1000});
+  await heatTile.hover();
+  const candleDetails=page.locator('.heatmap-popover').filter({hasText:'Latest screening candle'});
+  await candleDetails.waitFor();
+  for(const text of ['Open','Close','Change','105','+5.00%'])if(!(await candleDetails.innerText()).includes(text))throw Error('Missing candle detail '+text);
+  await page.mouse.move(0,0);await candleDetails.waitFor({state:'hidden'});
+  await page.getByRole('button',{name:'How the heatmap works',exact:true}).click();
+  await page.getByRole('heading',{name:'How the heatmap works',exact:true}).waitFor();
+  await page.keyboard.press('Escape');
+  const monitorKey=`signalgen.monitor-selection.v1.${encodeURIComponent(user.id)}`;
+  const realBefore=await page.evaluate(key=>localStorage.getItem(key),monitorKey);
+  const historyBefore=await page.evaluate(id=>localStorage.getItem(`signalgen:workspace:v1:${id}:monitor-history`),user.id);
+  const realTicker=await page.locator('.monitor-chart h3').innerText();
+  let previewWrites=0;
+  const countPreviewWrites=request=>{if(new URL(request.url()).pathname.startsWith('/api/')&&!['GET','HEAD','OPTIONS'].includes(request.method()))previewWrites++;};
+  page.on('request',countPreviewWrites);
+  await page.getByRole('button',{name:'Preview test data',exact:true}).click();
+  await page.getByText('TEST PREVIEW',{exact:true}).waitFor();
+  if(await page.locator('.monitor-board').isVisible()||await page.locator('.monitor-history').isVisible())throw Error('Real chart/history visible in simulation');
+  if(await page.locator('.stock-heatmap__tile[data-tone="loss-strong"]').count()!==2)throw Error('Preview should contain negative test moves');
+  await page.setViewportSize({width:390,height:1000});
+  await page.locator('.stock-heatmap__tile').filter({hasText:'BBRI'}).click();
+  const previewDetails=page.locator('.heatmap-popover[data-preview]');await previewDetails.waitFor();
+  if(!(await previewDetails.innerText()).includes('Simulation only')||!(await previewDetails.innerText()).includes('-10.00%'))throw Error('Preview details not clearly simulated');
+  const popupBox=await previewDetails.boundingBox();if(popupBox.x<0||popupBox.x+popupBox.width>391)throw Error('Mobile detail popup overflows');
+  await page.getByRole('button',{name:'Close stock details',exact:true}).click();
+  await page.locator('.stock-heatmap').screenshot({path:'output/playwright/stock-heatmap-preview-mobile.png',animations:'disabled'});
+  await page.getByRole('button',{name:'Exit test preview',exact:true}).click();
+  if(await page.locator('.monitor-chart h3').innerText()!==realTicker)throw Error('Preview changed real selection');
+  if(await page.evaluate(key=>localStorage.getItem(key),monitorKey)!==realBefore||await page.evaluate(id=>localStorage.getItem(`signalgen:workspace:v1:${id}:monitor-history`),user.id)!==historyBefore)throw Error('Preview persisted fake state');
+  page.off('request',countPreviewWrites);if(previewWrites)throw Error('Preview caused API mutations');
+  // Hold the universe response to verify there is no starter-watchlist flash.
+  let releaseUniverses;const universeGate=new Promise(resolve=>releaseUniverses=resolve);
+  await page.route('**/api/v1/stock-universes',async route=>{await universeGate;await route.fulfill({json:{items:[{...universe,symbols:heatSymbols.map(t=>t+'.JK')}]}});});
+  await page.reload();await page.getByRole('status',{name:'Loading market monitor',exact:true}).waitFor();
+  if(await page.locator('.stock-heatmap__tile:visible').count()||await page.locator('.monitor-board').isVisible())throw Error('Loading flashed unrelated stocks/chart');
+  releaseUniverses();await heatTile.waitFor();
+  await page.waitForFunction(()=>document.querySelector('.stock-heatmap__tile[aria-pressed="true"] strong')?.textContent==='TLKM');
+  // Missing-price CTA prefills universe; it must not run a screening by itself.
+  let screenRequests=0;const countScreen=request=>{if(/screen/.test(new URL(request.url()).pathname)&&request.method()==='POST')screenRequests++;};page.on('request',countScreen);
+  await page.getByRole('button',{name:'Screen this universe',exact:true}).click();
+  await page.waitForURL('**/#app/analysis');
+  await page.waitForFunction(()=>document.querySelector('#screen-universe')?.textContent.includes('Bank pilihan'));
+  page.off('request',countScreen);if(screenRequests)throw Error('CTA automatically started screening');
+  // Real layout stress: varying counts and long company names, with synthetic data only.
+  let stressSymbols=[];
+  const stressCatalog=Array.from({length:30},(_,i)=>({symbol:(heatSymbols[i]??`T${String.fromCharCode(65+i-10)}AA`)+'.JK',name:'A very long company name with multiple divisions and international operations Tbk.',exchange:'XIDX',currency:'IDR'}));
+  await page.route('**/api/v1/stocks',route=>route.fulfill({json:{items:stressCatalog}}));
+  await page.route('**/api/v1/stock-universes',route=>route.fulfill({json:{items:[{...universe,symbols:stressSymbols}]}}));
+  for(const count of [1,3,30]){
+    stressSymbols=stressCatalog.slice(0,count).map(stock=>stock.symbol);
+    await page.goto(`${origin}/#app/realtime`);await page.reload();
+    await page.waitForFunction(count=>document.querySelectorAll('.stock-heatmap__tile').length===count,count);
+    for(const width of [1218,390])for(const theme of ['dark','light']){
+      await page.setViewportSize({width,height:1000});await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+      await page.waitForFunction(()=>[...document.querySelectorAll('.stock-heatmap__tile')].every(tile=>{const r=tile.getBoundingClientRect();return r.width>=44&&r.height>=44;}));
+      if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error('Stress layout overflows '+count+'/'+width);
+      const broken=await page.locator('.stock-heatmap__tile > small').evaluateAll(labels=>labels.some(label=>getComputedStyle(label).display!=='none'&&label.getBoundingClientRect().height+1<parseFloat(getComputedStyle(label).lineHeight)));
+      if(broken)throw Error('Stress layout clipped company label '+count+'/'+width);
+      await page.locator('.stock-heatmap').screenshot({path:`output/playwright/stock-heatmap-stress-${count}-${width}-${theme}.png`,animations:'disabled'});
+    }
+    await page.locator('.stock-heatmap__tile').first().click();
+    const longDetails=page.locator('.heatmap-popover').filter({hasText:'Latest screening candle'});await longDetails.waitFor();
+    const box=await longDetails.boundingBox();if(box.x<0||box.x+box.width>391||box.y<0||box.y+box.height>1001)throw Error('Long-name popup outside mobile viewport');
+    await page.getByRole('button',{name:'Close stock details',exact:true}).click();
   }
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() => document.body.setAttribute("data-signalgen-browser-tests", "complete"));

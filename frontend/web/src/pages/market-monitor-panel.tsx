@@ -19,6 +19,15 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TradingViewChart } from "@/components/tradingview-chart";
 import { StockHeatmap } from "@/components/stock-heatmap";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  readMonitorSelection,
+  saveMonitorSelection,
+} from "@/lib/monitor-selection";
+import {
+  readScreenerPreferences,
+  saveScreenerPreferences,
+} from "@/lib/screener-preferences";
 import { screenerIntervals } from "@/analysis/screener-monitor";
 import { marketCandleDate, marketTimezone } from "@/lib/data-freshness";
 import { decisionLabel } from "@/lib/workspace-feedback";
@@ -116,6 +125,8 @@ const date = (value: string) => {
 export function MarketMonitorPanel({ userId }: { userId?: string }) {
   const key = `signalgen:watchlist:${userId ?? "guest"}`;
   const [watchlist, setWatchlist] = useState<string[]>(defaults);
+  const watchlistRef = useRef(watchlist);
+  watchlistRef.current = watchlist;
   const [selected, setSelected] = useState("BBCA");
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +143,12 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   const [loadingUniverses, setLoadingUniverses] = useState(false);
   const [universeError, setUniverseError] = useState(false);
   const [showCards, setShowCards] = useState(true);
+  const [loadedOwner, setLoadedOwner] = useState<string>();
+  const [preview, setPreview] = useState(false);
+  const [previewSelected, setPreviewSelected] = useState("BBCA");
+  const loading = Boolean(
+    userId && (loadingUniverses || loadedOwner !== userId),
+  );
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
@@ -163,6 +180,8 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
     setUniverseId("watchlist");
     setLoadingUniverses(false);
     setUniverseError(false);
+    setLoadedOwner(undefined);
+    setPreview(false);
     if (!userId) return;
     setLoadingUniverses(true);
     setUniverseError(false);
@@ -171,26 +190,76 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
         if (cancelled) return;
         setUniverses(groups.items);
         setCatalog(stocks.items);
-        const first = groups.items.find((group) => group.symbols.length);
+        const remembered = readMonitorSelection(userId);
+        const preferred =
+          remembered?.universeId ?? readScreenerPreferences(userId).universeId;
+        const first =
+          groups.items.find((group) => group.id === preferred) ??
+          groups.items.find((group) => group.symbols.length);
+        if (remembered?.universeId === "watchlist") {
+          setUniverseId("watchlist");
+          setSelected(
+            watchlistRef.current.includes(remembered.ticker)
+              ? remembered.ticker
+              : (watchlistRef.current[0] ?? "BBCA"),
+          );
+          return;
+        }
         if (first) {
           setUniverseId(first.id);
           const firstTicker =
             first.symbols
               .map((symbol) => watchTicker(symbol) ?? idxTicker(symbol))
               .find((ticker): ticker is string => Boolean(ticker)) ?? "BBCA";
-          setSelected(firstTicker);
+          setSelected(
+            first.symbols.some(
+              (symbol) =>
+                (watchTicker(symbol) ?? idxTicker(symbol)) ===
+                remembered?.ticker,
+            )
+              ? remembered!.ticker
+              : firstTicker,
+          );
         }
       })
       .catch(() => {
         if (!cancelled) setUniverseError(true);
       })
       .finally(() => {
-        if (!cancelled) setLoadingUniverses(false);
+        if (!cancelled) {
+          setLoadingUniverses(false);
+          setLoadedOwner(userId);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [userId]);
+  useEffect(() => {
+    if (userId && !loading && !universeError && loadedOwner === userId)
+      saveMonitorSelection(userId, universeId, selected);
+  }, [userId, loading, loadedOwner, universeId, selected, universeError]);
+  function screenUniverse() {
+    if (!universe || !userId) {
+      location.hash = "app/universes";
+      return;
+    }
+    const preferences = readScreenerPreferences(userId);
+    if (
+      !saveScreenerPreferences(userId, {
+        ...preferences,
+        universeId: universe.id,
+        filter: "all",
+        search: "",
+      })
+    ) {
+      setError(
+        "Could not prepare this universe for screening. Please try again.",
+      );
+      return;
+    }
+    location.hash = "app/analysis";
+  }
   function chooseUniverse(value: string | null) {
     const id = value ?? "watchlist";
     const group = universes.find((item) => item.id === id);
@@ -333,17 +402,13 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   }
   return (
     <div className="market-monitor">
-      <header className="monitor-lineup-heading">
-        <div>
-          <h3>Your stock lineup</h3>
-          <p>Choose a stock to inspect its chart and screening results.</p>
-        </div>
+      <header className="monitor-controls">
         <Field>
           <FieldLabel htmlFor="monitor-universe">Stock universe</FieldLabel>
           <Select
             value={universeId}
             onValueChange={chooseUniverse}
-            disabled={loadingUniverses}
+            disabled={loading || preview}
             items={[
               { value: "watchlist", label: "Personal watchlist" },
               ...universes.map((item) => ({
@@ -367,6 +432,38 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             </SelectContent>
           </Select>
         </Field>
+        <span className="monitor-controls__count">
+          {loading
+            ? "Loading stocks…"
+            : preview
+              ? "10 simulated stocks"
+              : `${activeStocks.length} stocks`}
+        </span>
+        <div className="monitor-controls__actions">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            aria-pressed={preview}
+            onClick={() => {
+              setPreview((value) => !value);
+              setShowCards(true);
+            }}
+          >
+            {preview ? "Exit test preview" : "Preview test data"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="monitor-lineup-toggle"
+            disabled={loading || (!activeStocks.length && !preview)}
+            aria-expanded={showCards}
+            aria-controls="monitor-stock-lineup"
+            onClick={() => setShowCards((value) => !value)}
+          >
+            {showCards ? "Hide heatmap" : "Show heatmap"}
+          </Button>
+        </div>
       </header>
       {universeError && (
         <p role="alert">
@@ -374,672 +471,724 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           available. Reopen Market Monitor to retry.
         </p>
       )}
-      <div className="monitor-lineup-actions">
-        <span>
-          {activeStocks.length} stocks ·{" "}
-          {universe?.name ?? "Personal watchlist"}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          className="monitor-lineup-toggle"
-          disabled={!activeStocks.length}
-          aria-expanded={showCards}
-          aria-controls={
-            activeStocks.length ? "monitor-stock-lineup" : undefined
-          }
-          onClick={() => setShowCards((value) => !value)}
+      {loading ? (
+        <section
+          className="monitor-loading"
+          role="status"
+          aria-label="Loading market monitor"
         >
-          {showCards ? "Hide heatmap" : "Show heatmap"}
-        </Button>
-      </div>
-      {activeStocks.length > 0 && (
-        <StockHeatmap
-          stocks={activeStocks.map((ticker) => {
-            const snapshot = snapshots.get(ticker);
-            const age = snapshotAge(snapshot?.decision.timestamp, now);
-            return {
-              ticker,
-              name: stockName(ticker),
-              change:
-                age === "future"
-                  ? null
-                  : openCloseChange(
-                      snapshot?.latestOpen,
-                      snapshot?.latestClose,
-                    ),
-              timestamp: snapshot
-                ? `${date(snapshot.decision.timestamp)} SGT`
-                : undefined,
-              stale: age === "old",
-              icon: <StockMark ticker={ticker} />,
-            };
-          })}
-          selected={selected}
-          onSelect={setSelected}
-          hidden={!showCards}
-        />
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-64 w-full" />
+          <span>Loading your selected universe…</span>
+        </section>
+      ) : (
+        (activeStocks.length > 0 || preview) && (
+          <StockHeatmap
+            preview={preview}
+            onScreen={screenUniverse}
+            screenLabel={
+              universe ? "Screen this universe" : "Create universe to screen"
+            }
+            stocks={
+              preview
+                ? [10, -10, 5, -5, 2, -2, 1, -1, 0, null].map(
+                    (change, index) => ({
+                      ticker: [
+                        "BBCA",
+                        "BBRI",
+                        "TLKM",
+                        "BMRI",
+                        "ASII",
+                        "ANTM",
+                        "INDF",
+                        "AADI",
+                        "PTBA",
+                        "ICBP",
+                      ][index],
+                      name: `Simulated stock ${index + 1}`,
+                      change,
+                      open: change === null ? undefined : 100,
+                      close: change === null ? undefined : 100 + change,
+                      timestamp: "Simulation · not market data",
+                      stale: false,
+                      icon: <Building2 aria-hidden="true" />,
+                    }),
+                  )
+                : activeStocks.map((ticker) => {
+                    const snapshot = snapshots.get(ticker);
+                    const age = snapshotAge(snapshot?.decision.timestamp, now);
+                    return {
+                      ticker,
+                      open: snapshot?.latestOpen ?? undefined,
+                      close: snapshot?.latestClose,
+                      name: stockName(ticker),
+                      change:
+                        age === "future"
+                          ? null
+                          : openCloseChange(
+                              snapshot?.latestOpen,
+                              snapshot?.latestClose,
+                            ),
+                      timestamp: snapshot
+                        ? `${date(snapshot.decision.timestamp)} SGT`
+                        : undefined,
+                      stale: age === "old",
+                      icon: <StockMark ticker={ticker} />,
+                    };
+                  })
+            }
+            selected={preview ? previewSelected : selected}
+            onSelect={preview ? setPreviewSelected : setSelected}
+            hidden={!showCards}
+          />
+        )
       )}
-      {!activeStocks.length && (
-        <p>
-          This universe has no stocks.{" "}
-          <a href="#app/universes">Edit stock universes</a> to add stocks.
-        </p>
-      )}
-      {activeStocks.length > 0 && (
-        <div
-          className="monitor-board"
-          ref={boardRef}
-          tabIndex={-1}
-          aria-label="Stock analysis board"
-        >
-          <div className="monitor-board-toolbar">
-            <div className="monitor-board-actions">
-              <Button size="sm" onClick={() => focusSection(boardRef.current)}>
-                Analyze stock
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => focusSection(ledgerRef.current)}
+      <div className="monitor-live-content" hidden={loading || preview}>
+        {!activeStocks.length && (
+          <p>
+            This universe has no stocks.{" "}
+            <a href="#app/universes">Edit stock universes</a> to add stocks.
+          </p>
+        )}
+        {activeStocks.length > 0 && (
+          <div
+            className="monitor-board"
+            ref={boardRef}
+            tabIndex={-1}
+            aria-label="Stock analysis board"
+          >
+            <div className="monitor-board-toolbar">
+              <div className="monitor-board-actions">
+                <Button
+                  size="sm"
+                  onClick={() => focusSection(boardRef.current)}
+                >
+                  Analyze stock
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => focusSection(ledgerRef.current)}
+                >
+                  Compare stocks
+                </Button>
+              </div>
+              <Field
+                orientation="horizontal"
+                className="monitor-stock-selector"
               >
-                Compare stocks
-              </Button>
+                <FieldLabel htmlFor="monitor-active-stock">Stock</FieldLabel>
+                <Select
+                  value={selected}
+                  onValueChange={(value) => {
+                    if (value) setSelected(value);
+                  }}
+                  items={activeStocks.map((ticker) => ({
+                    value: ticker,
+                    label: ticker,
+                  }))}
+                >
+                  <SelectTrigger id="monitor-active-stock">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {activeStocks.map((ticker) => (
+                        <SelectItem key={ticker} value={ticker}>
+                          {ticker}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
             </div>
-            <Field orientation="horizontal" className="monitor-stock-selector">
-              <FieldLabel htmlFor="monitor-active-stock">Stock</FieldLabel>
-              <Select
-                value={selected}
-                onValueChange={(value) => {
-                  if (value) setSelected(value);
-                }}
-                items={activeStocks.map((ticker) => ({
-                  value: ticker,
-                  label: ticker,
-                }))}
+            <div className="monitor-board-grid">
+              <section
+                className="monitor-chart"
+                aria-label={`Chart ${selected}`}
               >
-                <SelectTrigger id="monitor-active-stock">
+                <header>
+                  <span className="monitor-window-dots" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <div className="monitor-chart__title">
+                    <h3>{selectedSymbol}</h3>
+                    <p>{stockName(selected)}</p>
+                    <Badge variant="outline">Daily · {selectedCurrency}</Badge>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    nativeButton={false}
+                    render={
+                      <a
+                        href={
+                          selectedMarket === "US"
+                            ? `https://www.tradingview.com/symbols/${selectedSymbol}/`
+                            : `https://www.tradingview.com/symbols/IDX-${selectedSymbol}/`
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                      />
+                    }
+                  >
+                    TradingView
+                    <ExternalLink data-icon="inline-end" />
+                  </Button>
+                </header>
+                <TradingViewChart symbol={chartSymbol} label={selectedSymbol} />
+              </section>
+              <aside
+                className="monitor-stock-detail"
+                aria-label={`Stock details ${selectedSymbol}`}
+              >
+                <Card className="monitor-detail-card">
+                  <CardHeader>
+                    <div className="monitor-detail-navigation">
+                      <h3>Stock details</h3>
+                      <div>
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label="Previous stock"
+                          disabled={selectedIndex <= 0}
+                          onClick={() => moveStock(-1)}
+                        >
+                          <ChevronLeft />
+                        </Button>
+                        <span aria-live="polite">
+                          {selectedIndex + 1} / {activeStocks.length}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label="Next stock"
+                          disabled={selectedIndex >= activeStocks.length - 1}
+                          onClick={() => moveStock(1)}
+                        >
+                          <ChevronRight />
+                        </Button>
+                      </div>
+                    </div>
+                    <CardTitle>
+                      <h4>{selectedSymbol}</h4>
+                    </CardTitle>
+                    <CardDescription>{stockName(selected)}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="monitor-detail-identity">
+                      <StockMark ticker={selected} />
+                      <span>
+                        {selectedMarket === "US"
+                          ? "Nasdaq/NYSE · USD"
+                          : "IDX · IDR"}
+                      </span>
+                    </div>
+                    <div className="monitor-detail-quote">
+                      <span>Latest screening close</span>
+                      <strong>
+                        {number(selectedSnapshot?.latestClose ?? NaN)}{" "}
+                        <small>{selectedCurrency}</small>
+                      </strong>
+                      {selectedChange !== null && (
+                        <span
+                          className="monitor-change"
+                          data-direction={
+                            Math.abs(selectedChange) < 0.005
+                              ? "flat"
+                              : selectedMovement
+                          }
+                        >
+                          {formatSignedPercent(selectedChange)} from open
+                        </span>
+                      )}
+                    </div>
+                    <dl className="monitor-detail-metrics">
+                      <div>
+                        <dt>Open</dt>
+                        <dd>{number(selectedSnapshot?.latestOpen ?? NaN)}</dd>
+                      </div>
+                      <div>
+                        <dt>RSI 14</dt>
+                        <dd>
+                          {number(selectedSnapshot?.features.rsi14 ?? NaN)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>EMA 9</dt>
+                        <dd>
+                          {number(selectedSnapshot?.features.ema9 ?? NaN)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>EMA 20</dt>
+                        <dd>
+                          {number(selectedSnapshot?.features.ema20 ?? NaN)}
+                        </dd>
+                      </div>
+                    </dl>
+                    <div className="monitor-detail-result">
+                      <span>Latest rule result</span>
+                      <Badge
+                        variant={
+                          selectedSnapshot?.decision.matched
+                            ? "secondary"
+                            : "outline"
+                        }
+                      >
+                        {selectedSnapshot
+                          ? decisionLabel(selectedSnapshot.decision)
+                          : "Not evaluated"}
+                      </Badge>
+                      <p>
+                        {selectedSnapshot?.record.rule ??
+                          "Run the screener to add a snapshot for this stock."}
+                      </p>
+                      {selectedSnapshot && (
+                        <time dateTime={selectedSnapshot.decision.timestamp}>
+                          Candle{" "}
+                          {marketCandleDate(
+                            selectedSnapshot.decision.timestamp,
+                            selectedMarket,
+                            selectedSnapshot.record.run.manifest.timeframe,
+                          )}{" "}
+                          · {marketTimezone(selectedMarket)}
+                          {" · "}
+                          {selectedSnapshot.record.run.manifest.timeframe}{" "}
+                          candles
+                        </time>
+                      )}
+                      {selectedSnapshot &&
+                        now - Date.parse(selectedSnapshot.record.recordedAt) >
+                          2 *
+                            (screenerIntervals.find(
+                              (item) =>
+                                item.value ===
+                                selectedSnapshot.record.run.manifest.timeframe,
+                            )?.periodMs ?? 900000) && (
+                          <Badge variant="outline">Not recently screened</Badge>
+                        )}
+                      {selectedSnapshot && (
+                        <p className="monitor-company">
+                          Last screened{" "}
+                          {date(selectedSnapshot.record.recordedAt)} · not a
+                          live quote
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <p>Screening snapshot, not a live quote.</p>
+                    <Button
+                      variant="outline"
+                      nativeButton={false}
+                      render={<a href="#app/analysis" />}
+                    >
+                      Open screener
+                      <ExternalLink data-icon="inline-end" />
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </aside>
+            </div>
+          </div>
+        )}
+        <section
+          className="monitor-ledger"
+          ref={ledgerRef}
+          tabIndex={-1}
+          aria-label="Watchlist and screening results"
+        >
+          <header>
+            <div>
+              <h3>
+                {universe ? universe.name : "Watchlist"} & screening results
+              </h3>
+              <p>Latest daily candle snapshots. Not live prices.</p>
+            </div>
+            {!universe && (
+              <form onSubmit={add}>
+                <Field data-invalid={Boolean(error)}>
+                  <FieldLabel htmlFor="monitor-symbol" className="sr-only">
+                    Add stock
+                  </FieldLabel>
+                  <div className="monitor-add">
+                    <Input
+                      id="monitor-symbol"
+                      placeholder="IDX ticker, e.g. BBCA"
+                      value={query}
+                      onChange={(e) => {
+                        setQuery(e.target.value);
+                        setError(null);
+                      }}
+                      aria-invalid={Boolean(error)}
+                    />
+                    <Button type="submit" variant="outline">
+                      <Plus data-icon="inline-start" />
+                      Add stock
+                    </Button>
+                  </div>
+                  {error && <FieldError>{error}</FieldError>}
+                </Field>
+              </form>
+            )}
+          </header>
+          <div className="monitor-toolbar">
+            <Field>
+              <FieldLabel htmlFor="monitor-sort">Sort table</FieldLabel>
+              <Select
+                value={sort}
+                onValueChange={(value) => setSort(value ?? "watchlist")}
+                items={[
+                  { value: "watchlist", label: "Watchlist order" },
+                  { value: "change", label: "Highest open-to-close change" },
+                  { value: "matched", label: "Matches first" },
+                  { value: "latest", label: "Latest candle" },
+                ]}
+              >
+                <SelectTrigger id="monitor-sort">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    {activeStocks.map((ticker) => (
-                      <SelectItem key={ticker} value={ticker}>
-                        {ticker}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="watchlist">Watchlist order</SelectItem>
+                    <SelectItem value="change">
+                      Highest open-to-close change
+                    </SelectItem>
+                    <SelectItem value="matched">Matches first</SelectItem>
+                    <SelectItem value="latest">Latest candle</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
             </Field>
           </div>
-          <div className="monitor-board-grid">
-            <section className="monitor-chart" aria-label={`Chart ${selected}`}>
-              <header>
-                <span className="monitor-window-dots" aria-hidden="true">
-                  <i />
-                  <i />
-                  <i />
-                </span>
-                <div className="monitor-chart__title">
-                  <h3>{selectedSymbol}</h3>
-                  <p>{stockName(selected)}</p>
-                  <Badge variant="outline">Daily · {selectedCurrency}</Badge>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  nativeButton={false}
-                  render={
-                    <a
-                      href={
-                        selectedMarket === "US"
-                          ? `https://www.tradingview.com/symbols/${selectedSymbol}/`
-                          : `https://www.tradingview.com/symbols/IDX-${selectedSymbol}/`
-                      }
-                      target="_blank"
-                      rel="noreferrer"
-                    />
-                  }
-                >
-                  TradingView
-                  <ExternalLink data-icon="inline-end" />
-                </Button>
-              </header>
-              <TradingViewChart symbol={chartSymbol} label={selectedSymbol} />
-            </section>
-            <aside
-              className="monitor-stock-detail"
-              aria-label={`Stock details ${selectedSymbol}`}
-            >
-              <Card className="monitor-detail-card">
-                <CardHeader>
-                  <div className="monitor-detail-navigation">
-                    <h3>Stock details</h3>
-                    <div>
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label="Previous stock"
-                        disabled={selectedIndex <= 0}
-                        onClick={() => moveStock(-1)}
-                      >
-                        <ChevronLeft />
-                      </Button>
-                      <span aria-live="polite">
-                        {selectedIndex + 1} / {activeStocks.length}
+          <Table>
+            <colgroup>
+              <col style={{ width: "17%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "7%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "17%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "5%" }} />
+            </colgroup>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Stock</TableHead>
+                <TableHead className="monitor-price-heading--open">
+                  Open <span className="monitor-unit">IDR</span>
+                </TableHead>
+                <TableHead className="monitor-price-heading--close">
+                  Close <span className="monitor-unit">IDR</span>
+                </TableHead>
+                <TableHead className="monitor-change-cell">Change</TableHead>
+                <TableHead>RSI 14</TableHead>
+                <TableHead>EMA 20</TableHead>
+                <TableHead>Rule result</TableHead>
+                <TableHead>Data time</TableHead>
+                <TableHead>
+                  <span className="sr-only">Remove stock</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {displayedWatchlist.map((ticker) => {
+                const snapshot = snapshots.get(ticker);
+                const change = openCloseChange(
+                  snapshot?.latestOpen,
+                  snapshot?.latestClose,
+                );
+                const age = snapshotAge(snapshot?.decision.timestamp);
+                const movement = priceMovement(
+                  snapshot?.latestOpen,
+                  snapshot?.latestClose,
+                );
+                const hasOpen =
+                  snapshot?.latestOpen != null &&
+                  Number.isFinite(snapshot.latestOpen);
+                const hasClose =
+                  snapshot?.latestClose != null &&
+                  Number.isFinite(snapshot.latestClose);
+                return (
+                  <TableRow
+                    key={ticker}
+                    data-state={selected === ticker ? "selected" : undefined}
+                  >
+                    <TableCell data-label="Stock">
+                      <span className="monitor-table-mark">
+                        <StockMark ticker={ticker} />
                       </span>
                       <Button
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label="Next stock"
-                        disabled={selectedIndex >= activeStocks.length - 1}
-                        onClick={() => moveStock(1)}
+                        variant="ghost"
+                        size="sm"
+                        aria-pressed={selected === ticker}
+                        onClick={() => setSelected(ticker)}
                       >
-                        <ChevronRight />
+                        {ticker}
                       </Button>
-                    </div>
-                  </div>
-                  <CardTitle>
-                    <h4>{selectedSymbol}</h4>
-                  </CardTitle>
-                  <CardDescription>{stockName(selected)}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="monitor-detail-identity">
-                    <StockMark ticker={selected} />
-                    <span>
-                      {selectedMarket === "US"
-                        ? "Nasdaq/NYSE · USD"
-                        : "IDX · IDR"}
-                    </span>
-                  </div>
-                  <div className="monitor-detail-quote">
-                    <span>Latest screening close</span>
-                    <strong>
-                      {number(selectedSnapshot?.latestClose ?? NaN)}{" "}
-                      <small>{selectedCurrency}</small>
-                    </strong>
-                    {selectedChange !== null && (
+                      <span
+                        className="monitor-company"
+                        title={stockName(ticker)}
+                      >
+                        {stockName(ticker)}
+                      </span>
+                    </TableCell>
+                    <TableCell data-label="Open · IDR">
+                      <span
+                        className="monitor-price"
+                        data-price={hasOpen ? "open" : "missing"}
+                      >
+                        {hasOpen ? number(snapshot.latestOpen!) : "—"}
+                      </span>
+                    </TableCell>
+                    <TableCell data-label="Close · IDR">
+                      <span
+                        className="monitor-price"
+                        data-price={hasClose ? movement : "missing"}
+                      >
+                        {movement === "up" && (
+                          <ArrowUpRight aria-hidden="true" />
+                        )}
+                        {movement === "down" && (
+                          <ArrowDownRight aria-hidden="true" />
+                        )}
+                        {movement === "flat" && <Minus aria-hidden="true" />}
+                        {hasClose ? number(snapshot.latestClose) : "—"}
+                        {movement !== "unknown" && (
+                          <span className="sr-only">
+                            {movement === "up"
+                              ? "Above opening price"
+                              : movement === "down"
+                                ? "Below opening price"
+                                : "Unchanged from opening price"}
+                          </span>
+                        )}
+                      </span>
+                    </TableCell>
+                    <TableCell
+                      data-label="Change · open to close"
+                      className="monitor-change-cell"
+                    >
                       <span
                         className="monitor-change"
                         data-direction={
-                          Math.abs(selectedChange) < 0.005
+                          change !== null && Math.abs(change) < 0.005
                             ? "flat"
-                            : selectedMovement
+                            : movement
                         }
                       >
-                        {formatSignedPercent(selectedChange)} from open
+                        {formatSignedPercent(change)}
                       </span>
-                    )}
-                  </div>
-                  <dl className="monitor-detail-metrics">
-                    <div>
-                      <dt>Open</dt>
-                      <dd>{number(selectedSnapshot?.latestOpen ?? NaN)}</dd>
-                    </div>
-                    <div>
-                      <dt>RSI 14</dt>
-                      <dd>{number(selectedSnapshot?.features.rsi14 ?? NaN)}</dd>
-                    </div>
-                    <div>
-                      <dt>EMA 9</dt>
-                      <dd>{number(selectedSnapshot?.features.ema9 ?? NaN)}</dd>
-                    </div>
-                    <div>
-                      <dt>EMA 20</dt>
-                      <dd>{number(selectedSnapshot?.features.ema20 ?? NaN)}</dd>
-                    </div>
-                  </dl>
-                  <div className="monitor-detail-result">
-                    <span>Latest rule result</span>
-                    <Badge
-                      variant={
-                        selectedSnapshot?.decision.matched
-                          ? "secondary"
-                          : "outline"
-                      }
-                    >
-                      {selectedSnapshot
-                        ? decisionLabel(selectedSnapshot.decision)
-                        : "Not evaluated"}
-                    </Badge>
-                    <p>
-                      {selectedSnapshot?.record.rule ??
-                        "Run the screener to add a snapshot for this stock."}
-                    </p>
-                    {selectedSnapshot && (
-                      <time dateTime={selectedSnapshot.decision.timestamp}>
-                        Candle{" "}
-                        {marketCandleDate(
-                          selectedSnapshot.decision.timestamp,
-                          selectedMarket,
-                          selectedSnapshot.record.run.manifest.timeframe,
-                        )}{" "}
-                        · {marketTimezone(selectedMarket)}
-                        {" · "}
-                        {selectedSnapshot.record.run.manifest.timeframe} candles
-                      </time>
-                    )}
-                    {selectedSnapshot &&
-                      now - Date.parse(selectedSnapshot.record.recordedAt) >
-                        2 *
-                          (screenerIntervals.find(
-                            (item) =>
-                              item.value ===
-                              selectedSnapshot.record.run.manifest.timeframe,
-                          )?.periodMs ?? 900000) && (
-                        <Badge variant="outline">Not recently screened</Badge>
-                      )}
-                    {selectedSnapshot && (
-                      <p className="monitor-company">
-                        Last screened {date(selectedSnapshot.record.recordedAt)}{" "}
-                        · not a live quote
-                      </p>
-                    )}
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <p>Screening snapshot, not a live quote.</p>
-                  <Button
-                    variant="outline"
-                    nativeButton={false}
-                    render={<a href="#app/analysis" />}
-                  >
-                    Open screener
-                    <ExternalLink data-icon="inline-end" />
-                  </Button>
-                </CardFooter>
-              </Card>
-            </aside>
-          </div>
-        </div>
-      )}
-      <section
-        className="monitor-ledger"
-        ref={ledgerRef}
-        tabIndex={-1}
-        aria-label="Watchlist and screening results"
-      >
-        <header>
-          <div>
-            <h3>
-              {universe ? universe.name : "Watchlist"} & screening results
-            </h3>
-            <p>Latest daily candle snapshots. Not live prices.</p>
-          </div>
-          {!universe && (
-            <form onSubmit={add}>
-              <Field data-invalid={Boolean(error)}>
-                <FieldLabel htmlFor="monitor-symbol" className="sr-only">
-                  Add stock
-                </FieldLabel>
-                <div className="monitor-add">
-                  <Input
-                    id="monitor-symbol"
-                    placeholder="IDX ticker, e.g. BBCA"
-                    value={query}
-                    onChange={(e) => {
-                      setQuery(e.target.value);
-                      setError(null);
-                    }}
-                    aria-invalid={Boolean(error)}
-                  />
-                  <Button type="submit" variant="outline">
-                    <Plus data-icon="inline-start" />
-                    Add stock
-                  </Button>
-                </div>
-                {error && <FieldError>{error}</FieldError>}
-              </Field>
-            </form>
-          )}
-        </header>
-        <div className="monitor-toolbar">
-          <Field>
-            <FieldLabel htmlFor="monitor-sort">Sort table</FieldLabel>
-            <Select
-              value={sort}
-              onValueChange={(value) => setSort(value ?? "watchlist")}
-              items={[
-                { value: "watchlist", label: "Watchlist order" },
-                { value: "change", label: "Highest open-to-close change" },
-                { value: "matched", label: "Matches first" },
-                { value: "latest", label: "Latest candle" },
-              ]}
-            >
-              <SelectTrigger id="monitor-sort">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="watchlist">Watchlist order</SelectItem>
-                  <SelectItem value="change">
-                    Highest open-to-close change
-                  </SelectItem>
-                  <SelectItem value="matched">Matches first</SelectItem>
-                  <SelectItem value="latest">Latest candle</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-        </div>
-        <Table>
-          <colgroup>
-            <col style={{ width: "17%" }} />
-            <col style={{ width: "9%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "17%" }} />
-            <col style={{ width: "15%" }} />
-            <col style={{ width: "5%" }} />
-          </colgroup>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Stock</TableHead>
-              <TableHead className="monitor-price-heading--open">
-                Open <span className="monitor-unit">IDR</span>
-              </TableHead>
-              <TableHead className="monitor-price-heading--close">
-                Close <span className="monitor-unit">IDR</span>
-              </TableHead>
-              <TableHead className="monitor-change-cell">Change</TableHead>
-              <TableHead>RSI 14</TableHead>
-              <TableHead>EMA 20</TableHead>
-              <TableHead>Rule result</TableHead>
-              <TableHead>Data time</TableHead>
-              <TableHead>
-                <span className="sr-only">Remove stock</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {displayedWatchlist.map((ticker) => {
-              const snapshot = snapshots.get(ticker);
-              const change = openCloseChange(
-                snapshot?.latestOpen,
-                snapshot?.latestClose,
-              );
-              const age = snapshotAge(snapshot?.decision.timestamp);
-              const movement = priceMovement(
-                snapshot?.latestOpen,
-                snapshot?.latestClose,
-              );
-              const hasOpen =
-                snapshot?.latestOpen != null &&
-                Number.isFinite(snapshot.latestOpen);
-              const hasClose =
-                snapshot?.latestClose != null &&
-                Number.isFinite(snapshot.latestClose);
-              return (
-                <TableRow
-                  key={ticker}
-                  data-state={selected === ticker ? "selected" : undefined}
-                >
-                  <TableCell data-label="Stock">
-                    <span className="monitor-table-mark">
-                      <StockMark ticker={ticker} />
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-pressed={selected === ticker}
-                      onClick={() => setSelected(ticker)}
-                    >
-                      {ticker}
-                    </Button>
-                    <span className="monitor-company" title={stockName(ticker)}>
-                      {stockName(ticker)}
-                    </span>
-                  </TableCell>
-                  <TableCell data-label="Open · IDR">
-                    <span
-                      className="monitor-price"
-                      data-price={hasOpen ? "open" : "missing"}
-                    >
-                      {hasOpen ? number(snapshot.latestOpen!) : "—"}
-                    </span>
-                  </TableCell>
-                  <TableCell data-label="Close · IDR">
-                    <span
-                      className="monitor-price"
-                      data-price={hasClose ? movement : "missing"}
-                    >
-                      {movement === "up" && <ArrowUpRight aria-hidden="true" />}
-                      {movement === "down" && (
-                        <ArrowDownRight aria-hidden="true" />
-                      )}
-                      {movement === "flat" && <Minus aria-hidden="true" />}
-                      {hasClose ? number(snapshot.latestClose) : "—"}
-                      {movement !== "unknown" && (
-                        <span className="sr-only">
-                          {movement === "up"
-                            ? "Above opening price"
-                            : movement === "down"
-                              ? "Below opening price"
-                              : "Unchanged from opening price"}
-                        </span>
-                      )}
-                    </span>
-                  </TableCell>
-                  <TableCell
-                    data-label="Change · open to close"
-                    className="monitor-change-cell"
-                  >
-                    <span
-                      className="monitor-change"
-                      data-direction={
-                        change !== null && Math.abs(change) < 0.005
-                          ? "flat"
-                          : movement
-                      }
-                    >
-                      {formatSignedPercent(change)}
-                    </span>
-                  </TableCell>
-                  <TableCell data-label="RSI 14">
-                    {snapshot ? number(snapshot.features.rsi14) : "—"}
-                  </TableCell>
-                  <TableCell data-label="EMA 20">
-                    {snapshot ? number(snapshot.features.ema20) : "—"}
-                  </TableCell>
-                  <TableCell data-label="Rule result">
-                    <div className="monitor-result">
-                      {snapshot ? (
-                        <>
-                          <Badge
-                            variant={
-                              snapshot.decision.matched
-                                ? "secondary"
-                                : "outline"
-                            }
-                          >
-                            {snapshot.decision.matched
-                              ? "Matched"
-                              : "Not matched"}
-                          </Badge>
-                          <span
-                            className="monitor-company"
-                            title={snapshot.record.rule}
-                          >
-                            {snapshot.record.rule}
-                          </span>
-                        </>
-                      ) : (
-                        <Badge variant="outline">Not evaluated</Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell data-label="Data time">
-                    {snapshot ? (
-                      <time dateTime={snapshot.decision.timestamp}>
-                        {marketCandleDate(
-                          snapshot.decision.timestamp,
-                          snapshot.record.run.manifest.market,
-                          snapshot.record.run.manifest.timeframe,
+                    </TableCell>
+                    <TableCell data-label="RSI 14">
+                      {snapshot ? number(snapshot.features.rsi14) : "—"}
+                    </TableCell>
+                    <TableCell data-label="EMA 20">
+                      {snapshot ? number(snapshot.features.ema20) : "—"}
+                    </TableCell>
+                    <TableCell data-label="Rule result">
+                      <div className="monitor-result">
+                        {snapshot ? (
+                          <>
+                            <Badge
+                              variant={
+                                snapshot.decision.matched
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                            >
+                              {snapshot.decision.matched
+                                ? "Matched"
+                                : "Not matched"}
+                            </Badge>
+                            <span
+                              className="monitor-company"
+                              title={snapshot.record.rule}
+                            >
+                              {snapshot.record.rule}
+                            </span>
+                          </>
+                        ) : (
+                          <Badge variant="outline">Not evaluated</Badge>
                         )}
-                        <span className="monitor-company">
-                          {marketTimezone(snapshot.record.run.manifest.market)}
-                          {" · "}
-                          {snapshot.record.run.manifest.timeframe} candles
-                        </span>
-                        <span className="monitor-company">
-                          Screened {date(snapshot.record.recordedAt)}
-                        </span>
-                      </time>
-                    ) : (
-                      "—"
-                    )}
-                    {age === "old" && (
-                      <Badge variant="outline">Older snapshot</Badge>
-                    )}
-                    {age === "future" && (
-                      <Badge variant="destructive">Check data time</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {!universe && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Remove ${ticker} from watchlist`}
-                        onClick={() => remove(ticker)}
-                      >
-                        <X />
-                      </Button>
-                    )}
+                      </div>
+                    </TableCell>
+                    <TableCell data-label="Data time">
+                      {snapshot ? (
+                        <time dateTime={snapshot.decision.timestamp}>
+                          {marketCandleDate(
+                            snapshot.decision.timestamp,
+                            snapshot.record.run.manifest.market,
+                            snapshot.record.run.manifest.timeframe,
+                          )}
+                          <span className="monitor-company">
+                            {marketTimezone(
+                              snapshot.record.run.manifest.market,
+                            )}
+                            {" · "}
+                            {snapshot.record.run.manifest.timeframe} candles
+                          </span>
+                          <span className="monitor-company">
+                            Screened {date(snapshot.record.recordedAt)}
+                          </span>
+                        </time>
+                      ) : (
+                        "—"
+                      )}
+                      {age === "old" && (
+                        <Badge variant="outline">Older snapshot</Badge>
+                      )}
+                      {age === "future" && (
+                        <Badge variant="destructive">Check data time</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {!universe && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Remove ${ticker} from watchlist`}
+                          onClick={() => remove(ticker)}
+                        >
+                          <X />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {!activeStocks.length && (
+                <TableRow>
+                  <TableCell colSpan={9}>
+                    {universe
+                      ? "Add stocks to this universe to start monitoring."
+                      : "Add a stock ticker to start monitoring."}
                   </TableCell>
                 </TableRow>
-              );
-            })}
-            {!activeStocks.length && (
-              <TableRow>
-                <TableCell colSpan={9}>
-                  {universe
-                    ? "Add stocks to this universe to start monitoring."
-                    : "Add a stock ticker to start monitoring."}
-                </TableCell>
-              </TableRow>
+              )}
+            </TableBody>
+          </Table>
+          <footer>
+            {universe ? (
+              <>
+                Stocks follow your saved universe.{" "}
+                <a href="#app/universes">Edit universe</a>.{" "}
+              </>
+            ) : (
+              "Your watchlist is saved in your workspace. "
             )}
-          </TableBody>
-        </Table>
-        <footer>
-          {universe ? (
-            <>
-              Stocks follow your saved universe.{" "}
-              <a href="#app/universes">Edit universe</a>.{" "}
-            </>
+            <a href="#app/analysis">Run screener</a> to populate results and
+            indicators. Snapshots older than seven calendar days are marked as
+            older; this does not account for the exchange trading calendar.
+          </footer>
+        </section>
+        <section
+          className="monitor-history"
+          aria-labelledby="monitor-history-title"
+        >
+          <header>
+            <h3 id="monitor-history-title" ref={historyHeading} tabIndex={-1}>
+              Screening history {selected}
+            </h3>
+            <div className="monitor-history__tools">
+              <Badge variant="outline">{entries.length} results</Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="monitor-history__delete-all"
+                disabled={!entries.length || !userId}
+                onClick={(event) => {
+                  deleteTrigger.current = event.currentTarget;
+                  setHistoryError("");
+                  setDeleteAllOpen(true);
+                }}
+              >
+                <Trash2 data-icon="inline-start" />
+                Delete all
+              </Button>
+            </div>
+          </header>
+          {historyError && <p role="alert">{historyError}</p>}
+          {entries.length ? (
+            <ol>
+              {entries.map(({ decision, record }, index) => (
+                <li key={`${record.recordedAt}-${index}`}>
+                  <time dateTime={record.recordedAt}>
+                    {date(record.recordedAt)}
+                  </time>
+                  <strong>{record.rule}</strong>
+                  <Badge variant={decision.matched ? "success" : "destructive"}>
+                    {decisionLabel(decision)}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Delete history for ${record.rule}, ${date(record.recordedAt)}`}
+                    onClick={(event) => {
+                      deleteTrigger.current = event.currentTarget;
+                      setHistoryError("");
+                      setPendingDelete(record);
+                    }}
+                  >
+                    <Trash2 />
+                  </Button>
+                </li>
+              ))}
+            </ol>
           ) : (
-            "Your watchlist is saved in your workspace. "
+            <p>
+              Results for this stock appear after a completed run. The ten most
+              recent runs are available for up to 30 days.
+            </p>
           )}
-          <a href="#app/analysis">Run screener</a> to populate results and
-          indicators. Snapshots older than seven calendar days are marked as
-          older; this does not account for the exchange trading calendar.
-        </footer>
-      </section>
-      <section
-        className="monitor-history"
-        aria-labelledby="monitor-history-title"
-      >
-        <header>
-          <h3 id="monitor-history-title" ref={historyHeading} tabIndex={-1}>
-            Screening history {selected}
-          </h3>
-          <div className="monitor-history__tools">
-            <Badge variant="outline">{entries.length} results</Badge>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="monitor-history__delete-all"
-              disabled={!entries.length || !userId}
-              onClick={(event) => {
-                deleteTrigger.current = event.currentTarget;
-                setHistoryError("");
-                setDeleteAllOpen(true);
-              }}
-            >
-              <Trash2 data-icon="inline-start" />
-              Delete all
-            </Button>
-          </div>
-        </header>
-        {historyError && <p role="alert">{historyError}</p>}
-        {entries.length ? (
-          <ol>
-            {entries.map(({ decision, record }, index) => (
-              <li key={`${record.recordedAt}-${index}`}>
-                <time dateTime={record.recordedAt}>
-                  {date(record.recordedAt)}
-                </time>
-                <strong>{record.rule}</strong>
-                <Badge variant={decision.matched ? "success" : "destructive"}>
-                  {decisionLabel(decision)}
-                </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Delete history for ${record.rule}, ${date(record.recordedAt)}`}
-                  onClick={(event) => {
-                    deleteTrigger.current = event.currentTarget;
-                    setHistoryError("");
-                    setPendingDelete(record);
-                  }}
-                >
-                  <Trash2 />
-                </Button>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p>
-            Results for this stock appear after a completed run. The ten most
-            recent runs are available for up to 30 days.
-          </p>
-        )}
-      </section>
-      <ConfirmDialog
-        open={Boolean(pendingDelete) || deleteAllOpen}
-        title={
-          deleteAllOpen
-            ? "Delete all screening history?"
-            : "Delete screening history?"
-        }
-        description={
-          deleteAllOpen
-            ? `Remove all ${entries.length} saved screens shown for ${selected} from this browser? Each screen includes all of its stocks, so these results will also disappear for other stocks in those screens. Account history and backend data stay unchanged.`
-            : pendingDelete
-              ? `Remove “${pendingDelete.rule}” from ${date(pendingDelete.recordedAt)} on this browser? This result includes ${pendingDelete.run.rows.length} stock${pendingDelete.run.rows.length === 1 ? "" : "s"}. Account history and backend data stay unchanged.`
-              : ""
-        }
-        confirmLabel={deleteAllOpen ? "Delete all history" : "Delete history"}
-        destructive
-        returnFocus={deleteTrigger}
-        onCancel={() => {
-          setPendingDelete(null);
-          setDeleteAllOpen(false);
-        }}
-        onConfirm={() => {
-          if (!userId) return;
-          const targets = deleteAllOpen
-            ? entries.map(({ record }) => record)
-            : pendingDelete
-              ? [pendingDelete]
-              : [];
-          const removed = targets
-            .map((record) => hideMonitorRun(userId, record))
-            .every(Boolean);
-          deleteTrigger.current = historyHeading.current;
-          setRuns(monitorRuns(userId));
-          if (!removed)
-            setHistoryError(
-              "History could not be removed. Allow browser storage and try again.",
-            );
-          setPendingDelete(null);
-          setDeleteAllOpen(false);
-        }}
-      />
+        </section>
+        <ConfirmDialog
+          open={Boolean(pendingDelete) || deleteAllOpen}
+          title={
+            deleteAllOpen
+              ? "Delete all screening history?"
+              : "Delete screening history?"
+          }
+          description={
+            deleteAllOpen
+              ? `Remove all ${entries.length} saved screens shown for ${selected} from this browser? Each screen includes all of its stocks, so these results will also disappear for other stocks in those screens. Account history and backend data stay unchanged.`
+              : pendingDelete
+                ? `Remove “${pendingDelete.rule}” from ${date(pendingDelete.recordedAt)} on this browser? This result includes ${pendingDelete.run.rows.length} stock${pendingDelete.run.rows.length === 1 ? "" : "s"}. Account history and backend data stay unchanged.`
+                : ""
+          }
+          confirmLabel={deleteAllOpen ? "Delete all history" : "Delete history"}
+          destructive
+          returnFocus={deleteTrigger}
+          onCancel={() => {
+            setPendingDelete(null);
+            setDeleteAllOpen(false);
+          }}
+          onConfirm={() => {
+            if (!userId) return;
+            const targets = deleteAllOpen
+              ? entries.map(({ record }) => record)
+              : pendingDelete
+                ? [pendingDelete]
+                : [];
+            const removed = targets
+              .map((record) => hideMonitorRun(userId, record))
+              .every(Boolean);
+            deleteTrigger.current = historyHeading.current;
+            setRuns(monitorRuns(userId));
+            if (!removed)
+              setHistoryError(
+                "History could not be removed. Allow browser storage and try again.",
+              );
+            setPendingDelete(null);
+            setDeleteAllOpen(false);
+          }}
+        />
+      </div>
     </div>
   );
 }

@@ -19,6 +19,74 @@
   display: block;
   font-size: 16px;
 }
+.stock-heatmap__heading > div:first-child {
+  margin-right: auto;
+  min-width: 0;
+}
+.stock-heatmap__empty,
+.stock-heatmap__preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  color: var(--muted);
+  font-size: 13px;
+  border-top: 1px solid var(--line);
+}
+.stock-heatmap__preview {
+  background: var(--accent-surface);
+  color: var(--text);
+  justify-content: flex-start;
+}
+.heatmap-popover-positioner {
+  z-index: 60;
+}
+.heatmap-popover {
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  padding: 16px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px #0003;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.heatmap-popover__title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.heatmap-popover__title > h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.heatmap-popover__title > button {
+  flex-shrink: 0;
+}
+.heatmap-popover [data-slot="button"] {
+  min-height: 44px;
+}
+.heatmap-popover dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.heatmap-popover dt,
+.heatmap-popover p {
+  color: var(--muted);
+  font-size: 12px;
+}
+.heatmap-popover dd {
+  margin: 4px 0 0;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
 .stock-heatmap__heading > div > span {
   display: block;
   margin-top: 4px;
@@ -189,22 +257,19 @@
   font-size: 12px;
   line-height: 1.2;
 }
-.stock-heatmap__hint {
-  margin: 0;
-  padding: 12px 20px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
 @media (max-width: 600px) {
   .stock-heatmap__heading {
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     padding: 14px 16px;
     gap: 10px;
   }
-  .stock-heatmap__hint {
-    padding: 12px 16px;
+  .stock-heatmap__heading > button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .stock-heatmap__legend {
+    grid-column: 1 / -1;
   }
 }
 @media (prefers-reduced-motion: reduce) {

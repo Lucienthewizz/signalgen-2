@@ -1,6 +1,6 @@
 # Heatmap color and size scenarios
 
-All prices below are synthetic browser fixtures. No real account, journal,
+All prices below are synthetic browser fixtures and the optional in-app preview. No real account, journal,
 screening history, market feed, or backend record is modified.
 
 | Fixture stock | Open | Close | Change | Expected color | Expected area |
@@ -36,8 +36,13 @@ the price label.
 - Test 1–30 stocks, including a dominant move with all other stocks unchanged.
 - Test desktop/mobile, both themes, sidebar transitions, resize, hide/show,
   keyboard selection, and chart synchronization.
-- Live mode still uses actual screening snapshots; synthetic fixtures are
-  restricted to the automated test browser.
+- Live mode still uses actual screening snapshots. In Market monitor, choose
+  **Preview test data** to inspect this scenario, then **Exit test preview** to
+  restore the real universe and selected stock. The preview is clearly labelled,
+  hides the real chart/history, and never persists simulated prices or selection.
+- Hover or tap a tile for candle prices, change and snapshot time; Escape closes
+  the details. Missing snapshots offer **Screen this universe**, which prefills
+  the Screener without starting a run or changing the selected rule.
 
 Run `npm test` and `npm run test:browser` from `frontend/web`.
 Visual captures are written to `output/playwright/stock-heatmap-mixed-*.png`.
