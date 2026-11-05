@@ -336,6 +336,8 @@ async (page) => {
   const chartConfig=await page.locator('.monitor-chart .tradingview-widget-container script').textContent().then(JSON.parse);
   if(chartConfig.interval!=='D'||chartConfig.range!=='12M')throw Error('Monitor initial zoom must show normal-sized daily candles');
   const screeningDetails=page.locator('.monitor-detail-result');
+  const detailBox=await screeningDetails.evaluate(el=>{const css=getComputedStyle(el);return {padding:parseFloat(css.paddingLeft),border:parseFloat(css.borderLeftWidth),radius:parseFloat(css.borderTopLeftRadius)};});
+  if(detailBox.padding<16||detailBox.border!==1||detailBox.radius<12)throw Error('Screening details should be a padded, bordered box');
   for(const label of ['Screening details','Rule','Candle session','Interval','Last screened','SGT'])if(!(await screeningDetails.innerText()).includes(label))throw Error('Missing screening information '+label);
   for(const width of [1218,390])for(const theme of ['dark','light']){
     await page.setViewportSize({width,height:1000});await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);

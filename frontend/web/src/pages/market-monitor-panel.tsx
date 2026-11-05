@@ -735,23 +735,25 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                       </div>
                     </dl>
                     <div className="monitor-detail-result">
-                      <h5>Screening details</h5>
-                      <Badge
-                        variant={
-                          selectedSnapshot?.decision.matched
-                            ? "success"
-                            : selectedSnapshot &&
-                                !selectedSnapshot.decision.reason_codes.includes(
-                                  "COOLDOWN_ACTIVE",
-                                )
-                              ? "destructive"
-                              : "outline"
-                        }
-                      >
-                        {selectedSnapshot
-                          ? decisionLabel(selectedSnapshot.decision)
-                          : "Not evaluated"}
-                      </Badge>
+                      <div className="monitor-detail-result__header">
+                        <h5>Screening details</h5>
+                        <Badge
+                          variant={
+                            selectedSnapshot?.decision.matched
+                              ? "success"
+                              : selectedSnapshot &&
+                                  !selectedSnapshot.decision.reason_codes.includes(
+                                    "COOLDOWN_ACTIVE",
+                                  )
+                                ? "destructive"
+                                : "outline"
+                          }
+                        >
+                          {selectedSnapshot
+                            ? decisionLabel(selectedSnapshot.decision)
+                            : "Not evaluated"}
+                        </Badge>
+                      </div>
                       <p>
                         {selectedSnapshot
                           ? decisionReasons(
