@@ -1,6 +1,6 @@
 # SignalGen 2.0 — Product Requirements Document
 
-Versi 2.4 · 3 November 2026 · Produk: aplikasi web multi-user dengan Supabase Postgres. Kebutuhan dan hasil pengujian aktual dibedakan; lihat [bahan asis 4 November](ASIS_2026_11_04.md).
+Versi 2.5 · 5 November 2026 · Produk: aplikasi web multi-user dengan Supabase Postgres. Kebutuhan dan hasil pengujian aktual dibedakan; lihat [bahan asis 4 November](ASIS_2026_11_04.md).
 
 Keputusan implementasi 5 Oktober 2026: alur screening aktif memakai **Model A**
 (indikator di Go/WASM client, private decision di Go server melalui WebSocket).
@@ -8,6 +8,12 @@ Model B hanya pembanding penelitian. Benchmark dan persetujuan pembimbing tidak
 dianggap selesai hanya karena pilihan implementasi sudah ditetapkan.
 
 ## 1. Otoritas dan revisi
+
+Revisi pengguna 5 November: jurnal aktif hanya arsip hasil **Match** yang dipilih
+pada screener. Tidak ada input transaksi manual, edit/hapus, tutup posisi,
+quantity/fee, grafik atau perhitungan P&L pada halaman jurnal. Catatan lama tetap
+tersimpan tanpa konversi otomatis. [Kontrak aktual](backend/SCREENING_JOURNAL.md).
+
 
 Keputusan pengguna 2 November: ledger portofolio BUY/SELL baru, jurnal lama tetap;
 tanpa konversi otomatis. Pencatatan manual long-only memakai weighted average
@@ -44,7 +50,7 @@ Pengguna:
 - Operator: mengelola grant/sesi demo terkontrol, tanpa otomatis membaca data trading privat.
 - Tim/pembimbing: membutuhkan demo repeatable, parity, benchmark dan threat model.
 
-Outcome: login browser → pilih rule/data → screening/backtest lokal → pahami hasil → catat transaksi terkonfirmasi di jurnal server.
+Outcome: login browser → pilih rule/data → screening/backtest lokal → pahami hasil → simpan hasil screening Match yang dipilih ke jurnal server.
 
 ## 3. Prioritas dan batas MVP
 
@@ -62,8 +68,9 @@ Revisi 2 November 2026: **Analisis semua sinyal** menjadi mode utama backtest;
 close candle sinyal sebagai acuan, O/H/C T+1…T+n, BUY/SELL sebagai analisis arah,
 TP/SL konservatif SL dahulu, serta data masa depan kurang bukan loss. Seluruh
 katalog IDX atau AS diproses batch sepuluh tanpa mengubah limit screener langsung.
-Mode portofolio next-open tetap terpisah. Ceklis hasil Match membawa draft ke
-review jurnal dengan quantity/harga/tanggal/biaya/buku dan konfirmasi pengguna.
+Mode portofolio next-open tetap terpisah. Revisi 5 November menggantikan review
+transaksi: ceklis hasil Match membawa snapshot ke jurnal untuk disimpan tanpa
+input harga/quantity/biaya manual.
 Tidak mengisi jurnal otomatis dari backtest. Detail acceptance, limit, kontrak
 dan kebijakan: [SIGNAL_STUDY](backend/SIGNAL_STUDY.md).
 
@@ -95,8 +102,8 @@ atau pekerjaan server tanpa browser. Detail kontrak, penerimaan dan limit:
 | MVP-RESULT-01 | P0 | Hasil dapat dijelaskan | Metrik, signal/trade dan asumsi tervalidasi; unsupported ditandai, bukan dipalsukan |
 | MVP-CACHE-01 | P1 | Cache terkompresi/terenkripsi | Tidak ada plaintext persisten; user/version/checksum terpisah; clear cache tersedia |
 | MVP-DEVICE-01 | P1 | Instalasi browser, limit dan revoke | Limit configurable; sesi revoked ditolak server; IP sebagai sinyal risiko |
-| MVP-JOURNAL-01 | P1 | Jurnal server CRUD BUY/SELL | Waktu, quantity, harga, fee, catatan dan ownership tervalidasi |
-| MVP-JOURNAL-02 | P1 | Draft dari hasil analisis | Harga/waktu editable; konfirmasi wajib; tidak mengirim order broker |
+| MVP-JOURNAL-01 | P1 | Arsip hasil screening server | Hanya snapshot Match dengan bukti server terikat akun/sesi; append-only |
+| MVP-JOURNAL-02 | P1 | Pilihan hasil Match | Pilih satu/beberapa saham; simpan snapshot tanpa form transaksi; retry tidak menggandakan hasil |
 | MVP-PORT-01 | P1 | Posisi/P&L server | Cost-basis terdokumentasi; harga terakhir/timestamp bukan klaim live |
 | MVP-EVAL-01 | P0/P1 | Evaluasi | 1/10/30 sesi, cold/warm, CPU/RAM kedua sisi, latency/traffic/failure dan threat model |
 | MVP-WEB-01 | P1 | Informasi produk/akun jujur | CTA menuju web app; tidak menjanjikan checkout/installer/live feed yang belum ada |
@@ -112,7 +119,7 @@ performa, recovery atau penerimaan pembimbing.
 - Onboarding: register/konfirmasi atau login → principal → sesi/instalasi browser → workspace sesuai entitlement.
 - Analisis: rule + saham/periode → server access check → data berversi → worker → hasil/asumsi.
 - Limited access: penjelasan hak fitur dan aktivasi manual; bukan checkout palsu; API tetap menolak request tanpa hak.
-- Jurnal: input manual/draft dari hasil historis → edit harga, quantity, waktu aktual → konfirmasi → server menghitung ulang.
+- Jurnal: screening baru → pilih hasil Match → simpan snapshot → lihat arsip; tidak ada mutasi transaksi atau P&L.
 - Perangkat: list/revoke/registrasi ulang dengan limit; sesi lama ditolak pada request berikutnya.
 
 Owner berasal dari principal, bukan payload user_id. Role operator terpisah dari entitlement dan tidak otomatis mengizinkan akses resource privat orang lain. Paket berbasis fitur; nama/harga/kuota komersial belum final. Aplikasi meminta validasi akses server untuk run baru, termasuk cache hit; offline run bukan fitur MVP.
@@ -180,3 +187,8 @@ MVP selesai: **seluruh P0/P1** lulus; slice API Go teruji; provider berizin, mig
 | Benefit/harga/provider pembayaran | Product | P2 komersial; tidak memblokir grant MVP |
 
 Usulan teknik bukan ucapan pembimbing. Perubahan berikutnya memperbarui scope, dampak, acceptance dan kontrak bersama. Review/merge tetap lewat PR. Revisi ini tidak membuat commit/push, menghapus legacy, atau menjalankan migration production.
+
+
+## Google sign-in (5 November 2026)
+
+Login/register mendukung pilihan Google melalui Supabase PKCE, di samping email/password. Callback web `/auth/google/callback`, gateway Go `POST /api/auth/google/start` dan `POST /api/auth/google/exchange` (API 0.18.0). Sesi aplikasi, ownership, status, dan entitlement memakai alur backend yang sama. Google Client Secret hanya berada di konfigurasi provider Supabase. Aktivasi provider dan smoke test akun asli tetap perlu dibuktikan terpisah. Panduan: [Google sign-in](backend/GOOGLE_SIGN_IN.md).

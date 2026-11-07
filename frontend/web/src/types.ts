@@ -268,6 +268,7 @@ export type ScreenerFeatureResult = {
 };
 
 export type ScreenerDecision = {
+  journal_receipt?: string;
   symbol: string;
   timestamp: string;
   matched: boolean;

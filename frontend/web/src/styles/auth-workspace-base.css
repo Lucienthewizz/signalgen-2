@@ -1754,3 +1754,10 @@ html[data-theme="light"] .tradingview-chart__status strong {
 html[data-theme="light"] .tradingview-chart__status span {
   color: var(--muted);
 }
+
+.auth-or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.auth-google { width: 100%; min-height: 48px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.auth-google__mark { font: 700 20px/1 Arial, sans-serif; }
+html[data-theme="light"] .auth-google { background: #fff; border-color: #c8d9d0; color: #10251a; }
+html[data-theme="light"] .auth-layout .auth-submit { background: #087f56; color: #fff; }

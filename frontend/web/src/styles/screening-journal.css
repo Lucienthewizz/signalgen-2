@@ -1,0 +1,105 @@
+.screening-journal {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.screening-journal .screening-journal__intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+.screening-journal__intro h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 650;
+}
+.screening-journal__intro p,
+.screening-journal__note {
+  margin: 0.4rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+.screening-journal__selection {
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--card);
+  display: grid;
+  gap: 1rem;
+}
+.screening-journal__selection-heading,
+.screening-journal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.screening-journal__selection h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.screening-journal__selection ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+}
+.screening-journal__selection li {
+  display: grid;
+  grid-template-columns:
+    minmax(4rem, 0.5fr) minmax(8rem, 2fr) minmax(6rem, 1fr)
+    minmax(6rem, 1fr);
+  gap: 0.75rem;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.screening-journal__selection li span {
+  overflow-wrap: anywhere;
+}
+.screening-journal__selection li span:last-child {
+  color: var(--muted-foreground);
+}
+.screening-journal__loading {
+  display: grid;
+  gap: 0.65rem;
+}
+.screening-journal__loading > * {
+  height: 2.75rem;
+}
+.screening-journal .journal-ledger {
+  min-width: 0;
+  overflow-x: auto;
+}
+.screening-journal .journal-ledger tbody tr {
+  cursor: default;
+}
+.screening-journal th,
+.screening-journal td {
+  white-space: nowrap;
+}
+.screening-journal__actions p {
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .screening-journal .screening-journal__intro {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 1rem;
+  }
+  .screening-journal__selection {
+    padding: 1rem;
+  }
+  .screening-journal__selection li {
+    grid-template-columns: 1fr 1fr;
+  }
+  .screening-journal__actions > button {
+    width: 100%;
+    min-height: 44px;
+  }
+}

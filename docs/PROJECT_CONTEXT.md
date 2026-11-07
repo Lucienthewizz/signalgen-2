@@ -1,6 +1,6 @@
 # SignalGen 2.0 — Project Context and Architecture
 
-Versi 2.4 · 3 November 2026. SignalGen adalah aplikasi web multi-user dengan
+Versi 2.5 · 5 November 2026. SignalGen adalah aplikasi web multi-user dengan
 backend Go/Gin dan Supabase Postgres. Scope target bukan bukti semua fitur selesai;
 status terverifikasi berada di [backend progress](backend/BACKEND_PROGRESS.md) dan
 [laporan asis](ASIS_2026_10_07.md).
@@ -11,6 +11,13 @@ melalui WebSocket. Model B tetap bahan eksperimen, bukan jalur produk kedua.
 Pilihan ini bukan bukti efisiensi production atau persetujuan pembimbing.
 
 ## 1. Acuan
+
+Keputusan 5 November: halaman jurnal menjadi **arsip screening saja**, terpisah
+secara konsep dari ledger portofolio manual. Hanya snapshot Match dengan bukti
+server yang dapat ditambahkan; tidak ada form manual, edit/hapus, tutup posisi,
+grafik atau P&L jurnal. Catatan lama tetap tersimpan. Lihat
+[screening-journal-1](backend/SCREENING_JOURNAL.md) untuk alur dan batas aktual.
+
 
 Keputusan 2 November: portofolio memakai ledger BUY/SELL manual baru, terpisah
 dari jurnal masuk–keluar. Tidak ada konversi otomatis. Holding dan realized P&L
@@ -87,7 +94,7 @@ Go/WASM harian dan API akses/sinyal privat; lihat [kebijakan backtest](backend/B
 `#app/backtest` kini memisahkan studi seluruh sinyal (`signal-study-1`, close
 acuan, TP/SL, batch katalog) dan simulasi portofolio lama (`backtest-2`, next-open).
 API jurnal dan arsip simulasi server digunakan kembali; draft ceklis screener
-harus direview dan dikonfirmasi sebelum menjadi jurnal. Detail studi sementara
+hanya menyimpan snapshot Match melalui bukti server; tidak menjadi transaksi. Detail studi sementara
 tidak menjadi transaksi. [Kontrak studi](backend/SIGNAL_STUDY.md) dan
 [bukti asis](ASIS_2026_11_04.md) menyatakan verifikasi serta batas yang aktual.
 Runtime aktif tidak dual-write SQLite/Postgres.
@@ -162,3 +169,8 @@ Gates: parity core, API/worker contract tests, ownership/role/entitlement, migra
 main stabil, develop integrasi; PR kecil dengan review anggota lain. Ikuti branch yang diminta; default branch agent codex/. Tidak push/merge atau migration production hanya karena PRD berubah.
 
 Saat mulai: baca acuan terkait, cek git status, kontrak runtime, pilih slice, tulis tes dan verifikasi. Preserve perubahan user. Keputusan terbuka PRD diselesaikan pada gate-nya tanpa menghentikan pekerjaan independen yang aman.
+
+
+## Google sign-in (5 November 2026)
+
+Login/register mendukung pilihan Google melalui Supabase PKCE, di samping email/password. Callback web `/auth/google/callback`, gateway Go `POST /api/auth/google/start` dan `POST /api/auth/google/exchange` (API 0.18.0). Sesi aplikasi, ownership, status, dan entitlement memakai alur backend yang sama. Google Client Secret hanya berada di konfigurasi provider Supabase. Aktivasi provider dan smoke test akun asli tetap perlu dibuktikan terpisah. Panduan: [Google sign-in](backend/GOOGLE_SIGN_IN.md).

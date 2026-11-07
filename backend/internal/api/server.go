@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/api/shared"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/journal"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 )
 
@@ -56,10 +57,15 @@ func NewServer(identity IdentityVerifier, sessions SessionStore, accessStore Acc
 	if config.socketLimiter == nil {
 		config.socketLimiter, _ = screener.NewConnectionLimiter(32, 2)
 	}
+	receipts, err := journal.NewIssuer()
+	if err != nil {
+		return nil, fmt.Errorf("initialize journal receipts: %w", err)
+	}
 	server := &Server{Context: &shared.Context{
-		Profiles:   config.profileStore,
-		Management: config.managementStore,
-		Identity:   identity, Auth: config.authService, Sessions: sessions, Access: accessStore,
+		JournalReceipts: receipts,
+		Profiles:        config.profileStore,
+		Management:      config.managementStore,
+		Identity:        identity, Auth: config.authService, Sessions: sessions, Access: accessStore,
 		Datasets: datasets, Compute: computeStore, Rules: config.ruleStore, Subscriptions: config.subscriptions, Universes: config.universeStore, Limiter: config.rateLimiter,
 		Tickets: config.ticketStore, OriginPatterns: append([]string(nil), config.originPatterns...),
 		SocketContext:     config.socketContext,

@@ -269,6 +269,7 @@ test("BUY and SELL plus previous-candle evidence survive history storage and mod
       token: "secret-previous-features",
     };
     run.rows[0].decision.token = "secret-decision";
+    run.rows[0].decision.journal_receipt = "session-bound-receipt-must-not-persist";
     const owner = `direction-${signal}`;
     output.recordMonitorRun(owner, "Crossover", run);
     const restored = loadMonitor().monitorRuns(owner)[0].run;
@@ -278,6 +279,7 @@ test("BUY and SELL plus previous-candle evidence survive history storage and mod
     assert.equal(restored.rows[0].prevFeatures.rsi14, 71);
     assert.equal("token" in restored.rows[0].prevFeatures, false);
     assert.equal("token" in restored.rows[0].decision, false);
+    assert.equal("journal_receipt" in restored.rows[0].decision, false);
   }
 });
 test("legacy history without direction or prior features remains readable without inventing either", () => {

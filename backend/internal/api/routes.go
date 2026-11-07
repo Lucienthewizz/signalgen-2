@@ -9,6 +9,7 @@ import (
 	backtestsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/backtests"
 	computeapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/compute"
 	datasetsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/datasets"
+	journalapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/journal"
 	newsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/news"
 	operatorapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/operator"
 	portfolioapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/portfolio"
@@ -54,6 +55,9 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	router.Handle(http.MethodPut, "/api/v1/portfolio/transactions/:id", portfolioHandler.Serve)
 	router.Handle(http.MethodDelete, "/api/v1/portfolio/transactions/:id", portfolioHandler.Serve)
 	recordsHandler := &recordsapi.Handler{Context: server.Context, Store: config.recordStore}
+	journalHandler := &journalapi.Handler{Context: server.Context, Store: config.recordStore}
+	router.Handle(http.MethodGet, "/api/v1/journal/screenings", journalHandler.Serve)
+	router.Handle(http.MethodPost, "/api/v1/journal/screenings", journalHandler.Serve)
 	for _, base := range []string{"/api/v1/journal/trades", "/api/v1/backtests/history"} {
 		router.Handle(http.MethodGet, base, recordsHandler.Serve)
 		router.Handle(http.MethodGet, base+"/:id", recordsHandler.Serve)
@@ -81,6 +85,7 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	router.Handle(http.MethodGet, "/api/v1/capabilities", systemHandler.Capabilities)
 
 	auth.RegisterRoutes(router, auth.RouteHandlers{
+		StartGoogle: authHandler.StartGoogle(config.allowedOrigins), ExchangeGoogle: authHandler.ExchangeGoogle,
 		Register: authHandler.Register, Login: authHandler.Login, Refresh: authHandler.RefreshAuth, Me: authHandler.Me,
 		RequestPasswordReset: authHandler.RequestPasswordReset(config.resetRedirect),
 		ResetPassword:        authHandler.ResetPassword,

@@ -6,13 +6,21 @@ async (page) => {
   const now = new Date().toISOString(), day = now.slice(0,10);
   const rule = {id:"qa-rule",name:"QA momentum",owner_type:"user",read_only:false,version:1,definition_hash:"qa",engine_version:"core-0.5.0",definition:{name:"QA momentum",logic:"AND",signal_type:"BUY",cooldown_sec:0,conditions:[{left:"RSI14",op:">",right:50}]}};
   const universe = {id:"qa-universe",name:"QA universe",symbols:["BBCA.JK","BBRI.JK","TLKM.JK"],version:1};
-  const rows = universe.symbols.map((symbol,index)=>({decision:{symbol,timestamp:now,matched:index<2,signal_type:"BUY",reason_codes:[index<2?"RULE_MATCHED":"CONDITIONS_NOT_MET"]},features:{price:100,ema9:99,ema20:98,rsi14:60},latestOpen:95,latestClose:100}));
+  const rows = universe.symbols.map((symbol,index)=>({decision:{symbol,timestamp:now,matched:index<2,journal_receipt:index<2?`fixture-${index}`:undefined,signal_type:"BUY",reason_codes:[index<2?"RULE_MATCHED":"CONDITIONS_NOT_MET"]},features:{price:100,ema9:99,ema20:98,rsi14:60},latestOpen:95,latestClose:100}));
   const run = {rows,latestDecision:rows[0].decision,features:rows[0].features,latestOpen:95,latestClose:100,result:{type:"screener.result",protocol:"screener-private-1",request_id:"qa-run",decision_version:"qa",results:rows.map(r=>r.decision)},manifest:{dataset_id:"qa-data",version:"1",schema_version:"ohlcv-multi-1",provider:"yahoo_finance",purpose:"screen",market:"IDX",currency:"IDR",symbols:universe.symbols,timeframe:"1d",timezone:"UTC",requested_range:{from:day,to:day},available_range:{from:day,to:day},warmup_candles:20,adjustment:"none",candle_count:100,decoded_bytes:1000,checksum:"qa-checksum",quality:{status:"complete",warnings:[]}},execution:"client_wasm+server_private_scoring"};
   const history = [{rule:rule.name,recordedAt:now,context:{ruleId:rule.id,universeId:universe.id,universeName:universe.name,ruleSnapshot:rule},run}];
-  const items=Array.from({length:30},(_,i)=>({id:`77777777-7777-4777-8777-${String(i+1).padStart(12,"0")}`,version:1,bytes:1000,data:{symbol:`QA${String(i).padStart(2,"0")}`,market:"IDX",currency:"IDR",side:"BUY",quantity:100,entry_price:100,exit_price:i===1?99:i===2?100:101,entry_fee:0,exit_fee:0,entry_date:day,exit_date:day,book:"QA journal",note:`Fixture note ${i}`,net_pl:i===1?-100:i===2?0:100,return_pct:i===1?-1:i===2?0:1}}));
+  const snapshot=(symbol)=>({schema_version:"screening-journal-1",source:"screening",symbol,market:"IDX",currency:"IDR",rule_id:rule.id,rule_name:rule.name,definition_hash:rule.definition_hash,timeframe:"1d",candle_at:now,screened_at:now,matched:true,signal_type:"BUY",price:100,features:{price:100,ema9:99,ema20:98,rsi14:60},reason_codes:["RULE_MATCHED"],dataset_checksum:"qa-checksum"});
+  const items=Array.from({length:30},(_,i)=>({id:`77777777-7777-4777-8777-${String(i+1).padStart(12,"0")}`,version:1,bytes:1000,data:snapshot(`QA${String(i).padStart(2,"0")}`)}));
+  let failSecond = true;
+
   let rulesMode="normal",journalMode="normal",rulesReads=0,releaseRules,releaseJournal;
   const writes=[],errors=[];
-  page.on("pageerror",e=>errors.push(e.message));
+  page.on("pageerror",e=>{
+    // Blocked third-party/about:blank frames cannot use storage. The active
+    // page's login token is asserted separately below.
+    if(e.message.includes("Access is denied for this document"))return;
+    errors.push(e.message);
+  });
   await page.emulateMedia({reducedMotion:"reduce"});
   await page.addInitScript(({user,history})=>{
     sessionStorage.setItem("signalgen.access-token","synthetic-not-real");
@@ -23,6 +31,7 @@ async (page) => {
   await page.route("**/*",async route=>{
     const req=route.request(),url=new URL(req.url()),p=url.pathname;
     if(url.origin!==origin)return route.abort();
+    if(p==="/src/analysis/screener.ts")return route.fulfill({contentType:"application/javascript",body:`export async function runLiveScreener(){return ${JSON.stringify(run)};}`});
     if(p!=="/api"&&!p.startsWith("/api/")&&p!=="/ready")return route.continue();
     if(p==="/api/v1/rules"){
       rulesReads++;
@@ -30,18 +39,19 @@ async (page) => {
       if(rulesMode==="fail")return route.fulfill({status:503,json:{error:{code:"SERVICE_UNAVAILABLE",message:"Synthetic rules outage"}}});
       return route.fulfill({json:{items:[rule]}});
     }
-    if(p.startsWith("/api/v1/journal/trades")){
+    if(p==="/api/v1/journal/screenings"){
       if(req.method()==="GET"){
-        if(journalMode==="hold")await new Promise(resolve=>releaseJournal=resolve);
-        if(journalMode==="fail")return route.fulfill({status:503,json:{error:{code:"SERVICE_UNAVAILABLE",message:"Synthetic journal read outage"}}});
-        return route.fulfill({json:{items}});
+        if(journalMode==="fail")return route.fulfill({status:503,json:{error:{code:"JOURNAL_UNAVAILABLE",message:"Synthetic journal read outage"}}});
+        return route.fulfill({json:{schema_version:"screening-journal-1",items}});
       }
-      const body=req.postDataJSON(),id=p.split("/").at(-1);
-      writes.push({id,body});
-      const record={id,version:1,bytes:1000,data:{...body.data,net_pl:null,return_pct:null}};
-      items.push(record);
-      return route.fulfill({json:record});
+      const body=req.postDataJSON();writes.push({body});
+      if(req.method()!=="POST"||Object.keys(body).length!==1||!["fixture-0","fixture-1"].includes(body.receipt))throw Error("Journal accepted a manual trade payload");
+      if(body.receipt==="fixture-1"&&failSecond)return route.fulfill({status:503,json:{error:{code:"JOURNAL_UNAVAILABLE",message:"Synthetic one-row interruption"}}});
+      await new Promise(resolve=>setTimeout(resolve,40));
+      const index=Number(body.receipt.at(-1)),id=`88888888-8888-4888-8888-${String(index).padStart(12,"0")}`;
+      let item=items.find(r=>r.id===id);if(!item){item={id,version:1,bytes:1000,data:snapshot(universe.symbols[index])};items.push(item);}return route.fulfill({json:item});
     }
+    if(p.startsWith("/api/v1/journal/trades")&&req.method()!=="GET")throw Error("Removed journal action reached the API");
     let payload;
     if(p==="/api"||p==="/ready")payload={status:"ready",name:"Synthetic API"};
     else if(p==="/api/auth/me")payload=user;
@@ -57,6 +67,9 @@ async (page) => {
   const wait=async predicate=>{for(let n=0;n<80;n++){if(predicate())return;await page.waitForTimeout(50);}throw Error("Fixture did not reach expected request state");};
   await page.goto(`${origin}/#app/analysis`);await page.reload();
   await page.getByRole("button",{name:"Refresh selections",exact:true}).waitFor();
+  await page.getByRole('button',{name:'Start screening',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('input[aria-label="Select BBCA for journal"]')?.disabled===false);
+  await page.getByRole('button',{name:'Stop',exact:true}).click();
   const stock=page.getByRole("button",{name:"BBCA",exact:true});
   const initialReads=rulesReads;
   rulesMode="hold";
@@ -138,7 +151,7 @@ async (page) => {
     if(!await page.getByRole("checkbox",{name:"Select TLKM for journal",exact:true}).isDisabled())throw Error("Rejected stock is selectable");
     // Search must not silently drop selections hidden by filters.
     const search=page.locator("#screen-search");
-    await search.fill("BBCA");if(!await page.getByRole("button",{name:"Review 2 in journal",exact:true}).isEnabled())throw Error("Filtering discarded selected stocks");if((await ledger.locator("tbody tr td:first-child").allTextContents()).join("|")!=="1")throw Error("Filtered row numbering is incorrect");await search.fill("");
+    await search.fill("BBCA");if(!await page.getByRole("button",{name:"Add 2 to journal",exact:true}).isEnabled())throw Error("Filtering discarded selected stocks");if((await ledger.locator("tbody tr td:first-child").allTextContents()).join("|")!=="1")throw Error("Filtered row numbering is incorrect");await search.fill("");
     await page.locator(".screener-results").screenshot({path:`output/playwright/usability-screening-${width}.png`,animations:"disabled"});
     await ledger.locator("tbody tr").first().locator("td").last().scrollIntoViewIfNeeded();
     await ledger.screenshot({path:`output/playwright/usability-journal-selection-${width}.png`,animations:"disabled"});
@@ -148,142 +161,41 @@ async (page) => {
   await page.setViewportSize({width:1440,height:1000});
   await page.getByRole("checkbox",{name:"Select BBCA for journal",exact:true}).check();
   await page.getByRole("checkbox",{name:"Select BBRI for journal",exact:true}).check();
-  await page.getByRole("button",{name:"Review 2 in journal",exact:true}).click();
-  await page.getByRole("heading",{name:"Review selected screening drafts",exact:true}).waitFor();
-  if(writes.length)throw Error("Selecting stocks saved trades before confirmation");
-  await page.getByLabel("Quantity BBCA.JK",{exact:true}).fill("100");
-  await page.getByLabel("Quantity BBRI.JK",{exact:true}).fill("100");
-  await page.getByLabel("Entry price BBCA.JK",{exact:true}).fill("105");
-  const review=page.locator('.journal-batch-review');
-  await review.getByRole('checkbox').check();
-  await review.getByRole('button',{name:'Save unsaved / retry failed trades',exact:true}).evaluate(button=>{button.click();button.click();});
-  await wait(()=>writes.length===2);
-  if(writes[0].body.data.entry_price!==105)throw Error("Review edits were not saved");
-  await review.getByText('2/2 saved to this account',{exact:true}).waitFor();
-  if(writes.length!==2)throw Error('Double click duplicated reviewed trades');
-  await review.getByRole('button',{name:'Close review',exact:true}).click();
-  await page.getByRole('button',{name:'Open journal form',exact:true}).click();
-  for(const width of [1440,1218,390]){
-    await page.setViewportSize({width,height:1000});
-    await page.evaluate(async()=>{await document.fonts.ready;await Promise.all(document.getAnimations().filter(a=>a.effect?.getComputedTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})))});
-    const header=page.locator(".journal-page-header"),searchControl=page.getByLabel("Search recorded trades",{exact:true}),sortControl=page.getByLabel("Sort trades",{exact:true});
-    if(await page.getByRole("heading",{name:"Trade journal",exact:true}).count()!==1)throw Error("Journal heading duplicated");
-    const headingBox=await header.locator(".page-heading").boundingBox(),searchBox=await searchControl.boundingBox(),sortBox=await sortControl.boundingBox();
-    if(!headingBox||!searchBox||!sortBox||Math.abs(searchBox.y-sortBox.y)>1||searchBox.height<43.99||sortBox.height<43.99||searchBox.height>49||sortBox.height>49)throw Error("Journal quick controls are not compact/aligned at "+width);
-    if(width>=1218&&(searchBox.x<headingBox.x+headingBox.width-1||searchBox.y>headingBox.y+headingBox.height||searchBox.width>225||sortBox.width>195))throw Error("Journal controls are not beside the title at "+width);
-    await searchControl.focus();await page.keyboard.press("Tab");if(!await sortControl.evaluate(el=>el===document.activeElement))throw Error("Search/sort keyboard order incorrect");
-    await sortControl.evaluate(el=>el.blur());
-    const entryDate=page.getByLabel("Entry date",{exact:true}),entryValue=await entryDate.inputValue();
-    const dateGroup=page.locator(".signalgen-date-control").filter({has:entryDate});
-    const dateTrigger=dateGroup.getByRole("button",{name:"Open calendar",exact:true});
-    await dateTrigger.click();
-    const calendar=page.getByRole("dialog",{name:"Choose date",exact:true});await calendar.waitFor();
-    if(!(await calendar.innerText()).includes("Singapore Time (SGT, UTC+8)"))throw Error("Calendar timezone hint missing");
-    await page.waitForFunction(()=>{const popup=document.querySelector('.signalgen-date-popup');if(!popup)return false;const b=popup.getBoundingClientRect();return b.left>=0&&b.right<=innerWidth+1&&b.top>=0});
-    await page.screenshot({path:`output/playwright/shared-calendar-${width}.png`,animations:"disabled"});
-    await calendar.locator(`[data-day="${entryValue}"] button`).press("ArrowLeft");await page.keyboard.press("Enter");
-    await calendar.waitFor({state:"hidden"});
-    const previousDay=new Date(entryValue+"T12:00:00Z");previousDay.setUTCDate(previousDay.getUTCDate()-1);
-    if(await entryDate.inputValue()!==previousDay.toISOString().slice(0,10))throw Error("Calendar keyboard selection changed trading date incorrectly");
-    await entryDate.fill("2026-02-30");if(await entryDate.evaluate(el=>el.checkValidity()))throw Error("Impossible calendar date accepted");
-    await entryDate.fill(entryValue);await dateTrigger.click();await calendar.getByRole("button",{name:"Clear",exact:true}).click();
-    if(await entryDate.evaluate(el=>el.checkValidity()))throw Error("Required calendar date accepted empty value");
-    await entryDate.fill(entryValue);await dateTrigger.click();await calendar.press("Escape");await calendar.waitFor({state:"hidden"});
-    if(!await dateTrigger.evaluate(el=>el===document.activeElement))throw Error("Calendar did not return keyboard focus");
-    const monthTrigger=page.getByLabel("Month",{exact:true});
-    await monthTrigger.click();
-    const monthPicker=page.getByRole("dialog",{name:"Filter by month",exact:true});
-    await monthPicker.waitFor();
-    const yearInput=monthPicker.getByLabel("Calendar year",{exact:true}),originalYear=await yearInput.inputValue();
-    await monthPicker.getByRole("button",{name:"Previous year",exact:true}).click();
-    if(Number(await yearInput.inputValue())!==Number(originalYear)-1)throw Error("Calendar previous year failed");
-    await monthPicker.getByRole("button",{name:"Next year",exact:true}).click();
-    if(await yearInput.inputValue()!==originalYear)throw Error("Calendar next year failed");
-    const monthBounds=await monthPicker.boundingBox();if(monthBounds.x<0||monthBounds.x+monthBounds.width>width+1)throw Error("Calendar overflow at "+width);
-    await page.waitForFunction(()=>{const popup=document.querySelector('.journal-month-popup'),trigger=document.querySelector('#journal-month');if(!popup||!trigger)return false;const p=popup.getBoundingClientRect(),t=trigger.getBoundingClientRect();return p.left>=0&&p.top>=0&&(p.top>=t.bottom-1||p.bottom<=t.top+1)&&p.right<=innerWidth+1});
-    await page.screenshot({path:`output/playwright/journal-month-picker-${width}.png`,animations:"disabled"});
-    await yearInput.press("Escape");await monthPicker.waitFor({state:"hidden"});
-    if(!await monthTrigger.evaluate(el=>el===document.activeElement))throw Error("Calendar escape lost trigger focus");
-    await monthTrigger.click();await yearInput.fill("2099");
-    await monthPicker.getByRole("button",{name:"January 2099",exact:true}).click();
-    await page.getByText(/No recorded trades match these filters/).waitFor();
-    if(!(await monthTrigger.innerText()).includes("Jan 2099"))throw Error("Calendar selection label stale");
-    await monthTrigger.click();
-    if(await monthPicker.getByRole("button",{name:"January 2099",exact:true}).getAttribute("aria-pressed")!=="true")throw Error("Selected month missing state");
-    await monthPicker.getByRole("button",{name:"All months",exact:true}).click();
-    await page.getByText(/No recorded trades match these filters/).waitFor({state:"hidden"});
-    const actions=page.locator(".journal-row-actions").first();
-    const actionStyles=await actions.locator("button").evaluateAll(items=>items.map(item=>({height:item.getBoundingClientRect().height,width:item.getBoundingClientRect().width,border:getComputedStyle(item).borderTopColor,background:getComputedStyle(item).backgroundColor})));
-    if(actionStyles.length!==2||actionStyles.some(item=>item.height<43.99||item.border!=="rgba(0, 0, 0, 0)"))throw Error("Journal row actions are not lightweight or touch accessible");
-    await actions.screenshot({path:`output/playwright/journal-row-actions-${width}.png`,animations:"disabled"});
-    await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:`output/playwright/journal-compact-header-${width}.png`,animations:"disabled"});
-    const journalArrows=await page.locator(".journal-workspace select").evaluateAll(items=>items.map(item=>{const style=getComputedStyle(item);return {appearance:style.appearance,padding:parseFloat(style.paddingRight),image:style.backgroundImage,position:style.backgroundPosition,size:style.backgroundSize};}));
-    if(journalArrows.length<6 || journalArrows.some(item=>item.appearance!=="none" || item.padding<40 || !item.image.includes("svg") || !item.position.includes("14px") || item.size!=="16px 16px"))throw Error(`Journal select arrows are inconsistent: ${JSON.stringify(journalArrows)}`);
-    await page.locator(".journal-capture").screenshot({path:`output/playwright/usability-review-${width}.png`,animations:"disabled"});
-    if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error(`Review overflow at ${width}`);
+  await page.getByRole("button",{name:"Add 2 to journal",exact:true}).click();
+  await page.getByRole("heading",{name:"Saved screening results",exact:true}).waitFor();
+  const selection=page.getByRole("region",{name:"Selected screening results",exact:true});
+  await selection.waitFor();
+  if(writes.length)throw Error("Selection saved results before explicit confirmation");
+  if(await page.locator('.journal-capture,.journal-pnl-chart,input[name="quantity"]').count())throw Error("Removed journal functions remain");
+  const save=page.getByRole('button',{name:'Save 2 results to journal',exact:true});
+  await save.waitFor();
+  await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Save 2 results to journal'&&!b.disabled));
+  await save.evaluate(button=>{button.click();button.click();});
+  await page.getByText('Some results could not be saved',{exact:true}).waitFor();
+  if(writes.length!==2||items.length!==31)throw Error('Double save or incorrect partial write');
+  if(!(await selection.innerText()).includes('Saved')||!(await selection.innerText()).includes('Ready to save'))throw Error('Per-row save status missing');
+  failSecond=false;
+  await page.getByRole('button',{name:'Retry unsaved results',exact:true}).click();
+  await page.getByText('Selected results saved to your journal.',{exact:true}).waitFor();
+  if(writes.length!==3||writes[2].body.receipt!=='fixture-1'||items.length!==32)throw Error('Retry did not target only the failed receipt');
+  await page.getByRole('button',{name:'Done',exact:true}).click();
+  for(const width of [1440,390])for(const theme of ['dark','light']){
+    await page.setViewportSize({width,height:1000});await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+    for(const name of ['Open journal form','Save trade','Update trade','Delete trade'])if(await page.getByRole('button',{name,exact:true}).count())throw Error('Manual journal action remains');
+    if(await page.locator('.journal-ledger tbody tr').count()!==25)throw Error('Journal list is not bounded to 25 rows');
+    await page.getByRole('button',{name:'Next results',exact:true}).click();
+    if(await page.locator('.journal-ledger tbody tr').count()!==7)throw Error('Journal paging skipped results');
+    await page.getByRole('button',{name:'Previous results',exact:true}).click();
+    await page.screenshot({path:`output/playwright/screening-only-journal-${width}-${theme}.png`,animations:'disabled',fullPage:true});
+    if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error(`Journal overflow at ${width}/${theme}`);
   }
-  await page.getByRole("button",{name:"Close form",exact:true}).click();
-  if(writes.length!==2)throw Error("Closing a manual form created a trade");
-  await page.getByRole("button",{name:"Open journal form",exact:true}).waitFor();
-  for(const width of [1440,390]){
-    await page.setViewportSize({width,height:1000});
-    const chart=page.locator(".journal-pnl-chart"), points=chart.locator("g[data-trade-id]");
-    if(await points.count()!==30)throw Error("Same-day trades were combined or open trades were included in the chart");
-    if(await chart.locator("g[role=button][tabindex='0']").count()!==1)throw Error("Chart does not use one keyboard tab stop");
-    const hitboxes=await chart.locator(".journal-chart-hit").evaluateAll(items=>items.map(item=>item.getBoundingClientRect()));
-    if(hitboxes.some(box=>box.width<43.99||box.height<43.99))throw Error(`Trade points are too small to tap: ${JSON.stringify(hitboxes.map(box=>({width:box.width,height:box.height})))}`);
-    await points.nth(0).click();
-    const detail=page.getByRole("region",{name:"Selected trade details",exact:true});
-    if(!(await detail.innerText()).includes("QA00"))throw Error("Point click did not open the selected trade");
-    await points.nth(1).focus();await page.keyboard.press("Enter");
-    if(!(await detail.innerText()).includes("QA01"))throw Error("Keyboard selection opened the wrong same-day trade");
-    const negative=await detail.locator('[data-pnl="negative"]').evaluate(item=>getComputedStyle(item).color);
-    const rgb=negative.match(/\d+/g).map(Number);if(rgb[0]<=rgb[1])throw Error("Loss trade detail is not red");
-    await page.keyboard.press("ArrowRight");await page.keyboard.press("Space");
-    if(!(await detail.innerText()).includes("QA02"))throw Error("Arrow navigation did not select the next trade");
-    await page.keyboard.press("Escape");if(await detail.count())throw Error("Escape did not clear chart selection");
-    await page.emulateMedia({reducedMotion:"no-preference"});
-    await points.nth(0).click();await points.nth(1).click();
-    const animated=await chart.locator(".journal-chart-selection").evaluate(item=>({duration:getComputedStyle(item).transitionDuration,property:getComputedStyle(item).transitionProperty}));
-    if(!animated.property.includes("transform")||!animated.duration.split(",").some(value=>parseFloat(value)>0))throw Error("Selected trade marker has no movement feedback");
-    await page.emulateMedia({reducedMotion:"reduce"});
-    if(await chart.locator(".journal-chart-selection").evaluate(item=>getComputedStyle(item).transitionDuration.split(",").some(value=>parseFloat(value)>0.001)))throw Error("Reduced motion still animates chart movement");
-    await chart.screenshot({path:`output/playwright/journal-trade-chart-${width}.png`,animations:"disabled"});
-    await page.getByRole("button",{name:"Clear chart selection",exact:true}).click();
-    if(await detail.count())throw Error("Clear chart selection did not close details");
-    if(writes.length!==2)throw Error("Chart interaction wrote a trade");
-    const body=page.locator(".journal-ledger tbody");
-    if(await body.locator("tr").count()>25)throw Error("Journal page is unbounded");
-    await page.getByRole("button",{name:"Next trades",exact:true}).click();
-    if(await body.locator("tr").count()!==7)throw Error("Journal pagination count mismatch");
-    await points.nth(1).click();
-    await page.getByLabel("Search recorded trades",{exact:true}).fill("QA29");
-    if(await body.locator("tr").count()!==1)throw Error("Journal search did not reset pagination");
-    if(await detail.count())throw Error("Filtering out a selected trade left stale chart details visible");
-    if(!await page.getByRole("region",{name:"Trading performance",exact:true}).isVisible())throw Error("Filtered performance disappeared");
-    await page.getByLabel("Search recorded trades",{exact:true}).fill("");
-    const sortControl=page.getByLabel("Sort trades",{exact:true});
-    await sortControl.selectOption("symbol");
-    const firstSymbol=items.map(item=>item.data.symbol).sort((a,b)=>a.localeCompare(b))[0];
-    if(!(await body.locator("tr").first().innerText()).includes(firstSymbol))throw Error("Stock symbol ordering failed");
-    await sortControl.selectOption("pnl");
-    if(await sortControl.inputValue()!=="pnl")throw Error("P&L sort option unavailable");
-    await sortControl.selectOption("newest");
-    await page.locator(".journal-ledger").screenshot({path:`output/playwright/usability-journal-${width}.png`,animations:"disabled"});
-    if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error(`Journal overflow at ${width}`);
-  }
-  journalMode="hold";
-  await page.getByRole("button",{name:"Refresh journal",exact:true}).click();
-  await wait(()=>Boolean(releaseJournal));
-  if(!await page.locator(".journal-ledger").isVisible())throw Error("Journal refresh hid records");
-  journalMode="normal";releaseJournal();
-  await page.getByText("Refreshing journal. Previous records remain visible.",{exact:true}).waitFor({state:"detached"});
-  journalMode="fail";
-  await page.getByRole("button",{name:"Refresh journal",exact:true}).click();
-  await page.getByText("Journal unavailable",{exact:true}).waitFor();
-  if(!await page.locator(".journal-ledger").isVisible())throw Error("Journal outage lost previous records");
-  if(!await page.evaluate(()=>sessionStorage.getItem("signalgen.access-token")==="synthetic-not-real"))throw Error("Transient outage cleared login");
+  journalMode='fail';await page.goto(`${origin}/#app/news`);await page.locator('.news-feed').waitFor();await page.goto(`${origin}/#app/journal`);await page.getByRole('heading',{name:'Saved screening results',exact:true}).waitFor();
+  await page.getByText('Journal unavailable',{exact:true}).waitFor();
+  if(!await page.evaluate(()=>sessionStorage.getItem('signalgen.access-token')==='synthetic-not-real'))throw Error('Journal outage logged out the account');
+  journalMode='normal';await page.getByRole('button',{name:'Retry journal',exact:true}).click();
+  await page.getByText('Journal unavailable',{exact:true}).waitFor({state:'hidden'});
+  if(await page.locator('.journal-ledger tbody tr').count()!==25)throw Error('Retry did not reload saved screenings');
   if(errors.length)throw Error(errors.join("; "));
   await page.evaluate(()=>document.body.setAttribute("data-signalgen-usability-tests","complete"));
-  return {synthetic:true,individualWrites:writes.length,refreshRetained:true,widths:[1440,1218,390]};
+  return {synthetic:true,receiptWrites:writes.length,retryOnlyFailed:true,widths:[1440,1218,390]};
 }

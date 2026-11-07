@@ -21,6 +21,7 @@ const modules = [
   "backtesting",
   "signal-study",
   "workspace-polish",
+  "screening-journal",
 ];
 
 test("stylesheet entry keeps explicit cascade order and imports each module once", () => {

@@ -153,6 +153,15 @@ Provider failure does not erase user journal. Respond safe stable errors, distin
 
 ## 8. Journal and portfolio rules
 
+Revisi 5 November: jurnal aktif adalah arsip snapshot screening **Match**, bukan
+pencatatan transaksi. Server menerima hanya bukti bertanda tangan dari evaluator,
+terikat akun/sesi; harga dan konteks tidak dikirim manual. Endpoint jurnal lama
+menolak PUT/DELETE dengan 410, data lamanya dipertahankan. Tidak memerlukan
+migration baru karena tetap memakai user_records dengan RLS yang sama.
+[Kontrak aktual](SCREENING_JOURNAL.md). Aturan akuntansi di bawah berlaku untuk
+ledger portofolio terpisah/baseline historis, bukan halaman jurnal aktif.
+
+
 P1 long-only, single currency IDR/IDX initially. Quantity sent in shares, not ambiguous lots; UI may convert lots explicitly using declared lot size. No short/margin/options/multi-currency accounting.
 
 Working cost method: weighted average, fees BUY added to basis, fees SELL deducted from proceeds; final method confirmed M0 before financial tests. Ordered by executed_at plus deterministic tie-breaker. SELL above held quantity rejected. Backdated edit/delete recomputes all affected positions transactionally and rejects invalid resulting sells; no stale materialized P&L.

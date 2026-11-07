@@ -1,5 +1,11 @@
 # Postman test — SignalGen Go API
 
+API `0.17.0`: jurnal sekarang hanya menyimpan hasil screening Match melalui
+`POST /api/v1/journal/screenings` dengan `{receipt}` dari keputusan WebSocket.
+PUT/DELETE jurnal manual lama mengembalikan 410; GET kompatibilitas tetap ada.
+[Kontrak terbaru](../../docs/backend/SCREENING_JOURNAL.md). Jangan mencatat receipt
+ke Git atau membagikannya; ia terikat akun/sesi dan sementara.
+
 Kontrak aktual API **0.16.0** menambahkan ledger terpisah melalui
 `/api/v1/portfolio` dan `/api/v1/portfolio/transactions/{id}`. Header bearer dan
 app-session memakai environment di bawah. [Contoh PUT/SELL/GET, expected P&L,

@@ -1,5 +1,14 @@
 # Backend progress
 
+## 5 November 2026 — jurnal khusus screening
+
+Jurnal aktif disederhanakan sesuai permintaan pengguna: hanya simpan hasil Match
+yang dipilih dari screener lalu lihat arsip. Form transaksi, quantity/fee,
+edit/hapus/tutup posisi, dan grafik/P&L tidak muncul pada halaman jurnal.
+API `0.17.0` memakai receipt evaluasi server terikat akun/sesi; mutasi jurnal
+manual lama mengembalikan 410. Data lama tetap ada, tanpa migration atau konversi.
+Lihat [alur, kontrak, struktur dan batas](SCREENING_JOURNAL.md).
+
 ## 3 November 2026 — ledger portofolio dan resume audit
 
 Backend API `0.16.0` menambahkan ledger BUY/SELL manual terpisah sesuai keputusan

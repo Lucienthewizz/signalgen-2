@@ -66,3 +66,13 @@ export function eligibleJournalScreening(
         draft.run.manifest.currency === "USD"))
   );
 }
+
+/** Saving accepts a server attestation, never a user-entered trade payload. */
+export function journalScreeningReceipt(
+  draft: JournalScreeningDraft,
+  userId?: string,
+): string | null {
+  const checked = checkJournalScreening(draft, userId);
+  const receipt = checked.ok ? checked.row.decision.journal_receipt : undefined;
+  return typeof receipt === "string" && receipt.length > 0 ? receipt : null;
+}
