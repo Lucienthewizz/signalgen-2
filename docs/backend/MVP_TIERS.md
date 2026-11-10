@@ -37,9 +37,9 @@ Create/update resource memakai transaksi dan lock per owner. Free tidak menulis 
 2. Buka **Stock universes**, pilih sendiri satu sampai tiga saham dalam satu pasar, beri nama dan simpan. Tidak ada universe otomatis.
 3. Buka **Screener**, pilih rule sistem dan universe. Free memakai candle harian. Klik Start; Stop mempertahankan hasil.
 4. Match yang memiliki receipt server dapat dipilih, direview di jurnal lalu disimpan. No match adalah hasil sah, bukan error.
-5. **Plan & access** dan halaman harga memuat katalog backend. **Ajukan aktivasi** membuka petunjuk menghubungi operator dengan email akun dan paket pilihan; tombol tidak mengirim pembayaran/pesan atau otomatis mengaktifkan paket.
-6. Operator mengaktifkan satu bulan melalui alur audit yang sudah ada. Tanggal akhir tampil pada subscription. Tidak ada checkout otomatis, pilihan tahunan, trial, priority support/data atau perpanjangan otomatis.
-7. Saat periode berakhir, akun kembali Free. Rule/universe di atas kuota tetap terbaca dan bisa dibersihkan. Untuk penggunaan baru, kurangi universe menjadi tiga saham/pakai baseline atau ajukan aktivasi.
+5. Dashboard memandu akses → rule → saham → screening. Free memakai rule sistem yang sudah tersedia; tidak diarahkan membuat rule pribadi. **Plan & access** selalu dapat dibuka dari footer sidebar dan menu akun. Harga/fitur tetap berasal dari katalog backend.
+6. **View plan details** menampilkan rincian paket dan keterangan bahwa checkout online belum tersedia. Tidak ada formulir permintaan, pembayaran atau aktivasi berbayar otomatis. Alur operator yang sudah ada tetap tersedia untuk bantuan/pengecualian dan subscription yang telah diaktifkan; bukan langkah wajib onboarding Free. Checkout/webhook adalah tahap terpisah. Tidak ada pilihan tahunan, trial, atau perpanjangan otomatis.
+7. Saat periode berakhir, akun kembali Free. Rule/universe di atas kuota tetap terbaca dan bisa dibersihkan. Untuk penggunaan baru, kurangi universe menjadi tiga saham/pakai baseline. Dashboard mengenali universe yang melebihi batas dan mengarahkan ke penyesuaian.
 
 ## Rollout dan rollback
 

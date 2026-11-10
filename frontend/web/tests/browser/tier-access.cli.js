@@ -11,7 +11,7 @@ async (page) => {
   const history = [];
   const snapshot=(symbol)=>({schema_version:"screening-journal-1",source:"screening",symbol,market:"IDX",currency:"IDR",rule_id:rule.id,rule_name:rule.name,definition_hash:rule.definition_hash,timeframe:"1d",candle_at:now,screened_at:now,matched:true,signal_type:"BUY",price:100,features:{price:100,ema9:99,ema20:98,rsi14:60},reason_codes:["RULE_MATCHED"],dataset_checksum:"qa-checksum"});
   const items=[];
-  let groups=[], tier="free", premiumCalls=0;
+  let groups=[], tier="free", premiumCalls=0, accountUnavailable=false, subscriptionUnavailable=false;
   const limits=()=>({custom_rules:tier==="free"?0:tier==="analyst"?10:50,stock_universes:tier==="free"?1:tier==="analyst"?5:20});
   const policy=()=>({plan_code:tier,source:tier==="free"?"free":"subscription",features:tier==="pro"?["screener","backtest"]:["screener"],limits:limits(),screening:{max_symbols:tier==="free"?3:10,timeframes:tier==="free"?["1d"]:["1m","5m","15m","1h","1d"],system_rules_only:tier==="free"}});
   let failSecond = false;
@@ -36,6 +36,7 @@ async (page) => {
     if(url.origin!==origin)return route.abort();
     if(p==="/src/analysis/screener.ts")return route.fulfill({contentType:"application/javascript",body:`export async function runLiveScreener(){return ${JSON.stringify(run)};}`});
     if(p!=="/api"&&!p.startsWith("/api/")&&p!=="/ready")return route.continue();
+    if((accountUnavailable && p==="/api/v1/account/me") || (subscriptionUnavailable && p==="/api/v1/subscription"))return route.fulfill({status:503,json:{error:{code:"SERVICE_UNAVAILABLE",message:"Synthetic access outage"}}});
     if(p.startsWith("/api/v1/backtests/studies") || p==="/api/v1/datasets/prepare" || p==="/api/v1/compute-grants") {premiumCalls++;return route.fulfill({status:403,json:{error:{code:"FEATURE_NOT_INCLUDED",message:"Pro required"}}});}
     if(p==="/api/v1/stock-universes" && req.method()==="POST") {
       const body=req.postDataJSON();if(groups.length || body.symbols.length>3) return route.fulfill({status:403,json:{error:{code:"PLAN_LIMIT_EXCEEDED",message:"Free capacity"}}});
@@ -75,7 +76,41 @@ async (page) => {
     return route.fulfill({json:payload});
   });
 
-  await page.goto(`${origin}/#app/analysis`);await page.reload();
+  await page.goto(`${origin}/#app/overview`);await page.reload();
+  await page.getByRole("button",{name:"Choose your first stocks",exact:true}).waitFor();
+  await page.getByRole("list",{name:"First screening steps"}).waitFor();
+  for(const width of [1440,390,320])for(const theme of ["dark","light"]){
+    await page.setViewportSize({width,height:1000});
+    await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle("dark",theme==="dark");},theme);
+    if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2))throw Error(`First-use dashboard overflows ${width}/${theme}`);
+    await page.screenshot({path:`output/playwright/onboarding-first-${width}-${theme}.png`,fullPage:true});
+  }
+  await page.setViewportSize({width:1440,height:1000});
+  if(await page.getByRole("dialog").count())throw Error("Login opened an unsolicited plan modal");
+  await page.getByRole("link",{name:"Plan & access: Free",exact:true}).click();
+  await page.getByRole("heading",{name:"Free access is active",exact:true}).waitFor();
+  await page.getByRole("button",{name:"Continue to dashboard",exact:true}).click();
+  await page.getByRole("button",{name:"Choose your first stocks",exact:true}).waitFor();
+  await page.getByRole("button",{name:/Open Usability QA menu/}).click();
+  await page.getByRole("menuitem",{name:"Devices & sessions",exact:true}).waitFor();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button",{name:"Choose your first stocks",exact:true}).click();
+  await page.getByRole("heading",{name:"Build a stock universe",exact:true}).waitFor();
+  accountUnavailable=true;
+  await page.goto(`${origin}/#app/overview`);await page.reload();
+  await page.getByRole("button",{name:"Reload workspace",exact:true}).waitFor();
+  if(await page.getByRole("button",{name:"View plan & access",exact:true}).count())throw Error("Access outage was presented as a missing plan");
+  accountUnavailable=false;
+  await page.getByRole("button",{name:"Reload workspace",exact:true}).click();
+  await page.getByRole("button",{name:"Choose your first stocks",exact:true}).waitFor();
+  subscriptionUnavailable=true;
+  await page.goto(`${origin}/#app/subscription`);
+  await page.getByText("Plan status unavailable",{exact:true}).waitFor();
+  if(await page.getByRole("heading",{name:"Free access is active",exact:true}).count())throw Error("Plan failure incorrectly displayed active Free");
+  subscriptionUnavailable=false;
+  await page.getByRole("button",{name:"Try again",exact:true}).click();
+  await page.getByRole("heading",{name:"Free access is active",exact:true}).waitFor();
+  await page.goto(`${origin}/#app/analysis`);
   await page.getByText("Free plan",{exact:false}).first().waitFor();
   await page.getByRole("button",{name:"Start screening",exact:true}).waitFor();
   if(await page.getByRole("dialog",{name:/Screening|access|Plan|unavailable/i}).count())throw Error("Free onboarding opened a permission modal");
@@ -101,7 +136,7 @@ async (page) => {
     if(!await summary.isVisible() || await summary.locator("li").count()!==3)throw Error("Plan limits are not clearly grouped");
     if(width===1440){
       await page.getByRole("button",{name:"Close menu",exact:true}).click();
-      const badge=page.getByRole("link",{name:"Free plan and limits",exact:true});
+      const badge=page.getByRole("link",{name:"Plan & access: Free",exact:true});
       const box=await badge.boundingBox();if(!box||box.width<44||box.width>50)throw Error("Collapsed plan control has incorrect width");
       await page.screenshot({path:"output/playwright/mvp-sidebar-collapsed.png"});
       await page.getByRole("button",{name:"Open workspace menu",exact:true}).click();
@@ -129,17 +164,34 @@ async (page) => {
     if(premiumCalls)throw Error("Preview called a premium computation endpoint");
   }
   await page.goto(`${origin}/#app/subscription`);
-  await page.getByRole("button",{name:"Ajukan aktivasi",exact:true}).first().waitFor();
-  await page.getByRole("button",{name:"Ajukan aktivasi",exact:true}).first().click();
+  await page.getByRole("button",{name:"View Analyst details",exact:true}).waitFor();
+  await page.getByRole("button",{name:"View Analyst details",exact:true}).click();
   await page.getByRole("dialog").waitFor();
+  await page.getByRole("dialog").getByText(/Online upgrades are coming soon/).waitFor();
   await page.getByRole("dialog").getByRole("button",{name:"Close",exact:true}).click();
-  for(const width of [1440,390])for(const theme of ["dark","light"]){
+  for(const width of [1440,390,320])for(const theme of ["dark","light"]){
     await page.setViewportSize({width,height:1000});
     await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle("dark",theme==="dark");},theme);
     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2))throw Error(`Tier page overflows ${width}/${theme}`);
     await page.evaluate(()=>window.scrollTo({top:0,behavior:"instant"}));
     await page.screenshot({path:`output/playwright/mvp-tier-${width}-${theme}.png`,fullPage:true});
   }
+  tier="free";
+  await page.goto(`${origin}/#app/overview`);await page.reload();
+  await page.getByRole("button",{name:"Open screener",exact:true}).waitFor();
+  for(const width of [1440,390])for(const theme of ["dark","light"]){
+    await page.setViewportSize({width,height:1000});
+    await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle("dark",theme==="dark");},theme);
+    await page.getByRole("list",{name:"First screening steps"}).waitFor();
+    if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2))throw Error(`Onboarding overflows ${width}/${theme}`);
+    await page.locator(".overview-launch").screenshot({path:`output/playwright/onboarding-${width}-${theme}.png`,animations:"disabled"});
+  }
+  await page.evaluate(async ({owner,rule,run,universe})=>{
+    const {recordMonitorRun}=await import("/src/lib/market-monitor.ts");
+    recordMonitorRun(owner,rule.name,JSON.parse(JSON.stringify(run)),{ruleId:rule.id,universeId:universe.id,universeName:universe.name});
+  },{owner:user.id,rule,run,universe});
+  await page.getByRole("heading",{name:"Continue your analysis",exact:true}).waitFor();
+  if(await page.getByRole("list",{name:"First screening steps"}).count())throw Error("Returning user still sees the first-screening checklist");
   await page.goto(`${origin}/#home`);
   await page.locator(".pricing-plan").nth(2).waitFor();
   const pricing=page.locator("#pricing");

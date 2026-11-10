@@ -67,7 +67,7 @@ export function Pricing() {
                 <span className="pricing-plan__billing-note">
                   {plan.code === "free"
                     ? "No payment required"
-                    : "One-month activation by operator"}
+                    : "Online upgrade coming soon"}
                 </span>
                 <ul>
                   <li>
@@ -97,8 +97,8 @@ export function Pricing() {
                   }
                 >
                   {plan.code === "free"
-                    ? "Coba screening gratis"
-                    : "Ajukan aktivasi"}
+                    ? "Start with Free"
+                    : "View plan details"}
                 </a>
               </article>
             ))}

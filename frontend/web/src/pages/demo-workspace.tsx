@@ -1951,13 +1951,30 @@ export function DemoWorkspace({
           </nav>
         </Tooltip.Provider>
         <div className="sidebar__footer">
-          {account && (
+          {account ? (
             <TierSummary
               access={tierAccess(account)!}
               variant="sidebar"
               collapsed={sidebarCollapsed && !mobileViewport}
             />
-          )}
+          ) : authenticated ? (
+            <a
+              className="sidebar-plan"
+              href="#app/subscription"
+              aria-label="Plan & access"
+              data-collapsed={
+                (sidebarCollapsed && !mobileViewport) || undefined
+              }
+            >
+              <span className="sidebar-plan__compact" aria-hidden="true">
+                P
+              </span>
+              <span className="sidebar-plan__content">
+                <strong>Plan &amp; access</strong>
+                <small>View your plan and features</small>
+              </span>
+            </a>
+          ) : null}
           {authenticated && user ? (
             <AccountMenu
               user={user}

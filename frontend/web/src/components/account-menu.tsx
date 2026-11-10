@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LogOut, Settings2 } from "lucide-react";
+import { BadgeCheck, LogOut, MonitorSmartphone, Settings2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -205,6 +205,22 @@ export function AccountMenu({
             ) : (
               "Account"
             )}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="account-menu__item"
+            onClick={() => {
+              location.hash = "app/subscription";
+            }}
+          >
+            <BadgeCheck aria-hidden="true" /> Plan &amp; access
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="account-menu__item"
+            onClick={() => {
+              location.hash = "app/access";
+            }}
+          >
+            <MonitorSmartphone aria-hidden="true" /> Devices &amp; sessions
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator className="account-menu__separator" />

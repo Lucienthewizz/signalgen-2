@@ -166,7 +166,7 @@ if (usedCli) {
 }
 
 console.log(
-  tiersOnly ? "PASS: Free onboarding, own three-stock universe, fourth-stock limit, baseline screen-to-journal, Free/Analyst preview without premium calls, manual activation, desktop/mobile dark/light CSS regression. Synthetic fixtures only." : authOnly ? "PASS: Google PKCE login, duplicate click, session handoff, disabled provider, cancelled/expired/unsolicited callback; 1440/390px dark/light. Synthetic API/provider/account fixtures only." : studyOnly
+  tiersOnly ? "PASS: guided Free onboarding, plan navigation, outage recovery, own three-stock universe, baseline screen-to-journal, paid previews without premium calls, checkout availability, returning-user guidance and responsive themes. Synthetic fixtures only." : authOnly ? "PASS: Google PKCE login, duplicate click, session handoff, disabled provider, cancelled/expired/unsolicited callback; 1440/390px dark/light. Synthetic API/provider/account fixtures only." : studyOnly
     ? "PASS: batched signal-study browser regression with real Go/WASM; synthetic API/account/provider fixtures."
     : usabilityOnly
       ? "PASS: screening-only journal selection, receipt-only writes, failed-row retry, double-click prevention, bounded paging and outage recovery; desktop/mobile, dark/light. Synthetic API/account/evaluator fixtures only."

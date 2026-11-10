@@ -27,7 +27,7 @@ export function TierSummary({
         className="sidebar-plan"
         data-collapsed={collapsed || undefined}
         href="#app/subscription"
-        aria-label={`${name} plan and limits`}
+        aria-label={`Plan & access: ${name}`}
         title={`${name} · Up to ${access.screening.max_symbols} stocks · ${intervals}`}
       >
         <span className="sidebar-plan__compact" aria-hidden="true">
@@ -35,12 +35,10 @@ export function TierSummary({
         </span>
         <span className="sidebar-plan__content">
           <span className="sidebar-plan__heading">
-            <span className="plan-label">{name} plan</span>
+            <span className="plan-label">Plan &amp; access</span>
             <ChevronRight aria-hidden="true" />
           </span>
-          <span className="sidebar-plan__limit">
-            Up to {access.screening.max_symbols} stocks
-          </span>
+          <span className="sidebar-plan__limit">{name} · Active</span>
           <span className="sidebar-plan__detail">
             {grant
               ? "Operator grant active"

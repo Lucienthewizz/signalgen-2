@@ -635,7 +635,7 @@ export function SubscriptionPanel({
   backendOnline,
 }: ConnectionProps) {
   const [effective, setEffective] = useState<EffectiveAccess | null>(null);
-  const [activationPlan, setActivationPlan] = useState<SubscriptionPlan | null>(
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(
     null,
   );
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -645,6 +645,11 @@ export function SubscriptionPanel({
   const [error, setError] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const access = subscription ? subscriptionState(subscription) : null;
+  const currentPlanCode =
+    authenticated && !accountError
+      ? (effective?.plan_code ??
+        (access?.usable ? subscription?.plan_code : undefined))
+      : undefined;
   const active = useRef(false);
   const loadVersion = useRef(0);
 
@@ -686,6 +691,7 @@ export function SubscriptionPanel({
           });
       } else {
         setSubscription(null);
+        setEffective(null);
         if (authenticated)
           setAccountError(
             "The server is unavailable. Your plan status could not be checked.",
@@ -703,9 +709,16 @@ export function SubscriptionPanel({
   useEffect(() => {
     active.current = true;
     void load();
+    const refresh = () => {
+      void load();
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("signalgen:subscription", refresh);
     return () => {
       active.current = false;
       ++loadVersion.current;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("signalgen:subscription", refresh);
     };
   }, [authenticated, backendOnline]);
 
@@ -757,17 +770,28 @@ export function SubscriptionPanel({
       <section className="subscription-current">
         <header className="resource-editor__header">
           <h3>Your plan</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            onClick={() => void load()}
+          >
+            <RefreshCw aria-hidden="true" /> Refresh status
+          </Button>
         </header>
         {loading ? (
           <div className="resource-loading">
             <Skeleton />
             <Skeleton />
           </div>
-        ) : accountError ? (
+        ) : accountError || (authenticated && !effective && !subscription) ? (
           <Alert variant="destructive">
             <CircleAlert />
             <AlertTitle>Plan status unavailable</AlertTitle>
-            <AlertDescription>{accountError}</AlertDescription>
+            <AlertDescription>
+              {accountError ??
+                "Your access could not be confirmed. Refresh to try again."}
+            </AlertDescription>
             <Button variant="outline" onClick={() => void load()}>
               <RefreshCw data-icon="inline-start" />
               Try again
@@ -909,20 +933,40 @@ export function SubscriptionPanel({
               <EmptyMedia variant="icon">
                 <KeyRound />
               </EmptyMedia>
-              <EmptyTitle>
+              <EmptyTitle role="heading" aria-level={4}>
                 {authenticated
-                  ? `${tierName(effective?.plan_code ?? "free")} plan is ready`
+                  ? `${tierName(effective?.plan_code ?? "free")} access is active`
                   : "Sign in to view your plan"}
               </EmptyTitle>
               <EmptyDescription>
                 {authenticated
                   ? effective?.source === "manual_grant"
                     ? `An operator grant is active. Screen up to ${effective.screening.max_symbols} stocks with ${effective.screening.system_rules_only ? "the system rule and daily candles" : "personal rules and supported intervals"}. The grant does not change your subscription plan.`
-                    : "Use the system rule to screen up to 3 stocks with daily candles. Choose your stocks to get started."
+                    : "Free access starts automatically. Use the system rule and daily candles to screen up to three stocks. No payment or approval is needed."
                   : "Compare plans below or sign in to check your access."}
               </EmptyDescription>
             </EmptyHeader>
-            {!authenticated && (
+            {authenticated ? (
+              <EmptyContent>
+                {subscription && !access?.usable && (
+                  <p>
+                    Your {subscription.plan_name} subscription{" "}
+                    {access?.label === "Canceled"
+                      ? "was cancelled"
+                      : "has ended"}
+                    . Your saved data is still available under your current
+                    access.
+                  </p>
+                )}
+                <Button
+                  nativeButton={false}
+                  render={<a href="#app/overview" />}
+                >
+                  Continue to dashboard
+                </Button>
+                <ResourceQuota revision={0} />
+              </EmptyContent>
+            ) : (
               <EmptyContent>
                 <Button
                   onClick={() => {
@@ -938,28 +982,37 @@ export function SubscriptionPanel({
       </section>
 
       <InfoDialog
-        open={activationPlan !== null}
+        open={selectedPlan !== null}
         onOpenChange={(open) => {
-          if (!open) setActivationPlan(null);
+          if (!open) setSelectedPlan(null);
         }}
-        title={`Ajukan aktivasi ${activationPlan?.name ?? ""}`}
-        description="Activation is handled by a SignalGen operator. This page does not submit a payment or activate a subscription."
+        title={`${selectedPlan?.name ?? ""} plan details`}
+        description="Online upgrades are coming soon. You can continue using your current access."
       >
         <p>
-          Contact your SignalGen operator with your account email and selected
-          plan: <strong>{activationPlan?.name}</strong>
-          {activationPlan?.pricing
-            ? ` · ${monthlyPrice(activationPlan.pricing.amount)} for one month`
+          <strong>{selectedPlan?.name}</strong>
+          {selectedPlan?.pricing
+            ? ` · ${monthlyPrice(selectedPlan.pricing.amount)} per month`
             : ""}
-          . The operator confirms activation; the end date then appears on this
-          page. Automatic payments, annual plans and trials are not available.
+          . Checkout is not available yet. No payment has been taken and your
+          plan has not changed.
         </p>
+        <Button
+          nativeButton={false}
+          render={<a href={authenticated ? "#app/overview" : "#register"} />}
+        >
+          {authenticated ? "Continue to dashboard" : "Start with Free"}
+        </Button>
       </InfoDialog>
       <section className="plan-ledger" aria-labelledby="plan-heading">
         <header>
           <div>
             <h3 id="plan-heading">Available plans</h3>
             <p>Choose the capacity that fits your analysis.</p>
+            <p>
+              Free starts automatically. Online upgrades to Analyst and Pro are
+              coming soon.
+            </p>
           </div>
         </header>
         <div className="plan-columns">
@@ -972,13 +1025,7 @@ export function SubscriptionPanel({
             .map((plan) => (
               <Card
                 key={plan.code}
-                className={
-                  (effective?.plan_code ??
-                    (access?.usable ? subscription?.plan_code : "free")) ===
-                  plan.code
-                    ? "is-current"
-                    : ""
-                }
+                className={currentPlanCode === plan.code ? "is-current" : ""}
               >
                 <CardHeader>
                   <CardTitle>
@@ -997,9 +1044,7 @@ export function SubscriptionPanel({
                   </CardTitle>
                   <CardDescription>{plan.description}</CardDescription>
                   <CardAction>
-                    {(effective?.plan_code ??
-                      (access?.usable ? subscription?.plan_code : "free")) ===
-                      plan.code && <Badge>Your plan</Badge>}
+                    {currentPlanCode === plan.code && <Badge>Your plan</Badge>}
                   </CardAction>
                 </CardHeader>
                 <CardContent>
@@ -1074,14 +1119,17 @@ export function SubscriptionPanel({
                 </CardContent>
                 <CardFooter>
                   {plan.code !== "free" && (
-                    <Button onClick={() => setActivationPlan(plan)}>
-                      Ajukan aktivasi
+                    <Button
+                      variant="outline"
+                      onClick={() => setSelectedPlan(plan)}
+                    >
+                      View {plan.name} details
                     </Button>
                   )}
                   <span>
                     {plan.code === "free"
                       ? "Free daily screening"
-                      : "One month via operator"}
+                      : "Online upgrade coming soon"}
                   </span>
                 </CardFooter>
               </Card>
