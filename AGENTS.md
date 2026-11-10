@@ -1,16 +1,27 @@
 # Skill usage workflow
 
-Always check the available skill catalog before starting a task. When a skill matches the requested work, use it and read its `SKILL.md` before applying its instructions. Explicitly requested skills must be consulted. Apply skills proportionately to the task; do not run every skill on every request.
+Always check the available skill catalog before starting a task. When a skill matches the requested work, use it and read its `SKILL.md` before applying its instructions. Explicitly requested skills must be consulted. Apply skills proportionately to the task. The two writing skills in the mandatory final review below apply to every task; select other skills according to the work.
 
 - Use `ponytail` for coding, fixes, refactoring, code reviews, and dependency choices. Prefer the smallest complete solution that satisfies the request and required verification.
 - Use `ui-ux-pro-max` for UI/UX design, implementation, and review, including accessibility, responsive layouts, typography, colors, and interaction states.
 - Use `scroll-craft` when the request involves scroll-driven experiences, cinematic or layered heroes, scrollytelling, or bespoke landing-page motion. Keep motion aligned with the requested scope and support reduced-motion preferences.
 - Use `no-ai-slop` when editing or reviewing writing for clarity, voice, and generic AI phrasing. This skill primarily concerns writing quality; it does not replace UI design guidance.
-- Use `unslop` when the user requests more natural writing, humanization, voice matching, or removal of AI tone. If it overlaps with `no-ai-slop`, choose the most relevant skill or combine only complementary guidance without redundant rewrite passes. Preserve facts and the user's intended meaning.
+- Use `unslop` for natural writing, humanization, voice matching, or removal of AI tone. Combine its guidance with `no-ai-slop` in the mandatory final review below. Preserve facts and the user's intended meaning.
 - Use other relevant installed skills for their supported tasks, including the frontend and codebase skills required below. These five skills are not an exhaustive list.
 - Briefly announce which skill(s) are being applied and why the first time they are used in the conversation. Only claim use after reading and following the applicable instructions.
 - If a required skill is missing or inaccessible, check the configured skill locations, disclose the limitation, and use an available fallback when it can safely complete the task. Do not install skills, enable integrations, upload files, or change accounts without authorization.
 - Follow user instructions and higher-priority requirements when skill guidance conflicts. Do not expand the task, redesign unrelated UI, or add dependencies solely because a skill suggests them.
+
+# Mandatory final writing review
+
+For every user prompt, apply both `no-ai-slop` and `unslop` before sending the final answer. After implementing a feature or fix, also review any user-facing prose created or changed by the task, such as UI labels, error messages, help text, and documentation. Read both skills before their first use in the conversation and follow their applicable guidance on subsequent turns.
+
+1. Use `no-ai-slop` to remove filler, repetition, vague claims, and generic AI phrasing. Follow its applicable evaluation checklist. Keep wording that is already clear.
+2. Use `unslop` at balanced intensity unless the user requests otherwise, to make the text natural and appropriate for its audience. Both reviews are required, but do not force two full rewrites when no changes are needed.
+3. Check that the final wording preserves facts, citations, technical meaning, uncertainty, and verification results. Keep executable code, identifiers, commands, exact quotations, and literal tool output intact. Write commits and PRs in normal technical language.
+4. Complete this review before committing and pushing any affected prose. If editing changes files after verification, rerun the relevant checks before delivery. Keep the final answer concise; include editing commentary only when useful or requested.
+
+Use the current draft as the review input; do not ask the user to provide a separate draft for this automatic review. This is a writing review, not a reason to redesign unrelated UI, modify working logic, invent evidence, or claim a feature is complete without verification. A later user instruction to skip or disable either skill overrides this default.
 
 # Git delivery workflow
 
