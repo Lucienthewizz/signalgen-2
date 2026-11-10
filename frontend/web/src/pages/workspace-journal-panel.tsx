@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NotebookTabs, SearchCheck } from "lucide-react";
-import { api, session } from "@/api/client";
+import "@/styles/screening-journal.css";
+import { Download, NotebookTabs, SearchCheck } from "lucide-react";
+import { api, ApiError, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,24 @@ import {
 } from "@/lib/screening-journal";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import type { ServerRecord } from "@/lib/server-records";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+} from "@/components/ui/select";
+import { DateInput } from "@/components/date-input";
+import { downloadCsv } from "@/lib/csv";
+import {
+  emptyJournalFilters,
+  filterJournal,
+  journalSummary,
+  journalCsvRows,
+} from "@/lib/journal-explorer";
 
 type Item = ServerRecord<ScreeningJournalEntry>;
 const message = (e: unknown) =>
@@ -69,13 +88,42 @@ export function JournalPanel({
   const [saveError, setSaveError] = useState("");
   const [reload, setReload] = useState(0);
   const [page, setPage] = useState(0);
+  const [filters, setFilters] = useState({ ...emptyJournalFilters });
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [receiptInvalid, setReceiptInvalid] = useState(false);
+  const [exportNotice, setExportNotice] = useState("");
+  const detailHeading = useRef<HTMLHeadingElement>(null);
   const operation = useRef<AbortController | null>(null);
   const owner = useRef(userId);
   owner.current = userId;
   const items = records.owner === userId ? records.items : [];
-  const lastPage = Math.max(0, Math.ceil(items.length / 25) - 1);
+  const filtered = useMemo(
+    () => filterJournal(items, filters),
+    [items, filters],
+  );
+  const summary = useMemo(() => journalSummary(filtered), [filtered]);
+  const rules = useMemo(
+    () =>
+      [
+        ...new Map(
+          items.map(({ data: d }) => [d.rule_id, d.rule_name]),
+        ).entries(),
+      ].sort((a, b) => a[1].localeCompare(b[1])),
+    [items],
+  );
+  const detail = items.find((item) => item.id === detailId)?.data;
+  const lastPage = Math.max(0, Math.ceil(filtered.length / 25) - 1);
   const currentPage = Math.min(page, lastPage);
-  const visibleItems = items.slice(currentPage * 25, (currentPage + 1) * 25);
+  const visibleItems = filtered.slice(currentPage * 25, (currentPage + 1) * 25);
+  const changeFilter = (key: keyof typeof filters, value: string) => {
+    setFilters((current) => ({ ...current, [key]: value }));
+    setPage(0);
+    setDetailId(null);
+    setExportNotice("");
+  };
+  useEffect(() => {
+    if (detailId) detailHeading.current?.focus();
+  }, [detailId]);
   const selected = useMemo(() => {
     const unique = new Set<string>();
     return [
@@ -134,6 +182,10 @@ export function JournalPanel({
       setSaved([]);
       setPage(0);
       setSaveError("");
+      setReceiptInvalid(false);
+      setDetailId(null);
+      setFilters({ ...emptyJournalFilters });
+      setExportNotice("");
       setRecords({ owner: "", items: [] });
     };
     stop();
@@ -146,7 +198,14 @@ export function JournalPanel({
   }, [userId]);
 
   async function save() {
-    if (operation.current || loading || !userId || !pending.length) return;
+    if (
+      operation.current ||
+      loading ||
+      receiptInvalid ||
+      !userId ||
+      !pending.length
+    )
+      return;
     const controller = new AbortController(),
       id = userId,
       revision = session.getIdentityRevision();
@@ -183,7 +242,12 @@ export function JournalPanel({
         setPage(0);
       }
     } catch (e) {
-      if (active()) setSaveError(message(e));
+      if (active()) {
+        setSaveError(message(e));
+        setReceiptInvalid(
+          e instanceof ApiError && e.code === "SCREENING_RECEIPT_INVALID",
+        );
+      }
     } finally {
       if (operation.current === controller) {
         operation.current = null;
@@ -257,7 +321,21 @@ export function JournalPanel({
             </Alert>
           )}
           <div className="screening-journal__actions">
-            {pending.length > 0 ? (
+            {receiptInvalid ? (
+              <>
+                <p>
+                  This screening proof has expired or the API restarted. Saved
+                  results are safe.
+                </p>
+                <Button
+                  nativeButton={false}
+                  render={<a href="#app/analysis" />}
+                  onClick={clearDraft}
+                >
+                  Run screening again
+                </Button>
+              </>
+            ) : pending.length > 0 ? (
               <Button onClick={() => void save()} disabled={saving || loading}>
                 {saving
                   ? "Saving screening results…"
@@ -275,6 +353,174 @@ export function JournalPanel({
             )}
           </div>
         </section>
+      )}
+      {items.length > 0 && (
+        <>
+          <FieldGroup
+            className="journal-explorer-filters"
+            aria-label="Filter screening journal"
+          >
+            <Field>
+              <FieldLabel htmlFor="journal-search">Search</FieldLabel>
+              <Input
+                id="journal-search"
+                placeholder="Stock or rule…"
+                value={filters.search}
+                onChange={(e) => changeFilter("search", e.target.value)}
+              />
+            </Field>
+            {(
+              [
+                ["rule", "Rule", [["", "All rules"], ...rules]],
+                [
+                  "signal",
+                  "Signal",
+                  [
+                    ["", "All signals"],
+                    ["BUY", "BUY"],
+                    ["SELL", "SELL"],
+                    ["MATCH", "Match (unspecified)"],
+                  ],
+                ],
+                [
+                  "market",
+                  "Market",
+                  [
+                    ["", "All markets"],
+                    ["IDX", "IDX · IDR"],
+                    ["US", "US · USD"],
+                  ],
+                ],
+                [
+                  "sort",
+                  "Sort",
+                  [
+                    ["newest", "Newest first"],
+                    ["oldest", "Oldest first"],
+                    ["symbol", "Stock symbol"],
+                  ],
+                ],
+              ] as [keyof typeof filters, string, string[][]][]
+            ).map(([key, label, options]) => (
+              <Field key={key}>
+                <FieldLabel htmlFor={`journal-${key}`}>{label}</FieldLabel>
+                <Select
+                  value={filters[key]}
+                  onValueChange={(value) => changeFilter(key, value ?? "")}
+                >
+                  <SelectTrigger id={`journal-${key}`}>
+                    <SelectValue>
+                      {options.find((o) => o[0] === filters[key])?.[1]}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {options.map(([value, label]) => (
+                        <SelectItem value={value} key={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            ))}
+            <Field>
+              <FieldLabel htmlFor="journal-from">
+                Screened from (SGT)
+              </FieldLabel>
+              <DateInput
+                id="journal-from"
+                value={filters.from}
+                onValueChange={(value) => changeFilter("from", value)}
+                max={filters.to || undefined}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="journal-to">Screened to (SGT)</FieldLabel>
+              <DateInput
+                id="journal-to"
+                value={filters.to}
+                onValueChange={(value) => changeFilter("to", value)}
+                min={filters.from || undefined}
+              />
+            </Field>
+          </FieldGroup>
+          <div className="screening-journal__actions journal-explorer-actions">
+            <p role="status">
+              {filtered.length} of {items.length} saved results · date filters
+              use screening time in SGT
+            </p>
+            <div>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setFilters({ ...emptyJournalFilters });
+                  setPage(0);
+                  setDetailId(null);
+                  setExportNotice("");
+                }}
+              >
+                Clear filters
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!filtered.length}
+                onClick={() => {
+                  downloadCsv(
+                    "signalgen-screening-journal.csv",
+                    journalCsvRows(filtered),
+                  );
+                  setExportNotice(
+                    `Exported ${filtered.length} screening snapshots.`,
+                  );
+                }}
+              >
+                <Download data-icon="inline-start" /> Export filtered CSV
+              </Button>
+            </div>
+          </div>
+          {exportNotice && <p role="status">{exportNotice}</p>}
+          <dl
+            className="journal-explorer-summary"
+            aria-label="Filtered signal summary"
+          >
+            <div>
+              <dt>Saved signals</dt>
+              <dd>{summary.total}</dd>
+            </div>
+            <div data-signal="BUY">
+              <dt>BUY</dt>
+              <dd>{summary.buy}</dd>
+            </div>
+            <div data-signal="SELL">
+              <dt>SELL</dt>
+              <dd>{summary.sell}</dd>
+            </div>
+            <div>
+              <dt>Unspecified</dt>
+              <dd>{summary.other}</dd>
+            </div>
+            <div>
+              <dt>Stocks / rules</dt>
+              <dd>
+                {summary.stocks} / {summary.rules}
+              </dd>
+            </div>
+          </dl>
+          <p className="screening-journal__note">
+            Most frequent stock:{" "}
+            {summary.topStock
+              ? `${summary.topStock[0].replace(/\.JK$/, "")} (${summary.topStock[1]})`
+              : "—"}
+            . Most frequent rule:{" "}
+            {summary.topRule
+              ? `${summary.topRule[1].name} (${summary.topRule[1].count})`
+              : "—"}
+            . Counts reflect the current filters, not returns or trade
+            performance.
+          </p>
+        </>
       )}
       {error && (
         <Alert variant="destructive">
@@ -315,6 +561,25 @@ export function JournalPanel({
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
+      ) : items.length > 0 && !filtered.length ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No results match these filters</EmptyTitle>
+            <EmptyDescription>
+              Try another stock, rule or date range. Your saved snapshots have
+              not changed.
+            </EmptyDescription>
+          </EmptyHeader>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setFilters({ ...emptyJournalFilters });
+              setPage(0);
+            }}
+          >
+            Reset journal filters
+          </Button>
+        </Empty>
       ) : items.length > 0 ? (
         <div className="journal-ledger">
           <Table>
@@ -328,6 +593,7 @@ export function JournalPanel({
                 <TableHead>Candle time (SGT)</TableHead>
                 <TableHead>Screening price</TableHead>
                 <TableHead>Screened at (SGT)</TableHead>
+                <TableHead>Details</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -343,12 +609,27 @@ export function JournalPanel({
                     </TableCell>
                     <TableCell>{d.rule_name}</TableCell>
                     <TableCell>
-                      <Badge>{d.signal_type ?? "Match"}</Badge>
+                      <Badge variant="outline" data-signal={d.signal_type}>
+                        {d.signal_type ?? "Match"}
+                      </Badge>
                     </TableCell>
                     <TableCell>{d.timeframe}</TableCell>
                     <TableCell>{time(d.candle_at)}</TableCell>
                     <TableCell>{price(d.price, d.currency)}</TableCell>
                     <TableCell>{time(d.screened_at)}</TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-expanded={detailId === item.id}
+                        aria-controls="journal-snapshot-detail"
+                        onClick={() =>
+                          setDetailId(detailId === item.id ? null : item.id)
+                        }
+                      >
+                        View {d.symbol.replace(/\.JK$/, "")} details
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -356,12 +637,107 @@ export function JournalPanel({
           </Table>
         </div>
       ) : null}
-      {items.length > 25 && (
+      {detail && (
+        <section
+          id="journal-snapshot-detail"
+          className="journal-snapshot-detail"
+          aria-label="Screening snapshot details"
+        >
+          <div className="screening-journal__actions">
+            <h2 ref={detailHeading} tabIndex={-1}>
+              {detail.symbol.replace(/\.JK$/, "")} · Screening details
+            </h2>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setDetailId(null);
+                document
+                  .querySelector<HTMLButtonElement>(
+                    'button[aria-expanded="true"][aria-controls="journal-snapshot-detail"]',
+                  )
+                  ?.focus();
+              }}
+            >
+              Close details
+            </Button>
+          </div>
+          <p>Read-only snapshot. Not a broker fill or a live quote.</p>
+          <dl>
+            <div>
+              <dt>Rule</dt>
+              <dd>{detail.rule_name}</dd>
+            </div>
+            <div>
+              <dt>Signal</dt>
+              <dd>
+                <Badge variant="outline" data-signal={detail.signal_type}>
+                  {detail.signal_type ?? "Match"}
+                </Badge>
+              </dd>
+            </div>
+            <div>
+              <dt>Screening price</dt>
+              <dd>{price(detail.price, detail.currency)}</dd>
+            </div>
+            <div>
+              <dt>Market / interval</dt>
+              <dd>
+                {detail.market} / {detail.timeframe}
+              </dd>
+            </div>
+            <div>
+              <dt>Candle (SGT)</dt>
+              <dd>{time(detail.candle_at)}</dd>
+            </div>
+            <div>
+              <dt>Screened (SGT)</dt>
+              <dd>{time(detail.screened_at)}</dd>
+            </div>
+            {Object.entries({
+              RSI14: detail.features?.rsi14,
+              EMA9: detail.features?.ema9,
+              EMA20: detail.features?.ema20,
+              ...detail.features?.values,
+            }).map(([key, value]) => (
+              <div key={key}>
+                <dt>{key}</dt>
+                <dd>
+                  {Number.isFinite(value)
+                    ? new Intl.NumberFormat("en-GB", {
+                        maximumFractionDigits: 4,
+                      }).format(value)
+                    : "Unavailable"}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <h3>Match evidence</h3>
+          <ul>
+            {(detail.reason_codes ?? []).map((reason, i) => (
+              <li key={i}>{reason.replaceAll("_", " ")}</li>
+            ))}
+          </ul>
+          <details>
+            <summary>Snapshot verification metadata</summary>
+            <dl>
+              <div>
+                <dt>Dataset checksum</dt>
+                <dd>{detail.dataset_checksum || "Unavailable"}</dd>
+              </div>
+              <div>
+                <dt>Rule definition hash</dt>
+                <dd>{detail.definition_hash || "Unavailable"}</dd>
+              </div>
+            </dl>
+          </details>
+        </section>
+      )}
+      {filtered.length > 25 && (
         <nav className="screening-journal__actions" aria-label="Journal pages">
           <p>
             {currentPage * 25 + 1}–
-            {Math.min((currentPage + 1) * 25, items.length)} of {items.length}{" "}
-            results
+            {Math.min((currentPage + 1) * 25, filtered.length)} of{" "}
+            {filtered.length} results
           </p>
           <div>
             <Button

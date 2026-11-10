@@ -799,7 +799,7 @@ async (page) => {
   }
   unauthorized = true;
   await page.goto(`${origin}/#app/analysis`);
-  await page.waitForURL("**/#login", { timeout: 10000 });
+  await page.waitForURL(url=>url.hash.startsWith('#login'), { timeout: 10000 });
   if (await page.evaluate(() => sessionStorage.getItem("signalgen.access-token"))) throw Error("401 retained auth");
   for (const route of ["home", "creators", "login", "register", "forgot-password", "reset-password"]) {
     await page.goto(`${origin}/#${route}`);
@@ -1145,7 +1145,7 @@ async (page) => {
   await page.goto(`${origin}/#app/analysis`);
   unauthorized = true;
   await page.reload();
-  await page.waitForURL('**/#login', { timeout: 10000 });
+  await page.waitForURL(url=>url.hash.startsWith('#login'), { timeout: 10000 });
   unauthorized = false;
   for (const view of ['login', 'register', 'forgot-password', 'reset-password']) {
     await page.goto(`${origin}/#${view}`);

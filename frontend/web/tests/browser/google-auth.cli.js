@@ -41,10 +41,13 @@ async (page) => {
   for(const width of [1440,390]) for(const theme of ["dark","light"]){
     await page.setViewportSize({width,height:1000});
     await reset();
-    await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle("dark",theme==="dark");},theme);
     await page.addStyleTag({content:"*,*::before,*::after{transition:none!important;animation:none!important;}"});
+    await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle("dark",theme==="dark");},theme);
+    await page.locator('.auth-google').scrollIntoViewIfNeeded();
     if(theme==="light") await page.waitForFunction(()=>getComputedStyle(document.querySelector(".auth-google")).backgroundColor==="rgb(255, 255, 255)");
     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error("Login overflow");
+    const fills=await page.locator('.auth-google__mark path').evaluateAll(paths=>paths.map(p=>p.getAttribute('fill')));
+    if(new Set(fills).size!==4)throw Error('Google identity mark is not four-color');
     await page.screenshot({path:`output/playwright/google-login-${width}-${theme}.png`,fullPage:true});
     mode="disabled";
     await page.getByRole("button",{name:"Continue with Google",exact:true}).click();
@@ -56,6 +59,10 @@ async (page) => {
     if(starts-before.starts!==1||exchanges-before.exchanges!==1||sessions-before.sessions!==1)throw Error("Duplicate OAuth/session operation");
     if(await page.evaluate(()=>sessionStorage.getItem("signalgen.google-pkce")))throw Error("Verifier retained after success");
   }
+  await reset();mode="success";
+  await page.goto(origin+'/#login&returnTo=app%2Fjournal');
+  await page.getByRole('button',{name:'Continue with Google',exact:true}).click();
+  await page.waitForURL('**/#app/journal');
   for(const failure of ["cancel","expired"]){
     await reset();mode=failure;const before=exchanges;
     await page.getByRole("button",{name:"Continue with Google",exact:true}).click();

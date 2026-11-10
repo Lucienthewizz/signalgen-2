@@ -50,8 +50,17 @@ jobs:
           node --input-type=module -e 'for(let i=0;i<30;i++){try{if((await fetch("http://127.0.0.1:5174")).ok)process.exit(0);}catch{}await new Promise(r=>setTimeout(r,500));}process.exit(1);'
       - name: Workspace, responsive layout and admin regressions
         run: |
-          npm run test:browser
+          npm run test:auth
+          npm run test:journal-explorer
           npm run test:admin
+      - name: Start development fixture server
+        run: |
+          npm exec -- vite --host 127.0.0.1 --port 5176 --strictPort > /tmp/signalgen-frontend-fixtures.log 2>&1 &
+          node --input-type=module -e 'for(let i=0;i<30;i++){try{if((await fetch("http://127.0.0.1:5176")).ok)process.exit(0);}catch{}await new Promise(r=>setTimeout(r,500));}process.exit(1);'
+      - name: Workspace and receipt recovery with development module fixtures
+        run: |
+          SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5176 npm run test:browser
+          SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5176 npm run test:usability
       - name: Mobile lab and performance budgets
         run: |
           npm run test:mobile-performance

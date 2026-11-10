@@ -6,6 +6,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  LoaderCircle,
   ShieldCheck,
   X,
 } from "lucide-react";
@@ -23,6 +24,7 @@ import {
   PasswordStrengthIndicator,
 } from "@/components/ui/password-strength";
 import { Brand } from "@/components/brand";
+import { GoogleMark } from "@/components/google-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { api, ApiError, session } from "@/api/client";
 import { createGoogleProof, clearGoogleProof } from "@/api/google-oauth";
@@ -189,6 +191,8 @@ export function AuthPage({
         sessionStorage,
         location.origin,
         controller.signal,
+        new URLSearchParams(location.hash.slice(1)).get("returnTo") ??
+          location.hash.slice(1),
       );
       controller.signal.throwIfAborted();
       const result = await api.startGoogle(proof, controller.signal);
@@ -485,11 +489,21 @@ export function AuthPage({
                     onClick={() => void signInWithGoogle()}
                     disabled={loading || googleLoading || !backendOnline}
                   >
-                    <span aria-hidden="true" className="auth-google__mark">
-                      G
-                    </span>
+                    {googleLoading ? (
+                      <LoaderCircle
+                        className="auth-google__spinner"
+                        data-icon="inline-start"
+                      />
+                    ) : (
+                      <GoogleMark />
+                    )}
                     {googleLoading ? "Opening Google…" : "Continue with Google"}
                   </Button>
+                  <p className="auth-google__hint" role="status">
+                    {googleLoading
+                      ? "Opening secure Google sign-in. Continue in this tab."
+                      : "Sign in securely with Google, or use your email above."}
+                  </p>
                 </>
               )}
             </form>

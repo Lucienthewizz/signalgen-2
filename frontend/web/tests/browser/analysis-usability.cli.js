@@ -12,6 +12,7 @@ async (page) => {
   const snapshot=(symbol)=>({schema_version:"screening-journal-1",source:"screening",symbol,market:"IDX",currency:"IDR",rule_id:rule.id,rule_name:rule.name,definition_hash:rule.definition_hash,timeframe:"1d",candle_at:now,screened_at:now,matched:true,signal_type:"BUY",price:100,features:{price:100,ema9:99,ema20:98,rsi14:60},reason_codes:["RULE_MATCHED"],dataset_checksum:"qa-checksum"});
   const items=Array.from({length:30},(_,i)=>({id:`77777777-7777-4777-8777-${String(i+1).padStart(12,"0")}`,version:1,bytes:1000,data:snapshot(`QA${String(i).padStart(2,"0")}`)}));
   let failSecond = true;
+  let invalidReceipt = false;
 
   let rulesMode="normal",journalMode="normal",rulesReads=0,releaseRules,releaseJournal;
   const writes=[],errors=[];
@@ -45,6 +46,7 @@ async (page) => {
         return route.fulfill({json:{schema_version:"screening-journal-1",items}});
       }
       const body=req.postDataJSON();writes.push({body});
+      if(invalidReceipt)return route.fulfill({status:422,json:{error:{code:'SCREENING_RECEIPT_INVALID',message:'Run screening again and select a matched result from this session.'}}});
       if(req.method()!=="POST"||Object.keys(body).length!==1||!["fixture-0","fixture-1"].includes(body.receipt))throw Error("Journal accepted a manual trade payload");
       if(body.receipt==="fixture-1"&&failSecond)return route.fulfill({status:503,json:{error:{code:"JOURNAL_UNAVAILABLE",message:"Synthetic one-row interruption"}}});
       await new Promise(resolve=>setTimeout(resolve,40));
@@ -195,6 +197,22 @@ async (page) => {
   journalMode='normal';await page.getByRole('button',{name:'Retry journal',exact:true}).click();
   await page.getByText('Journal unavailable',{exact:true}).waitFor({state:'hidden'});
   if(await page.locator('.journal-ledger tbody tr').count()!==25)throw Error('Retry did not reload saved screenings');
+  // A receipt invalidated by expiry/API restart is not a retryable storage outage.
+  await page.goto(`${origin}/#app/analysis`);
+  await page.getByRole('button',{name:'Start screening',exact:true}).click();
+  await page.getByRole('checkbox',{name:'Select BBCA for journal',exact:true}).waitFor();
+  await page.waitForFunction(()=>document.querySelector('input[aria-label="Select BBCA for journal"]')?.disabled===false);
+  await page.getByRole('button',{name:'Stop',exact:true}).click();
+  await page.getByRole('checkbox',{name:'Select BBCA for journal',exact:true}).check();
+  await page.getByRole('button',{name:'Add 1 to journal',exact:true}).click();
+  invalidReceipt=true;
+  await page.getByRole('button',{name:'Save 1 result to journal',exact:true}).click();
+  await page.getByRole('button',{name:'Run screening again',exact:true}).waitFor();
+  if(await page.getByRole('button',{name:'Retry unsaved results',exact:true}).count())throw Error('Expired receipt offered an impossible retry');
+  const countBeforeRecovery=writes.length;
+  await page.getByRole('button',{name:'Run screening again',exact:true}).click();
+  await page.waitForURL('**/#app/analysis');
+  if(writes.length!==countBeforeRecovery)throw Error('Recovery silently resubmitted the stale receipt');
   if(errors.length)throw Error(errors.join("; "));
   await page.evaluate(()=>document.body.setAttribute("data-signalgen-usability-tests","complete"));
   return {synthetic:true,receiptWrites:writes.length,retryOnlyFailed:true,widths:[1440,1218,390]};

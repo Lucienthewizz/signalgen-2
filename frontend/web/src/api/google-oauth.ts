@@ -1,6 +1,24 @@
 const FLOW_KEY = "signalgen.google-pkce";
 export const GOOGLE_CALLBACK_PATH = "/auth/google/callback";
 const FLOW_LIFETIME = 10 * 60_000;
+const destinations = new Set([
+  "account",
+  "app/overview",
+  "app/analysis",
+  "app/rules",
+  "app/universes",
+  "app/journal",
+  "app/backtest",
+  "app/realtime",
+  "app/news",
+  "app/access",
+  "app/subscription",
+]);
+export function safeGoogleDestination(value: unknown): string {
+  return typeof value === "string" && destinations.has(value)
+    ? value
+    : "app/overview";
+}
 
 function base64url(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes))
@@ -15,6 +33,7 @@ export async function createGoogleProof(
   storage: Storage,
   origin: string,
   signal?: AbortSignal,
+  destination?: string,
 ) {
   const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
   const challenge = base64url(
@@ -25,7 +44,12 @@ export async function createGoogleProof(
   signal?.throwIfAborted();
   storage.setItem(
     FLOW_KEY,
-    JSON.stringify({ verifier, origin, createdAt: Date.now() }),
+    JSON.stringify({
+      verifier,
+      origin,
+      createdAt: Date.now(),
+      destination: safeGoogleDestination(destination),
+    }),
   );
   return {
     code_challenge: challenge,
@@ -73,5 +97,9 @@ export function consumeGoogleCallback(storage: Storage, href: string) {
     throw new Error(
       "Google did not return a valid sign-in code. Please start again.",
     );
-  return { code, code_verifier: flow.verifier as string };
+  return {
+    code,
+    code_verifier: flow.verifier as string,
+    destination: safeGoogleDestination(flow.destination),
+  };
 }

@@ -14,7 +14,10 @@ import {
 import { Brand } from "@/components/brand";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AuthView } from "@/pages/auth-page";
-import { GOOGLE_CALLBACK_PATH } from "@/api/google-oauth";
+import {
+  GOOGLE_CALLBACK_PATH,
+  safeGoogleDestination,
+} from "@/api/google-oauth";
 import type { DemoView } from "@/pages/demo-workspace";
 import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
 import { startHistoricalCacheLifecycle } from "@/data/historical-lifecycle";
@@ -141,7 +144,8 @@ function RoutedApp() {
     });
     const unauthorized = () => {
       setUser(null);
-      location.hash = "login";
+      const destination = safeGoogleDestination(location.hash.slice(1));
+      location.hash = `login&returnTo=${encodeURIComponent(destination)}`;
     };
     addEventListener("signalgen:unauthorized", unauthorized);
     return () => {
@@ -151,10 +155,13 @@ function RoutedApp() {
     };
   }, []);
 
-  const authenticated = useCallback((nextUser: User) => {
-    setUser(nextUser);
-    location.hash = "app/overview";
-  }, []);
+  const authenticated = useCallback(
+    (nextUser: User, destination = "app/overview") => {
+      setUser(nextUser);
+      location.hash = safeGoogleDestination(destination);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!user) return;

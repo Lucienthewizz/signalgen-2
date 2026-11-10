@@ -21,7 +21,6 @@ const modules = [
   "backtesting",
   "signal-study",
   "workspace-polish",
-  "screening-journal",
 ];
 
 test("stylesheet entry keeps explicit cascade order and imports each module once", () => {
@@ -40,7 +39,12 @@ test("stylesheet entry keeps explicit cascade order and imports each module once
 });
 
 test("stylesheet modules parse independently and do not introduce hidden imports", () => {
-  for (const name of [...modules, "admin-access", "calendar"]) {
+  for (const name of [
+    ...modules,
+    "admin-access",
+    "calendar",
+    "screening-journal",
+  ]) {
     const root = postcss.parse(
       fs.readFileSync(path.join(src, "styles", name + ".css"), "utf8"),
     );

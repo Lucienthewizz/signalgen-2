@@ -3,6 +3,100 @@
   gap: 1.25rem;
   min-width: 0;
 }
+.journal-explorer-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+.journal-explorer-filters [data-slot="select-trigger"] {
+  width: 100%;
+  min-height: 44px;
+}
+.journal-explorer-actions > div {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.journal-explorer-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  padding-block: 1rem;
+  border-block: 1px solid var(--border);
+  gap: 1rem;
+}
+.journal-explorer-summary dt,
+.journal-snapshot-detail dt {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+.journal-explorer-summary dd {
+  margin: 0.35rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.screening-journal [data-signal="BUY"] {
+  color: var(--green);
+}
+.screening-journal [data-signal="SELL"] {
+  color: var(--danger);
+}
+.journal-snapshot-detail {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  background: var(--card);
+}
+.journal-snapshot-detail h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.journal-snapshot-detail > dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+.journal-snapshot-detail dd {
+  margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
+}
+.journal-snapshot-detail p {
+  color: var(--muted-foreground);
+}
+.journal-snapshot-detail summary {
+  cursor: pointer;
+  padding-block: 0.75rem;
+}
+.journal-snapshot-detail h2:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+@media (max-width: 900px) {
+  .journal-explorer-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .journal-explorer-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .journal-snapshot-detail > dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .journal-explorer-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .journal-explorer-filters > [data-slot="field"]:first-child {
+    grid-column: 1 / -1;
+  }
+  .journal-explorer-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .journal-snapshot-detail > dl {
+    grid-template-columns: 1fr;
+  }
+}
 .screening-journal .screening-journal__intro {
   display: flex;
   justify-content: space-between;

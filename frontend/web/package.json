@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "description": "SignalGen 2.0 website and account portal",
   "scripts": {
+    "test:auth": "node scripts/test-browser.mjs --auth",
+    "test:journal-explorer": "node scripts/test-browser.mjs --journal-explorer",
     "test:mobile-performance": "node scripts/test-browser.mjs --mobile-performance",
     "check:budgets": "node scripts/check-performance-budgets.mjs",
     "check:lab": "node scripts/check-performance-budgets.mjs --lab",
