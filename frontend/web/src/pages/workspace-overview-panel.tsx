@@ -311,59 +311,6 @@ export function WorkspaceOverviewPanel({
                 ? "Reload workspace"
                 : setup.label}
           </Button>
-          {!latest && !preparing && account && (
-            <ol className="onboarding-steps" aria-label="First screening steps">
-              {[
-                {
-                  title: "Check your access",
-                  done: setup.allowed,
-                  detail: account.access
-                    ? `${tierName(account.access.plan_code)} plan`
-                    : "View Plan & access",
-                  view: "subscription",
-                },
-                {
-                  title: "Choose a rule",
-                  done: Boolean(setup.rule),
-                  detail: account.access?.screening.system_rules_only
-                    ? "System rule included; no need to create one"
-                    : "Use a system rule or save your own",
-                  view: "rules",
-                },
-                {
-                  title: "Choose your stocks",
-                  done: Boolean(setup.universe),
-                  detail:
-                    setup.universe?.name ??
-                    `Save a universe with up to ${account.access?.screening.max_symbols ?? 10} stocks`,
-                  view: "universes",
-                },
-                {
-                  title: "Run your first screen",
-                  done: false,
-                  detail: "Review matches and the reasons behind them",
-                  view: "analysis",
-                },
-              ].map((step, index) => (
-                <li
-                  key={step.view}
-                  data-complete={step.done || undefined}
-                  aria-current={setup.view === step.view ? "step" : undefined}
-                >
-                  <span className="onboarding-steps__number" aria-hidden="true">
-                    {step.done ? "✓" : index + 1}
-                  </span>
-                  <a href={`#app/${step.view}`}>
-                    <strong>{step.title}</strong>
-                    <small>{step.detail}</small>
-                  </a>
-                  <span className="sr-only">
-                    {step.done ? "Ready" : "Not completed"}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
         </section>
         <nav className="overview-shortcuts" aria-label="Quick access">
           <h3>Follow the market</h3>
@@ -453,6 +400,70 @@ export function WorkspaceOverviewPanel({
           </a>
         ))}
       </section>
+      {!latest && !preparing && account && (
+        <section
+          className="overview-activity"
+          aria-labelledby="onboarding-title"
+        >
+          <header>
+            <h3 id="onboarding-title">
+              <ListChecks aria-hidden="true" />
+              First screening
+            </h3>
+          </header>
+          <ol className="onboarding-steps" aria-label="First screening steps">
+            {[
+              {
+                title: "Check your access",
+                done: setup.allowed,
+                detail: account.access
+                  ? `${tierName(account.access.plan_code)} plan`
+                  : "View Plan & access",
+                view: "subscription",
+              },
+              {
+                title: "Choose a rule",
+                done: Boolean(setup.rule),
+                detail: account.access?.screening.system_rules_only
+                  ? "System rule included; no need to create one"
+                  : "Use a system rule or save your own",
+                view: "rules",
+              },
+              {
+                title: "Choose your stocks",
+                done: Boolean(setup.universe),
+                detail:
+                  setup.universe?.name ??
+                  `Save a universe with up to ${account.access?.screening.max_symbols ?? 10} stocks`,
+                view: "universes",
+              },
+              {
+                title: "Run your first screen",
+                done: false,
+                detail: "Review matches and the reasons behind them",
+                view: "analysis",
+              },
+            ].map((step, index) => (
+              <li
+                key={step.view}
+                data-complete={step.done || undefined}
+                aria-current={setup.view === step.view ? "step" : undefined}
+              >
+                <span className="onboarding-steps__number" aria-hidden="true">
+                  {step.done ? "✓" : index + 1}
+                </span>
+                <a href={`#app/${step.view}`}>
+                  <strong>{step.title}</strong>
+                  <small>{step.detail}</small>
+                </a>
+                <span className="sr-only">
+                  {step.done ? "Ready" : "Not completed"}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
       <section
         className="overview-activity"
         aria-labelledby="overview-activity-title"

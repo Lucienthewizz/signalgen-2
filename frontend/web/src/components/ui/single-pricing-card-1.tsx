@@ -1,8 +1,18 @@
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, ShieldCheck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { api } from "@/api/client";
-import { monthlyPrice } from "@/lib/tier-access";
+import { cn } from "@/lib/utils";
 import type { SubscriptionPlan } from "@/types";
+
+const planOrder = ["free", "analyst", "pro"];
+const planBadges = {
+  free: "Daily screening",
+  analyst: "Personal screening",
+  pro: "Historical analysis",
+};
+const rupiahAmount = new Intl.NumberFormat("id-ID");
 
 // Pricing and capacity are published by the same backend as access checks.
 export function Pricing() {
@@ -25,7 +35,7 @@ export function Pricing() {
   return (
     <section className="pricing-section" id="pricing">
       <div className="pricing-section__heading">
-        <h3>Start screening. Grow your analysis.</h3>
+        <h3>Choose access that fits your analysis.</h3>
         <p>
           Try daily screening for free. Analyst adds your own rules; Pro adds
           historical analysis.
@@ -42,28 +52,32 @@ export function Pricing() {
         <div className="pricing-card">
           {[...plans]
             .sort(
-              (a, b) =>
-                ["free", "analyst", "pro"].indexOf(a.code) -
-                ["free", "analyst", "pro"].indexOf(b.code),
+              (a, b) => planOrder.indexOf(a.code) - planOrder.indexOf(b.code),
             )
             .map((plan) => (
               <article
                 key={plan.code}
-                className={`pricing-plan ${plan.code === "analyst" ? "pricing-plan--featured" : ""}`}
+                className={cn(
+                  "pricing-plan",
+                  plan.code === "analyst" && "pricing-plan--featured",
+                )}
               >
                 <div className="pricing-plan__meta">
                   <h4>{plan.name}</h4>
-                  {plan.code === "analyst" && <span>Personal screening</span>}
+                  <Badge
+                    variant={plan.code === "analyst" ? "default" : "secondary"}
+                  >
+                    {planBadges[plan.code]}
+                  </Badge>
                 </div>
                 <p>{plan.description}</p>
-                <div className="pricing-plan__price">
-                  <strong>
-                    {plan.pricing
-                      ? monthlyPrice(plan.pricing.amount)
-                      : "See plan details"}
-                  </strong>
-                  <small>/ month</small>
-                </div>
+                {plan.pricing && (
+                  <div className="pricing-plan__price">
+                    <span>Rp</span>
+                    <strong>{rupiahAmount.format(plan.pricing.amount)}</strong>
+                    <small>/ month</small>
+                  </div>
+                )}
                 <span className="pricing-plan__billing-note">
                   {plan.code === "free"
                     ? "No payment required"
@@ -91,7 +105,13 @@ export function Pricing() {
                   </li>
                 </ul>
                 <a
-                  className="ui-button ui-button--primary pricing-plan__action"
+                  className={cn(
+                    buttonVariants({
+                      variant: plan.code === "analyst" ? "default" : "outline",
+                      size: "lg",
+                    }),
+                    "pricing-plan__action",
+                  )}
                   href={
                     plan.code === "free" ? "#register" : "#app/subscription"
                   }
@@ -104,7 +124,8 @@ export function Pricing() {
             ))}
         </div>
       )}
-      <p className="pricing-trust-note">
+      <p className="pricing-section__assurance">
+        <ShieldCheck aria-hidden="true" />
         Periodic Yahoo updates, subject to provider availability. Automatic
         billing and licensed real-time data are not included.
       </p>

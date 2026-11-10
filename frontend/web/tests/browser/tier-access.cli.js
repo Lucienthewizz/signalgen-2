@@ -87,7 +87,9 @@ async (page) => {
   }
   await page.setViewportSize({width:1440,height:1000});
   if(await page.getByRole("dialog").count())throw Error("Login opened an unsolicited plan modal");
-  await page.getByRole("link",{name:"Plan & access: Free",exact:true}).click();
+  const accountMenu=page.getByRole("button",{name:"Open Usability QA menu",exact:true});
+  await accountMenu.click();
+  await page.getByRole("menuitem",{name:"Plan & access",exact:true}).click();
   await page.getByRole("heading",{name:"Free access is active",exact:true}).waitFor();
   await page.getByRole("button",{name:"Continue to dashboard",exact:true}).click();
   await page.getByRole("button",{name:"Choose your first stocks",exact:true}).waitFor();
@@ -131,14 +133,20 @@ async (page) => {
     await page.setViewportSize({width,height:1000});
     await page.evaluate(()=>window.scrollTo({top:0,behavior:"instant"}));
     await page.screenshot({path:`output/playwright/mvp-screener-${width}.png`,fullPage:true});
-    await page.getByRole("region",{name:"Screening plan",exact:true}).screenshot({path:`output/playwright/mvp-free-info-${width}.png`});
-    const summary=page.getByRole("region",{name:"Screening plan",exact:true});
-    if(!await summary.isVisible() || await summary.locator("li").count()!==3)throw Error("Plan limits are not clearly grouped");
+    const summary=page.locator(".screener-access-summary");
+    await summary.screenshot({path:`output/playwright/mvp-free-info-${width}.png`});
+    const summaryText=await summary.innerText();
+    for(const text of ["Free plan","Up to 3 stocks","Daily candles","System rule"]){
+      if(!summaryText.includes(text))throw Error(`Screening plan summary omitted ${text}`);
+    }
     if(width===1440){
       await page.getByRole("button",{name:"Close menu",exact:true}).click();
-      const badge=page.getByRole("link",{name:"Plan & access: Free",exact:true});
-      const box=await badge.boundingBox();if(!box||box.width<44||box.width>50)throw Error("Collapsed plan control has incorrect width");
+      await page.waitForFunction(()=>{const trigger=document.querySelector(".sidebar .account-menu__trigger");return trigger&&Math.abs(trigger.offsetWidth-trigger.offsetHeight)<=1;});
+      const box=await accountMenu.boundingBox();if(!box||box.width<44||Math.abs(box.width-box.height)>1)throw Error("Collapsed account control is not square");
+      await accountMenu.click();
+      await page.getByRole("menuitem",{name:"Plan & access",exact:true}).waitFor();
       await page.screenshot({path:"output/playwright/mvp-sidebar-collapsed.png"});
+      await page.keyboard.press("Escape");
       await page.getByRole("button",{name:"Open workspace menu",exact:true}).click();
     }
     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2))throw Error("Screener plan summary overflows");
@@ -159,10 +167,18 @@ async (page) => {
   for(const code of ["free","analyst"]){
     tier=code;
     await page.goto(`${origin}/#app/backtest`);await page.reload();
-    await page.getByText("Historical analysis preview",{exact:true}).waitFor();
-    await page.getByText(/Illustrative fixture data only/).waitFor();
+    const preview=page.getByRole("region",{name:"Historical analysis preview",exact:true});
+    await preview.getByText(/Illustrative fixture data only/).waitFor();
+    for(const width of [1440,320]){
+      await page.setViewportSize({width,height:1000});
+      await page.evaluate(()=>document.fonts.ready.then(()=>new Promise(requestAnimationFrame)));
+      if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2))throw Error(`Backtest preview overflows ${width}`);
+      if(await preview.locator('[data-slot="table-container"]').evaluate(el=>el.scrollWidth>el.clientWidth+1))throw Error(`Backtest preview hides columns at ${width}`);
+      await preview.screenshot({path:`output/playwright/mvp-backtest-preview-${width}.png`});
+    }
     if(premiumCalls)throw Error("Preview called a premium computation endpoint");
   }
+  await page.setViewportSize({width:1440,height:1000});
   await page.goto(`${origin}/#app/subscription`);
   await page.getByRole("button",{name:"View Analyst details",exact:true}).waitFor();
   await page.getByRole("button",{name:"View Analyst details",exact:true}).click();

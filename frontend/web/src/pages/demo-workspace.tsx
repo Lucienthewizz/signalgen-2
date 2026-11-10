@@ -80,8 +80,6 @@ import {
   type ScreenerStage,
 } from "@/analysis/screener";
 import { api } from "@/api/client";
-import { TierSummary } from "@/components/tier-summary";
-import { tierAccess, tierName } from "@/lib/tier-access";
 import { useWorkspaceSync } from "@/lib/use-workspace-sync";
 import type { AccountDevice, AccountSession, AccountState } from "@/types";
 import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
@@ -1976,36 +1974,11 @@ export function DemoWorkspace({
           </nav>
         </Tooltip.Provider>
         <div className="sidebar__footer">
-          {account ? (
-            <TierSummary
-              access={tierAccess(account)!}
-              variant="sidebar"
-              collapsed={sidebarCollapsed && !mobileViewport}
-            />
-          ) : authenticated ? (
-            <a
-              className="sidebar-plan"
-              href="#app/subscription"
-              aria-label="Plan & access"
-              data-collapsed={
-                (sidebarCollapsed && !mobileViewport) || undefined
-              }
-            >
-              <span className="sidebar-plan__compact" aria-hidden="true">
-                P
-              </span>
-              <span className="sidebar-plan__content">
-                <strong>Plan &amp; access</strong>
-                <small>View your plan and features</small>
-              </span>
-            </a>
-          ) : null}
           {authenticated && user ? (
             <AccountMenu
               user={user}
               onLogout={onLogout}
               variant="sidebar"
-              showPlanInTrigger={!account}
               collapsed={sidebarCollapsed && !mobileViewport}
             />
           ) : (
@@ -2157,9 +2130,17 @@ export function DemoWorkspace({
                       />
                     )}
                     {view === "backtest" && accountError && (
-                      <p role="alert">
-                        Access could not be checked. Refresh to try again.
-                      </p>
+                      <section className="backtest-panel">
+                        <h3>Historical analysis</h3>
+                        <p role="alert">Access could not be checked.</p>
+                        <Button
+                          variant="outline"
+                          onClick={() => refreshAccount.current?.()}
+                        >
+                          <RefreshCw data-icon="inline-start" />
+                          Retry access check
+                        </Button>
+                      </section>
                     )}
                     {view === "backtest" && !accountError && (
                       <WorkspaceBacktestPanel

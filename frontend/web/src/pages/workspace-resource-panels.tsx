@@ -348,12 +348,6 @@ export function StockUniversesPanel({
                     screening.
                   </p>
                 </div>
-                {policy && (
-                  <p>
-                    {tierName(policy.plan_code)} plan ·{" "}
-                    <a href="#app/subscription">View plans</a>
-                  </p>
-                )}
                 <ResourceQuota
                   kind="stock_universes"
                   revision={universes.length}
@@ -646,9 +640,9 @@ export function SubscriptionPanel({
   const [accountError, setAccountError] = useState<string | null>(null);
   const access = subscription ? subscriptionState(subscription) : null;
   const currentPlanCode =
-    authenticated && !accountError
+    authenticated && !accountError && (effective || subscription)
       ? (effective?.plan_code ??
-        (access?.usable ? subscription?.plan_code : undefined))
+        (access?.usable ? subscription?.plan_code : "free"))
       : undefined;
   const active = useRef(false);
   const loadVersion = useRef(0);
@@ -797,32 +791,47 @@ export function SubscriptionPanel({
               Try again
             </Button>
           </Alert>
-        ) : subscription &&
-          access?.usable &&
-          effective?.plan_code !== "free" ? (
+        ) : authenticated ? (
           <div className="subscription-ledger">
             <div className="subscription-ledger__lead">
               <div className="subscription-plan-name">
                 <Layers3 aria-hidden="true" />
-                <h4>{subscription.plan_name}</h4>
-                <Badge variant={access?.usable ? "secondary" : "outline"}>
-                  {access?.usable
-                    ? "Active"
-                    : access?.label === "Expired"
-                      ? "Expired"
-                      : access?.label === "Canceled"
-                        ? "Cancelled"
-                        : access?.label}
-                </Badge>
-              </div>
-              <p className="subscription-expiry">
-                {access?.usable ? "Active until" : "Period ends"}
-                <strong>{formatDate(subscription.current_period_end)}</strong>
-                {subscription.cancel_at_period_end && (
-                  <small>Ends after this period</small>
+                <h4>
+                  {currentPlanCode && currentPlanCode !== "free"
+                    ? tierName(currentPlanCode)
+                    : "Free access is active"}
+                </h4>
+                {currentPlanCode && currentPlanCode !== "free" && (
+                  <Badge variant="secondary">Active</Badge>
                 )}
-              </p>
+              </div>
+              {subscription && (
+                <p className="subscription-expiry">
+                  {access?.usable
+                    ? "Active until"
+                    : access?.label === "Canceled"
+                      ? "Cancelled"
+                      : "Period ended"}
+                  <strong>{formatDate(subscription.current_period_end)}</strong>
+                  {subscription.cancel_at_period_end && access?.usable && (
+                    <small>Ends after this period</small>
+                  )}
+                </p>
+              )}
             </div>
+            {effective?.source === "manual_grant" ? (
+              <p>
+                An operator grant is active. Your subscription stays separate.
+              </p>
+            ) : currentPlanCode === "free" ? (
+              <p>
+                Screen up to {effective?.screening.max_symbols ?? 3} stocks with
+                the system rule and daily candles. No payment required.
+              </p>
+            ) : null}
+            {subscription && !access?.usable && (
+              <p>Your saved data is available under your current access.</p>
+            )}
             <div
               className="subscription-feature-grid"
               aria-label="Your plan access"
@@ -842,12 +851,11 @@ export function SubscriptionPanel({
                   icon: History,
                 },
               ].map(({ code, name, description, icon: Icon }) => {
-                const included = Boolean(
-                  access?.usable &&
-                  (effective?.features ?? subscription.features).includes(
-                    code as "screener" | "backtest",
-                  ),
-                );
+                const included = (
+                  effective?.features ??
+                  (access?.usable ? subscription?.features : undefined) ??
+                  []
+                ).some((feature) => feature === code);
                 return (
                   <Card
                     key={code}
@@ -878,54 +886,64 @@ export function SubscriptionPanel({
               <h4 id="subscription-usage-title">Quota usage</h4>
               <ResourceQuota
                 revision={
-                  subscription.updated_at
+                  subscription?.updated_at
                     ? Date.parse(subscription.updated_at)
                     : 0
                 }
               />
             </section>
-            <details className="subscription-manage subscription-manage--account">
-              <summary>
-                <span>
-                  <strong>Manage plan</strong>
-                  <small>
-                    View your active period and cancellation options
-                  </small>
-                </span>
-                <ChevronDown aria-hidden="true" />
-              </summary>
-              <p>
-                Started {formatDate(subscription.current_period_start)} ·{" "}
-                {subscription.source === "manual"
-                  ? "Activated by an operator. No automatic payments."
-                  : "Payments are managed by the provider."}
-              </p>
-              <p>
-                The access above comes from your plan. Additional operator
-                grants remain subject to their own settings.
-              </p>
-              {!subscription.cancel_at_period_end &&
-                access?.usable &&
-                subscription.status === "active" && (
-                  <div className="subscription-actions">
-                    <Button
-                      variant="outline"
-                      disabled={saving}
-                      onClick={() => void cancel(true)}
-                    >
-                      <CalendarClock data-icon="inline-start" /> Cancel at
-                      period end
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      disabled={saving}
-                      onClick={() => void cancel(false)}
-                    >
-                      <X data-icon="inline-start" /> Cancel now
-                    </Button>
-                  </div>
-                )}
-            </details>
+            {subscription && access?.usable && (
+              <details className="subscription-manage subscription-manage--account">
+                <summary>
+                  <span>
+                    <strong>Manage plan</strong>
+                    <small>
+                      View your active period and cancellation options
+                    </small>
+                  </span>
+                  <ChevronDown aria-hidden="true" />
+                </summary>
+                <p>
+                  Started {formatDate(subscription.current_period_start)} ·{" "}
+                  {subscription.source === "manual"
+                    ? "Activated by an operator. No automatic payments."
+                    : "Payments are managed by the provider."}
+                </p>
+                <p>
+                  The access above comes from your plan. Additional operator
+                  grants remain subject to their own settings.
+                </p>
+                {!subscription.cancel_at_period_end &&
+                  subscription.status === "active" && (
+                    <div className="subscription-actions">
+                      <Button
+                        variant="outline"
+                        disabled={saving}
+                        onClick={() => void cancel(true)}
+                      >
+                        <CalendarClock data-icon="inline-start" /> Cancel at
+                        period end
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        disabled={saving}
+                        onClick={() => void cancel(false)}
+                      >
+                        <X data-icon="inline-start" /> Cancel now
+                      </Button>
+                    </div>
+                  )}
+              </details>
+            )}
+            {currentPlanCode === "free" && (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<a href="#app/overview" />}
+              >
+                Continue to dashboard
+              </Button>
+            )}
           </div>
         ) : (
           <Empty className="subscription-empty">
@@ -934,49 +952,17 @@ export function SubscriptionPanel({
                 <KeyRound />
               </EmptyMedia>
               <EmptyTitle role="heading" aria-level={4}>
-                {authenticated
-                  ? `${tierName(effective?.plan_code ?? "free")} access is active`
-                  : "Sign in to view your plan"}
+                Sign in to view your plan
               </EmptyTitle>
               <EmptyDescription>
-                {authenticated
-                  ? effective?.source === "manual_grant"
-                    ? `An operator grant is active. Screen up to ${effective.screening.max_symbols} stocks with ${effective.screening.system_rules_only ? "the system rule and daily candles" : "personal rules and supported intervals"}. The grant does not change your subscription plan.`
-                    : "Free access starts automatically. Use the system rule and daily candles to screen up to three stocks. No payment or approval is needed."
-                  : "Compare plans below or sign in to check your access."}
+                Compare plans below or sign in to check your access.
               </EmptyDescription>
             </EmptyHeader>
-            {authenticated ? (
-              <EmptyContent>
-                {subscription && !access?.usable && (
-                  <p>
-                    Your {subscription.plan_name} subscription{" "}
-                    {access?.label === "Canceled"
-                      ? "was cancelled"
-                      : "has ended"}
-                    . Your saved data is still available under your current
-                    access.
-                  </p>
-                )}
-                <Button
-                  nativeButton={false}
-                  render={<a href="#app/overview" />}
-                >
-                  Continue to dashboard
-                </Button>
-                <ResourceQuota revision={0} />
-              </EmptyContent>
-            ) : (
-              <EmptyContent>
-                <Button
-                  onClick={() => {
-                    window.location.hash = "login";
-                  }}
-                >
-                  <KeyRound data-icon="inline-start" /> Sign in
-                </Button>
-              </EmptyContent>
-            )}
+            <EmptyContent>
+              <Button nativeButton={false} render={<a href="#login" />}>
+                <KeyRound data-icon="inline-start" /> Sign in
+              </Button>
+            </EmptyContent>
           </Empty>
         )}
       </section>

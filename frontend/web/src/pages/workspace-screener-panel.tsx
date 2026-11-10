@@ -1,5 +1,4 @@
-import { TierSummary } from "@/components/tier-summary";
-import { tierAccess } from "@/lib/tier-access";
+import { tierAccess, tierName } from "@/lib/tier-access";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -645,6 +644,20 @@ export function WorkspaceScreenerPanel({
             <div>
               <h3 id="screener-console-title">Choose stocks, run your rule</h3>
               <p>Choose a rule and universe. Screening results appear below.</p>
+              {policy && (
+                <p className="screener-access-summary">
+                  <a href="#app/subscription">
+                    {tierName(policy.plan_code)} plan
+                  </a>
+                  {" · "}Up to {policy.screening.max_symbols} stocks
+                  {policy.screening.timeframes.length === 1 &&
+                  policy.screening.timeframes[0] === "1d"
+                    ? " · Daily candles"
+                    : ""}
+                  {policy.screening.system_rules_only ? " · System rule" : ""}
+                  {policy.source === "manual_grant" ? " · Operator grant" : ""}
+                </p>
+              )}
             </div>
           </div>
           <div className="screener-console__tools">
@@ -661,13 +674,6 @@ export function WorkspaceScreenerPanel({
           </div>
         </header>
 
-        {policy && <TierSummary access={policy} variant="screener" />}
-        {selectionIssue && (
-          <div className="tier-notice">
-            <span>{selectionIssue}</span>
-            <a href="#app/universes">Edit universe</a>
-          </div>
-        )}
         {loadingResources &&
         (!account || (!rules.length && !universes.length)) ? (
           <div
@@ -746,6 +752,15 @@ export function WorkspaceScreenerPanel({
           </div>
         ) : (
           <div className="screener-console__body">
+            {selectionIssue && (
+              <Alert>
+                <CircleAlert aria-hidden="true" />
+                <AlertTitle>{selectionIssue}</AlertTitle>
+                <AlertDescription>
+                  <a href="#app/universes">Edit universe</a>
+                </AlertDescription>
+              </Alert>
+            )}
             {loadingResources && (
               <p role="status">
                 Refreshing selections. Your current settings and results stay

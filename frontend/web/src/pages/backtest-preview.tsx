@@ -1,5 +1,17 @@
 import { useState } from "react";
+import { History } from "lucide-react";
 import { session } from "@/api/client";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { BacktestHistoryPanel } from "./backtest-history-panel";
 import { BacktestResults } from "./backtest-results";
 import type { BacktestArchive } from "@/analysis/backtest-history";
@@ -14,53 +26,67 @@ export function BacktestPreview({
 }) {
   const [archive, setArchive] = useState<BacktestArchive | null>(null);
   return (
-    <section className="backtest-preview">
-      <div className="tier-notice">
-        <strong>Historical analysis preview</strong>
-        <span>
-          Pro includes running historical analysis. Your saved archives remain
+    <div className="backtest-workspace">
+      <section
+        className="backtest-panel backtest-preview"
+        aria-labelledby="backtest-preview-title"
+      >
+        <header className="backtest-section-heading backtest-config-heading">
+          <div className="resource-title-lockup">
+            <span aria-hidden="true">
+              <History />
+            </span>
+            <div>
+              <h3 id="backtest-preview-title">Historical analysis preview</h3>
+              <p className="backtest-note">
+                See how a rule is evaluated after a signal. Run historical
+                analysis with Pro.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<a href="#app/subscription" />}
+          >
+            View Pro
+          </Button>
+        </header>
+        <Badge variant="outline">Illustrative fixture data only</Badge>
+        <Table>
+          <TableCaption>
+            Sample BUY signal · reference close 100 · next trading candle
+          </TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col">Price point</TableHead>
+              <TableHead scope="col">Price</TableHead>
+              <TableHead scope="col">Return</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell>Next open</TableCell>
+              <TableCell>101</TableCell>
+              <TableCell>+1%</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>Next high</TableCell>
+              <TableCell>103</TableCell>
+              <TableCell>+3%</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>Next close</TableCell>
+              <TableCell>99</TableCell>
+              <TableCell>−1%</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+        <p className="backtest-note">
+          The high shows potential price movement. Your saved archives remain
           available.
-        </span>
-        <a href="#app/subscription">View Pro</a>
-      </div>
-      <h3>Understand how a rule behaved after a signal</h3>
-      <p>
-        Illustrative fixture data only. These are not current prices, your
-        screening results, or an executed backtest.
-      </p>
-      <table>
-        <caption>
-          Sample BUY signal · reference close 100 · next trading candle
-        </caption>
-        <thead>
-          <tr>
-            <th>Evaluation price</th>
-            <th>Example value</th>
-            <th>Direction return</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Next open</td>
-            <td>101</td>
-            <td>+1%</td>
-          </tr>
-          <tr>
-            <td>Next high</td>
-            <td>103</td>
-            <td>+3% potential historical movement</td>
-          </tr>
-          <tr>
-            <td>Next close</td>
-            <td>99</td>
-            <td>−1%</td>
-          </tr>
-        </tbody>
-      </table>
-      <p>
-        Actual analysis evaluates completed signals over the selected history
-        and reports coverage, wins, losses and unfinished horizons.
-      </p>
+        </p>
+      </section>
       {authenticated && userId && (
         <BacktestHistoryPanel
           key={userId}
@@ -80,6 +106,6 @@ export function BacktestPreview({
           onClose={() => setArchive(null)}
         />
       )}
-    </section>
+    </div>
   );
 }

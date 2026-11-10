@@ -164,8 +164,9 @@ async (page) => {
     }
     releaseWorkspace(); releaseSubscription();
     if(width===390){
-      await page.locator('.overview-activity li').first().waitFor({timeout:10000});
-      if(await page.locator('.overview-activity li').count()!==2)throw Error('Late workspace history was not applied to the mounted dashboard');
+      const recentRuns=page.getByRole('region',{name:'Recent screening',exact:true}).locator('li');
+      await recentRuns.first().waitFor({timeout:10000});
+      if(await recentRuns.count()!==2)throw Error('Late workspace history was not applied to the mounted dashboard');
       await page.goto(`${origin}/#app/analysis`);
     }
     await page.getByRole('button',{name:'Export CSV',exact:true}).waitFor({timeout:10000});
@@ -173,7 +174,7 @@ async (page) => {
     await page.unroute("**/api/v1/subscription");
   }
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
-  await page.getByRole('link',{name:'Plan & access: Pro',exact:true}).waitFor();
+  await page.locator('.sidebar .account-menu__identity small').getByText('Pro · Active',{exact:true}).waitFor();
   // The lists have been warmed by the dashboard/universe checks above.
   // Returning to them must work even while all their GET responses are held.
   let releaseCachedReads;const cachedReadsWait=new Promise(resolve=>{releaseCachedReads=resolve;});
@@ -963,8 +964,9 @@ async (page) => {
   await translation.waitFor();
   if (!await translation.getByLabel("Rule summary", { exact: true }).innerText().then(text => text.includes("crosses above"))) throw Error("Preset summary missing crossover semantics");
   await translation.getByRole('button', {name:'Close', exact:true}).click();
-  await translation.waitFor({state:'hidden'});
-  await page.getByLabel("Condition reference 1", { exact: true }).click();
+  await translation.waitFor({state:'detached'});
+  if (ruleWrite || await draftInput.inputValue() !== "Bullish EMA cross") throw Error("Closing the translation dialog changed the draft or saved a rule");
+  await page.getByRole("combobox", { name: "Condition reference 1", exact: true }).click();
   await page.getByRole("option", { name: "EMA 9", exact: true }).click();
   await page.getByRole("button", { name: "Save rule", exact: true }).click();
   if (!await page.getByText("Choose a different reference; an indicator cannot compare with itself.", { exact: true }).count()) throw Error("Self-comparison validation missing");

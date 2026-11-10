@@ -26,13 +26,11 @@ export function AccountMenu({
   onLogout,
   variant,
   collapsed = false,
-  showPlanInTrigger = true,
 }: {
   user: User;
   onLogout: () => void | Promise<void>;
   variant: "landing" | "workspace" | "sidebar";
   collapsed?: boolean;
-  showPlanInTrigger?: boolean;
 }) {
   const [avatarKey, setAvatarKey] = useState<ProfileAvatarKey>(() =>
     getSavedProfileAvatar(user.id),
@@ -152,9 +150,7 @@ export function AccountMenu({
         <span className="account-menu__identity">
           <span>{triggerLabel}</span>
           <small>
-            {showPlanInTrigger
-              ? `${planLabel} · ${planStatus}`
-              : "Account settings"}
+            {planLabel} · {planStatus}
           </small>
         </span>
       </DropdownMenuTrigger>
@@ -208,19 +204,37 @@ export function AccountMenu({
           </DropdownMenuItem>
           <DropdownMenuItem
             className="account-menu__item"
+            aria-label="Plan & access"
             onClick={() => {
               location.hash = "app/subscription";
             }}
           >
-            <BadgeCheck aria-hidden="true" /> Plan &amp; access
+            <BadgeCheck aria-hidden="true" />
+            {isCompactMenu ? (
+              <span className="account-menu__action-copy">
+                <span>Plan &amp; access</span>
+                <small>Features and limits</small>
+              </span>
+            ) : (
+              "Plan & access"
+            )}
           </DropdownMenuItem>
           <DropdownMenuItem
             className="account-menu__item"
+            aria-label="Devices & sessions"
             onClick={() => {
               location.hash = "app/access";
             }}
           >
-            <MonitorSmartphone aria-hidden="true" /> Devices &amp; sessions
+            <MonitorSmartphone aria-hidden="true" />
+            {isCompactMenu ? (
+              <span className="account-menu__action-copy">
+                <span>Devices &amp; sessions</span>
+                <small>Manage where you sign in</small>
+              </span>
+            ) : (
+              "Devices & sessions"
+            )}
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator className="account-menu__separator" />

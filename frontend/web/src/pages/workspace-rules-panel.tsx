@@ -558,14 +558,15 @@ export function ServerRulesPanel({
         )}
 
         {tierAccount && !canWriteRules && (
-          <div className="tier-notice">
-            <strong>Free plan: use the system rule in Screener.</strong>
-            <span>
+          <Alert>
+            <ShieldCheck aria-hidden="true" />
+            <AlertTitle>Use the system rule in Screener</AlertTitle>
+            <AlertDescription>
               Your saved rules remain available to read and delete. Analyst adds
-              personal rule creation and editing.
-            </span>
-            <a href="#app/subscription">View Analyst</a>
-          </div>
+              personal rule creation and editing.{" "}
+              <a href="#app/subscription">View Analyst</a>
+            </AlertDescription>
+          </Alert>
         )}
         <form className="rule-composer__form" onSubmit={save}>
           <fieldset
