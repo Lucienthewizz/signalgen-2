@@ -24,11 +24,13 @@ var (
 )
 
 type Plan struct {
-	Code        string         `json:"code"`
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Features    []string       `json:"features"`
-	Limits      ResourceLimits `json:"limits"`
+	Pricing     Pricing         `json:"pricing"`
+	Screening   ScreeningLimits `json:"screening"`
+	Code        string          `json:"code"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Features    []string        `json:"features"`
+	Limits      ResourceLimits  `json:"limits"`
 }
 
 type Subscription struct {

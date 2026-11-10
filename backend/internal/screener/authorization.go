@@ -12,6 +12,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/entitlement"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 // AuthorizationFailure is a transport-independent screening rejection. The API
@@ -89,6 +90,12 @@ func (service AuthorizationService) RecheckBatch(ctx context.Context, binding Bi
 		return fail("SERVICE_UNAVAILABLE", true)
 	}
 	if err := service.Entitlements.RequireFeature(ctx, binding.UserID, access.FeatureScreener); err != nil {
+		if errors.Is(err, access.ErrAccountSuspended) || errors.Is(err, access.ErrAccountNotFound) {
+			return fail("ACCOUNT_SUSPENDED", false)
+		}
+		if errors.Is(err, subscription.ErrFeatureNotIncluded) {
+			return fail("FEATURE_NOT_INCLUDED", false)
+		}
 		if errors.Is(err, access.ErrEntitlementMissing) {
 			return fail("ENTITLEMENT_REQUIRED", false)
 		}
@@ -120,6 +127,18 @@ func (service AuthorizationService) RecheckBatch(ctx context.Context, binding Bi
 	if manifest.DatasetID != grant.DatasetID || manifest.Version != grant.DatasetVersion ||
 		manifest.Checksum != grant.DatasetChecksum || manifest.Purpose != grant.Purpose {
 		return fail("VERSION_MISMATCH", false)
+	}
+	if err := subscription.CheckScreening(ctx, service.Entitlements, binding.UserID, binding.RuleID, manifest.Timeframe, len(manifest.Symbols)); err != nil {
+		if errors.Is(err, access.ErrAccountSuspended) || errors.Is(err, access.ErrAccountNotFound) {
+			return fail("ACCOUNT_SUSPENDED", false)
+		}
+		if errors.Is(err, subscription.ErrFeatureNotIncluded) {
+			return fail("FEATURE_NOT_INCLUDED", false)
+		}
+		if errors.Is(err, subscription.ErrPlanLimit) {
+			return fail("PLAN_LIMIT_EXCEEDED", false)
+		}
+		return fail("SERVICE_UNAVAILABLE", true)
 	}
 	rule, err := service.ResolveRule(ctx, binding)
 	if errors.Is(err, rules.ErrNotFound) {

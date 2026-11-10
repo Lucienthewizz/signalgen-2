@@ -1,3 +1,5 @@
+import { tierName } from "@/lib/tier-access";
+import { screeningSetup } from "@/lib/screening-setup";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useState } from "react";
 import {
@@ -94,6 +96,11 @@ export function WorkspaceOverviewPanel({
     setSubscription(ui.peekSubscription(userId)?.subscription ?? null);
   }, [userId]);
   useEffect(() => {
+    const refresh = () => setReload((value) => value + 1);
+    window.addEventListener("signalgen:subscription", refresh);
+    return () => window.removeEventListener("signalgen:subscription", refresh);
+  }, []);
+  useEffect(() => {
     if (!authenticated || !backendOnline) return;
     let active = true;
     setPending({
@@ -136,24 +143,17 @@ export function WorkspaceOverviewPanel({
       active = false;
     };
   }, [authenticated, backendOnline, userId, reload]);
-  const ready =
-    Boolean(account?.features.includes("screener")) &&
-    rules.length > 0 &&
-    universes.length > 0;
+  const setup = screeningSetup(account, rules, universes);
+  const ready = setup.ready;
   const latest = history[0];
   const preparing =
     !ready && (pending.account || pending.rules || pending.universes);
-  const nextStep = !account?.features.includes("screener")
-    ? "subscription"
-    : !rules.length
-      ? "rules"
-      : "universes";
   function continueScreen(item?: MonitorRun) {
-    if (userId && item?.context)
+    if (userId && (item?.context || (setup.rule && setup.universe)))
       saveScreenerPreferences(userId, {
         ...readScreenerPreferences(userId),
-        ruleId: item.context.ruleId,
-        universeId: item.context.universeId,
+        ruleId: item?.context?.ruleId ?? setup.rule!.id,
+        universeId: item?.context?.universeId ?? setup.universe!.id,
       });
     go("analysis");
   }
@@ -247,7 +247,9 @@ export function WorkspaceOverviewPanel({
                     : latest
                       ? "Continue your analysis"
                       : "Ready for your first screening"
-                  : "Set up your workspace"}
+                  : !account
+                    ? "Your access could not be checked"
+                    : "Start your first screening"}
             </h3>
             <p>
               {preparing
@@ -256,7 +258,11 @@ export function WorkspaceOverviewPanel({
                   ? latest
                     ? "Use your last selection or adjust it before screening."
                     : "Choose a rule and stock universe, then review the results and evidence."
-                  : "You need screener access, a rule, and a stock universe to run an analysis."}
+                  : !account
+                    ? "Try reloading your workspace. A connection problem does not change your plan."
+                    : account.access?.screening.system_rules_only
+                      ? "Free access starts automatically. Choose up to three stocks, then screen with the system rule and daily candles."
+                      : "You need screener access, a rule, and a stock universe to run an analysis."}
             </p>
             {latest && (
               <div
@@ -290,19 +296,74 @@ export function WorkspaceOverviewPanel({
             size="lg"
             className="workspace-glass-action overview-open-screener"
             disabled={preparing}
-            onClick={() => (ready ? continueScreen() : go(nextStep))}
+            onClick={() =>
+              !account
+                ? setReload((value) => value + 1)
+                : ready
+                  ? continueScreen()
+                  : go(setup.view)
+            }
           >
             <SearchCheck data-icon="inline-start" />
             {preparing
               ? "Loading analysis options…"
-              : ready
-                ? "Open screener"
-                : nextStep === "subscription"
-                  ? "Check access"
-                  : nextStep === "rules"
-                    ? "Create rule"
-                    : "Create universe"}
+              : !account
+                ? "Reload workspace"
+                : setup.label}
           </Button>
+          {!latest && !preparing && account && (
+            <ol className="onboarding-steps" aria-label="First screening steps">
+              {[
+                {
+                  title: "Check your access",
+                  done: setup.allowed,
+                  detail: account.access
+                    ? `${tierName(account.access.plan_code)} plan`
+                    : "View Plan & access",
+                  view: "subscription",
+                },
+                {
+                  title: "Choose a rule",
+                  done: Boolean(setup.rule),
+                  detail: account.access?.screening.system_rules_only
+                    ? "System rule included; no need to create one"
+                    : "Use a system rule or save your own",
+                  view: "rules",
+                },
+                {
+                  title: "Choose your stocks",
+                  done: Boolean(setup.universe),
+                  detail:
+                    setup.universe?.name ??
+                    `Save a universe with up to ${account.access?.screening.max_symbols ?? 10} stocks`,
+                  view: "universes",
+                },
+                {
+                  title: "Run your first screen",
+                  done: false,
+                  detail: "Review matches and the reasons behind them",
+                  view: "analysis",
+                },
+              ].map((step, index) => (
+                <li
+                  key={step.view}
+                  data-complete={step.done || undefined}
+                  aria-current={setup.view === step.view ? "step" : undefined}
+                >
+                  <span className="onboarding-steps__number" aria-hidden="true">
+                    {step.done ? "✓" : index + 1}
+                  </span>
+                  <a href={`#app/${step.view}`}>
+                    <strong>{step.title}</strong>
+                    <small>{step.detail}</small>
+                  </a>
+                  <span className="sr-only">
+                    {step.done ? "Ready" : "Not completed"}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
         </section>
         <nav className="overview-shortcuts" aria-label="Quick access">
           <h3>Follow the market</h3>
@@ -351,9 +412,14 @@ export function WorkspaceOverviewPanel({
               view: "subscription",
               icon: Crown,
               label: "Plan",
-              value:
-                subscription?.plan_name ??
-                (pending.subscription ? "Loading…" : "—"),
+              value: account?.access
+                ? tierName(account.access.plan_code)
+                : (subscription?.plan_name ??
+                  (pending.account || pending.subscription
+                    ? "Loading…"
+                    : account
+                      ? "Free"
+                      : "—")),
               action: "View plan",
             },
             {

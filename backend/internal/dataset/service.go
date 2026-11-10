@@ -8,6 +8,8 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/entitlement"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
 )
 
 var ErrUnsupportedPurpose = errors.New("unsupported dataset purpose")
@@ -42,6 +44,9 @@ type AccessService struct {
 	Repository Repository
 	Features   FeatureAuthorizer
 	Rules      RuleReader
+	Universes  interface {
+		Get(context.Context, string, string) (universe.Universe, error)
+	}
 }
 
 // Prepare checks purpose, entitlement and private rule before fetching data.
@@ -69,6 +74,23 @@ func (service AccessService) Prepare(ctx context.Context, owner string, input Pr
 			return Manifest{}, ErrInvalidRequest
 		}
 		input.RequiredOperands = core.RequiredOperands(rule.Definition)
+	}
+	if input.Purpose == "screen" {
+		if _, supported := service.Features.(subscription.AccessProvider); supported {
+			if service.Universes == nil {
+				return Manifest{}, errors.New("universe policy reader unavailable")
+			}
+			group, err := service.Universes.Get(ctx, owner, input.UniverseID)
+			if err != nil {
+				if errors.Is(err, universe.ErrNotFound) {
+					return Manifest{}, ErrNotFound
+				}
+				return Manifest{}, err
+			}
+			if err := subscription.CheckScreening(ctx, service.Features, owner, input.RuleID, input.Timeframe, len(group.Symbols)); err != nil {
+				return Manifest{}, &AccessError{Err: err}
+			}
+		}
 	}
 	return service.Repository.Prepare(ctx, owner, input)
 }
@@ -107,6 +129,11 @@ func (service AccessService) requireFeature(ctx context.Context, owner string, m
 	}
 	if err := service.Features.RequireFeature(ctx, owner, feature); err != nil {
 		return &AccessError{Err: err}
+	}
+	if manifest.Purpose == "screen" {
+		if err := subscription.CheckScreening(ctx, service.Features, owner, "", manifest.Timeframe, len(manifest.Symbols)); err != nil {
+			return &AccessError{Err: err}
+		}
 	}
 	return nil
 }

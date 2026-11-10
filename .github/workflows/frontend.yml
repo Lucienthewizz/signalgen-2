@@ -61,6 +61,7 @@ jobs:
         run: |
           SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5176 npm run test:browser
           SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5176 npm run test:usability
+          SIGNALGEN_TEST_BASE_URL=http://127.0.0.1:5176 node scripts/test-browser.mjs --tiers
       - name: Mobile lab and performance budgets
         run: |
           npm run test:mobile-performance

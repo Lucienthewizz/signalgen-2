@@ -1,3 +1,5 @@
+import type { AccountState } from "@/types";
+import { BacktestPreview } from "./backtest-preview";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Play,
@@ -66,11 +68,21 @@ const dateLabel = (stamp: string) =>
   stamp ? singaporeDateTime(new Date(stamp)).slice(0, 10) : "—";
 
 export function WorkspaceBacktestPanel(props: {
+  account?: AccountState | null;
   authenticated: boolean;
   backendOnline: boolean;
   userId?: string;
 }) {
   const [mode, setMode] = useState<"study" | "portfolio">("study");
+  if (props.authenticated && !props.account)
+    return <p role="status">Checking historical analysis access…</p>;
+  if (!props.account?.features.includes("backtest"))
+    return (
+      <BacktestPreview
+        userId={props.userId}
+        authenticated={props.authenticated}
+      />
+    );
   return (
     <>
       <div className="study-actions" role="group" aria-label="Backtesting mode">

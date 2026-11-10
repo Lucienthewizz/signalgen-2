@@ -44,6 +44,7 @@ test("stylesheet modules parse independently and do not introduce hidden imports
     "admin-access",
     "calendar",
     "screening-journal",
+    "tier-access",
   ]) {
     const root = postcss.parse(
       fs.readFileSync(path.join(src, "styles", name + ".css"), "utf8"),

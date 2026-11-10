@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -77,30 +78,12 @@ func (store *PostgresRepository) RequireOperator(ctx context.Context, userID str
 }
 
 func (store *PostgresRepository) Features(ctx context.Context, userID string) ([]string, error) {
-	rows, err := store.db.Query(ctx, `
-select feature from (
-  select feature from signalgen.feature_grants
-  where user_id=$1::uuid and revoked_at is null and valid_until>now()
-  union
-  select feature.feature from signalgen.subscriptions subscription
-  join signalgen.subscription_plan_features feature on feature.plan_code=subscription.plan_code
-  where subscription.user_id=$1::uuid
-    and subscription.status in ('trialing','active')
-    and subscription.current_period_end>now()
-) effective_features order by feature`, userID)
-	if err != nil {
-		return nil, fmt.Errorf("list Postgres features: %w", err)
-	}
-	defer rows.Close()
-	features := make([]string, 0)
-	for rows.Next() {
-		var feature string
-		if err := rows.Scan(&feature); err != nil {
-			return nil, err
-		}
-		features = append(features, feature)
-	}
-	return features, rows.Err()
+	policy, err := store.EffectiveAccess(ctx, userID)
+	return policy.Features, err
+}
+
+func (store *PostgresRepository) EffectiveAccess(ctx context.Context, userID string) (subscription.EffectiveAccess, error) {
+	return subscription.ReadAccess(ctx, store.db, userID)
 }
 
 func (store *PostgresRepository) FeatureGrants(ctx context.Context, userID string) ([]access.FeatureGrant, error) {
@@ -131,34 +114,14 @@ from signalgen.feature_grants where user_id=$1::uuid order by feature`, userID)
 }
 
 func (store *PostgresRepository) RequireFeature(ctx context.Context, userID, feature string) error {
-	if feature != access.FeatureScreener && feature != access.FeatureBacktest {
+	if !validFeature(feature) {
 		return access.ErrInvalidValue
 	}
-	var enabled bool
-	var status string
-	err := store.db.QueryRow(ctx, `select
-  profile.status, (exists(select 1 from signalgen.feature_grants
-    where user_id=$1::uuid and feature=$2 and revoked_at is null and valid_until>now())
-  or
-  exists(select 1 from signalgen.subscriptions subscription
-    join signalgen.subscription_plan_features plan_feature on plan_feature.plan_code=subscription.plan_code
-    where subscription.user_id=$1::uuid and plan_feature.feature=$2
-      and subscription.status in ('trialing','active')
-      and subscription.current_period_end>now()))
-from signalgen.account_profiles profile where profile.user_id=$1::uuid`, userID, feature).Scan(&status, &enabled)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return access.ErrAccountNotFound
-	}
+	policy, err := store.EffectiveAccess(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("check Postgres feature: %w", err)
+		return err
 	}
-	if status != access.StatusActive {
-		return access.ErrAccountSuspended
-	}
-	if !enabled {
-		return access.ErrEntitlementMissing
-	}
-	return nil
+	return policy.RequireFeature(feature)
 }
 
 func (store *PostgresRepository) GrantFeatureAudited(ctx context.Context, actor, requestID, userID, feature string, validUntil time.Time, reason string) (access.FeatureGrant, error) {

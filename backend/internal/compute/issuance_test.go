@@ -11,6 +11,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/entitlement"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 // One recorder implements the four narrow workflow contracts. It makes call
@@ -175,5 +176,38 @@ func TestBacktestGrantRequiresRuleModeAndExactRule(t *testing.T) {
 	store.manifest.Backtest = &dataset.BacktestScope{Mode: "rule", RuleID: input.RuleID}
 	if _, err := store.service().Issue(context.Background(), "owner", "session", input); err != nil {
 		t.Fatal(err)
+	}
+}
+
+type tierIssuanceFeatures struct{ policy subscription.EffectiveAccess }
+
+func (f tierIssuanceFeatures) RequireFeature(_ context.Context, _ string, feature string) error {
+	return f.policy.RequireFeature(feature)
+}
+func (f tierIssuanceFeatures) EffectiveAccess(context.Context, string) (subscription.EffectiveAccess, error) {
+	return f.policy, nil
+}
+func TestFreeCannotIssueGrantForOldPaidDataset(t *testing.T) {
+	for _, tc := range []struct {
+		rule, tf string
+		count    int
+		want     error
+	}{
+		{core.BaselineRuleID, "1d", 3, nil}, {core.BaselineRuleID, "1d", 4, subscription.ErrPlanLimit},
+		{core.BaselineRuleID, "1m", 3, subscription.ErrPlanLimit}, {"private", "1d", 3, subscription.ErrFeatureNotIncluded},
+	} {
+		input, store := issuanceFixture()
+		input.RuleID = tc.rule
+		store.manifest.Timeframe = tc.tf
+		store.manifest.Symbols = make([]string, tc.count)
+		svc := store.service()
+		svc.Features = tierIssuanceFeatures{subscription.ResolveAccess("free", nil)}
+		_, err := svc.Issue(context.Background(), "owner", "session", input)
+		if !errors.Is(err, tc.want) {
+			t.Fatalf("%+v: %v", tc, err)
+		}
+		if tc.want != nil && store.created.UserID != "" {
+			t.Fatal("denied grant persisted")
+		}
 	}
 }

@@ -26,7 +26,8 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/v1/backtests/") {
 		kind = "backtest"
 	}
-	if kind == "backtest" {
+	// Paid access gates new uploads, not reading/deleting existing owner archives.
+	if kind == "backtest" && r.Method != http.MethodGet && r.Method != http.MethodDelete {
 		if err := h.Access.RequireFeature(r.Context(), p.ID, "backtest"); err != nil {
 			shared.WriteAccessError(w, r, err)
 			return

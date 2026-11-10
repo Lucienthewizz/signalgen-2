@@ -1,5 +1,7 @@
 # SignalGen MVP — Target API & Worker Contract
 
+> Pembaruan produk 10 November 2026: [paket MVP dan onboarding](MVP_TIERS.md) berlaku untuk akses Free/Analyst/Pro, harga bulanan, kuota, dan rollout. API aktif 0.19.0; engine/WASM tidak berubah. Ketentuan tier lama yang bertentangan di bawah ini bersifat historis.
+
 Versi desain 0.1 · 16 September 2026 · **Proposed contract, partially implemented.** [`openapi.yaml`](../../backend/openapi.yaml) documents only the implemented Go surface and wins for current runtime integration; this file retains proposed routes and policy decisions. Changes require FE+BE review and versioning.
 
 Checkpoint 3 November 2026: runtime OpenAPI **0.16.0**, core **core-0.5.0**,
@@ -72,8 +74,8 @@ This checkpoint is a subset, not a claim
 that the remaining proposed routes are available.
 
 Implementation checkpoint 30 September 2026: fondasi subscription
-provider-neutral tersedia. Paket publik hanya mengembalikan code/name/description
-dan feature mapping; harga belum menjadi kontrak backend. Pengguna dapat membaca
+provider-neutral tersedia. Catatan historis: saat itu paket publik hanya mengembalikan code/name/description
+dan feature mapping. Kontrak 0.19.0 kini menambah harga bulanan, screening limits dan akses efektif sesuai [paket MVP](MVP_TIERS.md). Pengguna dapat membaca
 dan membatalkan subscription miliknya. Operator tepercaya dapat mengaktifkan
 atau mengganti paket untuk MVP dan setiap perubahan menghasilkan event
 append-only. Effective entitlement menggabungkan manual grant aktif dengan fitur

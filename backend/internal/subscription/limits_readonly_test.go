@@ -2,10 +2,11 @@ package subscription
 
 import (
 	"context"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Optional SQL compatibility check only: no fixtures, writes, schema changes or
@@ -35,7 +36,7 @@ func TestLockedLimitsReadOnlyDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("quota SQL rejected: %v", err)
 	}
-	if limits != LimitsForPlan("analyst") && limits != LimitsForPlan("pro") {
+	if limits != LimitsForPlan("free") && limits != LimitsForPlan("analyst") && limits != LimitsForPlan("pro") {
 		t.Fatalf("unexpected capacity: %+v", limits)
 	}
 	var ruleCount, universeCount int

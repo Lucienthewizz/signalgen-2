@@ -752,17 +752,13 @@ async (page) => {
   await page.getByText("No saved backtests for this account yet.",{exact:true}).waitFor();
   mode = "denied";
   await page.reload();
-  await page.getByRole("button",{name:"Portfolio simulation",exact:true}).click();
-  await page.getByRole("alert").filter({ hasText: "not enabled" }).waitFor();
-  if (
-    await page
-      .getByRole("button", { name: "Run backtest", exact: true })
-      .count()
-  )
-    throw Error("Denied account has a runnable form");
-  if(await page.getByRole("heading",{name:"Backtest history",exact:true}).count())throw Error("Denied account can see saved history");
+  await page.getByText("Historical analysis preview",{exact:true}).waitFor();
+  if(await page.getByRole("button",{name:"Portfolio simulation",exact:true}).count())throw Error("Preview mounted premium controls");
+  if(await page.getByRole("button",{name:"Run backtest",exact:true}).count())throw Error("Preview mounted a runnable form");
+  await page.getByRole("heading",{name:"Backtest history",exact:true}).waitFor();
   mode = "healthy";
-  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await page.reload();
+  await page.getByRole("button",{name:"Portfolio simulation",exact:true}).click();
   await page.getByLabel("Entry mode", { exact: true }).waitFor();
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() =>

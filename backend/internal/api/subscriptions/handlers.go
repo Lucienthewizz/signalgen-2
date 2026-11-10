@@ -10,9 +10,8 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
-// ListSubscriptionPlans exposes only product capabilities. Prices and checkout
-// are intentionally absent until a payment provider and commercial terms are
-// approved.
+// ListSubscriptionPlans publishes the approved monthly prices and policy limits.
+// Activation stays operator-managed; this endpoint never takes a payment.
 func (server *Handler) ListSubscriptionPlans(writer http.ResponseWriter, request *http.Request) {
 	plans, err := server.Subscriptions.Plans(request.Context())
 	if err != nil {
@@ -20,7 +19,11 @@ func (server *Handler) ListSubscriptionPlans(writer http.ResponseWriter, request
 		return
 	}
 	for index := range plans {
-		plans[index].Limits = subscription.LimitsForPlan(plans[index].Code)
+		policy := subscription.ResolveAccess(plans[index].Code, nil)
+		plans[index].Features = policy.Features
+		plans[index].Limits = policy.Limits
+		plans[index].Screening = policy.Screening
+		plans[index].Pricing = subscription.PriceForPlan(plans[index].Code)
 	}
 	shared.WriteJSON(writer, http.StatusOK, map[string]interface{}{"items": plans})
 }
@@ -33,9 +36,14 @@ func (server *Handler) CurrentSubscription(writer http.ResponseWriter, request *
 		return
 	}
 	writer.Header().Set("Cache-Control", "private, no-store")
+	policy, err := server.EffectiveAccess(request.Context(), principal.ID)
+	if err != nil {
+		shared.WriteAccessError(writer, request, err)
+		return
+	}
 	current, err := server.Subscriptions.Current(request.Context(), principal.ID)
 	if errors.Is(err, subscription.ErrNotFound) {
-		shared.WriteJSON(writer, http.StatusOK, map[string]interface{}{"subscription": nil})
+		shared.WriteJSON(writer, http.StatusOK, map[string]interface{}{"subscription": nil, "access": policy})
 		return
 	}
 	if err != nil {
@@ -43,7 +51,7 @@ func (server *Handler) CurrentSubscription(writer http.ResponseWriter, request *
 		return
 	}
 	current.UserID = ""
-	shared.WriteJSON(writer, http.StatusOK, map[string]interface{}{"subscription": current})
+	shared.WriteJSON(writer, http.StatusOK, map[string]interface{}{"subscription": current, "access": policy})
 }
 
 // CancelCurrentSubscription lets a user cancel only their own subscription.

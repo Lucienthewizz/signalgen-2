@@ -3,12 +3,13 @@ package apitests
 import (
 	"context"
 	"encoding/json"
-	"github.com/Lucienthewizz/signalgen-2/backend/internal/api"
-	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
-	"github.com/Lucienthewizz/signalgen-2/backend/internal/records"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/api"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/records"
 )
 
 type fakeRecords struct {
@@ -59,7 +60,8 @@ func TestRecordsOwnerStrictValidationAndPermissions(t *testing.T) {
 		{"PUT", base + "/" + id, `{"version":0,"data":` + strings.Replace(trade, `"note":`, `"net_pl":999,"note":`, 1) + `}`, 410},
 		{"DELETE", base + "/" + id, `{"version":1}`, 410},
 		{"DELETE", base + "/" + id, `{}`, 410}, {"GET", base + "/not-uuid", "", 422},
-		{"GET", "/api/v1/backtests/history", "", 403},
+		{"GET", "/api/v1/backtests/history", "", 200},
+		{"PUT", "/api/v1/backtests/history/" + id, `{}`, 403},
 	} {
 		r := httptest.NewRequest(c.method, c.path, strings.NewReader(c.body))
 		r.Header.Set("Authorization", "Bearer fixture")

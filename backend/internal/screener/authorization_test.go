@@ -94,6 +94,7 @@ func TestAuthorizationServiceRechecksDomainState(t *testing.T) {
 		{name: "expired session", change: func(f *authorizationFixture) { f.sessionError = session.ErrExpired }, code: "SESSION_EXPIRED"},
 		{name: "revoked session", change: func(f *authorizationFixture) { f.sessionError = session.ErrRevoked }, code: "SESSION_REVOKED"},
 		{name: "suspended account", change: func(f *authorizationFixture) { f.accountError = access.ErrAccountSuspended }, code: "ACCOUNT_SUSPENDED"},
+		{name: "suspended during feature read", entitlementError: access.ErrAccountSuspended, code: "ACCOUNT_SUSPENDED"},
 		{name: "missing feature", entitlementError: access.ErrEntitlementMissing, code: "ENTITLEMENT_REQUIRED"},
 		{name: "expired grant", change: func(f *authorizationFixture) { f.grantError = compute.ErrExpired }, code: "GRANT_EXPIRED"},
 		{name: "invalid grant", change: func(f *authorizationFixture) { f.grantError = compute.ErrInvalid }, code: "GRANT_INVALID"},

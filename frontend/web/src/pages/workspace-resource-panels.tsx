@@ -1,3 +1,5 @@
+import { tierAccess, tierName, monthlyPrice } from "@/lib/tier-access";
+import type { EffectiveAccess, AccountState } from "@/types";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ResourceQuota } from "@/components/resource-quota";
 import { InfoDialog } from "@/components/ui/info-dialog";
@@ -119,6 +121,10 @@ export function StockUniversesPanel({
   backendOnline,
   userId,
 }: ConnectionProps & { userId?: string }) {
+  const [account, setAccount] = useState<AccountState | null>(null);
+  const policy = tierAccess(account);
+  const selectionLimit =
+    policy?.screening.max_symbols ?? universeSelectionLimit;
   const [catalog, setCatalog] = useState<StockInstrument[]>(
     () => ui.peekStocks(userId)?.items ?? [],
   );
@@ -141,27 +147,39 @@ export function StockUniversesPanel({
   const [notice, setNotice] = useState<string | null>(null);
   useActionNotifications(notice, error);
 
+  const activeOwner = useRef(userId);
+  activeOwner.current = authenticated ? userId : undefined;
   async function load(refresh = true) {
     if (!authenticated || !backendOnline) return;
     setLoading(true);
     setError(null);
     try {
-      const [stocks, groups] = await Promise.all([
+      const [stocks, groups, ownAccount] = await Promise.all([
         ui.listStocks(userId, refresh),
         ui.listStockUniverses(userId, refresh),
+        api.account(),
       ]);
+      if (activeOwner.current !== userId || ownAccount.user.id !== userId)
+        return;
+      setAccount(ownAccount);
       setCatalog(stocks.items);
       setUniverses(groups.items);
     } catch {
+      if (activeOwner.current !== userId) return;
       setError(
         "Stock universes could not be loaded. Check your connection and try Refresh.",
       );
     } finally {
-      setLoading(false);
+      if (activeOwner.current === userId) setLoading(false);
     }
   }
 
   useEffect(() => {
+    setAccount(null);
+    setUniverses(ui.peekUniverses(userId)?.items ?? []);
+    setEditing(null);
+    setName("");
+    setSymbols([]);
     void load(false);
   }, [authenticated, backendOnline, userId]);
 
@@ -195,7 +213,7 @@ export function StockUniversesPanel({
     setSymbols((current) =>
       current.includes(symbol)
         ? current.filter((item) => item !== symbol)
-        : current.length < universeSelectionLimit
+        : current.length < selectionLimit
           ? [...current, symbol]
           : current,
     );
@@ -205,6 +223,19 @@ export function StockUniversesPanel({
     event.preventDefault();
     if (!name.trim() || symbols.length === 0) {
       setError("Enter a name and select at least one stock.");
+      return;
+    }
+    if (!policy) {
+      setError("Checking your plan. Please retry shortly.");
+      return;
+    }
+    if (
+      symbols.length > selectionLimit ||
+      (!editing && universes.length >= policy.limits.stock_universes)
+    ) {
+      setError(
+        "Plan limit reached. Edit an existing universe, reduce the stock selection, or view plans.",
+      );
       return;
     }
     setSaving(true);
@@ -231,7 +262,9 @@ export function StockUniversesPanel({
       setError(
         caught instanceof ApiError && caught.code === "VERSION_CONFLICT"
           ? "This universe changed in another session. Refresh and try again."
-          : "Stock universe could not be saved. Please try again.",
+          : caught instanceof Error
+            ? caught.message
+            : "Stock universe could not be saved. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -288,6 +321,7 @@ export function StockUniversesPanel({
           key={`${editing?.id ?? "new"}:${market}`}
           catalog={marketCatalog}
           selected={symbols}
+          selectionLimit={selectionLimit}
           loading={loading && catalog.length === 0}
           disabled={saving}
           onToggle={toggleSymbol}
@@ -310,10 +344,16 @@ export function StockUniversesPanel({
                     {editing ? "Edit stock universe" : "Build a stock universe"}
                   </h3>
                   <p>
-                    Select up to {universeSelectionLimit} {market} stocks for
-                    your next screening.
+                    Select up to {selectionLimit} {market} stocks for your next
+                    screening.
                   </p>
                 </div>
+                {policy && (
+                  <p>
+                    {tierName(policy.plan_code)} plan ·{" "}
+                    <a href="#app/subscription">View plans</a>
+                  </p>
+                )}
                 <ResourceQuota
                   kind="stock_universes"
                   revision={universes.length}
@@ -594,6 +634,10 @@ export function SubscriptionPanel({
   authenticated,
   backendOnline,
 }: ConnectionProps) {
+  const [effective, setEffective] = useState<EffectiveAccess | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(
+    null,
+  );
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
@@ -601,6 +645,11 @@ export function SubscriptionPanel({
   const [error, setError] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const access = subscription ? subscriptionState(subscription) : null;
+  const currentPlanCode =
+    authenticated && !accountError
+      ? (effective?.plan_code ??
+        (access?.usable ? subscription?.plan_code : undefined))
+      : undefined;
   const active = useRef(false);
   const loadVersion = useRef(0);
 
@@ -626,7 +675,10 @@ export function SubscriptionPanel({
         await api
           .currentSubscription()
           .then((response) => {
-            if (current()) setSubscription(response.subscription);
+            if (current()) {
+              setSubscription(response.subscription);
+              setEffective(response.access ?? null);
+            }
           })
           .catch((caught) => {
             if (current())
@@ -639,6 +691,7 @@ export function SubscriptionPanel({
           });
       } else {
         setSubscription(null);
+        setEffective(null);
         if (authenticated)
           setAccountError(
             "The server is unavailable. Your plan status could not be checked.",
@@ -656,9 +709,16 @@ export function SubscriptionPanel({
   useEffect(() => {
     active.current = true;
     void load();
+    const refresh = () => {
+      void load();
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("signalgen:subscription", refresh);
     return () => {
       active.current = false;
       ++loadVersion.current;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("signalgen:subscription", refresh);
     };
   }, [authenticated, backendOnline]);
 
@@ -710,23 +770,36 @@ export function SubscriptionPanel({
       <section className="subscription-current">
         <header className="resource-editor__header">
           <h3>Your plan</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            onClick={() => void load()}
+          >
+            <RefreshCw aria-hidden="true" /> Refresh status
+          </Button>
         </header>
         {loading ? (
           <div className="resource-loading">
             <Skeleton />
             <Skeleton />
           </div>
-        ) : accountError ? (
+        ) : accountError || (authenticated && !effective && !subscription) ? (
           <Alert variant="destructive">
             <CircleAlert />
             <AlertTitle>Plan status unavailable</AlertTitle>
-            <AlertDescription>{accountError}</AlertDescription>
+            <AlertDescription>
+              {accountError ??
+                "Your access could not be confirmed. Refresh to try again."}
+            </AlertDescription>
             <Button variant="outline" onClick={() => void load()}>
               <RefreshCw data-icon="inline-start" />
               Try again
             </Button>
           </Alert>
-        ) : subscription ? (
+        ) : subscription &&
+          access?.usable &&
+          effective?.plan_code !== "free" ? (
           <div className="subscription-ledger">
             <div className="subscription-ledger__lead">
               <div className="subscription-plan-name">
@@ -771,7 +844,7 @@ export function SubscriptionPanel({
               ].map(({ code, name, description, icon: Icon }) => {
                 const included = Boolean(
                   access?.usable &&
-                  subscription.features.includes(
+                  (effective?.features ?? subscription.features).includes(
                     code as "screener" | "backtest",
                   ),
                 );
@@ -860,16 +933,40 @@ export function SubscriptionPanel({
               <EmptyMedia variant="icon">
                 <KeyRound />
               </EmptyMedia>
-              <EmptyTitle>
-                {authenticated ? "No active plan" : "Sign in to view your plan"}
+              <EmptyTitle role="heading" aria-level={4}>
+                {authenticated
+                  ? `${tierName(effective?.plan_code ?? "free")} access is active`
+                  : "Sign in to view your plan"}
               </EmptyTitle>
               <EmptyDescription>
                 {authenticated
-                  ? "Compare capacity below. Plans are activated by an operator."
+                  ? effective?.source === "manual_grant"
+                    ? `An operator grant is active. Screen up to ${effective.screening.max_symbols} stocks with ${effective.screening.system_rules_only ? "the system rule and daily candles" : "personal rules and supported intervals"}. The grant does not change your subscription plan.`
+                    : "Free access starts automatically. Use the system rule and daily candles to screen up to three stocks. No payment or approval is needed."
                   : "Compare plans below or sign in to check your access."}
               </EmptyDescription>
             </EmptyHeader>
-            {!authenticated && (
+            {authenticated ? (
+              <EmptyContent>
+                {subscription && !access?.usable && (
+                  <p>
+                    Your {subscription.plan_name} subscription{" "}
+                    {access?.label === "Canceled"
+                      ? "was cancelled"
+                      : "has ended"}
+                    . Your saved data is still available under your current
+                    access.
+                  </p>
+                )}
+                <Button
+                  nativeButton={false}
+                  render={<a href="#app/overview" />}
+                >
+                  Continue to dashboard
+                </Button>
+                <ResourceQuota revision={0} />
+              </EmptyContent>
+            ) : (
               <EmptyContent>
                 <Button
                   onClick={() => {
@@ -884,11 +981,38 @@ export function SubscriptionPanel({
         )}
       </section>
 
+      <InfoDialog
+        open={selectedPlan !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedPlan(null);
+        }}
+        title={`${selectedPlan?.name ?? ""} plan details`}
+        description="Online upgrades are coming soon. You can continue using your current access."
+      >
+        <p>
+          <strong>{selectedPlan?.name}</strong>
+          {selectedPlan?.pricing
+            ? ` · ${monthlyPrice(selectedPlan.pricing.amount)} per month`
+            : ""}
+          . Checkout is not available yet. No payment has been taken and your
+          plan has not changed.
+        </p>
+        <Button
+          nativeButton={false}
+          render={<a href={authenticated ? "#app/overview" : "#register"} />}
+        >
+          {authenticated ? "Continue to dashboard" : "Start with Free"}
+        </Button>
+      </InfoDialog>
       <section className="plan-ledger" aria-labelledby="plan-heading">
         <header>
           <div>
             <h3 id="plan-heading">Available plans</h3>
             <p>Choose the capacity that fits your analysis.</p>
+            <p>
+              Free starts automatically. Online upgrades to Analyst and Pro are
+              coming soon.
+            </p>
           </div>
         </header>
         <div className="plan-columns">
@@ -901,11 +1025,7 @@ export function SubscriptionPanel({
             .map((plan) => (
               <Card
                 key={plan.code}
-                className={
-                  access?.usable && subscription?.plan_code === plan.code
-                    ? "is-current"
-                    : ""
-                }
+                className={currentPlanCode === plan.code ? "is-current" : ""}
               >
                 <CardHeader>
                   <CardTitle>
@@ -922,21 +1042,24 @@ export function SubscriptionPanel({
                       {plan.name}
                     </span>
                   </CardTitle>
-                  <CardDescription>
-                    {plan.code === "free"
-                      ? "Explore the Signalgen demo."
-                      : plan.code === "pro"
-                        ? "More room for strategies and stock groups."
-                        : "For structured personal analysis."}
-                  </CardDescription>
+                  <CardDescription>{plan.description}</CardDescription>
                   <CardAction>
-                    {access?.usable &&
-                      subscription?.plan_code === plan.code && (
-                        <Badge>Your plan</Badge>
-                      )}
+                    {currentPlanCode === plan.code && <Badge>Your plan</Badge>}
                   </CardAction>
                 </CardHeader>
                 <CardContent>
+                  {plan.pricing && (
+                    <p className="plan-price">
+                      <strong>{monthlyPrice(plan.pricing.amount)}</strong> /
+                      month
+                    </p>
+                  )}
+                  <p>
+                    {plan.screening?.max_symbols ?? 10} stocks per screening ·{" "}
+                    {plan.screening?.system_rules_only
+                      ? "Daily system rule"
+                      : "Supported intraday and daily intervals"}
+                  </p>
                   {plan.limits && (
                     <dl className="plan-capacity">
                       <div>
@@ -988,17 +1111,25 @@ export function SubscriptionPanel({
                       Backtest access
                       {!plan.features.includes("backtest") && (
                         <span className="plan-feature-status">
-                          Not included
+                          Preview available · Pro unlocks analysis
                         </span>
                       )}
                     </li>
                   </ul>
                 </CardContent>
                 <CardFooter>
+                  {plan.code !== "free" && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setSelectedPlan(plan)}
+                    >
+                      View {plan.name} details
+                    </Button>
+                  )}
                   <span>
                     {plan.code === "free"
-                      ? "Demo access"
-                      : "Activation by operator"}
+                      ? "Free daily screening"
+                      : "Online upgrade coming soon"}
                   </span>
                 </CardFooter>
               </Card>

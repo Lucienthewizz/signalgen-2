@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LogOut, Settings2 } from "lucide-react";
+import { BadgeCheck, LogOut, MonitorSmartphone, Settings2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -18,6 +18,7 @@ import {
 } from "@/lib/profile-avatar";
 import type { User } from "@/types";
 import { ui } from "@/api/client";
+import { tierName } from "@/lib/tier-access";
 import { cn } from "@/lib/utils";
 
 export function AccountMenu({
@@ -25,11 +26,13 @@ export function AccountMenu({
   onLogout,
   variant,
   collapsed = false,
+  showPlanInTrigger = true,
 }: {
   user: User;
   onLogout: () => void | Promise<void>;
   variant: "landing" | "workspace" | "sidebar";
   collapsed?: boolean;
+  showPlanInTrigger?: boolean;
 }) {
   const [avatarKey, setAvatarKey] = useState<ProfileAvatarKey>(() =>
     getSavedProfileAvatar(user.id),
@@ -59,7 +62,7 @@ export function AccountMenu({
     const loadSubscription = (refresh = false) => {
       void ui
         .currentSubscription(user.id, refresh)
-        .then(({ subscription }) => {
+        .then(({ subscription, access }) => {
           if (!active) return;
           const statuses: Record<string, string> = {
             active: "Active",
@@ -70,10 +73,17 @@ export function AccountMenu({
           };
           setSubscriptionInfo({
             userId: user.id,
-            label: subscription?.plan_name || subscription?.plan_code || "Free",
-            status: subscription
-              ? statuses[subscription.status] || subscription.status
-              : "No paid subscription",
+            label: access
+              ? tierName(access.plan_code)
+              : subscription?.plan_name || subscription?.plan_code || "Free",
+            status:
+              access?.source === "manual_grant"
+                ? "Operator grant active"
+                : access?.plan_code === "free"
+                  ? "Daily screening"
+                  : subscription
+                    ? statuses[subscription.status] || subscription.status
+                    : "No paid subscription",
           });
         })
         .catch(() => {
@@ -142,7 +152,9 @@ export function AccountMenu({
         <span className="account-menu__identity">
           <span>{triggerLabel}</span>
           <small>
-            {planLabel} · {planStatus}
+            {showPlanInTrigger
+              ? `${planLabel} · ${planStatus}`
+              : "Account settings"}
           </small>
         </span>
       </DropdownMenuTrigger>
@@ -193,6 +205,22 @@ export function AccountMenu({
             ) : (
               "Account"
             )}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="account-menu__item"
+            onClick={() => {
+              location.hash = "app/subscription";
+            }}
+          >
+            <BadgeCheck aria-hidden="true" /> Plan &amp; access
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="account-menu__item"
+            onClick={() => {
+              location.hash = "app/access";
+            }}
+          >
+            <MonitorSmartphone aria-hidden="true" /> Devices &amp; sessions
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator className="account-menu__separator" />

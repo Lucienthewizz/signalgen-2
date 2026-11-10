@@ -9,6 +9,8 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/core"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
 )
 
 // Records the service boundary without needing a network, provider or database.
@@ -154,5 +156,56 @@ func TestAccessServicePreservesStoreFailures(t *testing.T) {
 		if !errors.Is(err, cause) || len(content) != 0 || manifest.DatasetID != "" {
 			t.Fatalf("content did not withhold failed result: %v", err)
 		}
+	}
+}
+
+type tierFeatureReader struct{ policy subscription.EffectiveAccess }
+
+func (f *tierFeatureReader) EffectiveAccess(context.Context, string) (subscription.EffectiveAccess, error) {
+	return f.policy, nil
+}
+func (f *tierFeatureReader) RequireFeature(_ context.Context, _ string, feature string) error {
+	return f.policy.RequireFeature(feature)
+}
+
+type tierUniverseReader struct{ symbols []string }
+
+func (u tierUniverseReader) Get(context.Context, string, string) (universe.Universe, error) {
+	return universe.Universe{Symbols: u.symbols}, nil
+}
+
+func TestFreeDatasetRejectsPremiumBeforeFetchAndOldSnapshotReads(t *testing.T) {
+	for _, tc := range []struct {
+		name, rule, tf string
+		count          int
+		want           error
+	}{
+		{"allowed", core.BaselineRuleID, "1d", 3, nil}, {"fourth stock", core.BaselineRuleID, "1d", 4, subscription.ErrPlanLimit},
+		{"intraday", core.BaselineRuleID, "5m", 3, subscription.ErrPlanLimit}, {"private rule", "private-rule", "1d", 3, subscription.ErrFeatureNotIncluded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &accessRecorder{manifest: Manifest{DatasetID: "old", Purpose: "screen", Timeframe: tc.tf, Symbols: make([]string, tc.count)}}
+			features := &tierFeatureReader{policy: subscription.ResolveAccess("free", nil)}
+			svc := AccessService{Repository: store, Rules: store, Features: features, Universes: tierUniverseReader{make([]string, tc.count)}}
+			_, err := svc.Prepare(context.Background(), "owner", PrepareRequest{Purpose: "screen", RuleID: tc.rule, Timeframe: tc.tf, UniverseID: "saved"})
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("prepare: %v want %v", err, tc.want)
+			}
+			for _, call := range store.calls {
+				if tc.want != nil && call == "prepare" {
+					t.Fatal("provider called after denial")
+				}
+			}
+			// A previous paid snapshot must be checked again after downgrade, including content bytes.
+			if tc.rule == core.BaselineRuleID {
+				body, _, err := svc.Content(context.Background(), "owner", "old")
+				if !errors.Is(err, tc.want) {
+					t.Fatalf("read: %v", err)
+				}
+				if tc.want != nil && len(body) > 0 {
+					t.Fatal("premium candle bytes leaked")
+				}
+			}
+		})
 	}
 }

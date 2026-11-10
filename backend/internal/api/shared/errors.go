@@ -6,10 +6,13 @@ import (
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 func WriteRuleError(writer http.ResponseWriter, request *http.Request, err error) {
 	switch {
+	case errors.Is(err, subscription.ErrFeatureNotIncluded), errors.Is(err, subscription.ErrPlanLimit):
+		WriteAccessError(writer, request, err)
 	case errors.Is(err, rules.ErrNotFound):
 		WriteError(writer, request, http.StatusNotFound, "RESOURCE_NOT_FOUND", "Rule tidak ditemukan.")
 	case errors.Is(err, rules.ErrInvalid):

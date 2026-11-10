@@ -1,11 +1,9 @@
 package subscriptionsapi
 
 import (
-	"errors"
-	"github.com/Lucienthewizz/signalgen-2/backend/internal/api/shared"
-	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 	"net/http"
-	"time"
+
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/api/shared"
 )
 
 func (server *Handler) ResourceUsage(writer http.ResponseWriter, request *http.Request) {
@@ -17,11 +15,12 @@ func (server *Handler) ResourceUsage(writer http.ResponseWriter, request *http.R
 		shared.WriteAccessError(writer, request, err)
 		return
 	}
-	current, err := server.Subscriptions.Current(request.Context(), principal.ID)
-	if err != nil && !errors.Is(err, subscription.ErrNotFound) {
-		shared.WriteError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Kuota belum dapat diperiksa.")
+	policy, err := server.EffectiveAccess(request.Context(), principal.ID)
+	if err != nil {
+		shared.WriteAccessError(writer, request, err)
 		return
 	}
+
 	rules, err := server.Rules.List(request.Context(), principal.ID)
 	if err != nil {
 		shared.WriteError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Pemakaian rule belum dapat diperiksa.")
@@ -34,7 +33,8 @@ func (server *Handler) ResourceUsage(writer http.ResponseWriter, request *http.R
 	}
 	writer.Header().Set("Cache-Control", "private, no-store")
 	shared.WriteJSON(writer, http.StatusOK, map[string]any{
-		"limits": subscription.EffectiveLimits(current, time.Now()),
+		"limits": policy.Limits,
+		"access": policy,
 		"used":   map[string]int{"custom_rules": len(rules), "stock_universes": len(universes)},
 	})
 }

@@ -38,6 +38,11 @@ order by plan.code`)
 		if err := rows.Scan(&plan.Code, &plan.Name, &plan.Description, &plan.Features); err != nil {
 			return nil, err
 		}
+		policy := ResolveAccess(plan.Code, nil)
+		plan.Features = policy.Features
+		plan.Limits = policy.Limits
+		plan.Screening = policy.Screening
+		plan.Pricing = PriceForPlan(plan.Code)
 		plans = append(plans, plan)
 	}
 	return plans, rows.Err()

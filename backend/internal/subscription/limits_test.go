@@ -28,15 +28,15 @@ func TestOnlyCurrentPaidSubscriptionGetsProCapacity(t *testing.T) {
 	}
 	for _, status := range []string{StatusCanceled, StatusExpired, StatusPastDue} {
 		sub.Status = status
-		if EffectiveLimits(sub, now).CustomRules != 10 {
+		if EffectiveLimits(sub, now).CustomRules != 0 {
 			t.Fatalf("inactive %s must not keep Pro capacity", status)
 		}
 	}
 	sub.Status = StatusActive
-	if EffectiveLimits(sub, sub.CurrentPeriodEnd).CustomRules != 10 {
+	if EffectiveLimits(sub, sub.CurrentPeriodEnd).CustomRules != 0 {
 		t.Fatal("expiry boundary")
 	}
-	if EffectiveLimits(sub, sub.CurrentPeriodStart.Add(-time.Second)).CustomRules != 10 {
+	if EffectiveLimits(sub, sub.CurrentPeriodStart.Add(-time.Second)).CustomRules != 0 {
 		t.Fatal("future subscription")
 	}
 }

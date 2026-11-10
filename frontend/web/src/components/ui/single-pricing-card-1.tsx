@@ -1,133 +1,112 @@
-import { useState } from "react";
-import { Check, ShieldCheck } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
+import { Check } from "lucide-react";
+import { api } from "@/api/client";
+import { monthlyPrice } from "@/lib/tier-access";
+import type { SubscriptionPlan } from "@/types";
 
-const plans = [
-  {
-    name: "Free",
-    monthlyPrice: "0",
-    annualPrice: "0",
-    note: "Explore the Signalgen workflow with static demo data.",
-    badge: "Demo",
-    featured: false,
-    features: [
-      "Demo workspace",
-      "Local fixture data",
-      "Rule and result previews",
-    ],
-    action: "Open demo",
-    href: "#app/overview",
-  },
-  {
-    name: "Analyst",
-    monthlyPrice: "79.000",
-    annualPrice: "69.000",
-    note: "A complete toolkit for building and testing an analysis workflow.",
-    badge: "Recommended",
-    featured: true,
-    features: ["Full screening", "Custom rules and backtests", "Trade journal"],
-    action: "Choose Analyst",
-    href: "#register",
-  },
-  {
-    name: "Pro",
-    monthlyPrice: "159.000",
-    annualPrice: "139.000",
-    note: "Higher limits for more intensive analysis workflows.",
-    badge: "Higher limits",
-    featured: false,
-    features: [
-      "Everything in Analyst",
-      "Advanced features and exports",
-      "Priority data and support",
-    ],
-    action: "Choose Pro",
-    href: "#register",
-  },
-] as const;
-
+// Pricing and capacity are published by the same backend as access checks.
 export function Pricing() {
-  const [annual, setAnnual] = useState(true);
-
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let active = true;
+    api
+      .listSubscriptionPlans()
+      .then((r) => {
+        if (active) setPlans(r.items);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   return (
     <section className="pricing-section" id="pricing">
       <div className="pricing-section__heading">
-        <h3>Choose access that fits your analysis.</h3>
+        <h3>Start screening. Grow your analysis.</h3>
         <p>
-          Start with the demo, move into the complete workflow, and increase
-          your limits as your needs grow.
+          Try daily screening for free. Analyst adds your own rules; Pro adds
+          historical analysis.
         </p>
-        <div className="pricing-billing">
-          <span className={!annual ? "active" : ""}>Monthly</span>
-          <Switch
-            checked={annual}
-            onCheckedChange={setAnnual}
-            aria-label="Use annual pricing"
-          />
-          <span className={annual ? "active" : ""}>Annual</span>
-          <Badge variant="secondary">Save up to 13%</Badge>
+      </div>
+      {failed ? (
+        <p role="status">
+          Plan prices are unavailable.{" "}
+          <a href="#app/subscription">Check plans again</a>
+        </p>
+      ) : !plans.length ? (
+        <p role="status">Loading plans…</p>
+      ) : (
+        <div className="pricing-card">
+          {[...plans]
+            .sort(
+              (a, b) =>
+                ["free", "analyst", "pro"].indexOf(a.code) -
+                ["free", "analyst", "pro"].indexOf(b.code),
+            )
+            .map((plan) => (
+              <article
+                key={plan.code}
+                className={`pricing-plan ${plan.code === "analyst" ? "pricing-plan--featured" : ""}`}
+              >
+                <div className="pricing-plan__meta">
+                  <h4>{plan.name}</h4>
+                  {plan.code === "analyst" && <span>Personal screening</span>}
+                </div>
+                <p>{plan.description}</p>
+                <div className="pricing-plan__price">
+                  <strong>
+                    {plan.pricing
+                      ? monthlyPrice(plan.pricing.amount)
+                      : "See plan details"}
+                  </strong>
+                  <small>/ month</small>
+                </div>
+                <span className="pricing-plan__billing-note">
+                  {plan.code === "free"
+                    ? "No payment required"
+                    : "Online upgrade coming soon"}
+                </span>
+                <ul>
+                  <li>
+                    <Check aria-hidden="true" />
+                    {plan.screening?.max_symbols ?? 10} stocks per screen
+                  </li>
+                  <li>
+                    <Check aria-hidden="true" />
+                    {plan.limits?.custom_rules ?? 0} personal rules ·{" "}
+                    {plan.limits?.stock_universes ?? 0} saved universes
+                  </li>
+                  <li>
+                    <Check aria-hidden="true" />
+                    {plan.features.includes("backtest")
+                      ? "Historical analysis"
+                      : "Historical analysis preview"}
+                  </li>
+                  <li>
+                    <Check aria-hidden="true" />
+                    Save your matched screening results to journal
+                  </li>
+                </ul>
+                <a
+                  className="ui-button ui-button--primary pricing-plan__action"
+                  href={
+                    plan.code === "free" ? "#register" : "#app/subscription"
+                  }
+                >
+                  {plan.code === "free"
+                    ? "Start with Free"
+                    : "View plan details"}
+                </a>
+              </article>
+            ))}
         </div>
-      </div>
-
-      <div className="pricing-card">
-        {plans.map((plan) => (
-          <article
-            className={cn(
-              "pricing-plan",
-              plan.featured && "pricing-plan--featured",
-            )}
-            key={plan.name}
-          >
-            <div className="pricing-plan__meta">
-              <h4>{plan.name}</h4>
-              <Badge variant={plan.featured ? "default" : "secondary"}>
-                {plan.badge}
-              </Badge>
-            </div>
-            <p>{plan.note}</p>
-            <div className="pricing-plan__price">
-              <span>Rp</span>
-              <strong key={`${plan.name}-${annual}`}>
-                {annual ? plan.annualPrice : plan.monthlyPrice}
-              </strong>
-              <small>/ month</small>
-            </div>
-            <span className="pricing-plan__billing-note">
-              {plan.name === "Free"
-                ? "No payment required"
-                : annual
-                  ? "Billed annually"
-                  : "Billed monthly"}
-            </span>
-            <ul>
-              {plan.features.map((feature) => (
-                <li key={feature}>
-                  <Check aria-hidden="true" /> {feature}
-                </li>
-              ))}
-            </ul>
-            <a
-              className={cn(
-                buttonVariants({
-                  variant: plan.featured ? "default" : "outline",
-                  size: "lg",
-                }),
-                "pricing-plan__action",
-              )}
-              href={plan.href}
-            >
-              {plan.action}
-            </a>
-          </article>
-        ))}
-      </div>
-
-      <p className="pricing-section__assurance">
-        <ShieldCheck aria-hidden="true" /> Pricing is a UI simulation; checkout
-        is not enabled yet.
+      )}
+      <p className="pricing-trust-note">
+        Periodic Yahoo updates, subject to provider availability. Automatic
+        billing and licensed real-time data are not included.
       </p>
     </section>
   );

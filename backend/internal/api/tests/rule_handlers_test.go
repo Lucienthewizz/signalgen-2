@@ -15,14 +15,16 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 )
 
-func TestRulesRequireScreenerEntitlement(t *testing.T) {
+func TestRulesRemainReadableWithoutPaidEntitlement(t *testing.T) {
 	server := testServer(t, fakeIdentity{principal: auth.Principal{ID: "user-a"}}, &fakeSessions{})
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/rules", nil)
 	request.Header.Set("Authorization", "Bearer user-token")
 	request.Header.Set("X-App-Session", "sgs_session")
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
-	assertErrorCode(t, response, http.StatusForbidden, "ENTITLEMENT_REQUIRED")
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d: %s", response.Code, response.Body.String())
+	}
 }
 
 func TestRulesExposeBaselineMetadataWithoutPrivateDefinition(t *testing.T) {

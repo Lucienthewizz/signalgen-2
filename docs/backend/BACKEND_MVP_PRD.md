@@ -1,5 +1,7 @@
 # SignalGen — Backend & Portable Core MVP PRD
 
+> Pembaruan produk 10 November 2026: [paket MVP dan onboarding](MVP_TIERS.md) berlaku untuk akses Free/Analyst/Pro, harga bulanan, kuota, dan rollout. API aktif 0.19.0; engine/WASM tidak berubah. Ketentuan tier lama yang bertentangan di bawah ini bersifat historis.
+
 Checkpoint implementasi 3 November 2026: API `0.16.0` menambahkan
 [ledger portofolio manual terpisah](PORTFOLIO_LEDGER.md). Pengguna memilih
 mempertahankan jurnal lama tanpa konversi; endpoint aktual dan batasnya mengikuti

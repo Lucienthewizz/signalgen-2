@@ -17,9 +17,9 @@ func (server *Handler) AccountMe(writer http.ResponseWriter, request *http.Reque
 	if !ok {
 		return
 	}
-	features, err := server.Access.Features(request.Context(), principal.ID)
+	policy, err := server.EffectiveAccess(request.Context(), principal.ID)
 	if err != nil {
-		shared.WriteError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Fitur akun belum dapat dibaca.")
+		shared.WriteAccessError(writer, request, err)
 		return
 	}
 	writer.Header().Set("Cache-Control", "private, no-store")
@@ -27,7 +27,8 @@ func (server *Handler) AccountMe(writer http.ResponseWriter, request *http.Reque
 		"user": map[string]string{
 			"id": account.UserID, "email": account.Email, "role": account.Role, "status": account.Status,
 		},
-		"features": features,
+		"features": policy.Features,
+		"access":   policy,
 		"session": map[string]interface{}{
 			"id": appSession.ID, "expires_at": appSession.ExpiresAt,
 		},

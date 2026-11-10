@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/api/shared"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
 )
 
@@ -109,6 +110,8 @@ func writeUniverseError(writer http.ResponseWriter, request *http.Request, err e
 		return false
 	}
 	switch {
+	case errors.Is(err, subscription.ErrFeatureNotIncluded), errors.Is(err, subscription.ErrPlanLimit):
+		shared.WriteAccessError(writer, request, err)
 	case errors.Is(err, universe.ErrLimit):
 		shared.WriteError(writer, request, http.StatusConflict, "UNIVERSE_LIMIT_REACHED", "Kuota stock universe paket Anda sudah tercapai. Hapus universe yang tidak digunakan atau periksa paket Anda.")
 	case errors.Is(err, universe.ErrNotFound):

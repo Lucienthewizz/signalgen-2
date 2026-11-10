@@ -8,6 +8,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/entitlement"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 var (
@@ -93,6 +94,11 @@ func (service IssuanceService) Issue(ctx context.Context, ownerID, sessionID str
 	}
 	if manifest.Backtest != nil && manifest.Backtest.StudyID != "" && manifest.Backtest.DefinitionHash != input.DefinitionHash {
 		return Grant{}, ErrBindingMismatch
+	}
+	if input.Purpose == "screen" {
+		if err := subscription.CheckScreening(ctx, service.Features, ownerID, input.RuleID, manifest.Timeframe, len(manifest.Symbols)); err != nil {
+			return Grant{}, &IssuanceError{Stage: StageEntitlement, Err: err}
+		}
 	}
 	expectedRuleHash := core.BaselineRuleHash
 	if input.RuleID != core.BaselineRuleID {

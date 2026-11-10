@@ -1,4 +1,5 @@
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
+import "@/styles/tier-access.css";
 import {
   type Dispatch,
   type FormEvent,
@@ -79,6 +80,8 @@ import {
   type ScreenerStage,
 } from "@/analysis/screener";
 import { api } from "@/api/client";
+import { TierSummary } from "@/components/tier-summary";
+import { tierAccess, tierName } from "@/lib/tier-access";
 import { useWorkspaceSync } from "@/lib/use-workspace-sync";
 import type { AccountDevice, AccountSession, AccountState } from "@/types";
 import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
@@ -1450,7 +1453,10 @@ export function AccessPanel({
         <div className="panel-heading">
           <div>
             <span>ENTITLEMENT</span>
-            <h3>Analysis access</h3>
+            <h3>
+              Analysis access
+              {account?.access && ` · ${account.access.plan_code}`}
+            </h3>
           </div>
           <Badge variant="outline">
             {account ? account.user.role : authenticated ? "Loading" : "Guest"}
@@ -1782,6 +1788,49 @@ export function DemoWorkspace({
     return () => query.removeEventListener("change", change);
   }, []);
   const sync = useWorkspaceSync(authenticated ? user?.id : undefined);
+  const [account, setAccount] = useState<AccountState | null>(null);
+  const [accountError, setAccountError] = useState(false);
+  const refreshAccount = useRef<(() => void) | null>(null);
+  const previousAccountView = useRef(view);
+  useEffect(() => {
+    let active = true;
+    let latest = 0;
+    setAccount((current) =>
+      authenticated && current?.user.id === user?.id ? current : null,
+    );
+    setAccountError(false);
+    if (!authenticated || !user?.id || !backendOnline) return;
+    const refresh = () => {
+      const request = ++latest;
+      void api
+        .account()
+        .then((next) => {
+          if (active && request === latest && next.user.id === user.id) {
+            setAccount(next);
+            setAccountError(false);
+          }
+        })
+        .catch(() => {
+          if (active && request === latest) setAccountError(true);
+        });
+    };
+    refreshAccount.current = refresh;
+    refresh();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("signalgen:subscription", refresh);
+    return () => {
+      active = false;
+      refreshAccount.current = null;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("signalgen:subscription", refresh);
+    };
+  }, [authenticated, user?.id, backendOnline]);
+  useEffect(() => {
+    const navigated = previousAccountView.current !== view;
+    previousAccountView.current = view;
+    if (navigated && accountError) refreshAccount.current?.();
+  }, [view, accountError]);
+
   // Only these editors consume synchronized drafts/preferences at mount.
   const needsWorkspace = ["analysis", "rules", "realtime", "news"].includes(
     view,
@@ -1927,11 +1976,36 @@ export function DemoWorkspace({
           </nav>
         </Tooltip.Provider>
         <div className="sidebar__footer">
+          {account ? (
+            <TierSummary
+              access={tierAccess(account)!}
+              variant="sidebar"
+              collapsed={sidebarCollapsed && !mobileViewport}
+            />
+          ) : authenticated ? (
+            <a
+              className="sidebar-plan"
+              href="#app/subscription"
+              aria-label="Plan & access"
+              data-collapsed={
+                (sidebarCollapsed && !mobileViewport) || undefined
+              }
+            >
+              <span className="sidebar-plan__compact" aria-hidden="true">
+                P
+              </span>
+              <span className="sidebar-plan__content">
+                <strong>Plan &amp; access</strong>
+                <small>View your plan and features</small>
+              </span>
+            </a>
+          ) : null}
           {authenticated && user ? (
             <AccountMenu
               user={user}
               onLogout={onLogout}
               variant="sidebar"
+              showPlanInTrigger={!account}
               collapsed={sidebarCollapsed && !mobileViewport}
             />
           ) : (
@@ -2082,8 +2156,14 @@ export function DemoWorkspace({
                         backendOnline={backendOnline}
                       />
                     )}
-                    {view === "backtest" && (
+                    {view === "backtest" && accountError && (
+                      <p role="alert">
+                        Access could not be checked. Refresh to try again.
+                      </p>
+                    )}
+                    {view === "backtest" && !accountError && (
                       <WorkspaceBacktestPanel
+                        account={account}
                         key={user?.id ?? "guest"}
                         authenticated={authenticated}
                         backendOnline={backendOnline}
@@ -2134,6 +2214,7 @@ export function DemoWorkspace({
                     )}
                     {view === "subscription" && (
                       <SubscriptionPanel
+                        key={user?.id ?? "guest"}
                         authenticated={authenticated}
                         backendOnline={backendOnline}
                       />

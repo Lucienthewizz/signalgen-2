@@ -173,7 +173,7 @@ async (page) => {
     await page.unroute("**/api/v1/subscription");
   }
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
-  await page.waitForFunction(()=>document.querySelector('.account-menu__identity small')?.textContent.includes('Pro'));
+  await page.getByRole('link',{name:'Plan & access: Pro',exact:true}).waitFor();
   // The lists have been warmed by the dashboard/universe checks above.
   // Returning to them must work even while all their GET responses are held.
   let releaseCachedReads;const cachedReadsWait=new Promise(resolve=>{releaseCachedReads=resolve;});
@@ -671,7 +671,8 @@ async (page) => {
       const popupBox=await accountPopup.boundingBox();
       if(popupBox.x<box.x+box.width || popupBox.width<280 || popupBox.x+popupBox.width>width || popupBox.y<0 || popupBox.y+popupBox.height>1001) throw Error('Collapsed account popup is clipped or not beside the icon');
       for(const text of [user.full_name,user.email,'Pro · Active','Profile, plan & devices']) if(!(await accountPopup.innerText()).includes(text)) throw Error('Collapsed account popup omitted '+text);
-      if(await accountPopup.getByRole('menuitem').count()!==2) throw Error('Account actions changed');
+      for(const name of ['Plan & access','Devices & sessions']) if(!await accountPopup.getByRole('menuitem',{name,exact:true}).isVisible()) throw Error('Account menu omitted '+name);
+      if(await accountPopup.getByRole('menuitem').count()!==4) throw Error('Account actions changed');
       await page.screenshot({path:'/private/tmp/signalgen-account-rail-popup.png',animations:'disabled'});
       await page.keyboard.press('Escape');
       await accountPopup.waitFor({state:'hidden'});

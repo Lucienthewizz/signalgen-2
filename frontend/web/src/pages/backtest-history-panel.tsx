@@ -26,7 +26,9 @@ export function BacktestHistoryPanel({
   owner,
   revision,
   onOpen,
+  allowUpload = true,
 }: {
+  allowUpload?: boolean;
   owner: string;
   revision: number;
   onOpen: (archive: BacktestArchive) => void;
@@ -203,6 +205,7 @@ export function BacktestHistoryPanel({
     }
   }
   async function sync(id: string) {
+    if (!allowUpload) return;
     if (busy) return;
     const controller = new AbortController();
     operation.current = controller;
@@ -326,7 +329,7 @@ export function BacktestHistoryPanel({
                 </dl>
               </div>
               <div className="backtest-actions">
-                {!item.serverVersion && item.local && (
+                {allowUpload && !item.serverVersion && item.local && (
                   <Button
                     variant="outline"
                     disabled={busy}
