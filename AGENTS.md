@@ -45,3 +45,17 @@ The user requests the installed frontend skills and CLI tools as the default wor
 - Use Playwright CLI for scoped browser verification when available and permitted by the active browser/tool policies. Verify affected flows, responsive layouts, and light/dark themes where relevant; do not claim browser verification when it could not run.
 - Apply these tools proportionately to the change. Disclose unavailable tools or blocked checks rather than silently claiming they were used. Do not perform unrelated redesigns, installs, account changes, or external uploads as a side effect.
 - After implementation and relevant verification, follow the Git delivery workflow above and push only task-related changes to `frontend/<feature-name>`.
+
+# Interface skills from jakubkrehel/skills
+
+Use the installed skills from `jakubkrehel/skills` alongside the website workflow above, selecting the skills relevant to the requested work. Read their `SKILL.md` and applicable references before use. Preserve Signalgen's existing components, design tokens, architecture, and product voice.
+
+- Use `better-interface` for a requested review of a screen or flow across accessibility, layout, writing, typography, colors, and UI polish. Load its domain skills as instructed and report only what the evidence supports.
+- Use `better-accessibility` for keyboard navigation, focus, accessible names, forms, screen-reader behavior, reduced motion, and zoom.
+- Use `better-layout` for grouping, alignment, reading order, responsive structure, and space for translated text.
+- Use `better-typography` for type scale, spacing, wrapping, truncation, and font features; use `better-colors` for semantic color tokens, palettes, and contrast.
+- Use `better-ui` for surfaces, icons, interaction states, shadows, and animation. Use `better-writing` for labels, errors, empty states, confirmations, and other interface copy, followed by the mandatory final writing review above.
+- Use `build-design` when implementing a supplied Figma design or design image. Use `teardown` when the user requests a technical illustration or an explanation through illustrated layers or parts.
+- Keep `interface-review`, `explain-interface`, `break`, `state-machine`, `variant`, and `afk` user-invoked, as their skill metadata requires. Installing this collection does not itself invoke them or authorize unattended feature work. Apply them when the user specifically requests the corresponding workflow.
+- For a completed UI feature, use the relevant domain skills to check the affected surface and states within the task's scope. Do not automatically invoke user-only workflows or expand into a whole-product audit. Verify visual and runtime claims with the relevant browser checks; disclose checks that could not run.
+- Do not install optional dependencies, enable plugins, or upload project data solely because a skill mentions them. If a required reference, tool, or integration is unavailable, disclose it and qualify the affected result instead of claiming full coverage.
