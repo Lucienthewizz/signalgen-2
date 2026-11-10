@@ -1,3 +1,17 @@
+# Skill usage workflow
+
+Always check the available skill catalog before starting a task. When a skill matches the requested work, use it and read its `SKILL.md` before applying its instructions. Explicitly requested skills must be consulted. Apply skills proportionately to the task; do not run every skill on every request.
+
+- Use `ponytail` for coding, fixes, refactoring, code reviews, and dependency choices. Prefer the smallest complete solution that satisfies the request and required verification.
+- Use `ui-ux-pro-max` for UI/UX design, implementation, and review, including accessibility, responsive layouts, typography, colors, and interaction states.
+- Use `scroll-craft` when the request involves scroll-driven experiences, cinematic or layered heroes, scrollytelling, or bespoke landing-page motion. Keep motion aligned with the requested scope and support reduced-motion preferences.
+- Use `no-ai-slop` when editing or reviewing writing for clarity, voice, and generic AI phrasing. This skill primarily concerns writing quality; it does not replace UI design guidance.
+- Use `unslop` when the user requests more natural writing, humanization, voice matching, or removal of AI tone. If it overlaps with `no-ai-slop`, choose the most relevant skill or combine only complementary guidance without redundant rewrite passes. Preserve facts and the user's intended meaning.
+- Use other relevant installed skills for their supported tasks, including the frontend and codebase skills required below. These five skills are not an exhaustive list.
+- Briefly announce which skill(s) are being applied and why the first time they are used in the conversation. Only claim use after reading and following the applicable instructions.
+- If a required skill is missing or inaccessible, check the configured skill locations, disclose the limitation, and use an available fallback when it can safely complete the task. Do not install skills, enable integrations, upload files, or change accounts without authorization.
+- Follow user instructions and higher-priority requirements when skill guidance conflicts. Do not expand the task, redesign unrelated UI, or add dependencies solely because a skill suggests them.
+
 # Git delivery workflow
 
 The user has requested automatic GitHub delivery for future updates made by the agent in this project.
