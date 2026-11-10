@@ -559,7 +559,7 @@
   background-image: var(--workspace-card-gradient);
 }
 .auth-layout:not(.auth-layout--recovery) .auth-card {
-  width: min(480px, 100%);
+  width: min(600px, 100%);
   min-width: 0;
   padding: 32px;
   border: 1px solid var(--line);

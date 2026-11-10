@@ -424,6 +424,8 @@ export function AccountPage({
               <RouteBoundary>
                 <Suspense fallback={<RouteLoading />}>
                   <SubscriptionPanel
+                    key={user.id}
+                    userId={user.id}
                     authenticated
                     backendOnline={backendOnline}
                   />

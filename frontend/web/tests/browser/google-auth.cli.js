@@ -34,8 +34,17 @@ async (page) => {
     return route.fulfill({json:body});
   });
   async function reset(){await page.goto(origin+"/#login");await page.evaluate(()=>{sessionStorage.clear();localStorage.clear();});await page.reload();await page.getByRole("button",{name:"Continue with Google",exact:true}).waitFor();await page.waitForFunction(()=>!document.querySelector(".auth-google")?.disabled);}
+  async function assertSplitAuth(){
+    const panel=await page.locator(".auth-panel").boundingBox();
+    const story=await page.locator(".auth-story").boundingBox();
+    const card=await page.locator(".auth-card").boundingBox();
+    if(!panel||!story||!card||panel.x>=story.x||Math.abs(panel.width-story.width)>1||card.width<=480)throw Error("Auth form is not a wider card on the left of an equal split");
+  }
+  await page.setViewportSize({width:1440,height:1000});
   await reset();await page.getByRole("link",{name:"Register",exact:true}).first().click();
   await page.getByRole("heading",{name:"Create your account",exact:true}).waitFor();
+  await assertSplitAuth();
+  await page.screenshot({path:"output/playwright/register-1440.png",fullPage:true});
   mode="disabled";await page.getByRole("button",{name:"Continue with Google",exact:true}).click();
   await page.getByText("Google sign-in is not configured yet. Use email and password.",{exact:true}).waitFor();
   for(const width of [1440,390]) for(const theme of ["dark","light"]){
@@ -46,6 +55,7 @@ async (page) => {
     await page.locator('.auth-google').scrollIntoViewIfNeeded();
     if(theme==="light") await page.waitForFunction(()=>getComputedStyle(document.querySelector(".auth-google")).backgroundColor==="rgb(255, 255, 255)");
     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error("Login overflow");
+    if(width===1440)await assertSplitAuth();
     const fills=await page.locator('.auth-google__mark path').evaluateAll(paths=>paths.map(p=>p.getAttribute('fill')));
     if(new Set(fills).size!==4)throw Error('Google identity mark is not four-color');
     await page.screenshot({path:`output/playwright/google-login-${width}-${theme}.png`,fullPage:true});

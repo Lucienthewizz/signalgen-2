@@ -54,9 +54,6 @@
   align-items: start;
   gap: 16px 20px;
 }
-.study-form-grid[data-columns="3"] {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
 .study-fields [data-slot="field-label"] {
   font-size: 0.8rem;
   line-height: 1.5;
@@ -258,11 +255,6 @@
   }
   .screener-result-ledger td:nth-child(n + 4):nth-child(-n + 7) {
     font-variant-numeric: tabular-nums;
-  }
-}
-@media (max-width: 760px) {
-  .study-form-grid[data-columns="3"] {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 480px) {

@@ -234,46 +234,6 @@ export function AuthPage({
     <main
       className={`auth-layout ${view === "forgot-password" ? "auth-layout--recovery" : ""}`}
     >
-      {view !== "forgot-password" && (
-        <section className="auth-story">
-          <a href="#home" aria-label="Back to Signalgen">
-            <Brand />
-          </a>
-          <div className="auth-story__content">
-            <h1>
-              Read the market.
-              <br />
-              <span>Verify the signal.</span>
-            </h1>
-            <p>
-              Build rules, test hypotheses, and understand the evidence behind
-              every IDX signal.
-            </p>
-            <div className="auth-proof">
-              <div>
-                <ShieldCheck />
-                <span>
-                  <b>Private by account</b>
-                  <small>Your strategies remain isolated by account</small>
-                </span>
-              </div>
-              <div>
-                <KeyRound />
-                <span>
-                  <b>Backend authorization</b>
-                  <small>Sessions are verified by Supabase</small>
-                </span>
-              </div>
-            </div>
-          </div>
-          <footer>
-            <span
-              className={`status-dot ${backendOnline ? "is-online" : ""}`}
-            />{" "}
-            Backend {backendOnline ? "verified" : "not connected"}
-          </footer>
-        </section>
-      )}
       <section className="auth-panel">
         <div className="auth-theme-toggle">
           <ThemeToggle compact />
@@ -536,6 +496,46 @@ export function AuthPage({
           )}
         </div>
       </section>
+      {view !== "forgot-password" && (
+        <section className="auth-story">
+          <a href="#home" aria-label="Back to Signalgen">
+            <Brand />
+          </a>
+          <div className="auth-story__content">
+            <h1>
+              Read the market.
+              <br />
+              <span>Verify the signal.</span>
+            </h1>
+            <p>
+              Build rules, test hypotheses, and understand the evidence behind
+              every IDX signal.
+            </p>
+            <div className="auth-proof">
+              <div>
+                <ShieldCheck />
+                <span>
+                  <b>Private by account</b>
+                  <small>Your strategies remain isolated by account</small>
+                </span>
+              </div>
+              <div>
+                <KeyRound />
+                <span>
+                  <b>Backend authorization</b>
+                  <small>Sessions are verified by Supabase</small>
+                </span>
+              </div>
+            </div>
+          </div>
+          <footer>
+            <span
+              className={`status-dot ${backendOnline ? "is-online" : ""}`}
+            />{" "}
+            Backend {backendOnline ? "verified" : "not connected"}
+          </footer>
+        </section>
+      )}
     </main>
   );
 }

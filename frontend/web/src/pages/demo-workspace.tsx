@@ -2196,6 +2196,7 @@ export function DemoWorkspace({
                     {view === "subscription" && (
                       <SubscriptionPanel
                         key={user?.id ?? "guest"}
+                        userId={user?.id}
                         authenticated={authenticated}
                         backendOnline={backendOnline}
                       />

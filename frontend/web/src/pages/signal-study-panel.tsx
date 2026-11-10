@@ -431,7 +431,7 @@ export function SignalStudyPanel({
             <legend className="sr-only">Historical study settings</legend>
             <FieldSet className="study-settings-section">
               <FieldLegend>Source &amp; rule</FieldLegend>
-              <FieldGroup className="study-form-grid" data-columns="2">
+              <FieldGroup className="study-form-grid">
                 <Field>
                   <FieldLabel htmlFor="study-source">Stock source</FieldLabel>
                   <select
@@ -493,7 +493,7 @@ export function SignalStudyPanel({
             </FieldSet>
             <FieldSet className="study-settings-section">
               <FieldLegend>Test period</FieldLegend>
-              <FieldGroup className="study-form-grid" data-columns="3">
+              <FieldGroup className="study-form-grid">
                 <Field>
                   <FieldLabel htmlFor="study-from">
                     From (daily session, SGT)
@@ -545,7 +545,7 @@ export function SignalStudyPanel({
             </FieldSet>
             <FieldSet className="study-settings-section">
               <FieldLegend>Take profit &amp; stop loss</FieldLegend>
-              <FieldGroup className="study-form-grid" data-columns="2">
+              <FieldGroup className="study-form-grid">
                 <Field data-study-target="profit">
                   <FieldLabel htmlFor="study-tp">
                     Take profit % (optional)

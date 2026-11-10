@@ -106,14 +106,21 @@ async (page) => {
   await page.getByRole("button",{name:"Reload workspace",exact:true}).click();
   await page.getByRole("button",{name:"Choose your first stocks",exact:true}).waitFor();
   subscriptionUnavailable=true;
-  await page.goto(`${origin}/#app/subscription`);
+  await page.goto(`${origin}/#app/subscription`);await page.reload();
   await page.getByText("Plan status unavailable",{exact:true}).waitFor();
   if(await page.getByRole("heading",{name:"Free access is active",exact:true}).count())throw Error("Plan failure incorrectly displayed active Free");
   subscriptionUnavailable=false;
   await page.getByRole("button",{name:"Try again",exact:true}).click();
   await page.getByRole("heading",{name:"Free access is active",exact:true}).waitFor();
+  subscriptionUnavailable=true;
+  await page.getByRole("button",{name:"Refresh status",exact:true}).click();
+  await page.getByText("Showing last verified plan",{exact:true}).waitFor();
+  await page.getByRole("heading",{name:"Quota usage",exact:true}).waitFor();
+  if(await page.getByRole("heading",{name:"Free access is active",exact:true}).count())throw Error("Stale plan was presented as verified");
+  subscriptionUnavailable=false;
+  await page.getByRole("button",{name:"Refresh status",exact:true}).click();
+  await page.getByRole("heading",{name:"Free access is active",exact:true}).waitFor();
   await page.goto(`${origin}/#app/analysis`);
-  await page.getByText("Free plan",{exact:false}).first().waitFor();
   await page.getByRole("button",{name:"Start screening",exact:true}).waitFor();
   if(await page.getByRole("dialog",{name:/Screening|access|Plan|unavailable/i}).count())throw Error("Free onboarding opened a permission modal");
   if(groups.length)throw Error("Universe was auto-created");
@@ -133,12 +140,7 @@ async (page) => {
     await page.setViewportSize({width,height:1000});
     await page.evaluate(()=>window.scrollTo({top:0,behavior:"instant"}));
     await page.screenshot({path:`output/playwright/mvp-screener-${width}.png`,fullPage:true});
-    const summary=page.locator(".screener-access-summary");
-    await summary.screenshot({path:`output/playwright/mvp-free-info-${width}.png`});
-    const summaryText=await summary.innerText();
-    for(const text of ["Free plan","Up to 3 stocks","Daily candles","System rule"]){
-      if(!summaryText.includes(text))throw Error(`Screening plan summary omitted ${text}`);
-    }
+    if(await page.locator(".screener-console__header").getByText(/Free plan/).count())throw Error("Screener header shows the plan label");
     if(width===1440){
       await page.getByRole("button",{name:"Close menu",exact:true}).click();
       await page.waitForFunction(()=>{const trigger=document.querySelector(".sidebar .account-menu__trigger");return trigger&&Math.abs(trigger.offsetWidth-trigger.offsetHeight)<=1;});

@@ -1101,7 +1101,7 @@ export const ui = {
       "stocks",
     ),
   peekSubscription: (owner?: string) =>
-    peekUiResource<{ subscription: Subscription | null }>(
+    peekUiResource<Awaited<ReturnType<typeof api.currentSubscription>>>(
       identityRevision,
       owner,
       "subscription",

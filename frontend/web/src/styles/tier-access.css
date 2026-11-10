@@ -58,47 +58,6 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-/* Long limits and upgrade explanations must wrap inside narrow plan cards. */
-.plan-columns [data-slot="card"],
-.plan-columns [data-slot="card-header"],
-.plan-columns [data-slot="card-content"] {
-  min-width: 0;
-}
-.plan-columns [data-slot="card-header"] {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-.plan-columns [data-slot="card-description"] {
-  grid-column: 1 / -1;
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-.plan-columns [data-slot="card-content"] > p {
-  overflow-wrap: anywhere;
-}
-.plan-columns li {
-  flex-wrap: wrap;
-}
-.plan-columns .plan-feature-status {
-  flex-basis: 100%;
-  margin-left: 24px;
-  white-space: normal;
-}
-.plan-columns [data-slot="card-footer"] {
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.screener-access-summary {
-  margin-top: 6px;
-  font-size: 0.8rem;
-}
-
-.screener-access-summary a {
-  color: var(--green);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 .backtest-panel.backtest-preview header a {
   text-decoration: none;
 }

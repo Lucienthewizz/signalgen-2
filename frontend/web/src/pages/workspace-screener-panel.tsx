@@ -1,4 +1,4 @@
-import { tierAccess, tierName } from "@/lib/tier-access";
+import { tierAccess } from "@/lib/tier-access";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -644,20 +644,6 @@ export function WorkspaceScreenerPanel({
             <div>
               <h3 id="screener-console-title">Choose stocks, run your rule</h3>
               <p>Choose a rule and universe. Screening results appear below.</p>
-              {policy && (
-                <p className="screener-access-summary">
-                  <a href="#app/subscription">
-                    {tierName(policy.plan_code)} plan
-                  </a>
-                  {" · "}Up to {policy.screening.max_symbols} stocks
-                  {policy.screening.timeframes.length === 1 &&
-                  policy.screening.timeframes[0] === "1d"
-                    ? " · Daily candles"
-                    : ""}
-                  {policy.screening.system_rules_only ? " · System rule" : ""}
-                  {policy.source === "manual_grant" ? " · Operator grant" : ""}
-                </p>
-              )}
             </div>
           </div>
           <div className="screener-console__tools">

@@ -1,7 +1,7 @@
 .auth-layout {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(570px, 1.25fr) minmax(430px, 0.75fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   background: var(--canvas);
 }
 .auth-story {
@@ -11,7 +11,7 @@
   position: relative;
   overflow: hidden;
   padding: 48px clamp(48px, 6vw, 92px);
-  border-right: 1px solid var(--line);
+  border-inline-start: 1px solid var(--line);
 }
 .auth-story::after {
   content: "";

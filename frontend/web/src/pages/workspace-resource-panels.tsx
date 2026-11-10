@@ -1,5 +1,5 @@
 import { tierAccess, tierName, monthlyPrice } from "@/lib/tier-access";
-import type { EffectiveAccess, AccountState } from "@/types";
+import type { AccountState } from "@/types";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ResourceQuota } from "@/components/resource-quota";
 import { InfoDialog } from "@/components/ui/info-dialog";
@@ -89,7 +89,6 @@ import type {
   FeatureGrant,
   StockInstrument,
   StockUniverse,
-  Subscription,
   SubscriptionPlan,
 } from "@/types";
 
@@ -627,74 +626,64 @@ export function StockUniversesPanel({
 export function SubscriptionPanel({
   authenticated,
   backendOnline,
-}: ConnectionProps) {
-  const [effective, setEffective] = useState<EffectiveAccess | null>(null);
+  userId,
+}: ConnectionProps & { userId?: string }) {
+  const owner = authenticated ? userId : undefined;
+  const [snapshot, setSnapshot] = useState(() => ui.peekSubscription(owner));
+  const subscription = authenticated ? snapshot?.subscription : undefined;
+  const effective = authenticated ? snapshot?.access : undefined;
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(
     null,
   );
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const access = subscription ? subscriptionState(subscription) : null;
   const currentPlanCode =
-    authenticated && !accountError && (effective || subscription)
+    authenticated && (effective || subscription)
       ? (effective?.plan_code ??
         (access?.usable ? subscription?.plan_code : "free"))
       : undefined;
   const active = useRef(false);
   const loadVersion = useRef(0);
 
-  async function load() {
+  async function load(refresh = false, includePlans = false) {
     const version = ++loadVersion.current;
     const current = () => active.current && version === loadVersion.current;
     setLoading(true);
-    setError(null);
-    setAccountError(null);
     try {
-      const plansRequest = api
-        .listSubscriptionPlans()
-        .then((response) => {
-          if (current()) setPlans(response.items);
-        })
-        .catch((caught) => {
-          if (current())
-            setError(
-              readableError(caught, "Plan options could not be loaded."),
-            );
-        });
-      if (authenticated && backendOnline) {
-        await api
-          .currentSubscription()
+      if (includePlans) {
+        setError(null);
+        void api
+          .listSubscriptionPlans()
           .then((response) => {
-            if (current()) {
-              setSubscription(response.subscription);
-              setEffective(response.access ?? null);
-            }
+            if (current()) setPlans(response.items);
           })
           .catch((caught) => {
             if (current())
-              setAccountError(
-                readableError(
-                  caught,
-                  "Plan status could not be loaded. Try again to check your access.",
-                ),
+              setError(
+                readableError(caught, "Plan options could not be loaded."),
               );
           });
-      } else {
-        setSubscription(null);
-        setEffective(null);
-        if (authenticated)
-          setAccountError(
-            "The server is unavailable. Your plan status could not be checked.",
-          );
       }
-      await plansRequest;
+      if (authenticated && backendOnline) {
+        const response = await ui.currentSubscription(owner, refresh);
+        if (current()) {
+          setSnapshot(response);
+          setAccountError(null);
+        }
+      } else if (authenticated) {
+        setAccountError(
+          "The server is unavailable. Your plan status could not be checked.",
+        );
+      }
     } catch (caught) {
       if (current())
-        setError(readableError(caught, "Plans could not be loaded."));
+        setAccountError(
+          readableError(caught, "Plan status could not be loaded."),
+        );
     } finally {
       if (current()) setLoading(false);
     }
@@ -702,22 +691,18 @@ export function SubscriptionPanel({
 
   useEffect(() => {
     active.current = true;
-    void load();
-    const refresh = () => {
-      void load();
-    };
-    window.addEventListener("focus", refresh);
+    void load(false, true);
+    const refresh = () => void load(true, true);
     window.addEventListener("signalgen:subscription", refresh);
     return () => {
       active.current = false;
       ++loadVersion.current;
-      window.removeEventListener("focus", refresh);
       window.removeEventListener("signalgen:subscription", refresh);
     };
-  }, [authenticated, backendOnline]);
+  }, [authenticated, backendOnline, owner]);
 
   async function cancel(atPeriodEnd: boolean) {
-    if (!subscription) return;
+    if (!subscription || accountError || loading) return;
     const question = atPeriodEnd
       ? "Schedule cancellation at the end of this period?"
       : "Cancel your subscription now? Access may end immediately.";
@@ -731,7 +716,7 @@ export function SubscriptionPanel({
           ? "user scheduled cancellation"
           : "user canceled immediately",
       );
-      setSubscription(response.subscription);
+      setSnapshot({ subscription: response.subscription });
       toast.add({
         type: "success",
         title: "Plan updated",
@@ -768,17 +753,17 @@ export function SubscriptionPanel({
             variant="outline"
             size="sm"
             disabled={loading}
-            onClick={() => void load()}
+            onClick={() => void load(true, true)}
           >
             <RefreshCw aria-hidden="true" /> Refresh status
           </Button>
         </header>
-        {loading ? (
+        {loading && !currentPlanCode ? (
           <div className="resource-loading">
             <Skeleton />
             <Skeleton />
           </div>
-        ) : accountError || (authenticated && !effective && !subscription) ? (
+        ) : authenticated && !currentPlanCode ? (
           <Alert variant="destructive">
             <CircleAlert />
             <AlertTitle>Plan status unavailable</AlertTitle>
@@ -786,23 +771,40 @@ export function SubscriptionPanel({
               {accountError ??
                 "Your access could not be confirmed. Refresh to try again."}
             </AlertDescription>
-            <Button variant="outline" onClick={() => void load()}>
+            <Button variant="outline" onClick={() => void load(true, true)}>
               <RefreshCw data-icon="inline-start" />
               Try again
             </Button>
           </Alert>
         ) : authenticated ? (
           <div className="subscription-ledger">
+            {accountError && (
+              <Alert>
+                <CircleAlert />
+                <AlertTitle>Showing last verified plan</AlertTitle>
+                <AlertDescription>
+                  {accountError} Refresh status to check for changes.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="subscription-ledger__lead">
               <div className="subscription-plan-name">
                 <Layers3 aria-hidden="true" />
                 <h4>
-                  {currentPlanCode && currentPlanCode !== "free"
-                    ? tierName(currentPlanCode)
-                    : "Free access is active"}
+                  {currentPlanCode === "free" && (accountError || loading)
+                    ? "Free"
+                    : currentPlanCode && currentPlanCode !== "free"
+                      ? tierName(currentPlanCode)
+                      : "Free access is active"}
                 </h4>
                 {currentPlanCode && currentPlanCode !== "free" && (
-                  <Badge variant="secondary">Active</Badge>
+                  <Badge variant="secondary">
+                    {accountError
+                      ? "Last verified"
+                      : loading
+                        ? "Checking"
+                        : "Active"}
+                  </Badge>
                 )}
               </div>
               {subscription && (
@@ -892,7 +894,7 @@ export function SubscriptionPanel({
                 }
               />
             </section>
-            {subscription && access?.usable && (
+            {subscription && access?.usable && !accountError && !loading && (
               <details className="subscription-manage subscription-manage--account">
                 <summary>
                   <span>
@@ -973,15 +975,16 @@ export function SubscriptionPanel({
           if (!open) setSelectedPlan(null);
         }}
         title={`${selectedPlan?.name ?? ""} plan details`}
-        description="Online upgrades are coming soon. You can continue using your current access."
+        description="Paid plans are activated by an operator. Online upgrades are coming soon."
       >
         <p>
           <strong>{selectedPlan?.name}</strong>
           {selectedPlan?.pricing
             ? ` · ${monthlyPrice(selectedPlan.pricing.amount)} per month`
             : ""}
-          . Checkout is not available yet. No payment has been taken and your
-          plan has not changed.
+          {selectedPlan?.screening && (
+            <> · Up to {selectedPlan.screening.max_symbols} stocks per screen</>
+          )}
         </p>
         <Button
           nativeButton={false}
@@ -995,10 +998,6 @@ export function SubscriptionPanel({
           <div>
             <h3 id="plan-heading">Available plans</h3>
             <p>Choose the capacity that fits your analysis.</p>
-            <p>
-              Free starts automatically. Online upgrades to Analyst and Pro are
-              coming soon.
-            </p>
           </div>
         </header>
         <div className="plan-columns">
@@ -1028,24 +1027,20 @@ export function SubscriptionPanel({
                       {plan.name}
                     </span>
                   </CardTitle>
-                  <CardDescription>{plan.description}</CardDescription>
-                  <CardAction>
-                    {currentPlanCode === plan.code && <Badge>Your plan</Badge>}
-                  </CardAction>
+                  <CardDescription>
+                    {plan.code === "free"
+                      ? "Start with daily screening."
+                      : plan.code === "analyst"
+                        ? "For structured personal analysis."
+                        : "More room for strategies and historical analysis."}
+                  </CardDescription>
+                  {currentPlanCode === plan.code && !accountError && (
+                    <CardAction>
+                      <Badge>Your plan</Badge>
+                    </CardAction>
+                  )}
                 </CardHeader>
                 <CardContent>
-                  {plan.pricing && (
-                    <p className="plan-price">
-                      <strong>{monthlyPrice(plan.pricing.amount)}</strong> /
-                      month
-                    </p>
-                  )}
-                  <p>
-                    {plan.screening?.max_symbols ?? 10} stocks per screening ·{" "}
-                    {plan.screening?.system_rules_only
-                      ? "Daily system rule"
-                      : "Supported intraday and daily intervals"}
-                  </p>
                   {plan.limits && (
                     <dl className="plan-capacity">
                       <div>
@@ -1097,26 +1092,23 @@ export function SubscriptionPanel({
                       Backtest access
                       {!plan.features.includes("backtest") && (
                         <span className="plan-feature-status">
-                          Preview available · Pro unlocks analysis
+                          Preview only
                         </span>
                       )}
                     </li>
                   </ul>
                 </CardContent>
                 <CardFooter>
-                  {plan.code !== "free" && (
+                  {plan.code === "free" ? (
+                    <span>Free daily screening</span>
+                  ) : (
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       onClick={() => setSelectedPlan(plan)}
                     >
                       View {plan.name} details
                     </Button>
                   )}
-                  <span>
-                    {plan.code === "free"
-                      ? "Free daily screening"
-                      : "Online upgrade coming soon"}
-                  </span>
                 </CardFooter>
               </Card>
             ))}
