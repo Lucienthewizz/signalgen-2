@@ -7,16 +7,13 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/access"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/api/shared"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 // ListRules returns the read-only baseline plus rules owned by this user.
 func (server *Handler) ListRules(writer http.ResponseWriter, request *http.Request) {
 	principal, _, _, ok := server.RequireAppSession(writer, request)
 	if !ok {
-		return
-	}
-	if err := server.Access.RequireFeature(request.Context(), principal.ID, access.FeatureScreener); err != nil {
-		shared.WriteAccessError(writer, request, err)
 		return
 	}
 	userRules, err := server.Rules.List(request.Context(), principal.ID)
@@ -37,10 +34,6 @@ func (server *Handler) ListRules(writer http.ResponseWriter, request *http.Reque
 func (server *Handler) GetRule(writer http.ResponseWriter, request *http.Request) {
 	principal, _, _, ok := server.RequireAppSession(writer, request)
 	if !ok {
-		return
-	}
-	if err := server.Access.RequireFeature(request.Context(), principal.ID, access.FeatureScreener); err != nil {
-		shared.WriteAccessError(writer, request, err)
 		return
 	}
 	if request.PathValue("id") == core.BaselineRuleID {
@@ -117,7 +110,7 @@ func (server *Handler) UpdateRule(writer http.ResponseWriter, request *http.Requ
 
 // DeleteRule removes an owned custom rule but never the baseline system rule.
 func (server *Handler) DeleteRule(writer http.ResponseWriter, request *http.Request) {
-	principal, ok := server.requireRuleAccess(writer, request)
+	principal, _, _, ok := server.RequireAppSession(writer, request)
 	if !ok {
 		return
 	}
@@ -152,6 +145,16 @@ func (server *Handler) requireRuleAccess(writer http.ResponseWriter, request *ht
 	if err := server.Access.RequireFeature(request.Context(), principal.ID, access.FeatureScreener); err != nil {
 		shared.WriteAccessError(writer, request, err)
 		return auth.Principal{}, false
+	}
+	if provider, ok := server.Access.(subscription.AccessProvider); ok {
+		policy, err := provider.EffectiveAccess(request.Context(), principal.ID)
+		if err == nil {
+			err = policy.RequireCustomRules()
+		}
+		if err != nil {
+			shared.WriteAccessError(writer, request, err)
+			return auth.Principal{}, false
+		}
 	}
 	return principal, true
 }

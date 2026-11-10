@@ -12,6 +12,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/auth"
 	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 // Compatibility aliases keep existing handler tests stable while generic
@@ -134,6 +135,10 @@ func (server *Context) RequireOperator(writer http.ResponseWriter, request *http
 
 func WriteAccessError(writer http.ResponseWriter, request *http.Request, err error) {
 	switch {
+	case errors.Is(err, subscription.ErrFeatureNotIncluded):
+		WriteError(writer, request, 403, "FEATURE_NOT_INCLUDED", "Fitur ini tidak termasuk dalam paket Anda.")
+	case errors.Is(err, subscription.ErrPlanLimit):
+		WriteError(writer, request, 403, "PLAN_LIMIT_EXCEEDED", "Pilihan ini melampaui batas paket Anda. Kurangi saham atau periksa paket.")
 	case errors.Is(err, access.ErrAccountSuspended), errors.Is(err, access.ErrAccountNotFound):
 		WriteError(writer, request, http.StatusForbidden, "ACCOUNT_SUSPENDED", "Akun tidak aktif.")
 	case errors.Is(err, access.ErrRoleRequired):

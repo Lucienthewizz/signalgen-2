@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
 
 	"github.com/jackc/pgx/v5"
@@ -33,24 +35,35 @@ func TestPostgresUniverseThreeTenAndEleven(t *testing.T) {
 	}
 	defer admin.Close()
 	var owner, other string
+	var symbols []string
+	defer func() {
+		for _, id := range []string{owner, other} {
+			if id != "" {
+				if _, err := admin.Exec(context.Background(), `delete from auth.users where id=$1::uuid`, id); err != nil {
+					t.Errorf("cleanup owner: %v", err)
+				}
+			}
+		}
+		if _, err := admin.Exec(context.Background(), `delete from signalgen.stock_catalog where symbol=any($1::text[])`, symbols); err != nil {
+			t.Errorf("cleanup symbols: %v", err)
+		}
+	}()
 	for _, id := range []*string{&owner, &other} {
 		if err := admin.QueryRow(ctx, `insert into auth.users(email) values('ten-stock@test.invalid') returning id::text`).Scan(id); err != nil {
 			t.Fatal(err)
 		}
-		defer admin.Exec(context.Background(), `delete from auth.users where id=$1::uuid`, *id)
 		if _, err := admin.Exec(ctx, `insert into signalgen.account_profiles(user_id,email) values($1::uuid,'ten-stock@test.invalid')`, *id); err != nil {
 			t.Fatal(err)
 		}
 	}
-	symbols := make([]string, 10)
+	symbols = make([]string, 10)
 	for i := range symbols {
-		symbols[i] = fmt.Sprintf("TENCAP%d.JK", i)
+		symbols[i] = fmt.Sprintf("TCAP%s%d.JK", strings.ToUpper(owner[:8]), i)
 		if _, err := admin.Exec(ctx, `insert into signalgen.stock_catalog(symbol,provider,provider_symbol,name,exchange,currency)
 values($1,'yahoo_finance',$1,'Test fixture','XIDX','IDR')`, symbols[i]); err != nil {
 			t.Fatal(err)
 		}
 	}
-	defer admin.Exec(context.Background(), `delete from signalgen.stock_catalog where symbol=any($1::text[])`, symbols)
 	var hasRuntimeRole bool
 	if err := admin.QueryRow(ctx, `select exists(select 1 from pg_roles where rolname='signalgen_api')`).Scan(&hasRuntimeRole); err != nil {
 		t.Fatal(err)
@@ -85,6 +98,12 @@ values($1,'yahoo_finance',$1,'Test fixture','XIDX','IDR')`, symbols[i]); err != 
 	three, err := store.Create(ctx, owner, "Three", symbols[:3])
 	if err != nil || len(three.Symbols) != 3 {
 		t.Fatalf("create three: %+v %v", three, err)
+	}
+	if _, err := store.Update(ctx, owner, three.ID, "Free fourth", symbols[:4], three.Version); !errors.Is(err, subscription.ErrPlanLimit) {
+		t.Fatalf("Free accepted fourth symbol: %v", err)
+	}
+	if _, err := admin.Exec(ctx, `insert into signalgen.subscriptions(user_id,plan_code,status,current_period_start,current_period_end) values($1::uuid,'analyst','active',now()-interval '1 day',now()+interval '1 hour')`, owner); err != nil {
+		t.Fatal(err)
 	}
 	ten, err := store.Update(ctx, owner, three.ID, "Ten", symbols, three.Version)
 	if err != nil || !reflect.DeepEqual(ten.Symbols, symbols) {

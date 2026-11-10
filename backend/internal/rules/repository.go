@@ -56,8 +56,11 @@ func (store *PostgresRepository) Create(ctx context.Context, owner string, defin
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, owner); err != nil {
 		return Rule{}, err
 	}
-	limits, err := subscription.LockedLimits(ctx, tx, owner)
+	policy, err := subscription.LockedAccess(ctx, tx, owner)
 	if err != nil {
+		return Rule{}, err
+	}
+	if err := policy.RequireCustomRules(); err != nil {
 		return Rule{}, err
 	}
 	command, err := tx.Exec(ctx, `insert into signalgen.user_rules
@@ -65,12 +68,12 @@ func (store *PostgresRepository) Create(ctx context.Context, owner string, defin
 select $1,$2::uuid,$3,$4::jsonb,$5,$6,$7,1,$8,$8
 where (select count(*) from signalgen.user_rules where owner_user_id=$2::uuid)<$9`,
 		id, owner, definition.Name, string(raw), fmt.Sprintf("sha256:%x", hash),
-		core.SchemaVersion, core.EngineVersion, now, limits.CustomRules)
+		core.SchemaVersion, core.EngineVersion, now, policy.Limits.CustomRules)
 	if err != nil {
 		return Rule{}, fmt.Errorf("create Postgres rule: %w", err)
 	}
 	if command.RowsAffected() != 1 {
-		return Rule{}, ErrLimit
+		return Rule{}, subscription.ErrPlanLimit
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Rule{}, err
@@ -118,7 +121,22 @@ func (store *PostgresRepository) Update(ctx context.Context, owner, id string, v
 		return Rule{}, err
 	}
 	hash := sha256.Sum256(raw)
-	command, err := store.db.Exec(ctx, `update signalgen.user_rules
+	tx, err := store.db.Begin(ctx)
+	if err != nil {
+		return Rule{}, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, owner); err != nil {
+		return Rule{}, err
+	}
+	policy, err := subscription.LockedAccess(ctx, tx, owner)
+	if err != nil {
+		return Rule{}, err
+	}
+	if err = policy.RequireCustomRules(); err != nil {
+		return Rule{}, err
+	}
+	command, err := tx.Exec(ctx, `update signalgen.user_rules
 set name=$3,definition_json=$4::jsonb,definition_hash=$5,schema_version=$6,
 engine_version=$7,version=version+1,updated_at=now()
 where owner_user_id=$1::uuid and id=$2 and version=$8`, owner, id, definition.Name,
@@ -127,10 +145,19 @@ where owner_user_id=$1::uuid and id=$2 and version=$8`, owner, id, definition.Na
 		return Rule{}, err
 	}
 	if command.RowsAffected() != 1 {
-		if _, err := store.Get(ctx, owner, id); errors.Is(err, ErrNotFound) {
+		// Reuse the transaction connection: acquiring a second pool slot here
+		// can deadlock concurrent stale updates when the pool is saturated.
+		var exists bool
+		if err := tx.QueryRow(ctx, `select exists(select 1 from signalgen.user_rules where owner_user_id=$1::uuid and id=$2)`, owner, id).Scan(&exists); err != nil {
+			return Rule{}, err
+		}
+		if !exists {
 			return Rule{}, ErrNotFound
 		}
 		return Rule{}, ErrVersionConflict
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Rule{}, err
 	}
 	return store.Get(ctx, owner, id)
 }

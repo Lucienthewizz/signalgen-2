@@ -3,6 +3,8 @@ FROM golang:1.27.2-bookworm AS source
 WORKDIR /workspace/backend
 
 COPY backend/go.mod backend/go.sum ./
+# Keep verified dependencies in a reusable layer across source-only changes.
+RUN go mod download
 COPY backend/contract.go backend/openapi.yaml ./
 COPY backend/core ./core
 COPY backend/contracts ./contracts

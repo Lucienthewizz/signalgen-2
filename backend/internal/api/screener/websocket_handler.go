@@ -21,6 +21,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 // ScreenerWebSocket mengonsumsi satu socket ticket, memverifikasi ulang otorisasi dan sesi pengguna,
@@ -215,7 +216,7 @@ func (server *Handler) ScreenerWebSocket(writer http.ResponseWriter, request *ht
 func authorizationOutcome(err error) screener.Outcome {
 	if errors.Is(err, session.ErrInvalid) || errors.Is(err, session.ErrRevoked) || errors.Is(err, session.ErrExpired) ||
 		errors.Is(err, access.ErrAccountNotFound) || errors.Is(err, access.ErrAccountSuspended) ||
-		errors.Is(err, access.ErrEntitlementMissing) || errors.Is(err, compute.ErrInvalid) ||
+		errors.Is(err, subscription.ErrFeatureNotIncluded) || errors.Is(err, subscription.ErrPlanLimit) || errors.Is(err, access.ErrEntitlementMissing) || errors.Is(err, compute.ErrInvalid) ||
 		errors.Is(err, compute.ErrExpired) || errors.Is(err, rules.ErrNotFound) {
 		return screener.OutcomeRejected
 	}

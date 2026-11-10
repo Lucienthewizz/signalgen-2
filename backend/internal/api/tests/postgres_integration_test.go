@@ -28,6 +28,7 @@ import (
 	platformdb "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/database"
 	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/platform/observability"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/records"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/session"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
@@ -133,6 +134,7 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 			sessions, accounts, datasets, compute.NewPostgresRepository(runtimeDB),
 			api.WithRuleStore(rules.NewPostgresRepository(runtimeDB)),
 			api.WithProfileStore(accounts),
+			api.WithRecordStore(&records.PostgresStore{DB: runtimeDB}),
 			api.WithTrafficObserver(platformhttp.NewTrafficObserver(nil)),
 			api.WithScreeningObserver(observability.NewScreenerObserver(nil)),
 			api.WithSubscriptionService(subscriptions),
@@ -457,9 +459,104 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 		access.FeatureScreener, "test complete"); err != nil {
 		t.Fatal(err)
 	}
-	if err := accounts.RequireFeature(ctx, userB, access.FeatureScreener); err != access.ErrEntitlementMissing {
-		t.Fatalf("revoked grant remained usable: %v", err)
+	if policy, err := accounts.EffectiveAccess(ctx, userB); err != nil || policy.Screening.MaxSymbols != 3 || policy.PlanCode != "free" {
+		t.Fatalf("revoked grant did not fall back to Free: %+v %v", policy, err)
 	}
+	t.Run("Free daily screen to attested journal", func(t *testing.T) {
+		// Completed synthetic candles deliberately end in a baseline Match. This
+		// proves receipt saving, without treating current Yahoo prices as a fixture.
+		candles := make([]core.Candle, 100)
+		for i := range candles {
+			close := 100 + float64(i)*0.3
+			if i%2 == 0 {
+				close += 0.8
+			} else {
+				close -= 0.8
+			}
+			candles[i] = core.Candle{Timestamp: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i).Format(time.RFC3339), Open: close, High: close + 2, Low: close - 2, Close: close, Volume: 1000}
+		}
+		freeProvider, e := marketdata.NewCachedProvider(&integrationMarketProvider{candles: candles}, marketdata.DefaultCacheOptions())
+		if e != nil {
+			t.Fatal(e)
+		}
+		freeData, e := dataset.NewDynamicStore(freeProvider, universes)
+		if e != nil {
+			t.Fatal(e)
+		}
+		serverB.Datasets = freeData
+
+		deny := call(serverB, "POST", "/api/v1/rules", "{}", tokenB)
+		assertErrorCode(t, deny, 403, "FEATURE_NOT_INCLUDED")
+		deny = call(serverB, "POST", "/api/v1/stock-universes", `{"name":"four","symbols":["BBCA.JK","BBRI.JK","TLKM.JK","ASII.JK"]}`, tokenB)
+		assertErrorCode(t, deny, 403, "PLAN_LIMIT_EXCEEDED")
+		saved := call(serverB, "POST", "/api/v1/stock-universes", `{"name":"Free three","symbols":["BBCA.JK","BBRI.JK","TLKM.JK"]}`, tokenB)
+		if saved.Code != 201 {
+			t.Fatal(saved.Code, saved.Body.String())
+		}
+		var group universe.Universe
+		if e := json.Unmarshal(saved.Body.Bytes(), &group); e != nil {
+			t.Fatal(e)
+		}
+		body := fmt.Sprintf(`{"purpose":"screen","rule_id":%q,"universe_id":%q,"timeframe":"5m"}`, core.BaselineRuleID, group.ID)
+		assertErrorCode(t, call(serverB, "POST", "/api/v1/datasets/prepare", body, tokenB), 403, "PLAN_LIMIT_EXCEEDED")
+		body = fmt.Sprintf(`{"purpose":"backtest","rule_id":%q,"universe_id":%q}`, core.BaselineRuleID, group.ID)
+		assertErrorCode(t, call(serverB, "POST", "/api/v1/datasets/prepare", body, tokenB), 403, "FEATURE_NOT_INCLUDED")
+		body = fmt.Sprintf(`{"purpose":"screen","rule_id":%q,"universe_id":%q,"timeframe":"1d"}`, core.BaselineRuleID, group.ID)
+		prepared := call(serverB, "POST", "/api/v1/datasets/prepare", body, tokenB)
+		if prepared.Code != 200 {
+			t.Fatal(prepared.Code, prepared.Body.String())
+		}
+		var snap dataset.Manifest
+		if e := json.Unmarshal(prepared.Body.Bytes(), &snap); e != nil {
+			t.Fatal(e)
+		}
+		content := call(serverB, "GET", "/api/v1/datasets/"+snap.DatasetID+"/content", "", tokenB)
+		var data struct {
+			Series []marketdata.Series `json:"series"`
+		}
+		if content.Code != 200 || json.Unmarshal(content.Body.Bytes(), &data) != nil {
+			t.Fatal(content.Code, content.Body.String())
+		}
+		payload, _ := json.Marshal(map[string]string{"purpose": "screen", "dataset_id": snap.DatasetID, "dataset_version": snap.Version, "dataset_checksum": snap.Checksum, "rule_id": core.BaselineRuleID, "definition_hash": core.BaselineRuleHash, "engine_version": core.EngineVersion, "schema_version": core.SchemaVersion})
+		issued := call(serverB, "POST", "/api/v1/compute-grants", string(payload), tokenB)
+		if issued.Code != 201 {
+			t.Fatal(issued.Code, issued.Body.String())
+		}
+		var grant compute.Grant
+		json.Unmarshal(issued.Body.Bytes(), &grant)
+		ticket := call(serverB, "POST", "/api/v1/screener/socket-tickets", fmt.Sprintf(`{"compute_grant_id":%q,"protocol":"screener-private-1"}`, grant.ID), tokenB)
+		if ticket.Code != 201 {
+			t.Fatal(ticket.Code, ticket.Body.String())
+		}
+		var token struct {
+			Ticket string `json:"ticket"`
+		}
+		json.Unmarshal(ticket.Body.Bytes(), &token)
+		baseline := core.GetBaselineRuleDefinition()
+		result := verifyPostgresScreeningSocket(t, serverB, token.Ticket, data.Series, core.RuleSnapshot{Name: baseline.Name, Logic: baseline.Logic, SignalType: baseline.SignalType, CooldownSec: baseline.CooldownSec, Conditions: baseline.Conditions})
+		receipt := ""
+		for _, d := range result.Results {
+			if d.Matched && d.JournalReceipt != "" {
+				receipt = d.JournalReceipt
+				break
+			}
+		}
+		if receipt == "" {
+			t.Fatal("fixture produced no attested Match")
+		}
+		payload, _ = json.Marshal(map[string]string{"receipt": receipt})
+		for i := 0; i < 2; i++ {
+			saved := call(serverB, "POST", "/api/v1/journal/screenings", string(payload), tokenB)
+			if saved.Code != 200 {
+				t.Fatal(saved.Code, saved.Body.String())
+			}
+		}
+		rows, e := (&records.PostgresStore{DB: runtimeDB}).List(ctx, userB, "journal")
+		if e != nil || len(rows) != 1 {
+			t.Fatal("Free journal retry duplicated Match", e)
+		}
+		assertErrorCode(t, call(serverA, "POST", "/api/v1/journal/screenings", string(payload), tokenA), 422, "SCREENING_RECEIPT_INVALID")
+	})
 
 	// A trusted operator can activate a plan for another account. That plan's
 	// feature mapping becomes an effective entitlement without recreating a
@@ -482,8 +579,8 @@ func TestPostgresAPIContractsAndOwnership(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("owner cancellation = %d: %s", response.Code, response.Body.String())
 	}
-	if err := accounts.RequireFeature(ctx, userB, access.FeatureScreener); err != access.ErrEntitlementMissing {
-		t.Fatalf("canceled subscription remained usable: %v", err)
+	if policy, err := accounts.EffectiveAccess(ctx, userB); err != nil || policy.PlanCode != "free" || policy.Screening.MaxSymbols != 3 {
+		t.Fatalf("canceled subscription did not return to Free: %+v %v", policy, err)
 	}
 	// Revoked and expired sessions cannot rotate back into an active state.
 	bSession, err := sessions.Verify(ctx, userB, tokenB)
@@ -517,7 +614,7 @@ func (provider *integrationMarketProvider) Daily(_ context.Context, instruments 
 	return []marketdata.Series{{Symbol: instruments[0].Symbol, Timezone: "UTC", Candles: append([]core.Candle(nil), provider.candles...)}}, nil
 }
 
-func verifyPostgresScreeningSocket(t *testing.T, server *api.Server, ticket string, series []marketdata.Series, rule core.RuleSnapshot) {
+func verifyPostgresScreeningSocket(t *testing.T, server *api.Server, ticket string, series []marketdata.Series, rule core.RuleSnapshot) screenerapi.ResultMessage {
 	t.Helper()
 	// With the integration flag, features originate in the compiled Go/WASM
 	// bridge exactly as in Model A. Otherwise retain the fast native check.
@@ -546,6 +643,7 @@ func verifyPostgresScreeningSocket(t *testing.T, server *api.Server, ticket stri
 		t.Fatal(err)
 	}
 	defer connection.Close(websocket.StatusNormalClosure, "integration complete")
+	connection.SetReadLimit(1 << 20)
 	if err := wsjson.Write(ctx, connection, screenerapi.EvaluateMessage{Type: "screener.evaluate", Protocol: core.PrivateProtocol,
 		RequestID: "postgres-screening", EngineVersion: core.EngineVersion, FeatureSchemaVersion: core.FeatureSchemaVersion, Candidates: candidates}); err != nil {
 		t.Fatal(err)
@@ -584,4 +682,5 @@ func verifyPostgresScreeningSocket(t *testing.T, server *api.Server, ticket stri
 		}
 	}
 	t.Logf("Postgres screening verified: %d symbols, %d candidates, %d decisions", len(series), len(candidates), len(result.Results))
+	return result
 }

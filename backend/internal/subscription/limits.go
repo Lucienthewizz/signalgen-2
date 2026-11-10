@@ -2,7 +2,6 @@ package subscription
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -22,7 +21,7 @@ func LimitsForPlan(code string) ResourceLimits {
 	case "analyst":
 		return ResourceLimits{CustomRules: 10, StockUniverses: 5}
 	default:
-		return ResourceLimits{CustomRules: 0, StockUniverses: 5}
+		return ResourceLimits{CustomRules: 0, StockUniverses: 1}
 	}
 }
 
@@ -32,30 +31,34 @@ func EffectiveLimits(current Subscription, now time.Time) ResourceLimits {
 		(current.PlanCode == "analyst" || current.PlanCode == "pro") {
 		return LimitsForPlan(current.PlanCode)
 	}
-	// Preserve capacity for existing operator grants. This does not unlock the
-	// screener: RequireFeature still denies callers without effective access.
-	return LimitsForPlan("analyst")
+	return LimitsForPlan("free")
 }
 
 // LockedLimits is called inside an owner-serialized creation transaction.
 // Sharing the subscription row lock prevents a concurrent downgrade/cancel
 // from changing the plan while a resource is inserted. No schema change needed.
 func LockedLimits(ctx context.Context, tx pgx.Tx, owner string) (ResourceLimits, error) {
-	var code string
-	err := tx.QueryRow(ctx, `select subscription.plan_code
-from signalgen.subscriptions subscription
-join signalgen.subscription_plans plan on plan.code=subscription.plan_code and plan.active
-where subscription.user_id=$1::uuid and subscription.status in ('active','trialing')
-and subscription.current_period_start<=now() and subscription.current_period_end>now()
-for share of subscription`, owner).Scan(&code)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return LimitsForPlan("analyst"), nil
-	}
+	policy, err := LockedAccess(ctx, tx, owner)
+	return policy.Limits, err
+}
+
+func LockedAccess(ctx context.Context, tx pgx.Tx, owner string) (EffectiveAccess, error) {
+	// A downgrade must not race resource creation/update across API instances.
+	rows, err := tx.Query(ctx, `select user_id from signalgen.subscriptions where user_id=$1::uuid for share`, owner)
 	if err != nil {
-		return ResourceLimits{}, err
+		return EffectiveAccess{}, err
 	}
-	if code != "pro" && code != "analyst" {
-		code = "analyst"
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return EffectiveAccess{}, err
 	}
-	return LimitsForPlan(code), nil
+	rows, err = tx.Query(ctx, `select user_id from signalgen.feature_grants where user_id=$1::uuid for share`, owner)
+	if err != nil {
+		return EffectiveAccess{}, err
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return EffectiveAccess{}, err
+	}
+	return ReadAccess(ctx, tx, owner)
 }

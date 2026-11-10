@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 	"strings"
 
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -103,16 +103,19 @@ func (store *PostgresRepository) Create(ctx context.Context, owner, name string,
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, owner); err != nil {
 		return Universe{}, err
 	}
-	limits, err := subscription.LockedLimits(ctx, tx, owner)
+	policy, err := subscription.LockedAccess(ctx, tx, owner)
 	if err != nil {
 		return Universe{}, err
+	}
+	if len(symbols) > policy.Screening.MaxSymbols {
+		return Universe{}, subscription.ErrPlanLimit
 	}
 	var used int
 	if err := tx.QueryRow(ctx, `select count(*) from signalgen.stock_universes where owner_user_id=$1::uuid`, owner).Scan(&used); err != nil {
 		return Universe{}, err
 	}
-	if used >= limits.StockUniverses {
-		return Universe{}, ErrLimit
+	if used >= policy.Limits.StockUniverses {
+		return Universe{}, subscription.ErrPlanLimit
 	}
 	var id string
 	if err := tx.QueryRow(ctx, `insert into signalgen.stock_universes(owner_user_id,name) values($1::uuid,$2) returning id`, owner, name).Scan(&id); err != nil {
@@ -137,13 +140,29 @@ func (store *PostgresRepository) Update(ctx context.Context, owner, id, name str
 		return Universe{}, err
 	}
 	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, owner); err != nil {
+		return Universe{}, err
+	}
+	policy, err := subscription.LockedAccess(ctx, tx, owner)
+	if err != nil {
+		return Universe{}, err
+	}
+	if len(symbols) > policy.Screening.MaxSymbols {
+		return Universe{}, subscription.ErrPlanLimit
+	}
 	command, err := tx.Exec(ctx, `update signalgen.stock_universes set name=$3,version=version+1,updated_at=now()
 where owner_user_id=$1::uuid and id=$2 and version=$4`, owner, id, name, version)
 	if err != nil {
 		return Universe{}, err
 	}
 	if command.RowsAffected() != 1 {
-		if _, err := store.Get(ctx, owner, id); errors.Is(err, ErrNotFound) {
+		// Reuse the transaction connection: acquiring a second pool slot here
+		// can deadlock concurrent stale updates when the pool is saturated.
+		var exists bool
+		if err := tx.QueryRow(ctx, `select exists(select 1 from signalgen.stock_universes where owner_user_id=$1::uuid and id=$2)`, owner, id).Scan(&exists); err != nil {
+			return Universe{}, err
+		}
+		if !exists {
 			return Universe{}, ErrNotFound
 		}
 		return Universe{}, ErrVersionConflict

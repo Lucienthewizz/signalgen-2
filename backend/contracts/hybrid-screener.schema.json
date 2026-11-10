@@ -125,6 +125,8 @@
             "SESSION_EXPIRED",
             "ACCOUNT_SUSPENDED",
             "ENTITLEMENT_REQUIRED",
+            "FEATURE_NOT_INCLUDED",
+            "PLAN_LIMIT_EXCEEDED",
             "GRANT_INVALID",
             "GRANT_EXPIRED",
             "RESOURCE_NOT_FOUND",

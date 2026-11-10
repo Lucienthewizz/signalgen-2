@@ -11,6 +11,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 func (server *Handler) CreateScreenerSocketTicket(writer http.ResponseWriter, request *http.Request) {
@@ -88,6 +89,10 @@ func (server *Handler) verifiedScreenerDataset(writer http.ResponseWriter, reque
 	if manifest.DatasetID == "" || manifest.DatasetID != grant.DatasetID || manifest.Version != grant.DatasetVersion || manifest.Checksum != grant.DatasetChecksum || manifest.Purpose != grant.Purpose {
 		shared.WriteError(writer, request, http.StatusUnprocessableEntity, "VERSION_MISMATCH", "Dataset tidak cocok dengan compute grant.")
 		return dataset.Manifest{}, false, screener.OutcomeRejected
+	}
+	if err := subscription.CheckScreening(request.Context(), server.Access, owner, grant.RuleID, manifest.Timeframe, len(manifest.Symbols)); err != nil {
+		shared.WriteAccessError(writer, request, err)
+		return dataset.Manifest{}, false, authorizationOutcome(err)
 	}
 	return manifest, true, ""
 }
