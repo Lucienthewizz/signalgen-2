@@ -12,6 +12,22 @@ Always check the available skill catalog before starting a task. When a skill ma
 - If a required skill is missing or inaccessible, check the configured skill locations, disclose the limitation, and use an available fallback when it can safely complete the task. Do not install skills, enable integrations, upload files, or change accounts without authorization.
 - Follow user instructions and higher-priority requirements when skill guidance conflicts. Do not expand the task, redesign unrelated UI, or add dependencies solely because a skill suggests them.
 
+# Task completion and skill selection
+
+1. Establish the requested outcome and acceptance checks from the prompt and project context. Ask only when missing information prevents meaningful progress or materially affects the result.
+2. Select skills by the work they own: code discovery, implementation, design, verification, or writing. Read their applicable instructions and references. Reuse instructions already read in the conversation unless they changed or need refreshing. The practical examples in `SKILLS_GUIDE.md` supplement the available skill catalog; they do not replace it.
+3. Inspect the existing implementation and conventions before changing files. Use graph-first discovery and coverage checks for structural code exploration, and current documentation tools for library-specific decisions. Do not infer implemented behavior from historical plans or skill descriptions.
+4. Implement the requested scope using existing components and patterns. When skills overlap, follow each relevant requirement without duplicate audits or conflicting rewrites. Preserve established product choices unless the task requires changing them.
+5. Verify the behavior affected by the change. For UI work, check relevant loading, empty, error, success, keyboard, responsive, and theme states where applicable. Run appropriate project checks and scoped browser verification. A skill checklist alone is not proof that the feature works.
+6. Apply both mandatory writing reviews below, then inspect the final diff for scope and credential exposure before the authorized Git delivery. Report what changed, what was actually verified, and any material blocker. Distinguish source evidence, test/runtime evidence, and assumptions. Do not promise that using a skill guarantees a satisfactory or secure result.
+
+# Security skill selection
+
+- Use `security-audit` for security questions, focused vulnerability reviews, and security-sensitive work such as authentication, authorization, owner/tenant isolation, untrusted input, secrets, uploads, and external callbacks. Read its instructions before use and keep ordinary feature work in guidance mode, limited to the affected boundaries.
+- Run the complete audit workflow only when the user explicitly requests a codebase audit, pen test, full security review, or audit report artifacts, as defined by the skill. Installing or selecting the skill does not authorize a full audit.
+- Preserve the skill's distinction between confirmed findings, unresolved candidates, and rejected claims. Require source evidence and independent verification when its full workflow calls for it; do not call a checklist deviation a vulnerability.
+- Follow its execution isolation requirements. If the required sandbox controls are unavailable, inspect source and disclose the validation blocker instead of running target-controlled code outside those controls. Do not probe live or shared services as part of this workflow.
+
 # Mandatory final writing review
 
 For every user prompt, apply both `no-ai-slop` and `unslop` before sending the final answer. After implementing a feature or fix, also review any user-facing prose created or changed by the task, such as UI labels, error messages, help text, and documentation. Read both skills before their first use in the conversation and follow their applicable guidance on subsequent turns.
