@@ -167,15 +167,35 @@ export type StockUniverse = {
   updated_at: string;
 };
 
+export type EffectiveAccess = {
+  plan_code: "free" | "analyst" | "pro";
+  source: string;
+  features: Array<"screener" | "backtest">;
+  limits: { custom_rules: number; stock_universes: number };
+  screening: {
+    max_symbols: number;
+    timeframes: ScreenerTimeframe[];
+    system_rules_only: boolean;
+  };
+};
+
 export type SubscriptionPlan = {
   code: "free" | "analyst" | "pro";
   name: string;
   description: string;
   features: Array<"screener" | "backtest">;
   limits?: { custom_rules: number; stock_universes: number };
+  screening?: EffectiveAccess["screening"];
+  pricing?: {
+    amount: number;
+    currency: "IDR";
+    period: "month";
+    activation: "manual";
+  };
 };
 
 export type ResourceUsage = {
+  access?: EffectiveAccess;
   limits: { custom_rules: number; stock_universes: number };
   used: { custom_rules: number; stock_universes: number };
 };
@@ -285,6 +305,7 @@ export type ScreenerResult = {
 };
 
 export type AccountState = {
+  access?: EffectiveAccess;
   user: {
     id: string;
     email: string;

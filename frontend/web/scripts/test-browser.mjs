@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const tiersOnly = process.argv.includes("--tiers");
 const authOnly = process.argv.includes("--auth");
 const adminOnly = process.argv.includes("--admin");
 const studyOnly = process.argv.includes("--study");
@@ -15,7 +16,7 @@ const recoveryOnly = process.argv.includes("--recovery");
 const monitorOnly = process.argv.includes("--monitor");
 const usabilityOnly = process.argv.includes("--usability");
 const baseURL = process.env.SIGNALGEN_TEST_BASE_URL || "http://127.0.0.1:5174";
-const testFilename = authOnly ? "tests/browser/google-auth.cli.js" : studyOnly
+const testFilename = tiersOnly ? "tests/browser/tier-access.cli.js" : authOnly ? "tests/browser/google-auth.cli.js" : studyOnly
   ? "tests/browser/signal-study.cli.js"
   : usabilityOnly
     ? "tests/browser/analysis-usability.cli.js"
@@ -32,7 +33,7 @@ const testFilename = authOnly ? "tests/browser/google-auth.cli.js" : studyOnly
               : catalogOnly
                 ? "tests/browser/stock-catalog.cli.js"
                 : "tests/browser/workspace-regression.cli.js";
-const attributeName = authOnly ? "data-signalgen-auth-tests" : studyOnly
+const attributeName = tiersOnly ? "data-signalgen-tier-tests" : authOnly ? "data-signalgen-auth-tests" : studyOnly
   ? "data-signalgen-study-tests"
   : usabilityOnly
     ? "data-signalgen-usability-tests"
@@ -165,7 +166,7 @@ if (usedCli) {
 }
 
 console.log(
-  authOnly ? "PASS: Google PKCE login, duplicate click, session handoff, disabled provider, cancelled/expired/unsolicited callback; 1440/390px dark/light. Synthetic API/provider/account fixtures only." : studyOnly
+  tiersOnly ? "PASS: Free onboarding, own three-stock universe, fourth-stock limit, baseline screen-to-journal, Free/Analyst preview without premium calls, manual activation, desktop/mobile dark/light CSS regression. Synthetic fixtures only." : authOnly ? "PASS: Google PKCE login, duplicate click, session handoff, disabled provider, cancelled/expired/unsolicited callback; 1440/390px dark/light. Synthetic API/provider/account fixtures only." : studyOnly
     ? "PASS: batched signal-study browser regression with real Go/WASM; synthetic API/account/provider fixtures."
     : usabilityOnly
       ? "PASS: screening-only journal selection, receipt-only writes, failed-row retry, double-click prevention, bounded paging and outage recovery; desktop/mobile, dark/light. Synthetic API/account/evaluator fixtures only."

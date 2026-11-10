@@ -1,3 +1,5 @@
+import { TierSummary } from "@/components/tier-summary";
+import { tierAccess } from "@/lib/tier-access";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -242,26 +244,34 @@ export function WorkspaceScreenerPanel({
     setErrorOpen(false);
     setFailure(null);
     try {
-      const [accountResponse, ruleResponse, universeResponse] =
-        await Promise.all([
-          // Shared GETs coalesce with shell readers and Strict Mode remounts.
-          // The panel's generation below discards stale responses without
-          // aborting another component's authorized read.
-          api.account(),
-          api.listRules(),
-          api.listStockUniverses(),
-        ]);
+      const accountResponse = await api.account();
+      if (!mounted.current || version !== resourceVersion.current) return;
+      setAccount(accountResponse);
+      const policy = tierAccess(accountResponse)!;
+      if (!policy.screening.timeframes.includes(timeframe))
+        setTimeframe(policy.screening.timeframes[0]);
+      const [ruleResponse, universeResponse] = await Promise.all([
+        // Shared GETs coalesce with shell readers and Strict Mode remounts.
+        // The panel's generation below discards stale responses without
+        // aborting another component's authorized read.
+        api.listRules(),
+        api.listStockUniverses(),
+      ]);
       if (!mounted.current || version !== resourceVersion.current) return;
       if (accountResponse.user.id !== userId)
         throw new Error("The account changed. Reload your selections.");
       setAccount(accountResponse);
-      setRules(ruleResponse.items);
+      const availableRules = ruleResponse.items.filter(
+        (rule) =>
+          !policy.screening.system_rules_only || rule.owner_type === "system",
+      );
+      setRules(availableRules);
       setUniverses(universeResponse.items);
       const saved = readScreenerPreferences(accountResponse.user.id);
       setRuleId((current) =>
-        ruleResponse.items.some((item) => item.id === (current || saved.ruleId))
+        availableRules.some((item) => item.id === (current || saved.ruleId))
           ? current || saved.ruleId
-          : (ruleResponse.items[0]?.id ?? ""),
+          : (availableRules[0]?.id ?? ""),
       );
       setUniverseId((current) =>
         universeResponse.items.some(
@@ -301,7 +311,7 @@ export function WorkspaceScreenerPanel({
           ? caught.message
           : "Screener resources could not be loaded.",
       );
-      setErrorOpen(true);
+      setErrorOpen(false);
     } finally {
       if (resourceOperation.current === controller)
         resourceOperation.current = null;
@@ -424,7 +434,14 @@ export function WorkspaceScreenerPanel({
     (universe) => universe.id === universeId,
   );
   const conditions = useMemo(() => ruleSummary(selectedRule), [selectedRule]);
+  const policy = tierAccess(account);
   const canScreen = account?.features.includes("screener") ?? false;
+  const selectionIssue =
+    policy &&
+    selectedUniverse &&
+    selectedUniverse.symbols.length > policy.screening.max_symbols
+      ? `This universe has ${selectedUniverse.symbols.length} stocks. Your plan allows ${policy.screening.max_symbols}. Edit the universe or view plans.`
+      : null;
 
   function updateStage(next: ScreenerStage) {
     setStage(stages[next][0]);
@@ -437,6 +454,7 @@ export function WorkspaceScreenerPanel({
       !selectedRule ||
       !selectedUniverse ||
       !canScreen ||
+      !!selectionIssue ||
       monitorState.active
     )
       return;
@@ -531,6 +549,7 @@ export function WorkspaceScreenerPanel({
     if (failure?.action === "login") location.hash = "login";
     else if (failure?.action === "subscription")
       location.hash = "app/subscription";
+    else if (failure?.action === "account") location.hash = "app/access";
     else if (failure?.action === "interval") {
       cancel();
       recoveryFocus.current = document.getElementById("screen-interval");
@@ -642,7 +661,15 @@ export function WorkspaceScreenerPanel({
           </div>
         </header>
 
-        {loadingResources && !account ? (
+        {policy && <TierSummary access={policy} variant="screener" />}
+        {selectionIssue && (
+          <div className="tier-notice">
+            <span>{selectionIssue}</span>
+            <a href="#app/universes">Edit universe</a>
+          </div>
+        )}
+        {loadingResources &&
+        (!account || (!rules.length && !universes.length)) ? (
           <div
             className="screener-resource-loading"
             role="status"
@@ -671,10 +698,10 @@ export function WorkspaceScreenerPanel({
               <EmptyMedia variant="icon">
                 <ShieldCheck />
               </EmptyMedia>
-              <EmptyTitle>Screener access is not active</EmptyTitle>
+              <EmptyTitle>Review your screening access</EmptyTitle>
               <EmptyDescription>
-                Open Plan & access to review your plan, or ask an operator for
-                screener access.
+                Your plan and account access are shown in Plan & access. Your
+                saved data is retained.
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
@@ -701,7 +728,7 @@ export function WorkspaceScreenerPanel({
                 <EmptyDescription>
                   {!rules.length
                     ? "You need at least one active rule to run screening."
-                    : "Choose 1–10 stocks to analyze together."}
+                    : `Choose 1–${policy?.screening.max_symbols ?? 10} stocks to analyze together.`}
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
@@ -778,14 +805,28 @@ export function WorkspaceScreenerPanel({
                   <SelectContent>
                     <SelectGroup>
                       {screenerIntervals.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
+                        <SelectItem
+                          key={item.value}
+                          value={item.value}
+                          disabled={
+                            !!policy &&
+                            !policy.screening.timeframes.includes(item.value)
+                          }
+                        >
                           {item.label}
                         </SelectItem>
                       ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
-                <FieldDescription>Completed candles only.</FieldDescription>
+                <FieldDescription>
+                  Completed candles only.{" "}
+                  {policy?.screening.system_rules_only && (
+                    <a href="#app/subscription">
+                      Analyst includes intraday intervals.
+                    </a>
+                  )}
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="screen-universe">
@@ -969,6 +1010,7 @@ export function WorkspaceScreenerPanel({
                   loadingResources ||
                   !backendOnline ||
                   !canScreen ||
+                  !!selectionIssue ||
                   !selectedRule ||
                   !selectedUniverse
                 }
@@ -1089,13 +1131,15 @@ export function WorkspaceScreenerPanel({
                 ? "Sign in"
                 : failure?.action === "subscription"
                   ? "Check access"
-                  : failure?.action === "resources"
-                    ? "Reload selections"
-                    : failure?.action === "interval"
-                      ? "Change interval"
-                      : monitorState.active
-                        ? "Automatic retry scheduled"
-                        : "Try again"}
+                  : failure?.action === "account"
+                    ? "View account"
+                    : failure?.action === "resources"
+                      ? "Reload selections"
+                      : failure?.action === "interval"
+                        ? "Change interval"
+                        : monitorState.active
+                          ? "Automatic retry scheduled"
+                          : "Try again"}
             </Button>
           }
         >

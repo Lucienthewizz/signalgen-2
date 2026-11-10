@@ -1,3 +1,4 @@
+import { tierName } from "@/lib/tier-access";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useState } from "react";
 import {
@@ -256,7 +257,9 @@ export function WorkspaceOverviewPanel({
                   ? latest
                     ? "Use your last selection or adjust it before screening."
                     : "Choose a rule and stock universe, then review the results and evidence."
-                  : "You need screener access, a rule, and a stock universe to run an analysis."}
+                  : account?.access?.screening.system_rules_only
+                    ? "Your Free access and system rule are ready. Choose up to three stocks in one market to start."
+                    : "You need screener access, a rule, and a stock universe to run an analysis."}
             </p>
             {latest && (
               <div
@@ -351,9 +354,14 @@ export function WorkspaceOverviewPanel({
               view: "subscription",
               icon: Crown,
               label: "Plan",
-              value:
-                subscription?.plan_name ??
-                (pending.subscription ? "Loading…" : "—"),
+              value: account?.access
+                ? tierName(account.access.plan_code)
+                : (subscription?.plan_name ??
+                  (pending.account || pending.subscription
+                    ? "Loading…"
+                    : account
+                      ? "Free"
+                      : "—")),
               action: "View plan",
             },
             {

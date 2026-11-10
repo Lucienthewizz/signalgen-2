@@ -80,6 +80,8 @@ import {
   type ScreenerStage,
 } from "@/analysis/screener";
 import { api } from "@/api/client";
+import { TierSummary } from "@/components/tier-summary";
+import { tierAccess, tierName } from "@/lib/tier-access";
 import { useWorkspaceSync } from "@/lib/use-workspace-sync";
 import type { AccountDevice, AccountSession, AccountState } from "@/types";
 import { RouteBoundary, RouteLoading } from "@/components/route-boundary";
@@ -1446,7 +1448,10 @@ export function AccessPanel({
         <div className="panel-heading">
           <div>
             <span>ENTITLEMENT</span>
-            <h3>Analysis access</h3>
+            <h3>
+              Analysis access
+              {account?.access && ` · ${account.access.plan_code}`}
+            </h3>
           </div>
           <Badge variant="outline">
             {account ? account.user.role : authenticated ? "Loading" : "Guest"}
@@ -1778,6 +1783,29 @@ export function DemoWorkspace({
     return () => query.removeEventListener("change", change);
   }, []);
   const sync = useWorkspaceSync(authenticated ? user?.id : undefined);
+  const [account, setAccount] = useState<AccountState | null>(null);
+  const [accountError, setAccountError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setAccount((current) =>
+      authenticated && current?.user.id === user?.id ? current : null,
+    );
+    setAccountError(false);
+    if (authenticated && user?.id && backendOnline) {
+      void api
+        .account()
+        .then((next) => {
+          if (active && next.user.id === user.id) setAccount(next);
+        })
+        .catch(() => {
+          if (active) setAccountError(true);
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [authenticated, user?.id, backendOnline, view]);
+
   // Only these editors consume synchronized drafts/preferences at mount.
   const needsWorkspace = ["analysis", "rules", "realtime", "news"].includes(
     view,
@@ -1923,11 +1951,19 @@ export function DemoWorkspace({
           </nav>
         </Tooltip.Provider>
         <div className="sidebar__footer">
+          {account && (
+            <TierSummary
+              access={tierAccess(account)!}
+              variant="sidebar"
+              collapsed={sidebarCollapsed && !mobileViewport}
+            />
+          )}
           {authenticated && user ? (
             <AccountMenu
               user={user}
               onLogout={onLogout}
               variant="sidebar"
+              showPlanInTrigger={!account}
               collapsed={sidebarCollapsed && !mobileViewport}
             />
           ) : (
@@ -2078,8 +2114,14 @@ export function DemoWorkspace({
                         backendOnline={backendOnline}
                       />
                     )}
-                    {view === "backtest" && (
+                    {view === "backtest" && accountError && (
+                      <p role="alert">
+                        Access could not be checked. Refresh to try again.
+                      </p>
+                    )}
+                    {view === "backtest" && !accountError && (
                       <WorkspaceBacktestPanel
+                        account={account}
                         key={user?.id ?? "guest"}
                         authenticated={authenticated}
                         backendOnline={backendOnline}
@@ -2130,6 +2172,7 @@ export function DemoWorkspace({
                     )}
                     {view === "subscription" && (
                       <SubscriptionPanel
+                        key={user?.id ?? "guest"}
                         authenticated={authenticated}
                         backendOnline={backendOnline}
                       />

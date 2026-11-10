@@ -1,5 +1,7 @@
 # SignalGen — Frontend MVP PRD
 
+> Pembaruan produk 10 November 2026: [paket MVP dan onboarding](../backend/MVP_TIERS.md) berlaku untuk akses Free/Analyst/Pro, harga bulanan, kuota, dan rollout. API aktif 0.19.0; engine/WASM tidak berubah. Ketentuan tier lama yang bertentangan di bawah ini bersifat historis.
+
 Revisi aktif 5 November 2026: jurnal hanya menerima hasil screening Match yang
 dipilih pengguna. Hapus form/CRUD transaksi dan grafik P&L dari alur aktif;
 [screening-journal-1](../backend/SCREENING_JOURNAL.md) menggantikan kebutuhan jurnal

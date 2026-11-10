@@ -997,7 +997,10 @@ export const api = {
   listSubscriptionPlans: () =>
     request<{ items: SubscriptionPlan[] }>("/api/v1/subscription/plans"),
   currentSubscription: (signal?: AbortSignal) =>
-    request<{ subscription: Subscription | null }>("/api/v1/subscription", {
+    request<{
+      subscription: Subscription | null;
+      access?: import("@/types").EffectiveAccess;
+    }>("/api/v1/subscription", {
       signal,
     }),
   resourceUsage: () =>

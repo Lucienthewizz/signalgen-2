@@ -32,11 +32,11 @@ export function evaluateOverSocket(
       )
         socket.close(1000, "completed");
     }
-    function finishError(message: string) {
+    function finishError(message: string, status = 0, code?: string) {
       if (settled) return;
       settled = true;
       cleanup();
-      reject(new ApiError(message, 0));
+      reject(new ApiError(message, status, code));
     }
     function cancelled() {
       finishError("Analysis cancelled.");
@@ -68,7 +68,8 @@ export function evaluateOverSocket(
     };
     socket.onmessage = (event) => {
       let payload:
-        ScreenerResult | { type: "screener.error"; message?: string };
+        | ScreenerResult
+        | { type: "screener.error"; message?: string; code?: string };
       try {
         payload = JSON.parse(String(event.data));
       } catch {
@@ -80,7 +81,35 @@ export function evaluateOverSocket(
         return;
       }
       if (payload.type === "screener.error") {
-        finishError(payload.message ?? "Scoring was denied.");
+        const code = payload.code;
+        const status = [
+          "FEATURE_NOT_INCLUDED",
+          "PLAN_LIMIT_EXCEEDED",
+          "ENTITLEMENT_REQUIRED",
+          "ACCOUNT_SUSPENDED",
+          "SESSION_EXPIRED",
+          "SESSION_REVOKED",
+          "GRANT_EXPIRED",
+          "GRANT_INVALID",
+        ].includes(code ?? "")
+          ? 403
+          : [
+                "UNAUTHENTICATED",
+                "AUTH_REQUIRED",
+                "TICKET_INVALID",
+                "TICKET_EXPIRED",
+              ].includes(code ?? "")
+            ? 401
+            : code === "RESOURCE_NOT_FOUND"
+              ? 404
+              : [
+                    "VERSION_MISMATCH",
+                    "INVALID_MESSAGE",
+                    "UNSUPPORTED_CAPABILITY",
+                  ].includes(code ?? "")
+                ? 422
+                : 503;
+        finishError(payload.message ?? "Scoring was denied.", status, code);
         return;
       }
       if (payload.type !== "screener.result") return;

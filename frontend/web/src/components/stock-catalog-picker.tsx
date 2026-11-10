@@ -70,6 +70,7 @@ type Props = {
   onToggle: (symbol: string) => void;
   children?: ReactNode;
   header?: ReactNode;
+  selectionLimit?: number;
 };
 
 export function StockCatalogPicker({
@@ -80,6 +81,7 @@ export function StockCatalogPicker({
   onToggle,
   children,
   header,
+  selectionLimit = universeSelectionLimit,
 }: Props) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<StockCategory>("all");
@@ -110,7 +112,7 @@ export function StockCatalogPicker({
     () => catalogPage(catalog, query, requestedPage, category),
     [catalog, query, requestedPage, category],
   );
-  const full = selected.length >= universeSelectionLimit;
+  const full = selected.length >= selectionLimit;
   return (
     <div className="stock-catalog-picker" aria-busy={loading}>
       <section
@@ -428,7 +430,7 @@ export function StockCatalogPicker({
               </CardTitle>
               <CardAction>
                 <span role="status">
-                  {selected.length} / {universeSelectionLimit}
+                  {selected.length} / {selectionLimit}
                 </span>
               </CardAction>
             </CardHeader>

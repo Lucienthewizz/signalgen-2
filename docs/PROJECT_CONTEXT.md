@@ -1,6 +1,8 @@
 # SignalGen 2.0 — Project Context and Architecture
 
-Versi 2.5 · 5 November 2026. SignalGen adalah aplikasi web multi-user dengan
+> Pembaruan produk 10 November 2026: [paket MVP dan onboarding](backend/MVP_TIERS.md) berlaku untuk akses Free/Analyst/Pro, harga bulanan, kuota, dan rollout. API aktif 0.19.0; engine/WASM tidak berubah. Ketentuan tier lama yang bertentangan di bawah ini bersifat historis.
+
+Versi 2.6 · 10 November 2026. SignalGen adalah aplikasi web multi-user dengan
 backend Go/Gin dan Supabase Postgres. Scope target bukan bukti semua fitur selesai;
 status terverifikasi berada di [backend progress](backend/BACKEND_PROGRESS.md) dan
 [laporan asis](ASIS_2026_10_07.md).
@@ -106,8 +108,7 @@ Supabase bearer membuktikan identitas. Sesi aplikasi terikat instalasi browser m
 ID instalasi bukan hardware ID. IP dicatat sebagai sinyal; hard-lock IP tidak
 menjadi default. Grant manual memakai fitur/expiry/alasan/audit. Fondasi
 subscription menyimpan paket, periode, status, feature mapping, dan event;
-aktivasi MVP dilakukan operator tepercaya. Harga, checkout, dan webhook tetap
-menunggu keputusan provider dan tidak boleh disimulasikan sebagai payment sukses.
+aktivasi satu bulan dilakukan operator tepercaya. Harga bulanan sudah ditetapkan dalam paket MVP; checkout dan webhook belum dibuat dan tidak boleh disimulasikan sebagai payment sukses.
 
 Kelanjutan admin backend yang diminta 6 Oktober 2026 menyediakan daftar metadata
 akun aplikasi, suspend/aktifkan kembali dengan pencabutan sesi dan audit atomik,

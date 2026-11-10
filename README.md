@@ -155,3 +155,7 @@ npm run build
 ## License and ownership
 
 This repository is maintained for the SignalGen 2.0 development project. Confirm licensing and distribution requirements with the project owner before publishing packaged builds.
+
+## Paket MVP dan akun baru
+
+Akun aktif tanpa paket berbayar memakai Free: pilih sendiri 1–3 saham, simpan satu universe dan jalankan rule bawaan dengan candle harian. Match dapat disimpan ke jurnal. Analyst Rp49.000/bulan membuka screening pribadi; Pro Rp99.000/bulan membuka analisis historis. Aktivasi melalui operator. Lihat [onboarding, batas server dan rollout](docs/backend/MVP_TIERS.md).

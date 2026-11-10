@@ -15,10 +15,37 @@ export function screeningFailure(error: {
       detail: "Your session has expired. Sign in before retrying.",
       action: "login",
     };
+  if (error.code === "FEATURE_NOT_INCLUDED")
+    return {
+      title: "Choose a plan for this feature",
+      detail:
+        "Your current plan does not include this feature. Your selections and saved data are retained.",
+      action: "subscription",
+    };
+  if (error.code === "PLAN_LIMIT_EXCEEDED")
+    return {
+      title: "Plan limit reached",
+      detail:
+        "Reduce the stock selection, use the daily interval or system rule, or view the available plans.",
+      action: "subscription",
+    };
+  if (error.code === "SESSION_EXPIRED" || error.code === "SESSION_REVOKED")
+    return {
+      title: "Sign in again",
+      detail: "Your application session has ended. Sign in to continue.",
+      action: "login",
+    };
+  if (error.code === "ACCOUNT_SUSPENDED")
+    return {
+      title: "Account unavailable",
+      detail: "This account is not active. Contact an operator for help.",
+      action: "account",
+    };
   if (error.status === 403)
     return {
-      title: "Screening access needs attention",
-      detail: "Check your plan or ask an operator to restore screening access.",
+      title: "Screening request was not allowed",
+      detail:
+        "Review your account and plan access. Your saved data is retained.",
       action: "subscription",
     };
   if (error.code === "INTERVAL_UNAVAILABLE")

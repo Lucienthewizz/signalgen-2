@@ -1,6 +1,8 @@
 # SignalGen 2.0 — Product Requirements Document
 
-Versi 2.5 · 5 November 2026 · Produk: aplikasi web multi-user dengan Supabase Postgres. Kebutuhan dan hasil pengujian aktual dibedakan; lihat [bahan asis 4 November](ASIS_2026_11_04.md).
+> Pembaruan produk 10 November 2026: [paket MVP dan onboarding](backend/MVP_TIERS.md) berlaku untuk akses Free/Analyst/Pro, harga bulanan, kuota, dan rollout. API aktif 0.19.0; engine/WASM tidak berubah. Ketentuan tier lama yang bertentangan di bawah ini bersifat historis.
+
+Versi 2.6 · 10 November 2026 · Produk: aplikasi web multi-user dengan Supabase Postgres. Kebutuhan dan hasil pengujian aktual dibedakan; lihat [bahan asis 4 November](ASIS_2026_11_04.md).
 
 Keputusan implementasi 5 Oktober 2026: alur screening aktif memakai **Model A**
 (indikator di Go/WASM client, private decision di Go server melalui WebSocket).
@@ -122,7 +124,7 @@ performa, recovery atau penerimaan pembimbing.
 - Jurnal: screening baru → pilih hasil Match → simpan snapshot → lihat arsip; tidak ada mutasi transaksi atau P&L.
 - Perangkat: list/revoke/registrasi ulang dengan limit; sesi lama ditolak pada request berikutnya.
 
-Owner berasal dari principal, bukan payload user_id. Role operator terpisah dari entitlement dan tidak otomatis mengizinkan akses resource privat orang lain. Paket berbasis fitur; nama/harga/kuota komersial belum final. Aplikasi meminta validasi akses server untuk run baru, termasuk cache hit; offline run bukan fitur MVP.
+Owner berasal dari principal, bukan payload user_id. Role operator terpisah dari entitlement dan tidak otomatis mengizinkan akses resource privat orang lain. Paket berbasis fitur: Free screening harian tiga saham, Analyst screening pribadi, Pro analisis historis; harga dan kuota mengikuti [paket MVP](backend/MVP_TIERS.md). Aplikasi meminta validasi akses server untuk run baru, termasuk cache hit; offline run bukan fitur MVP.
 
 Entitlement bukan DRM absolut: data/modul yang sudah didistribusikan dapat digunakan ulang oleh client modifikasi. Pengguna screener bisa menghitung backtest sendiri dari data yang sudah mereka miliki; jangan menjanjikan server dapat melarang operasi matematika lokal.
 

@@ -84,6 +84,9 @@ async (page) => {
   rulesMode="fail";
   await page.getByRole("button",{name:"Refresh selections",exact:true}).click();
   const errorDialog=page.getByRole("dialog",{name:"Service temporarily unavailable",exact:true});
+  await page.locator(".screener-error-summary").waitFor();
+  if(await errorDialog.isVisible())throw Error("Resource refresh opened an automatic error modal");
+  await page.getByRole("button",{name:"View error",exact:true}).click();
   await errorDialog.waitFor();
   await errorDialog.getByRole("button",{name:"Close",exact:true}).click();
   if(!await stock.isVisible())throw Error("Read outage lost the previous result");

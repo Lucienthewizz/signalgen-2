@@ -1,3 +1,5 @@
+import { tierAccess } from "@/lib/tier-access";
+import type { AccountState } from "@/types";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpenCheck,
@@ -118,6 +120,12 @@ export function ServerRulesPanel({
   userId,
   onRun,
 }: Props) {
+  const [tierAccount, setTierAccount] = useState<AccountState | null>(null);
+  const rulePolicy = tierAccess(tierAccount);
+  const canWriteRules =
+    !!rulePolicy &&
+    !rulePolicy.screening.system_rules_only &&
+    rulePolicy.limits.custom_rules > 0;
   const [rules, setRules] = useState<RuleResource[]>(
     () => ui.peekRules(userId)?.items ?? [],
   );
@@ -161,6 +169,7 @@ export function ServerRulesPanel({
 
   useEffect(() => {
     const owner = authenticated ? userId : undefined;
+    setTierAccount(null);
     setDraftOwner(owner);
     setPendingDraft(owner ? readRuleDraft(owner) : null);
     setDefinition(blankDefinition());
@@ -221,8 +230,12 @@ export function ServerRulesPanel({
     setLoading(true);
     setError(null);
     try {
-      const response = await ui.listRules(userId, refresh);
+      const [response, profile] = await Promise.all([
+        ui.listRules(userId, refresh),
+        api.account(),
+      ]);
       if (activeUser.current !== owner) return;
+      setTierAccount(profile);
       setRules(response.items);
     } catch (caught) {
       if (activeUser.current !== owner) return;
@@ -297,6 +310,12 @@ export function ServerRulesPanel({
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    if (!canWriteRules) {
+      setError(
+        "Personal rules require Analyst or Pro. Your draft is retained.",
+      );
+      return;
+    }
     if (!backendOnline) {
       setError("Your draft is retained. Reconnect before saving the rule.");
       return;
@@ -538,6 +557,16 @@ export function ServerRulesPanel({
           </Alert>
         )}
 
+        {tierAccount && !canWriteRules && (
+          <div className="tier-notice">
+            <strong>Free plan: use the system rule in Screener.</strong>
+            <span>
+              Your saved rules remain available to read and delete. Analyst adds
+              personal rule creation and editing.
+            </span>
+            <a href="#app/subscription">View Analyst</a>
+          </div>
+        )}
         <form className="rule-composer__form" onSubmit={save}>
           <fieldset
             disabled={saving || !!pendingDraft}
@@ -1045,7 +1074,7 @@ export function ServerRulesPanel({
                 <Button
                   type="submit"
                   size="lg"
-                  disabled={saving || !backendOnline}
+                  disabled={saving || !backendOnline || !canWriteRules}
                 >
                   {saving ? (
                     <LoaderCircle
