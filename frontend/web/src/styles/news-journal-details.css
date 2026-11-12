@@ -1881,12 +1881,21 @@ html[data-theme="light"] .journal-toolbar select {
   white-space: nowrap;
 }
 @media (max-width: 1050px) {
-  .journal-toolbar { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .journal-toolbar__filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .journal-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .journal-toolbar__filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 @media (max-width: 600px) {
-  .journal-toolbar__filters { grid-template-columns: minmax(0, 1fr); }
-  .journal-toolbar__actions > button { width: 100%; }
+  .journal-toolbar__filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .journal-toolbar__actions > button {
+    width: 100%;
+  }
 }
 .journal-date svg,
 .journal-toolbar__actions span svg,
@@ -2119,10 +2128,24 @@ html[data-theme="light"] .journal-toolbar select {
   justify-content: space-between;
   gap: 12px;
 }
-.journal-detail__title > div { min-width: 0; }
-.journal-detail__title h3 { overflow-wrap: anywhere; }
-.journal-detail__title p { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
-.journal-detail > .journal-detail__note { margin: 0; max-width: 75ch; font-size: 14px; line-height: 1.7; }
+.journal-detail__title > div {
+  min-width: 0;
+}
+.journal-detail__title h3 {
+  overflow-wrap: anywhere;
+}
+.journal-detail__title p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.journal-detail > .journal-detail__note {
+  margin: 0;
+  max-width: 75ch;
+  font-size: 14px;
+  line-height: 1.7;
+}
 .journal-detail__evidence {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr));
@@ -2135,7 +2158,10 @@ html[data-theme="light"] .journal-toolbar select {
   display: grid;
   gap: 7px;
 }
-.journal-detail__evidence dt { color: var(--muted); font-size: 13px; }
+.journal-detail__evidence dt {
+  color: var(--muted);
+  font-size: 13px;
+}
 .journal-detail__evidence dd {
   margin: 0;
   color: var(--text);
@@ -2150,9 +2176,15 @@ html[data-theme="light"] .journal-toolbar select {
   align-self: center;
   color: var(--muted);
 }
-.journal-tags > svg { width: 16px; height: 16px; flex-shrink: 0; }
+.journal-tags > svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
 @media (max-width: 600px) {
-  .journal-detail__title { flex-wrap: wrap; }
+  .journal-detail__title {
+    flex-wrap: wrap;
+  }
 }
 .journal-drafts {
   display: grid;

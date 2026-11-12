@@ -80,7 +80,9 @@
   box-sizing: border-box;
 }
 @media (max-width: 760px) {
-  :root { --workspace-panel-gutter: 20px; }
+  :root {
+    --workspace-panel-gutter: 20px;
+  }
 }
 html {
   color-scheme: dark;

@@ -68,8 +68,7 @@ export function parseMarketNews(payload: unknown): MarketArticle[] {
   if (!payload || typeof payload !== "object" || !("articles" in payload))
     throw new Error("The news response is invalid.");
   const rows = (payload as { articles: unknown }).articles;
-  if (!Array.isArray(rows))
-    throw new Error("The news response is invalid.");
+  if (!Array.isArray(rows)) throw new Error("The news response is invalid.");
   const seen = new Set<string>();
   return rows
     .flatMap((row): MarketArticle[] => {
@@ -117,9 +116,7 @@ export async function fetchMarketNews(
     return previous;
   if (Date.now() < nextAttempt) {
     if (previous) return { ...previous, warning: STALE_WARNING };
-    throw new Error(
-      "News is unavailable. Try again in a minute.",
-    );
+    throw new Error("News is unavailable. Try again in a minute.");
   }
   try {
     const response = await fetch(`${API_ORIGIN}/api/news`, {
@@ -130,9 +127,7 @@ export async function fetchMarketNews(
       cache: refresh ? "no-cache" : "default",
     });
     if (!response.ok)
-      throw new Error(
-        "News is unavailable. Try again in a minute.",
-      );
+      throw new Error("News is unavailable. Try again in a minute.");
     const payload: unknown = await response.json();
     const items = parseMarketNews(payload);
     const metadata = payload as Record<string, unknown>;
