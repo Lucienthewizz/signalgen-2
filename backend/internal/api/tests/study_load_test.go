@@ -158,7 +158,21 @@ func TestStudySyntheticHTTPAdmission(t *testing.T) {
 		close(prepared)
 		prepareTimes := []float64{}
 		stockOK, capacityFailures := 0, 0
+		completeBatches, partialBatches, rejectedBatches := 0, 0, 0
 		for r := range prepared {
+			if r.err == nil && r.status == 429 {
+				var envelope struct {
+					Error struct {
+						Code string `json:"code"`
+					} `json:"error"`
+				}
+				if json.Unmarshal(r.body, &envelope) != nil || envelope.Error.Code != "SNAPSHOT_CAPACITY" {
+					t.Fatalf("unexpected admission refusal %s", r.body)
+				}
+				rejectedBatches++
+				traffic += r.bytes
+				continue
+			}
 			if r.err != nil || r.status != 200 {
 				t.Fatalf("batch %d %s %v", r.status, r.body, r.err)
 			}
@@ -167,6 +181,11 @@ func TestStudySyntheticHTTPAdmission(t *testing.T) {
 			var batch studies.StudyBatch
 			json.Unmarshal(r.body, &batch)
 			stockOK += len(batch.Manifests)
+			if len(batch.Manifests) == 10 && len(batch.Failures) == 0 {
+				completeBatches++
+			} else {
+				partialBatches++
+			}
 			for _, f := range batch.Failures {
 				if f.Code != "SNAPSHOT_CAPACITY" {
 					t.Fatalf("unexpected fake-provider failure %+v", f)
@@ -174,15 +193,18 @@ func TestStudySyntheticHTTPAdmission(t *testing.T) {
 				capacityFailures++
 			}
 		}
+		if completeBatches != min(len(accepted), 12) || partialBatches != 0 || rejectedBatches != len(accepted)-completeBatches || capacityFailures != 0 {
+			t.Fatalf("batch admission complete=%d partial=%d rejected=%d symbol_capacity=%d", completeBatches, partialBatches, rejectedBatches, capacityFailures)
+		}
 		for _, a := range accepted {
 			r := call(a.owner, "DELETE", "/api/v1/backtests/studies/"+a.id, nil)
 			if r.status != 204 {
 				t.Fatal("cleanup", r.status)
 			}
 		}
-		evidence = append(evidence, map[string]any{"logical_users": users, "admitted_contexts": len(accepted), "capacity_rejected_contexts": rejected, "first_batch_stocks_prepared": stockOK, "snapshot_capacity_failures": capacityFailures, "create_p50_ms": percentile(latencies, .5), "create_p95_ms": percentile(latencies, .95), "prepare_p50_ms": percentile(prepareTimes, .5), "prepare_p95_ms": percentile(prepareTimes, .95), "response_json_bytes": traffic, "unexpected_errors": 0})
+		evidence = append(evidence, map[string]any{"complete_first_batches": completeBatches, "partial_first_batches": partialBatches, "capacity_rejected_batches": rejectedBatches, "capacity_rejected_batch_stocks": rejectedBatches * 10, "logical_users": users, "admitted_contexts": len(accepted), "capacity_rejected_contexts": rejected, "first_batch_stocks_prepared": stockOK, "snapshot_capacity_failures": capacityFailures, "create_p50_ms": percentile(latencies, .5), "create_p95_ms": percentile(latencies, .95), "prepare_p50_ms": percentile(prepareTimes, .5), "prepare_p95_ms": percentile(prepareTimes, .95), "response_json_bytes": traffic, "unexpected_errors": 0})
 	}
-	report := map[string]any{"kind": "loopback_http_synthetic_admission", "timestamp": time.Now().UTC(), "go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH, "cpus": runtime.NumCPU(), "synthetic_dependencies": []string{"identity", "session", "entitlement", "catalog", "daily OHLCV"}, "limits": "One create and first ten-stock batch per admitted user; contexts held until admission wave ends. Current process-local bounds; no real Supabase/Yahoo, no complete screening, no production capacity claim.", "provider_calls": prices.calls.Load(), "runs": evidence}
+	report := map[string]any{"kind": "loopback_http_synthetic_admission", "schema_version": 2, "timestamp": time.Now().UTC(), "go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH, "cpus": runtime.NumCPU(), "synthetic_dependencies": []string{"identity", "session", "entitlement", "catalog", "daily OHLCV"}, "limits": "One create and first ten-stock batch per admitted user; contexts held until admission wave ends. Current process-local bounds; no real Supabase/Yahoo, no complete screening, no production capacity claim.", "provider_calls": prices.calls.Load(), "runs": evidence}
 	data, _ := json.MarshalIndent(report, "", "  ")
 	if e = os.WriteFile(output, append(data, '\n'), 0600); e != nil {
 		t.Fatal(e)

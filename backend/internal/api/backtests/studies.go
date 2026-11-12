@@ -22,7 +22,7 @@ import (
 )
 
 type studyDatasets interface {
-	PrepareStudy(context.Context, string, string, dataset.PrepareRequest, []universe.Instrument) (dataset.Manifest, error)
+	PrepareStudyBatch(context.Context, string, string, dataset.PrepareRequest, []universe.Instrument) ([]dataset.Manifest, []error, error)
 	ReleaseStudy(string, string)
 }
 type StudyInput struct {
@@ -288,20 +288,26 @@ func (h *StudyHandler) Batch(w http.ResponseWriter, r *http.Request) {
 	// below the shared HTTP deadline, returning explicit failures for retry.
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
-	manifests := make([]dataset.Manifest, len(batch))
-	failures := make([]error, len(batch))
-	var workers sync.WaitGroup
-	for offset := 0; offset < min(3, len(batch)); offset++ {
-		workers.Add(1)
-		go func(offset int) {
-			defer workers.Done()
-			for i := offset; i < len(batch); i += 3 {
-				input := dataset.PrepareRequest{Purpose: h.purpose(), Mode: "rule", RuleID: copyItem.RuleID, From: copyItem.Config.From, To: copyItem.Config.To, NSteps: copyItem.Config.NSteps, Timeframe: "1d", RequiredOperands: copyItem.operands, StudyRuleHash: copyItem.DefinitionHash}
-				manifests[i], failures[i] = h.Datasets.(studyDatasets).PrepareStudy(ctx, owner, id, input, []universe.Instrument{batch[i]})
-			}
-		}(offset)
+	request := dataset.PrepareRequest{Purpose: h.purpose(), Mode: "rule", RuleID: copyItem.RuleID, From: copyItem.Config.From, To: copyItem.Config.To, NSteps: copyItem.Config.NSteps, Timeframe: "1d", RequiredOperands: copyItem.operands, StudyRuleHash: copyItem.DefinitionHash}
+	manifests, failures, prepareErr := h.Datasets.(studyDatasets).PrepareStudyBatch(ctx, owner, id, request, batch)
+	if prepareErr != nil {
+		_, currentHash, definitionErr := h.definition(r.Context(), owner, copyItem.RuleID)
+		h.mu.Lock()
+		current := h.items[id] == item && time.Now().Before(item.ExpiresAt)
+		h.mu.Unlock()
+		if !current || definitionErr != nil || currentHash != copyItem.DefinitionHash {
+			h.Datasets.(studyDatasets).ReleaseStudy(owner, id)
+			shared.WriteError(w, r, 409, "VERSION_MISMATCH", "Study expired, was canceled, or its rule changed.")
+			return
+		}
+		if errors.Is(prepareErr, dataset.ErrCapacity) {
+			w.Header().Set("Retry-After", "1")
+			shared.WriteError(w, r, 429, "SNAPSHOT_CAPACITY", "Snapshot capacity is full. Retry this batch after releasing active snapshots.")
+		} else {
+			shared.WriteError(w, r, 503, "STUDY_UNAVAILABLE", "Batch preparation stopped. Retry this batch.")
+		}
+		return
 	}
-	workers.Wait()
 	for i, s := range batch {
 		out.Stocks = append(out.Stocks, s.Symbol)
 		if failures[i] != nil {
@@ -310,9 +316,6 @@ func (h *StudyHandler) Batch(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(failures[i], marketdata.ErrInsufficientCandles) {
 				code = "INSUFFICIENT_CANDLES"
 				retryable = false
-			}
-			if errors.Is(failures[i], dataset.ErrCapacity) {
-				code = "SNAPSHOT_CAPACITY"
 			}
 			out.Failures = append(out.Failures, StudyFailure{Symbol: s.Symbol, Code: code, Retryable: retryable})
 		} else {
