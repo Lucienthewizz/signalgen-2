@@ -30,6 +30,7 @@ import { CACHE_RESET_EVENT } from "@/data/historical-cache";
 import {
   evaluationComparison,
   outcomeDescription,
+  targetHitSummary,
 } from "@/analysis/evaluation-presentation";
 import { StudyEstimate } from "@/components/study-estimate";
 
@@ -450,6 +451,9 @@ export function SignalStudyPanel({
         resultStep,
       )
     : [];
+  const targetSummary = progress
+    ? targetHitSummary(progress.swing, ready!.config)
+    : null;
   const summaries = (items: Array<StudyMetrics & { key: string }>) =>
     items.slice(groupPage * 25, groupPage * 25 + 25);
   return (
@@ -742,6 +746,15 @@ export function SignalStudyPanel({
               Frozen period: {ready!.config.from}–{ready!.config.to}; T+
               {ready!.config.n_steps}. Catalog{" "}
               {ready!.catalog_hash.slice(0, 20)}…
+              {ready!.config.take_profit_pct != null && (
+                <>
+                  {" "}
+                  · Frozen TP: {pct(ready!.config.take_profit_pct)}
+                  {ready!.config.stop_loss_pct != null && (
+                    <> · SL: {pct(ready!.config.stop_loss_pct)}</>
+                  )}
+                </>
+              )}
             </p>
             <Field className="study-fields">
               <FieldLabel htmlFor="study-detail-step">
@@ -763,6 +776,22 @@ export function SignalStudyPanel({
                 use the frozen T+{ready!.config.n_steps} window.
               </FieldDescription>
             </Field>
+            <div role="group" aria-label="Target-hit statistics">
+              <p>
+                {targetSummary!.label}:{" "}
+                {busy && !progress.completed
+                  ? "Waiting for stock results…"
+                  : targetSummary!.text}
+              </p>
+            </div>
+            <p>
+              Counts cover all processed signals, across every result page. A
+              positive final Close without a target touch counts as a win, but
+              never as a target hit. With SL active, TP exit rate counts only TP
+              outcomes before SL; a shared-candle touch remains an SL exit.
+              Incomplete windows are excluded from the evaluated denominator;
+              failed stocks remain in coverage counts.
+            </p>
             <p>Scroll horizontally to compare all columns.</p>
             <div
               className="study-table-scroll"
@@ -805,10 +834,9 @@ export function SignalStudyPanel({
             <p>
               Win rate = positive outcomes / evaluated signals; flats stay in
               the denominator. Incomplete outcomes and failed stocks are
-              excluded. Average return includes losses and flats. Win rate is
-              not target-hit rate: an unhit window may still finish positive.
-              These are independent signal statistics, not combined portfolio
-              profit.
+              excluded. Average return includes losses and flats. Win rate can
+              include positive unhit time exits. These are independent signal
+              statistics, not combined portfolio profit.
             </p>
             {!progress.swing.signals && !busy && (
               <p role="status">
@@ -839,6 +867,50 @@ export function SignalStudyPanel({
               </p>
             )}
             <div className="study-actions">
+              <Button
+                variant="outline"
+                disabled={busy || !targetSummary!.available}
+                onClick={() =>
+                  downloadCsv("signal-study-target-hits.csv", [
+                    [
+                      "study_id",
+                      "metric",
+                      "target_hits",
+                      "evaluated",
+                      "incomplete",
+                      "signals",
+                      "rate_pct",
+                      "completed_stocks",
+                      "total_stocks",
+                      "window_candles",
+                      "take_profit_pct",
+                      "stop_loss_pct",
+                      "policy_version",
+                      "coverage",
+                    ],
+                    [
+                      ready!.id,
+                      targetSummary!.label,
+                      progress.swing.target_hits,
+                      progress.swing.evaluated,
+                      progress.swing.missing,
+                      progress.swing.signals,
+                      targetSummary!.rate,
+                      progress.completed,
+                      ready!.total,
+                      ready!.config.n_steps,
+                      ready!.config.take_profit_pct,
+                      ready!.config.stop_loss_pct,
+                      ready!.policy_version,
+                      progress.completed === ready!.total
+                        ? "complete"
+                        : "partial",
+                    ],
+                  ])
+                }
+              >
+                Export target-hit summary CSV
+              </Button>
               <Button
                 variant="outline"
                 disabled={busy}
@@ -989,6 +1061,9 @@ export function SignalStudyPanel({
                         <th>Missing</th>
                         <th>Win rate</th>
                         <th>Average return</th>
+                        {ready!.config.take_profit_pct != null && (
+                          <th>{targetSummary!.label}</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -1000,6 +1075,9 @@ export function SignalStudyPanel({
                           <td>{r.missing}</td>
                           <td>{pct(r.win_rate)}</td>
                           <td>{pct(r.mean_return_pct)}</td>
+                          {ready!.config.take_profit_pct != null && (
+                            <td>{targetHitSummary(r, ready!.config).text}</td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

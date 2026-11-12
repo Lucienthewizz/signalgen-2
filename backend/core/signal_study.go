@@ -44,6 +44,8 @@ type StudyEvent struct {
 	Swing          StudyOutcome   `json:"swing"`
 }
 type StudyMetrics struct {
+	// Present only for window metrics with a configured TP; absent in older results.
+	TargetHits *int     `json:"target_hits,omitempty"`
 	Signals    int      `json:"signals"`
 	Evaluated  int      `json:"evaluated"`
 	Missing    int      `json:"missing"`
@@ -102,6 +104,14 @@ func DecodeSignalStudyRequest(raw []byte) (SignalStudyRequest, error) {
 	return r, nil
 }
 
+func newStudyWindowMetrics(c SignalStudyConfig) *StudyMetrics {
+	m := &StudyMetrics{}
+	if c.TakeProfitPct != nil {
+		m.TargetHits = new(int)
+	}
+	return m
+}
+
 func (m *StudyMetrics) add(o StudyOutcome) {
 	m.Signals++
 	if o.ReturnPct == nil {
@@ -109,6 +119,9 @@ func (m *StudyMetrics) add(o StudyOutcome) {
 		return
 	}
 	m.Evaluated++
+	if m.TargetHits != nil && o.Status == "take_profit" {
+		(*m.TargetHits)++
+	}
 	m.SumReturn += *o.ReturnPct
 	if *o.ReturnPct > 0 {
 		m.Wins++
@@ -190,6 +203,7 @@ func RunSignalStudy(r SignalStudyRequest) (SignalStudyResult, error) {
 		series[s.Symbol] = s.Candles
 	}
 	out = SignalStudyResult{SchemaVersion: SignalStudySchema, PolicyVersion: SignalStudyPolicy, Config: r.Config, Events: []StudyEvent{}, Horizons: []StudyHorizon{}, BySymbol: []StudyGroup{}, ByDay: []StudyGroup{}, Warnings: []string{"Independent signal observations, not a cash portfolio or executed trades.", "High is historical potential, not an obtainable fill. Close reference is known only after the signal candle closes.", "Same-candle TP and SL assumes SL first. OHLC cannot establish intraday order or broker fills."}}
+	out.Swing = *newStudyWindowMetrics(r.Config)
 	for k := 1; k <= r.Config.NSteps; k++ {
 		for _, basis := range []string{"open", "high", "close"} {
 			out.Horizons = append(out.Horizons, StudyHorizon{Step: k, Basis: basis})
@@ -198,7 +212,7 @@ func RunSignalStudy(r SignalStudyRequest) (SignalStudyResult, error) {
 	seen := map[string]bool{}
 	bySymbol, byDay := map[string]*StudyMetrics{}, map[string]*StudyMetrics{}
 	for symbol := range series {
-		bySymbol[symbol] = &StudyMetrics{}
+		bySymbol[symbol] = newStudyWindowMetrics(r.Config)
 	}
 	entries := append([]BacktestEntry(nil), r.Entries...)
 	sort.Slice(entries, func(i, j int) bool {
@@ -254,7 +268,7 @@ func RunSignalStudy(r SignalStudyRequest) (SignalStudyResult, error) {
 			k string
 		}{{bySymbol, entry.Symbol}, {byDay, day}} {
 			if group.m[group.k] == nil {
-				group.m[group.k] = &StudyMetrics{}
+				group.m[group.k] = newStudyWindowMetrics(r.Config)
 			}
 			group.m[group.k].add(event.Swing)
 		}

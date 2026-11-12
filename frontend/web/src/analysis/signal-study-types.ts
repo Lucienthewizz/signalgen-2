@@ -56,6 +56,8 @@ export type StudyEntry = {
   signal_type: "BUY" | "SELL";
 };
 export type StudyMetrics = {
+  // Optional additive window counter; absent for no TP and legacy engines.
+  target_hits?: number;
   signals: number;
   evaluated: number;
   missing: number;
@@ -123,6 +125,15 @@ export function mergeStudyMetrics(
     "sum_return_pct",
   ] as const)
     out[key] += b[key];
+  // An empty accumulator contributes no unknown observations. A nonempty legacy
+  // part without counters makes the combined target rate unavailable.
+  if (
+    (a.target_hits != null || a.signals === 0) &&
+    (b.target_hits != null || b.signals === 0) &&
+    (a.target_hits != null || b.target_hits != null)
+  )
+    out.target_hits = (a.target_hits ?? 0) + (b.target_hits ?? 0);
+  else delete out.target_hits;
   out.mean_return_pct = out.evaluated
     ? out.sum_return_pct / out.evaluated
     : null;

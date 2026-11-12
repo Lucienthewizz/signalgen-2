@@ -1,0 +1,32 @@
+{
+  "synthetic": true,
+  "realWasm": true,
+  "widths": [
+    1440,
+    390
+  ],
+  "themes": [
+    "dark",
+    "light"
+  ],
+  "stocks": 23,
+  "batches": 3,
+  "signals": 64,
+  "evaluated": 63,
+  "incomplete": 1,
+  "targetHits": 1,
+  "targetRate": 1.5873015873015872,
+  "winRate": 100,
+  "slFirstTpExits": 0,
+  "pagination": [
+    50,
+    14
+  ],
+  "summaryCSV": true,
+  "eventCSVRows": 641,
+  "empty": true,
+  "legacyUnavailable": true,
+  "error": true,
+  "loading": true,
+  "keyboard": true
+}
