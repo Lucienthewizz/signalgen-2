@@ -1,0 +1,34 @@
+ok  	github.com/Lucienthewizz/signalgen-2/backend/core	2.657s
+goos: linux
+goarch: arm64
+pkg: github.com/Lucienthewizz/signalgen-2/backend/core
+BenchmarkSignalStudyPerformance/dense_10x1000_h5         	      36	  90507591 ns/op	18361693 B/op	  176684 allocs/op
+PASS
+ok  	github.com/Lucienthewizz/signalgen-2/backend/core	3.270s
+File: core.test
+Build ID: d5e1e94fa92715c1de1667b934fd9b0c646ff697
+Type: cpu
+Time: 2026-11-12 14:04:56 UTC
+Duration: 3.27s, Total samples = 3.26s (99.78%)
+Showing nodes accounting for 2.77s, 84.97% of 3.26s total
+Dropped 39 nodes (cum <= 0.02s)
+Showing top 18 nodes out of 79
+      flat  flat%   sum%        cum   cum%
+     0.87s 26.69% 26.69%      0.87s 26.69%  time.parseRFC3339[go.shape.string].func1 (inline)
+     0.48s 14.72% 41.41%      0.48s 14.72%  time.leadingInt[go.shape.string] (inline)
+     0.33s 10.12% 51.53%      2.51s 76.99%  time.parseRFC3339[go.shape.string]
+     0.12s  3.68% 55.21%      2.68s 82.21%  time.Parse
+     0.11s  3.37% 58.59%      0.11s  3.37%  time.dateToAbsDays
+     0.11s  3.37% 61.96%      0.66s 20.25%  time.parseNanoseconds[go.shape.string]
+     0.10s  3.07% 65.03%      0.10s  3.07%  time.norm (inline)
+     0.09s  2.76% 67.79%      0.32s  9.82%  encoding/json/v2.makeStructArshaler.func2
+     0.09s  2.76% 70.55%      0.16s  4.91%  time.(*Location).lookup
+     0.08s  2.45% 73.01%      0.40s 12.27%  time.Date
+     0.07s  2.15% 75.15%      0.07s  2.15%  time.(*Location).get
+     0.07s  2.15% 77.30%      0.55s 16.87%  time.atoi[go.shape.string]
+     0.06s  1.84% 79.14%      0.06s  1.84%  time.(*Time).addSec
+     0.05s  1.53% 80.67%      0.05s  1.53%  runtime.memequal
+     0.04s  1.23% 81.90%      3.25s 99.69%  github.com/Lucienthewizz/signalgen-2/backend/core.RunSignalStudy
+     0.04s  1.23% 83.13%      0.05s  1.53%  time.daysIn (inline)
+     0.03s  0.92% 84.05%      0.05s  1.53%  encoding/json/v2.makeStringArshaler.func1
+     0.03s  0.92% 84.97%      0.03s  0.92%  runtime.memmove
