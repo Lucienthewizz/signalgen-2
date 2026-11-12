@@ -1,0 +1,39 @@
+{
+  "synthetic": true,
+  "realWasm": true,
+  "indexedDB": true,
+  "reports": [
+    {
+      "width": 1440,
+      "theme": "dark",
+      "stocks": 23,
+      "signals": 92
+    },
+    {
+      "width": 1440,
+      "theme": "light",
+      "stocks": 23,
+      "signals": 92
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "stocks": 23,
+      "signals": 92
+    },
+    {
+      "width": 390,
+      "theme": "light",
+      "stocks": 23,
+      "signals": 92
+    }
+  ],
+  "cancellation": true,
+  "partialCoverage": true,
+  "pagination": true,
+  "emptyState": true,
+  "deniedAccess": true,
+  "ownedUniverse": true,
+  "date": "2026-11-12",
+  "scope": "Synthetic API/account/provider decisions; real application UI, Go/WASM and IndexedDB. Not live market coverage or production capacity."
+}

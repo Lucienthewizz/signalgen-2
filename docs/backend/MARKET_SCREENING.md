@@ -40,9 +40,33 @@ access, rejection by the backtest endpoint, session/rule changes, and no future
 outcome candles. The client fixture checks that all 23 symbols are processed
 without invoking outcome computation.
 
-These tests have not run in this session. The execution sandbox could not set its
-required OS memory limit. Build, test, browser and live-provider verification
-remain pending. Formatting and source review do not establish runtime behavior.
+Verification on 12 November 2026:
+
+- Frontend TypeScript check and production build passed.
+- All 255 frontend unit tests passed, including signal-only orchestration.
+- `npm run test:market-screen` passed with a fresh headless Chrome profile,
+  real Go/WASM and IndexedDB, and synthetic account/API/provider decisions.
+  It covers 23 stocks in three batches, pagination, partial failures, restarting,
+  Stop during preparation, an owned-universe selection, no matches, denied
+  access, keyboard order, and 1440/390px dark/light layouts.
+- Screenshot inspection found a squeezed heading and unstyled table. Reusing
+  the existing study header composition and table/field classes fixed them;
+  the browser suite and production build passed again afterward.
+- `TestMarketScreeningFrozenCatalogWithoutBacktestAccess` and
+  `TestScreeningSnapshotStopsAtSignalWindow` passed in a read-only Linux
+  container with no external network, scratch-only writes, and bounded CPU,
+  memory, processes, file size, disk and wall time. It used existing local Go
+  dependencies and dummy principals/data.
+
+Browser evidence is in `docs/evidence/market-screen-browser-20261112.json`.
+Generated screenshots are under `frontend/web/output/playwright/market-screen-*`.
+The focused browser fixture can be rerun with the frontend dev server on port
+5174, or `SIGNALGEN_TEST_BASE_URL` pointing at its local URL.
+
+The broader workspace browser suite did not pass: it timed out selecting
+`EMA 9` in the rule editor. That failure was not investigated in this scoped
+screening verification. Live Yahoo coverage, production capacity and the full
+application browser suite remain unverified.
 
 Performance optimization, scheduled incremental collection, evaluation-choice
 refinements and premium-provider integration remain subsequent phases. This

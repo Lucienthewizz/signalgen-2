@@ -10,6 +10,7 @@
     "check:budgets": "node scripts/check-performance-budgets.mjs",
     "check:lab": "node scripts/check-performance-budgets.mjs --lab",
     "test:usability": "node scripts/test-browser.mjs --usability",
+    "test:market-screen": "node scripts/test-browser.mjs --market-screen",
     "test:study": "node scripts/test-browser.mjs --study",
     "test:monitor": "node scripts/test-browser.mjs --monitor",
     "test:browser": "node scripts/test-browser.mjs",

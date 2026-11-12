@@ -9,6 +9,7 @@ const tiersOnly = process.argv.includes("--tiers");
 const authOnly = process.argv.includes("--auth");
 const journalExplorerOnly = process.argv.includes("--journal-explorer");
 const adminOnly = process.argv.includes("--admin");
+const marketScreenOnly = process.argv.includes("--market-screen");
 const studyOnly = process.argv.includes("--study");
 const backtestOnly = process.argv.includes("--backtest");
 const catalogOnly = process.argv.includes("--catalog");
@@ -45,56 +46,60 @@ if (performanceOnly) {
   );
 }
 const baseURL = process.env.SIGNALGEN_TEST_BASE_URL || "http://127.0.0.1:5174";
-const testFilename = tiersOnly
-  ? "tests/browser/tier-access.cli.js"
-  : journalExplorerOnly
-    ? "tests/browser/journal-explorer.cli.js"
-    : authOnly
-      ? "tests/browser/google-auth.cli.js"
-      : performanceOnly
-        ? performanceFilename
-        : studyOnly
-          ? "tests/browser/signal-study.cli.js"
-          : usabilityOnly
-            ? "tests/browser/analysis-usability.cli.js"
-            : adminOnly
-              ? "tests/browser/admin-access.cli.js"
-              : backtestOnly
-                ? "tests/browser/backtest.cli.js"
-                : monitorOnly
-                  ? "tests/browser/intraday-monitor.cli.js"
-                  : recoveryOnly
-                    ? "tests/browser/resource-recovery.cli.js"
-                    : decisionsOnly
-                      ? "tests/browser/screener-decisions.cli.js"
-                      : catalogOnly
-                        ? "tests/browser/stock-catalog.cli.js"
-                        : "tests/browser/workspace-regression.cli.js";
-const attributeName = tiersOnly
-  ? "data-signalgen-tier-tests"
-  : journalExplorerOnly
-    ? "data-signalgen-journal-explorer-tests"
-    : authOnly
-      ? "data-signalgen-auth-tests"
-      : performanceOnly
-        ? "data-signalgen-performance-tests"
-        : studyOnly
-          ? "data-signalgen-study-tests"
-          : usabilityOnly
-            ? "data-signalgen-usability-tests"
-            : adminOnly
-              ? "data-signalgen-admin-tests"
-              : backtestOnly
-                ? "data-signalgen-backtest-tests"
-                : monitorOnly
-                  ? "data-signalgen-monitor-tests"
-                  : recoveryOnly
-                    ? "data-signalgen-recovery-tests"
-                    : decisionsOnly
-                      ? "data-signalgen-decision-tests"
-                      : catalogOnly
-                        ? "data-signalgen-catalog-tests"
-                        : "data-signalgen-browser-tests";
+const testFilename = marketScreenOnly
+  ? "tests/browser/market-screen.cli.js"
+  : tiersOnly
+    ? "tests/browser/tier-access.cli.js"
+    : journalExplorerOnly
+      ? "tests/browser/journal-explorer.cli.js"
+      : authOnly
+        ? "tests/browser/google-auth.cli.js"
+        : performanceOnly
+          ? performanceFilename
+          : studyOnly
+            ? "tests/browser/signal-study.cli.js"
+            : usabilityOnly
+              ? "tests/browser/analysis-usability.cli.js"
+              : adminOnly
+                ? "tests/browser/admin-access.cli.js"
+                : backtestOnly
+                  ? "tests/browser/backtest.cli.js"
+                  : monitorOnly
+                    ? "tests/browser/intraday-monitor.cli.js"
+                    : recoveryOnly
+                      ? "tests/browser/resource-recovery.cli.js"
+                      : decisionsOnly
+                        ? "tests/browser/screener-decisions.cli.js"
+                        : catalogOnly
+                          ? "tests/browser/stock-catalog.cli.js"
+                          : "tests/browser/workspace-regression.cli.js";
+const attributeName = marketScreenOnly
+  ? "data-signalgen-market-screen-tests"
+  : tiersOnly
+    ? "data-signalgen-tier-tests"
+    : journalExplorerOnly
+      ? "data-signalgen-journal-explorer-tests"
+      : authOnly
+        ? "data-signalgen-auth-tests"
+        : performanceOnly
+          ? "data-signalgen-performance-tests"
+          : studyOnly
+            ? "data-signalgen-study-tests"
+            : usabilityOnly
+              ? "data-signalgen-usability-tests"
+              : adminOnly
+                ? "data-signalgen-admin-tests"
+                : backtestOnly
+                  ? "data-signalgen-backtest-tests"
+                  : monitorOnly
+                    ? "data-signalgen-monitor-tests"
+                    : recoveryOnly
+                      ? "data-signalgen-recovery-tests"
+                      : decisionsOnly
+                        ? "data-signalgen-decision-tests"
+                        : catalogOnly
+                          ? "data-signalgen-catalog-tests"
+                          : "data-signalgen-browser-tests";
 const chromePath =
   process.env.SIGNALGEN_TEST_BROWSER_EXECUTABLE ||
   (fs.existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
@@ -227,9 +232,14 @@ if (usedCli) {
             JSON.parse(document.body.dataset.signalgenPerformance),
           ),
         );
-      if (studyOnly)
+      if (studyOnly || marketScreenOnly)
         writeFileSync(
-          path.join(root, "output/playwright/signal-study-browser.json"),
+          path.join(
+            root,
+            marketScreenOnly
+              ? "output/playwright/market-screen-browser.json"
+              : "output/playwright/signal-study-browser.json",
+          ),
           JSON.stringify(evidence, null, 2) + "\n",
         );
     } catch (error) {
@@ -254,29 +264,31 @@ if (usedCli) {
 }
 
 console.log(
-  tiersOnly
-    ? "PASS: guided Free onboarding, plan navigation, access recovery and responsive tier checks. Synthetic fixtures only."
-    : journalExplorerOnly
-      ? "PASS: Journal search/filter/sort, SGT dates, snapshot details, safe filtered CSV, bounded paging and desktop/mobile dark/light layout. Synthetic account/API fixtures only."
-      : authOnly
-        ? "PASS: Google PKCE login, session handoff, disabled provider and invalid callbacks; desktop/mobile dark/light. Synthetic fixtures only."
-        : performanceOnly
-          ? "PASS: controlled production-preview loading benchmark; synthetic API/account only."
-          : studyOnly
-            ? "PASS: batched signal-study browser regression with real Go/WASM; synthetic API/account/provider fixtures."
-            : usabilityOnly
-              ? "PASS: screening-only journal selection, receipt-only writes, failed-row retry, double-click prevention, bounded paging and outage recovery; desktop/mobile dark/light. Synthetic API/account/evaluator fixtures only."
-              : adminOnly
-                ? "PASS: verified-role sidebar navigation, admin search/paging, reviewed grant/revoke, validation focus, contrast and 44px controls, denied/forged/suspended roles, 1440/375px and 844x390 landscape, dark theme. Synthetic account/API fixtures only."
-                : backtestOnly
-                  ? "PASS: backtest-2 rule/manual, real Go/WASM, horizon/equity/trade paging, bulk input, full CSV downloads, native IndexedDB persistence/limits/rollback, archive reload/logout/isolation, cancellation/integrity/denial, 1440/390px dark theme. Synthetic account/API fixtures only."
-                  : monitorOnly
-                    ? "PASS: Start/Stop, real WASM, unchanged-data dedup, new candles, cancellation, navigation, 1440/390px and dark theme; synthetic API/socket fixtures only."
-                    : recoveryOnly
-                      ? "PASS: transient resource recovery, bounded retries, persistent outage, explicit reload, session preservation, 1440/390px and dark theme. Synthetic API/account data only."
-                      : decisionsOnly
-                        ? "PASS: BUY/SELL, AND/OR, crossover history/reload/evidence/CSV, legacy unknown direction, cooldown, IDR/USD, 1440/390px and dark theme. Synthetic API/account data only."
-                        : catalogOnly
-                          ? "PASS: categories, search, 10-stock limit, paging, keyboard, empty/loading, 1440/900/390px and dark theme. Synthetic catalog fixture only."
-                          : "PASS: 10 workspace routes × 2 viewport sizes × dark theme; public/account routes; history/evidence/CSV; monitor sorting; sidebar navigation; expired-session cleanup. API/account fixtures only.",
+  marketScreenOnly
+    ? "PASS: market screening; 23 stocks in three batches, real WASM/IndexedDB, pagination, partial coverage, restart and Stop; 1440/390px dark/light; synthetic API."
+    : tiersOnly
+      ? "PASS: guided Free onboarding, plan navigation, access recovery and responsive tier checks. Synthetic fixtures only."
+      : journalExplorerOnly
+        ? "PASS: Journal search/filter/sort, SGT dates, snapshot details, safe filtered CSV, bounded paging and desktop/mobile dark/light layout. Synthetic account/API fixtures only."
+        : authOnly
+          ? "PASS: Google PKCE login, session handoff, disabled provider and invalid callbacks; desktop/mobile dark/light. Synthetic fixtures only."
+          : performanceOnly
+            ? "PASS: controlled production-preview loading benchmark; synthetic API/account only."
+            : studyOnly
+              ? "PASS: batched signal-study browser regression with real Go/WASM; synthetic API/account/provider fixtures."
+              : usabilityOnly
+                ? "PASS: screening-only journal selection, receipt-only writes, failed-row retry, double-click prevention, bounded paging and outage recovery; desktop/mobile dark/light. Synthetic API/account/evaluator fixtures only."
+                : adminOnly
+                  ? "PASS: verified-role sidebar navigation, admin search/paging, reviewed grant/revoke, validation focus, contrast and 44px controls, denied/forged/suspended roles, 1440/375px and 844x390 landscape, dark theme. Synthetic account/API fixtures only."
+                  : backtestOnly
+                    ? "PASS: backtest-2 rule/manual, real Go/WASM, horizon/equity/trade paging, bulk input, full CSV downloads, native IndexedDB persistence/limits/rollback, archive reload/logout/isolation, cancellation/integrity/denial, 1440/390px dark theme. Synthetic account/API fixtures only."
+                    : monitorOnly
+                      ? "PASS: Start/Stop, real WASM, unchanged-data dedup, new candles, cancellation, navigation, 1440/390px and dark theme; synthetic API/socket fixtures only."
+                      : recoveryOnly
+                        ? "PASS: transient resource recovery, bounded retries, persistent outage, explicit reload, session preservation, 1440/390px and dark theme. Synthetic API/account data only."
+                        : decisionsOnly
+                          ? "PASS: BUY/SELL, AND/OR, crossover history/reload/evidence/CSV, legacy unknown direction, cooldown, IDR/USD, 1440/390px and dark theme. Synthetic API/account data only."
+                          : catalogOnly
+                            ? "PASS: categories, search, 10-stock limit, paging, keyboard, empty/loading, 1440/900/390px and dark theme. Synthetic catalog fixture only."
+                            : "PASS: 10 workspace routes × 2 viewport sizes × dark theme; public/account routes; history/evidence/CSV; monitor sorting; sidebar navigation; expired-session cleanup. API/account fixtures only.",
 );

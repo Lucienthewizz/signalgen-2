@@ -4,6 +4,8 @@ import { runSignalStudy, type StudyProgress } from "@/analysis/signal-study";
 import { studyEventPage } from "@/analysis/signal-study-storage";
 import type { StudyEvent } from "@/analysis/signal-study-types";
 import type { RuleResource, StockUniverse } from "@/types";
+import { SlidersHorizontal } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/date-input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -153,6 +155,9 @@ export function MarketScreenPanel({
       aria-labelledby="market-screen-title"
     >
       <header className="study-config-heading">
+        <span className="study-config-heading__icon" aria-hidden="true">
+          <SlidersHorizontal />
+        </span>
         <div>
           <h2 id="market-screen-title">Market &amp; historical screening</h2>
           <p>
@@ -161,9 +166,10 @@ export function MarketScreenPanel({
             selection.
           </p>
         </div>
+        <Badge variant="outline">Daily candles</Badge>
       </header>
       <form onSubmit={start}>
-        <fieldset disabled={busy}>
+        <fieldset disabled={busy} className="study-fields">
           <legend>Screening settings</legend>
           <FieldGroup className="study-form-grid">
             <Field>
@@ -288,7 +294,12 @@ export function MarketScreenPanel({
               </ul>
             </details>
           )}
-          <div className="backtest-table-wrap">
+          <div
+            className="study-table-scroll"
+            role="region"
+            aria-label="Matching signals table"
+            tabIndex={0}
+          >
             <table>
               <caption>Matching stocks and signal dates</caption>
               <thead>
