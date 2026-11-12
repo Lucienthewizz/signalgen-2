@@ -966,13 +966,19 @@ async (page) => {
   await translation.getByRole('button', {name:'Close', exact:true}).click();
   await translation.waitFor({state:'detached'});
   if (ruleWrite || await draftInput.inputValue() !== "Bullish EMA cross") throw Error("Closing the translation dialog changed the draft or saved a rule");
-  await page.getByRole("combobox", { name: "Condition reference 1", exact: true }).click();
-  await page.getByRole("option", { name: "EMA 9", exact: true }).click();
+  const firstReference = page.getByRole("combobox", { name: "Condition reference 1", exact: true });
+  const referenceOptions = page.getByRole("listbox");
+  await firstReference.click();
+  await referenceOptions.getByRole("option", { name: "EMA 9", exact: true }).click();
+  await referenceOptions.waitFor({ state: "hidden" });
+  if ((await firstReference.innerText()).trim() !== "EMA 9") throw Error("EMA 9 was not selected as the condition reference");
   await page.getByRole("button", { name: "Save rule", exact: true }).click();
-  if (!await page.getByText("Choose a different reference; an indicator cannot compare with itself.", { exact: true }).count()) throw Error("Self-comparison validation missing");
-  await page.getByLabel("Condition reference 1", { exact: true }).click();
-  await page.getByRole("option", { name: "EMA 20", exact: true }).click();
+  await page.getByText("Choose a different reference; an indicator cannot compare with itself.", { exact: true }).waitFor();
   if (ruleWrite) throw Error("Invalid criteria were sent to the API");
+  await firstReference.click();
+  await referenceOptions.getByRole("option", { name: "EMA 20", exact: true }).click();
+  await referenceOptions.waitFor({ state: "hidden" });
+  if ((await firstReference.innerText()).trim() !== "EMA 20") throw Error("EMA 20 did not replace the self-comparison reference");
   const notifications = await page.getByRole("button", { name: "Dismiss notification", exact: true, includeHidden: true }).elementHandles();
   await Promise.all(notifications.map(close => close.click({ force: true, timeout: 1000 }).catch(() => {})));
   for (const width of [1440, 390]) for (const theme of ["dark"]) {
@@ -1001,7 +1007,7 @@ async (page) => {
   }
   await page.getByRole("button", { name: "Save rule", exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#rule-name')?.value === '');
-  if (!ruleWrite || ruleWrite.definition.conditions[0].op !== "CROSS_UP" || ruleWrite.definition.signal_type !== "BUY") throw Error("Preset save payload lost crossover or signal action");
+  if (!ruleWrite || ruleWrite.definition.conditions[0].left !== "EMA9" || ruleWrite.definition.conditions[0].right !== "EMA20" || ruleWrite.definition.conditions[0].op !== "CROSS_UP" || ruleWrite.definition.signal_type !== "BUY") throw Error("Preset save payload lost EMA operands, crossover or signal action");
   await page.getByRole("button", {name:/Add the first condition/}).click();
   await draftInput.fill("Claudio indicator parity");
   await page.getByRole("combobox", {name:"Condition indicator 1",exact:true}).click();
