@@ -1,0 +1,146 @@
+{
+  "source_sha": "5bb111d626625bede93e4f7d590c19227a247699",
+  "runtime_input_id": "sha256:f1baf33b1e06c6a7b54f6226cf758785efd2efe99a358c9f613aa906da2077f4",
+  "toolchain_id": "sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+  "image_id": "sha256:81b7976006b8502be46fd1ea18830c6c395b8d5c8ec30bdd8aac5bc8a65a9882",
+  "tag": "signalgen-local-runtime:5bb111d62662",
+  "artifacts_sha256": {
+    "signalgen-api": "827fd6aad6528019c71531b4413a75d1e6ff159e6d6cd85daafd4542ce8f24b1",
+    "signalgen-admin": "c90c1a6b94ca1368271d89cc93a03a9c43a1d0e8496cf4af3fd08f84016f54ff",
+    "signalgen-audit-catalog": "28097f8ef65da5f1aeab622f229edba1e742beaa801342c1a5b0ff8b902a379b",
+    "signalgen-healthcheck": "a6c102760ddfc01596b0376b54e7be4e23258e875bb0211570566c0b10fcd6f9",
+    "signalgen-collect-idx": "ae3bdce344b50bf5a45ee9f6111a89f08f028e4743d4d3f849a78e453301e35e",
+    "collection.test": "b6046b7becfe50fcfd5826bb833c4d64c76f2f844284f814b11548b0a3854116"
+  },
+  "smoke": "=== RUN   TestCollectorRuntimeSmoke\n    runtime_smoke_test.go:90: PASS: compiled collector help, synthetic validate-only, incremental publications, read-only store and prune dry-run; no Yahoo\n--- PASS: TestCollectorRuntimeSmoke (0.06s)\nPASS\n",
+  "readonly_root_rejection": "incremental store is locked: openat .sync.lock: read-only file system\n",
+  "checks": [
+    "all five packaged binaries byte-match rebuilt artifacts",
+    "non-root runtime",
+    "read-only synthetic catalog",
+    "read-only root and catalog writes rejected",
+    "missing bind source rejected",
+    "compose config with empty env file and synthetic inputs"
+  ],
+  "base_config_review": {
+    "onbuild": null,
+    "entrypoint": null,
+    "cmd": [
+      "signalgen-api"
+    ],
+    "user": "signalgen",
+    "env_names": [
+      "PATH"
+    ]
+  },
+  "full_api_started": false,
+  "original_dockerfile_built": false,
+  "runtime_inputs_sha256": {
+    "runtime/group": "6234afc8b24f4d5a286d1d55edd66a42f388cc27ea09c3a45374ff649c854a78",
+    "runtime/passwd": "0e815a6dbbbdf48dd1f84db450499d2c684488dd43ace12081bbacb018e89571",
+    "runtime/ssl/certs/ca-certificates.crt": "e9c7b63ee2623386e9b0a3ee32f499d01a8ea23dc83b8383ddff9f8e749543b7",
+    "fixtures/default_scalping_v1.json": "a48a9f0e86dfdb94dda495d4f01f0c42fe402896c779107958411137f8698a38",
+    "licenses/TA-Lib.txt": "c8ff055c9bc14b22afa1faa1f44256c407e9fc478f2233bc6012a218e0036f5e"
+  },
+  "recipe_sha256": "b4754a2b06bb1a1fca169c2dbf1bca7279b4a50caf7eeaf0141fda9f3d3d3abc",
+  "compose_sha256": "6353a91ffbd8983eb984cf65db3f10122f3c685874b56cfc7f228cb5bb427fb9",
+  "date": "2026-11-12",
+  "task": "task_629775485b95",
+  "branch": "frontend/local-docker-runtime",
+  "source_input_count": 351,
+  "source_input_manifest_sha256": "b2bda86287070e446d85548893c185cf153bd47d4e721550e7478cad5942c4e5",
+  "protected_trees_and_files_at_source_sha": {
+    "backend/core": "b9857df75c3759fa850cc1c584d4151f44667750",
+    "backend/internal": "2ee56c08463dc46be686e28dd0446e57822d2982",
+    "backend/cmd": "dc3c342a160046ef048ede54909fba924b613c4f",
+    "backend/contracts": "492789d0f301b1aa14e92c22d91320a8bd25a207",
+    "backend/go.mod": "0340c8c8ec441937c57877fee278d71e48467b25",
+    "backend/go.sum": "6cafd3dd6c0bb3b196af645166f3a0196d612b41",
+    "backend/contract.go": "23bb9e99466275680b774a5b737c803b3a2290b2",
+    "backend/openapi.yaml": "d3a9f9b2551923b42b27defc51f67adb551498a4",
+    "backend/Go.Dockerfile": "0351ea98cbac0153135d859b5c2125c500109e60",
+    "docker-compose.yml": "4822b9e2e925925873342280710c889e5c0d84ac"
+  },
+  "classification": "verified LOCAL offline packaging from pinned existing CA/identity data; not unmodified production Dockerfile build",
+  "isolation": {
+    "network": "none",
+    "root_toolchain_source_module_cache": "read-only",
+    "source_copy": "only reviewed tracked compiler inputs; no env/ignored runtime data",
+    "compile_uid_gid": "65534:65534",
+    "runtime_uid_gid": "10001:10001",
+    "cpu": 2,
+    "memory_bytes": 2147483648,
+    "pids": 256,
+    "scratch_tmpfs_bytes": 2147483648,
+    "per_file_limit_bytes": 134217728,
+    "compile_wall_seconds": 360,
+    "runtime_wall_seconds": 60,
+    "capabilities": "ALL dropped",
+    "no_new_privileges": true,
+    "compile_environment": "env -i; safe PATH, scratch HOME/TMPDIR/GOCACHE, RO GOMODCACHE, GOPROXY/GOSUMDB off, GOTOOLCHAIN local, CGO disabled",
+    "runtime_environment": "only reviewed image PATH/HOME/TMPDIR and explicit safe test variable; no host env forwarded; Docker-generated HOSTNAME is runtime-provided, not host forwarded",
+    "output_limit_bytes": 268435456,
+    "stderr_limit_bytes": 1048576,
+    "docker_socket_or_host_credentials_mounted": false
+  },
+  "validation": {
+    "preflight_tests": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 backend/scripts/test_local_runtime.py",
+      "passed": 3
+    },
+    "build_and_smoke": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 backend/scripts/build_local_runtime.py",
+      "exit_code": 0,
+      "final_helper_end_to_end": "passed after source snapshot, recipe and ownership guards were finalized"
+    },
+    "compose": "final config including ulimits passed using explicit empty interpolation/service env files and synthetic variables; no service started",
+    "metadata_supplement": "Final artifact ownership/modes, CA parse and input digests independently checked after full build/smoke",
+    "python_syntax": "AST parse passed",
+    "protected_scope": "no Go/frontend/default Dockerfile/default compose changes",
+    "final_labels_and_environment": "verified source/base labels and only PATH/HOME/TMPDIR image variables",
+    "evidence_processing_correction": "Initial summary parser expected source_files in compact stdout; corrected to read the full task scratch report; no build/smoke failure",
+    "documentation": "local links, image/source/input digests and no-ai-slop/unslop/humanizer writing review passed"
+  },
+  "graph": {
+    "project": "browser_regression_integration",
+    "generation": "2026-11-12T14:03:43Z",
+    "tier": 2,
+    "workflow": "search_graph, trace_path, snippet for collector smoke; direct recipe/config reads",
+    "coverage": "smoke/API source metadata_match; Dockerfiles not_tracked and scripts/deploy excluded or new, read directly",
+    "caveat": "best-effort bounded coverage; ambiguous trace edges were not used to infer behavior"
+  },
+  "documentation": "docs/backend/LOCAL_DOCKER_RUNTIME.md",
+  "context7": "/docker/docs; Compose pull_policy never, long bind create_host_path, explicit env-file and COPY chmod checked against official docs",
+  "remaining_limits": [
+    "Full authenticated API/Supabase health not exercised",
+    "Original unmodified Dockerfile build remains unverified",
+    "Existing CA/identity data reused; no package-freshness claim",
+    "No systemd activation or Linux syntax pass, no automated Docker schedule",
+    "No live IDX/Yahoo/premium data, cloud deployment or sustained/full-user-load proof"
+  ],
+  "cleanup": "Only own uniquely named containers removed; private generated task directories retained for inspection; local candidate image retained",
+  "unresolved_acceptance_checks": [],
+  "platform": "linux/arm64",
+  "final_runtime_config": {
+    "user": "10001:10001",
+    "cmd": [
+      "signalgen-api"
+    ],
+    "entrypoint": null,
+    "healthcheck": {
+      "Test": [
+        "CMD",
+        "signalgen-healthcheck"
+      ],
+      "Interval": 10000000000,
+      "Timeout": 10000000000,
+      "StartPeriod": 5000000000,
+      "Retries": 5
+    },
+    "environment_names": [
+      "PATH",
+      "HOME",
+      "TMPDIR"
+    ]
+  }
+}

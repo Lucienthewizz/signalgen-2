@@ -1,0 +1,69 @@
+# Standalone LOCAL configuration: always pass --env-file /dev/null explicitly.
+services:
+  go-api:
+    image: ${SIGNALGEN_LOCAL_IMAGE:?Set the verified local image ID}
+    pull_policy: never
+    env_file:
+      - ${SIGNALGEN_LOCAL_API_ENV_FILE:?Set an explicit API environment file}
+    environment:
+      SIGNALGEN_GO_API_ADDR: :8080
+      SIGNALGEN_MARKET_DATA_MODE: idx_store
+      SIGNALGEN_IDX_HISTORY_DIR: /var/lib/signalgen/idx-store
+      HOME: /scratch/home
+      TMPDIR: /scratch/tmp
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    cpus: 2
+    mem_limit: 1536m
+    ulimits:
+      nofile: {soft: 1024, hard: 1024}
+      fsize: {soft: 134217728, hard: 134217728}
+    tmpfs:
+      - /scratch:rw,noexec,size=67108864,mode=0700,uid=10001,gid=10001
+    ports:
+      - "127.0.0.1:${SIGNALGEN_LOCAL_API_PORT:-8080}:8080"
+    volumes:
+      - type: bind
+        source: ${SIGNALGEN_LOCAL_IDX_STORE:?Set a private existing published store}
+        target: /var/lib/signalgen/idx-store
+        read_only: true
+        bind:
+          create_host_path: false
+  collector:
+    profiles: [collector]
+    image: ${SIGNALGEN_LOCAL_IMAGE:?Set the verified local image ID}
+    pull_policy: never
+    entrypoint: [signalgen-collect-idx]
+    # Safe default: no downloads and no publication mutation.
+    command: [-catalog, /catalog/idx.csv, -validate-only]
+    network_mode: none
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    cpus: 2
+    mem_limit: 1536m
+    ulimits:
+      nofile: {soft: 1024, hard: 1024}
+      fsize: {soft: 134217728, hard: 134217728}
+    environment:
+      HOME: /scratch/home
+      TMPDIR: /scratch/tmp
+    tmpfs:
+      - /scratch:rw,noexec,size=67108864,mode=0700,uid=10001,gid=10001
+    volumes:
+      - type: bind
+        source: ${SIGNALGEN_LOCAL_IDX_CATALOG:?Set a private operator-supplied catalog file}
+        target: /catalog/idx.csv
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SIGNALGEN_LOCAL_IDX_STORE:?Set a private existing published store}
+        target: /var/lib/signalgen/idx-store
+        bind:
+          create_host_path: false
