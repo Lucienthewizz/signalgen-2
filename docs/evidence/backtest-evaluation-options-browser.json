@@ -1,0 +1,29 @@
+{
+  "synthetic": true,
+  "realWasm": true,
+  "widths": [
+    1440,
+    390
+  ],
+  "themes": [
+    "dark",
+    "light"
+  ],
+  "modes": [
+    "exact",
+    "target",
+    "tpsl"
+  ],
+  "signals": 3,
+  "exactEvaluated": 2,
+  "exactIncomplete": 1,
+  "exactOpenMean": -8,
+  "exactCloseMean": -10,
+  "targetMean": -2.5,
+  "sameCandlePolicy": "SL-first",
+  "csvRows": 31,
+  "empty": true,
+  "error": true,
+  "loading": true,
+  "keyboard": true
+}

@@ -27,6 +27,10 @@ import type {
 import type { RuleResource, StockUniverse } from "@/types";
 import { csvCell, downloadCsv } from "@/lib/csv";
 import { CACHE_RESET_EVENT } from "@/data/historical-cache";
+import {
+  evaluationComparison,
+  outcomeDescription,
+} from "@/analysis/evaluation-presentation";
 import { StudyEstimate } from "@/components/study-estimate";
 
 function defaults(): StudyConfig {
@@ -98,11 +102,19 @@ export function SignalStudyPanel({
     [total, setTotal] = useState(0),
     [groupPage, setGroupPage] = useState(0);
   const [horizonPage, setHorizonPage] = useState(0);
+  const [evaluation, setEvaluation] = useState("exact");
+  const [detailStep, setDetailStep] = useState(3);
   const operation = useRef<AbortController | null>(null),
     current = useRef<StudyProgress | null>(null),
     ownerRef = useRef(userId);
   const frozenSelection = useRef("");
-  const selectionSignature = JSON.stringify({ source, rule, universe, config });
+  const selectionSignature = JSON.stringify({
+    source,
+    rule,
+    universe,
+    config,
+    evaluation,
+  });
   ownerRef.current = userId;
   const contextKey = `signalgen.study.context:${userId ?? ""}`;
   async function discardContext(id: string, keepalive = false) {
@@ -301,6 +313,7 @@ export function SignalStudyPanel({
         setPage(0);
         setGroupPage(0);
         setHorizonPage(0);
+        setDetailStep(config.n_steps);
       }
       const result = await runSignalStudy(
         {
@@ -428,7 +441,15 @@ export function SignalStudyPanel({
   if (!authenticated || !userId)
     return <p role="status">Sign in to analyse historical signals.</p>;
   const ready = progress?.context;
-  const selectedMetrics = progress?.swing;
+  const resultStep = Math.min(detailStep, ready?.config.n_steps ?? 1);
+  const comparison = progress
+    ? evaluationComparison(
+        progress.horizons,
+        progress.swing,
+        ready!.config,
+        resultStep,
+      )
+    : [];
   const summaries = (items: Array<StudyMetrics & { key: string }>) =>
     items.slice(groupPage * 25, groupPage * 25 + 25);
   return (
@@ -446,8 +467,9 @@ export function SignalStudyPanel({
           <div>
             <h2 id="study-heading">Analyse every signal</h2>
             <p>
-              Independent daily observations from the signal candle’s close. Not
-              a cash portfolio or executed trades.
+              Signal-study statistics measure each signal from its candle’s
+              close. Overlapping signals are independent observations; portfolio
+              return requires the separate Portfolio simulation mode.
             </p>
           </div>
           <Badge variant="outline">Daily candles</Badge>
@@ -524,6 +546,11 @@ export function SignalStudyPanel({
             </FieldSet>
             <FieldSet className="study-settings-section">
               <FieldLegend>Test period</FieldLegend>
+              <p className="study-settings-note">
+                Search for rule-matching signals within these dates, then
+                evaluate each signal over the following trading candles. A
+                one-month search can use a T+3 evaluation.
+              </p>
               <FieldGroup className="study-form-grid">
                 <Field>
                   <FieldLabel htmlFor="study-from">
@@ -576,13 +603,44 @@ export function SignalStudyPanel({
             </FieldSet>
             <FieldSet className="study-settings-section">
               <FieldLegend>Take profit &amp; stop loss</FieldLegend>
+              <Field>
+                <FieldLabel htmlFor="study-evaluation">
+                  Evaluation method
+                </FieldLabel>
+                <select
+                  id="study-evaluation"
+                  value={evaluation}
+                  onChange={(e) => {
+                    setEvaluation(e.target.value);
+                    setConfig({
+                      ...config,
+                      take_profit_pct: undefined,
+                      stop_loss_pct: undefined,
+                    });
+                  }}
+                  aria-describedby="study-evaluation-help"
+                >
+                  <option value="exact">Exact T+X Open / Close</option>
+                  <option value="target">Target reached within window</option>
+                  <option value="tpsl">TP / SL within window</option>
+                </select>
+                <FieldDescription id="study-evaluation-help">
+                  Exact prices keep negative returns. Target mode checks the
+                  first target touch; TP / SL checks the first barrier, with SL
+                  first on a shared candle. Unhit windows use the final Close;
+                  unfinished windows remain incomplete.
+                </FieldDescription>
+              </Field>
               <FieldGroup className="study-form-grid">
                 <Field data-study-target="profit">
                   <FieldLabel htmlFor="study-tp">
-                    Take profit % (optional)
+                    Take profit %
+                    {evaluation === "exact" ? " (optional)" : " (required)"}
                   </FieldLabel>
                   <Input
                     id="study-tp"
+                    disabled={evaluation === "exact"}
+                    required={evaluation !== "exact"}
                     type="number"
                     min="0.01"
                     max="99.99"
@@ -600,10 +658,13 @@ export function SignalStudyPanel({
                 </Field>
                 <Field data-study-target="loss">
                   <FieldLabel htmlFor="study-sl">
-                    Stop loss % (optional)
+                    Stop loss %
+                    {evaluation === "tpsl" ? " (required)" : " (optional)"}
                   </FieldLabel>
                   <Input
                     id="study-sl"
+                    disabled={evaluation !== "tpsl"}
+                    required={evaluation === "tpsl"}
                     type="number"
                     min="0.01"
                     max="99.99"
@@ -621,8 +682,10 @@ export function SignalStudyPanel({
                 </Field>
               </FieldGroup>
               <p className="study-settings-note">
-                Leave a target empty to skip it. If both are touched in the same
-                candle, stop loss comes first.
+                Enter take profit for target mode, or both thresholds for TP /
+                SL. Percentages are measured from the signal Close in its BUY or
+                SELL direction. If both barriers are touched in the same candle,
+                stop loss comes first.
               </p>
             </FieldSet>
           </fieldset>
@@ -680,12 +743,79 @@ export function SignalStudyPanel({
               {ready!.config.n_steps}. Catalog{" "}
               {ready!.catalog_hash.slice(0, 20)}…
             </p>
+            <Field className="study-fields">
+              <FieldLabel htmlFor="study-detail-step">
+                Compare exact horizon
+              </FieldLabel>
+              <select
+                id="study-detail-step"
+                value={resultStep}
+                onChange={(e) => setDetailStep(Number(e.target.value))}
+              >
+                {Array.from({ length: ready!.config.n_steps }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    T+{i + 1} trading candles
+                  </option>
+                ))}
+              </select>
+              <FieldDescription>
+                Open and Close use this exact candle. Barrier outcomes always
+                use the frozen T+{ready!.config.n_steps} window.
+              </FieldDescription>
+            </Field>
+            <p>Scroll horizontally to compare all columns.</p>
+            <div
+              className="study-table-scroll"
+              role="region"
+              aria-label="Evaluation comparison"
+              tabIndex={0}
+            >
+              <table>
+                <caption>
+                  Signal-study comparison from the same reference Close
+                </caption>
+                <thead>
+                  <tr>
+                    <th>Evaluation</th>
+                    <th>Signals</th>
+                    <th>Evaluated</th>
+                    <th>Incomplete</th>
+                    <th>Win / loss / flat</th>
+                    <th>Win rate</th>
+                    <th>Average return</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparison.map(({ label, metrics: m }) => (
+                    <tr key={label}>
+                      <th scope="row">{label}</th>
+                      <td>{m.signals}</td>
+                      <td>{m.evaluated}</td>
+                      <td>{m.missing}</td>
+                      <td>
+                        {m.wins}/{m.losses}/{m.flats}
+                      </td>
+                      <td>{pct(m.win_rate)}</td>
+                      <td>{pct(m.mean_return_pct)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p>
-              Signals: {selectedMetrics!.signals} · Evaluated swing:{" "}
-              {selectedMetrics!.evaluated} · Missing future data:{" "}
-              {selectedMetrics!.missing} · Win rate:{" "}
-              {pct(selectedMetrics!.win_rate)}
+              Win rate = positive outcomes / evaluated signals; flats stay in
+              the denominator. Incomplete outcomes and failed stocks are
+              excluded. Average return includes losses and flats. Win rate is
+              not target-hit rate: an unhit window may still finish positive.
+              These are independent signal statistics, not combined portfolio
+              profit.
             </p>
+            {!progress.swing.signals && !busy && (
+              <p role="status">
+                No matching signals were found in the processed stocks. Review
+                the rule and signal search dates.
+              </p>
+            )}
             {!!(
               progress.failures.some((f) => f.retryable) ||
               progress.failedBatches.length
@@ -846,7 +976,7 @@ export function SignalStudyPanel({
               </Button>
             </div>
             <details>
-              <summary>By stock and signal day (swing outcomes)</summary>
+              <summary>By stock and signal day (window outcomes)</summary>
               {[progress.bySymbol, progress.byDay].map((items, i) => (
                 <div key={i} className="study-table-scroll">
                   <table>
@@ -858,6 +988,7 @@ export function SignalStudyPanel({
                         <th>Evaluated</th>
                         <th>Missing</th>
                         <th>Win rate</th>
+                        <th>Average return</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -868,6 +999,7 @@ export function SignalStudyPanel({
                           <td>{r.evaluated}</td>
                           <td>{r.missing}</td>
                           <td>{pct(r.win_rate)}</td>
+                          <td>{pct(r.mean_return_pct)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -892,11 +1024,16 @@ export function SignalStudyPanel({
                 Next summary
               </Button>
             </details>
-            <div className="study-table-scroll">
+            <div
+              className="study-table-scroll"
+              role="region"
+              aria-label="Individual signal outcomes"
+              tabIndex={0}
+            >
               <table>
                 <caption>
-                  Signal details — T+{ready!.config.n_steps} and swing; {total}{" "}
-                  signals
+                  Signal details — exact T+{resultStep} and window outcomes;{" "}
+                  {total} signals
                 </caption>
                 <thead>
                   <tr>
@@ -904,10 +1041,11 @@ export function SignalStudyPanel({
                     <th>Signal candle</th>
                     <th>Direction</th>
                     <th>Reference close</th>
+                    <th>Exact candle (UTC)</th>
                     <th>Open return</th>
                     <th>High return</th>
                     <th>Close return</th>
-                    <th>Swing</th>
+                    <th>Window outcome / first hit</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -917,13 +1055,36 @@ export function SignalStudyPanel({
                       <td>{e.timestamp.slice(0, 10)}</td>
                       <td>{e.signal_type}</td>
                       <td>{e.reference_price}</td>
+                      <td>
+                        {e.outcomes.find((o) => o.step === resultStep)
+                          ?.timestamp ?? "Incomplete"}
+                      </td>
                       {e.outcomes
-                        .filter((o) => o.step === ready!.config.n_steps)
+                        .filter((o) => o.step === resultStep)
                         .map((o) => (
-                          <td key={o.basis}>{pct(o.return_pct)}</td>
+                          <td key={o.basis}>
+                            {pct(o.return_pct)}
+                            <small>
+                              {o.price == null
+                                ? "Incomplete"
+                                : `price ${o.price}`}
+                            </small>
+                          </td>
                         ))}
                       <td>
-                        {e.swing.status} · {pct(e.swing.return_pct)}
+                        {outcomeDescription(
+                          e.swing,
+                          ready!.config.take_profit_pct != null ||
+                            ready!.config.stop_loss_pct != null,
+                        )
+                          .split(" · ")
+                          .map((part, i) =>
+                            i === 0 ? (
+                              <span key={i}>{part}</span>
+                            ) : (
+                              <small key={i}>{part}</small>
+                            ),
+                          )}
                       </td>
                     </tr>
                   ))}
