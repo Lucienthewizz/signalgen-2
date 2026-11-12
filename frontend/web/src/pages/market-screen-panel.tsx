@@ -259,7 +259,7 @@ export function MarketScreenPanel({
       </p>
       <p role="status">
         {progress
-          ? `${progress.completed}/${progress.context.total} stocks processed; ${progress.failures.length} failed. ${busy ? "Screening…" : complete ? "Selection complete." : "Partial results; some stocks were not processed."}`
+          ? `${progress.completed}/${progress.context.total} stocks processed; ${progress.failures.length} failed. ${progress.waitingUntil ? "Server is busy. Retrying shortly; Stop remains available." : busy ? "Screening…" : complete ? "Selection complete." : "Partial results; some stocks were not processed. Start screening to retry."}`
           : busy
             ? "Checking access and preparing data…"
             : "Ready to screen."}
@@ -322,9 +322,11 @@ export function MarketScreenPanel({
           </div>
           {result.total === 0 && (
             <p>
-              {busy
-                ? "No matches in the stocks processed so far."
-                : "No matches in the processed stocks for this rule and date range."}
+              {!progress.completed
+                ? "No stocks have been processed yet. No signal result is available."
+                : busy
+                  ? "No matches in the stocks processed so far."
+                  : "No matches in the processed stocks for this rule and date range."}
             </p>
           )}
           <div className="study-actions">
