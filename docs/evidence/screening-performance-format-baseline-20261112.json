@@ -1,0 +1,193 @@
+{
+  "date": "2026-11-12T08:38:44.685541+00:00",
+  "base": "3ee6f3aa684e805c78f6f0d9af484c58ee64ae2c",
+  "compared_head": "84e5a9dc0be7ba26ea57c10278d3398829099721",
+  "branch": "frontend/screening-performance",
+  "files": [
+    {
+      "path": "frontend/web/src/lib/market-news.ts",
+      "base_blob": "8faadbb9d08af93c5587b2c3bde3e2810b55c364",
+      "head_blob": "8faadbb9d08af93c5587b2c3bde3e2810b55c364",
+      "working_tree_blob": "8faadbb9d08af93c5587b2c3bde3e2810b55c364",
+      "sha256": "bdb3cde8bbc0dafb4e4a5bcaeaba281128f02fdd31ddbb3587772677c42531b9",
+      "bytes": 5167,
+      "byte_comparison": "base == HEAD == working tree",
+      "base_prettier_check_exit": 1,
+      "base_prettier_stdout": "(stdin)\n",
+      "base_prettier_stderr": ""
+    },
+    {
+      "path": "frontend/web/src/styles/foundation-shell.css",
+      "base_blob": "6df8d0fcd855b11ce717a64fd54cfedf05c24c46",
+      "head_blob": "6df8d0fcd855b11ce717a64fd54cfedf05c24c46",
+      "working_tree_blob": "6df8d0fcd855b11ce717a64fd54cfedf05c24c46",
+      "sha256": "6fd886734425266d4b6c9898874ae3ab651b370f432d794e2772b10c0d5e0d09",
+      "bytes": 10924,
+      "byte_comparison": "base == HEAD == working tree",
+      "base_prettier_check_exit": 1,
+      "base_prettier_stdout": "(stdin)\n",
+      "base_prettier_stderr": ""
+    },
+    {
+      "path": "frontend/web/src/styles/news-journal-details.css",
+      "base_blob": "8ba7e199b97a794c8966ecaf5b8a816606694d31",
+      "head_blob": "8ba7e199b97a794c8966ecaf5b8a816606694d31",
+      "working_tree_blob": "8ba7e199b97a794c8966ecaf5b8a816606694d31",
+      "sha256": "aded5ad2f60e78b2cd852ccdb943ae6d08676a4f8e84722e9bb2881ea5e9e001",
+      "bytes": 48531,
+      "byte_comparison": "base == HEAD == working tree",
+      "base_prettier_check_exit": 1,
+      "base_prettier_stdout": "(stdin)\n",
+      "base_prettier_stderr": ""
+    },
+    {
+      "path": "frontend/web/src/styles/workspace-compatibility.css",
+      "base_blob": "f9fda79fc0014dd6dd4614ad20500f26a70c87dd",
+      "head_blob": "f9fda79fc0014dd6dd4614ad20500f26a70c87dd",
+      "working_tree_blob": "f9fda79fc0014dd6dd4614ad20500f26a70c87dd",
+      "sha256": "01fa9285956f60956dbe71c58160af3dd2fdf67c0e981130c437ce9c5db02cbe",
+      "bytes": 61296,
+      "byte_comparison": "base == HEAD == working tree",
+      "base_prettier_check_exit": 1,
+      "base_prettier_stdout": "(stdin)\n",
+      "base_prettier_stderr": ""
+    },
+    {
+      "path": "frontend/web/src/styles/workspace-surfaces.css",
+      "base_blob": "550ab3eb15cfcb8162bc34cba977b52dd00055ec",
+      "head_blob": "550ab3eb15cfcb8162bc34cba977b52dd00055ec",
+      "working_tree_blob": "550ab3eb15cfcb8162bc34cba977b52dd00055ec",
+      "sha256": "315b599c62b5120159e52cc842e0a50756a56a6b758470c43e23b403798f2ebb",
+      "bytes": 89654,
+      "byte_comparison": "base == HEAD == working tree",
+      "base_prettier_check_exit": 1,
+      "base_prettier_stdout": "(stdin)\n",
+      "base_prettier_stderr": ""
+    }
+  ],
+  "locked_formatter_inputs": [
+    {
+      "path": "frontend/web/package.json",
+      "base_blob": "5f71b005f9814528048081ea6777111c360e7202",
+      "head_blob": "5f71b005f9814528048081ea6777111c360e7202",
+      "working_tree_blob": "5f71b005f9814528048081ea6777111c360e7202",
+      "sha256": "c53a8492e7e88f5dc2585f2247251501d92d8748e396acdb031a2ec3cac9f904",
+      "bytes": 2398,
+      "byte_comparison": "base == HEAD == working tree"
+    },
+    {
+      "path": "frontend/web/package-lock.json",
+      "base_blob": "4acbe71b36c0933adeb91de920f346f288045f33",
+      "head_blob": "4acbe71b36c0933adeb91de920f346f288045f33",
+      "working_tree_blob": "4acbe71b36c0933adeb91de920f346f288045f33",
+      "sha256": "c27cd5cbed7490dbd4d92c4e558bdf5dac976e0013ecd49a80627aca21117063",
+      "bytes": 81319,
+      "byte_comparison": "base == HEAD == working tree"
+    },
+    {
+      "path": "frontend/web/vite.config.ts",
+      "base_blob": "d6d1af540c3a35cdee3fcd8c14c362262863547f",
+      "head_blob": "d6d1af540c3a35cdee3fcd8c14c362262863547f",
+      "working_tree_blob": "d6d1af540c3a35cdee3fcd8c14c362262863547f",
+      "sha256": "1df0ff4eccbf5be40986306ad37d95651fa782c26b2671147c3007047557061f",
+      "bytes": 638,
+      "byte_comparison": "base == HEAD == working tree"
+    },
+    {
+      "path": "frontend/web/index.html",
+      "base_blob": "8803b9d46d827a1c91acd625f6bb0cf20eb9df98",
+      "head_blob": "8803b9d46d827a1c91acd625f6bb0cf20eb9df98",
+      "working_tree_blob": "8803b9d46d827a1c91acd625f6bb0cf20eb9df98",
+      "sha256": "afafb9c868d6f63c3e08d25931986bd68393d3ccab91334a3f62d859ff3be7b2",
+      "bytes": 1023,
+      "byte_comparison": "base == HEAD == working tree"
+    },
+    {
+      "path": ".gitignore",
+      "base_blob": "666b4894c3692f7bdb81d5a1fa93e89e237166ee",
+      "head_blob": "666b4894c3692f7bdb81d5a1fa93e89e237166ee",
+      "working_tree_blob": "666b4894c3692f7bdb81d5a1fa93e89e237166ee",
+      "sha256": "84b4ea6b195abec746959574b6a7cd9a2c63270fb72c797be0087c80f9909aec",
+      "bytes": 3345,
+      "byte_comparison": "base == HEAD == working tree"
+    }
+  ],
+  "formatter_direct_targets": {
+    "base_tree": "805ae6d7826f733b9d8df08df4c40c130de9d81c",
+    "head_tree": "805ae6d7826f733b9d8df08df4c40c130de9d81c",
+    "direct_target_file_count": 168,
+    "all_direct_target_bytes_equal": true,
+    "sorted_path_blob_sha256_manifest_sha256": "ed6c72326a1eac30c2b6f71eb0d427b4bdd960a69af88ccea39157962c578b93"
+  },
+  "tracked_ancestor_formatter_config_files": [],
+  "config_note": "No separate Prettier config, .prettierignore or .editorconfig exists at the repository, frontend or frontend/web levels; package.json and root .gitignore are compared explicitly.",
+  "prettier_version": "3.9.6",
+  "baseline_command": "git show <base>:<path> | ./node_modules/.bin/prettier --check --stdin-filepath <path relative to frontend/web> (cwd frontend/web; exact subprocess stdin bytes)",
+  "scoped_checks": [
+    {
+      "command": [
+        "frontend/web/node_modules/.bin/prettier",
+        "--check",
+        "frontend/web/tests/browser/screening-performance.cli.js"
+      ],
+      "exit": 0,
+      "stdout": "Checking formatting...\nAll matched files use Prettier code style!\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "frontend/web/tests/browser/screening-performance.cli.js"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "3ee6f3aa684e805c78f6f0d9af484c58ee64ae2c",
+        "HEAD"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "global_format_check": {
+    "exit": 1,
+    "stdout": "\n> signalgen-web@0.1.0 format:check\n> prettier --check src vite.config.ts index.html\n\nChecking formatting...\n",
+    "stderr": "[warn] src/lib/market-news.ts\n[warn] src/styles/foundation-shell.css\n[warn] src/styles/news-journal-details.css\n[warn] src/styles/workspace-compatibility.css\n[warn] src/styles/workspace-surfaces.css\n[warn] Code style issues found in 5 files. Run Prettier with --write to fix.\n",
+    "disposition": "still failing; five byte-identical base files"
+  },
+  "acceptance": "Benchmark baseline deliverable complete under coordinator-authorized pre-existing formatting exception only",
+  "original_task": {
+    "id": "task_ba3e40936b3e",
+    "outcome": "failed",
+    "preserved": true
+  },
+  "followup_task": "task_2d9810728d89",
+  "prior_browser_exception_reference": "077d49e1434099e6a6a94b73f7e1532bcc7cda98:docs/evidence/browser-regression-integration-format-baseline-20261112.json",
+  "runtime_checks": "Existing successful measurements and runtime checks reused; no product code, benchmark source, admission limits or raw measurements changed",
+  "capacity_result_preserved": {
+    "attempted": 1000,
+    "admitted_contexts": 32,
+    "capacity_rejected_contexts": 968,
+    "snapshot_capacity_failures": 192
+  },
+  "optimization": "none",
+  "production_capacity_established": false
+}
