@@ -1,0 +1,11 @@
+
+> signalgen-web@0.1.0 format:check
+> prettier --check src vite.config.ts index.html
+
+Checking formatting...
+[warn] src/lib/market-news.ts
+[warn] src/styles/foundation-shell.css
+[warn] src/styles/news-journal-details.css
+[warn] src/styles/workspace-compatibility.css
+[warn] src/styles/workspace-surfaces.css
+[warn] Code style issues found in 5 files. Run Prettier with --write to fix.

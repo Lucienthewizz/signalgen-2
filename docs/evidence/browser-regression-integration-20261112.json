@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-12",
+  "branch": "frontend/browser-regression-integration",
+  "base": "3ee6f3aa684e805c78f6f0d9af484c58ee64ae2c",
+  "source_fix": "1ed360fe2a75c614913d560e9a7efc2cba143c2f",
+  "integrated_fix": "31858ee",
+  "base_url": "http://127.0.0.1:5181",
+  "browser": "headless Google Chrome via Playwright CLI; fresh context per suite",
+  "checks": {
+    "test:browser": "passed",
+    "test:market-screen": "passed",
+    "typecheck": "passed",
+    "test": "passed",
+    "build": "passed",
+    "format:check": "failed: five unchanged files outside assigned scope"
+  },
+  "general_browser": {
+    "api_account_fixtures": true,
+    "screener_computation_mocked": true,
+    "ema_self_comparison_rejected_before_write": true,
+    "saved_operands_asserted": ["EMA9", "EMA20"],
+    "saved_operator_asserted": "CROSS_UP",
+    "saved_signal_asserted": "BUY",
+    "workspace_widths": [1440, 390],
+    "workspace_theme": "dark",
+    "indicator_styles": ["forced light", "dark"]
+  },
+  "market_screen": {
+    "synthetic_api_account_provider_private_decisions": true,
+    "real_wasm": true,
+    "native_indexeddb": true,
+    "stocks": 23,
+    "batches": 3,
+    "widths": [1440, 390],
+    "styles": ["forced light", "dark"],
+    "wasm_sha256": "sha256:91bebe4778ac4d7bc0ceead456e7156be9fbea8e595ed08630446eabcebd1149",
+    "wasm_bytes": 5278039
+  },
+  "unresolved_format_files": [
+    "frontend/web/src/lib/market-news.ts",
+    "frontend/web/src/styles/foundation-shell.css",
+    "frontend/web/src/styles/news-journal-details.css",
+    "frontend/web/src/styles/workspace-compatibility.css",
+    "frontend/web/src/styles/workspace-surfaces.css"
+  ],
+  "product_code_changed": false,
+  "live_backend_or_provider_verified": false
+}

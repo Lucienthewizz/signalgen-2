@@ -63,10 +63,12 @@ Generated screenshots are under `frontend/web/output/playwright/market-screen-*`
 The focused browser fixture can be rerun with the frontend dev server on port
 5174, or `SIGNALGEN_TEST_BASE_URL` pointing at its local URL.
 
-The broader workspace browser suite did not pass: it timed out selecting
-`EMA 9` in the rule editor. That failure was not investigated in this scoped
-screening verification. Live Yahoo coverage, production capacity and the full
-application browser suite remain unverified.
+The broader workspace browser suite passed on 12 November 2026 after integrating
+the existing EMA 9 regression-test fix onto backend/data commit `3ee6f3a`.
+The market-screen suite also passed with rebuilt real Go/WASM and synthetic API
+fixtures. See [integration verification](../frontend/BROWSER_REGRESSION_INTEGRATION.md)
+for commands and the unresolved repository format check. Live Yahoo coverage and
+production capacity remain unverified.
 
 Performance optimization, scheduled incremental collection, evaluation-choice
 refinements and premium-provider integration remain subsequent phases. This
