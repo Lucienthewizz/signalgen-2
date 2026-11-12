@@ -1,5 +1,12 @@
 # Screening and backtest performance baseline
 
+The measurements and format exception below describe the original performance
+branch through `e1e8d99`. The combined `frontend/prof-revisions-integration` branch
+repaired the five formatting files in separate commit `cb4a99e` and passed the
+full format check; see [combined verification](../evidence/prof-revisions-integration-20261112.md).
+The benchmark was not rerun, and these measurements remain tied to the original
+commit and environment.
+
 Measured on 12 November 2026 at `3ee6f3aa684e805c78f6f0d9af484c58ee64ae2c` in the screening-performance worktree. This change adds a reproducible benchmark and evidence; it does not change product orchestration, private scoring, admission limits, or market collection.
 
 ## Browser workload and results
@@ -116,6 +123,6 @@ The benchmark baseline deliverable is complete under the coordinator's exception
 
 Feeding each flagged file's base bytes to locked Prettier 3.9.6 with its original `--stdin-filepath` reproduces exit 1 for all five. The repository-wide `npm run format:check` was rerun and still fails on those same files. Scoped Prettier and syntax checks pass for `tests/browser/screening-performance.cli.js`, and whitespace checks pass from the base through this branch and for the follow-up diff. No formatter configuration or dependency inputs changed.
 
-Original task `task_ba3e40936b3e` retains its failed outcome. Follow-up task `task_2d9810728d89` records acceptance under this benchmark-only exception; the five global formatting issues remain outstanding for separate work. Existing successful tests and measurements are reused because this follow-up changes documentation and evidence only.
+Original task `task_ba3e40936b3e` retains its failed outcome. Follow-up task `task_2d9810728d89` records acceptance under this benchmark-only exception; at that branch snapshot, the five global formatting issues remained outstanding for separate work. Existing successful tests and measurements were reused because that follow-up changed documentation and evidence only.
 
 No optimization or production-capacity claim is added. The isolated 1000-request result remains 32 admitted contexts, 968 rejected contexts, and 192 snapshot-capacity failures; product code and admission limits remain unchanged.

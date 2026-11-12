@@ -1,5 +1,10 @@
 # Browser regression integration — 12 November 2026
 
+This report preserves the browser branch snapshot through `077d49e`. The combined
+`frontend/prof-revisions-integration` branch subsequently repaired the five baseline
+formatting files in separate commit `cb4a99e` and passed the full format check;
+see [combined verification](../evidence/prof-revisions-integration-20261112.md).
+
 The general workspace and scoped market-screen browser suites passed on
 `frontend/browser-regression-integration`, based on
 `3ee6f3aa684e805c78f6f0d9af484c58ee64ae2c`. This preserves the historical
@@ -79,9 +84,10 @@ that relevant changed-source checks passed. Those conditions are verified:
   also passed. The previously completed browser suites, typecheck, unit tests
   and build are reused; this follow-up changes documentation/evidence only.
 
-Scoped browser-regression acceptance is complete under that exception. The
-repository-wide `format:check` remains failed and its five baseline issues remain
-outstanding for separate work. Original task `task_c38ae3f02afc` retains its
+Scoped browser-regression acceptance was completed under that exception. At the
+original branch snapshot, repository-wide `format:check` was still failing and
+its five baseline issues remained outstanding for separate work. Original task
+`task_c38ae3f02afc` retains its
 historical failed outcome; follow-up task `task_c4cf0e422870` records the verified
 exception without rewriting the original result.
 

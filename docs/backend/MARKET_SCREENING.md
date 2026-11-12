@@ -67,8 +67,10 @@ The broader workspace browser suite passed on 12 November 2026 after integrating
 the existing EMA 9 regression-test fix onto backend/data commit `3ee6f3a`.
 The market-screen suite also passed with rebuilt real Go/WASM and synthetic API
 fixtures. See [integration verification](../frontend/BROWSER_REGRESSION_INTEGRATION.md)
-for commands and the unresolved repository format check. Live Yahoo coverage and
-production capacity remain unverified.
+for that branch snapshot's commands and format exception. The subsequent
+[combined integration](../evidence/prof-revisions-integration-20261112.md) repaired
+the formatting baseline and passed the full format check. Live Yahoo coverage
+and production capacity remain unverified.
 
 Performance optimization, scheduled incremental collection, evaluation-choice
 refinements and premium-provider integration remain subsequent phases. This

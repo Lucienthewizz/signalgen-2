@@ -1,0 +1,208 @@
+{
+  "date": "2026-11-12",
+  "task": "task_bc6d33eabac2",
+  "branch": "frontend/prof-revisions-integration",
+  "tested_product_commit": "cb4a99eb66eae0496d5f24ee4a0a370498306571",
+  "required_base": "3ee6f3aa684e805c78f6f0d9af484c58ee64ae2c",
+  "source_tips": {
+    "browser": "077d49e1434099e6a6a94b73f7e1532bcc7cda98",
+    "performance": "e1e8d99f552f99e135b036b525625fb511ae869b",
+    "evaluation": "3628ffc42dfd68a498c12b19d93ea9da972711a7"
+  },
+  "merges": [
+    "7e0dd9b1402a1d9e23c9f428ee108596a8501f7b",
+    "ffa5b40d367b730459ad958e9ade3ef9510597aa"
+  ],
+  "conflicts": false,
+  "formatting_commit": "cb4a99eb66eae0496d5f24ee4a0a370498306571",
+  "formatting_files": [
+    {
+      "path": "frontend/web/src/lib/market-news.ts",
+      "before_blob": "8faadbb9d08af93c5587b2c3bde3e2810b55c364",
+      "after_blob": "4fc56247c31abc019c209093bcfbc58ca2b0aab2",
+      "proof": "exact Prettier 3.9.6 output from parent contents; no manual edits"
+    },
+    {
+      "path": "frontend/web/src/styles/foundation-shell.css",
+      "before_blob": "6df8d0fcd855b11ce717a64fd54cfedf05c24c46",
+      "after_blob": "b47782b09b87918b29c30ee4a9b94b1cce9aa45d",
+      "proof": "exact Prettier 3.9.6 output from parent contents; no manual edits"
+    },
+    {
+      "path": "frontend/web/src/styles/news-journal-details.css",
+      "before_blob": "8ba7e199b97a794c8966ecaf5b8a816606694d31",
+      "after_blob": "2efee9a8da3e4f3f86deb1ae8c04f2ce1df994f4",
+      "proof": "exact Prettier 3.9.6 output from parent contents; no manual edits"
+    },
+    {
+      "path": "frontend/web/src/styles/workspace-compatibility.css",
+      "before_blob": "f9fda79fc0014dd6dd4614ad20500f26a70c87dd",
+      "after_blob": "884b5cbb24a7f7695208890d09b28f148d09960d",
+      "proof": "exact Prettier 3.9.6 output from parent contents; no manual edits"
+    },
+    {
+      "path": "frontend/web/src/styles/workspace-surfaces.css",
+      "before_blob": "550ab3eb15cfcb8162bc34cba977b52dd00055ec",
+      "after_blob": "b4aec1f6940ff5154aed93dbfa4eddaf89af7005",
+      "proof": "exact Prettier 3.9.6 output from parent contents; no manual edits"
+    }
+  ],
+  "backend_tree_at_base_and_head": "7d48fd5d7848975189a18cb8832d0ffd1f8f33b4",
+  "commands_cwd": "frontend/web; git commands from repository root",
+  "checks": [
+    {
+      "command": "npm test",
+      "exit_code": 0,
+      "result": "passed",
+      "output": "\u2714 events for another owner and edits after unmount cannot upload (3.838334ms)\n\u2139 tests 258\n\u2139 suites 0\n\u2139 pass 258\n\u2139 fail 0\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 2577.633334"
+    },
+    {
+      "command": "npm run typecheck",
+      "exit_code": 0,
+      "result": "passed",
+      "output": "> signalgen-web@0.1.0 typecheck\n> tsc -b --pretty false"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "result": "passed",
+      "output": "dist/assets/workspace-backtest-panel-B1njQ5d7.js              88.28 kB \u2502 gzip: 26.72 kB\ndist/assets/index-BEwLW49z.js                                298.25 kB \u2502 gzip: 96.91 kB\n\u2713 built in 1.45s"
+    },
+    {
+      "command": "npm run check:budgets",
+      "exit_code": 0,
+      "result": "passed",
+      "output": "> signalgen-web@0.1.0 check:budgets\n> node scripts/check-performance-budgets.mjs\n\nPASS: performance budgets {\"entryJsGzipBytes\":96905,\"workspaceStaticJsGzipBytes\":163755,\"entryCssGzipBytes\":64584,\"entryFiles\":[\"assets/index-BEwLW49z.js\",\"assets/index-D9_KMz76.css\"],\"workspaceFiles\":[\"assets/demo-workspace-Bw2aq-ny.js\",\"assets/demo-workspace-iIBho26m.css\",\"assets/index-BEwLW49z.js\",\"assets/index-D9_KMz76.css\",\"assets/calendar-C49awv3k.js\",\"assets/account-menu-6xtmx73H.js\",\"assets/profile-avatar-Wkl1cJMa.js\",\"assets/badge-D0da6NE7.js\",\"assets/useValueChanged-viuVn3gA.js\",\"assets/input-acvJdgiV.js\",\"assets/check-CjDZPWO1.js\",\"assets/pencil-BqO2Qcn0.js\"],\"journalFile\":\"assets/workspace-journal-panel-DbKhnX8Z.js\"}"
+    },
+    {
+      "command": "npm run format:check",
+      "exit_code": 0,
+      "result": "passed",
+      "output": "> signalgen-web@0.1.0 format:check\n> prettier --check src vite.config.ts index.html\n\nChecking formatting...\nAll matched files use Prettier code style!"
+    },
+    {
+      "command": "npm run test:browser",
+      "exit_code": 0,
+      "result": "passed",
+      "output": "> signalgen-web@0.1.0 test:browser\n> node scripts/test-browser.mjs\n\nPASS: 10 workspace routes \u00d7 2 viewport sizes \u00d7 dark theme; public/account routes; history/evidence/CSV; monitor sorting; sidebar navigation; expired-session cleanup. API/account fixtures only."
+    },
+    {
+      "command": "npm run test:market-screen",
+      "exit_code": 0,
+      "result": "passed",
+      "output": "> signalgen-web@0.1.0 test:market-screen\n> node scripts/test-browser.mjs --market-screen\n\nPASS: market screening; 23 stocks in three batches, real WASM/IndexedDB, pagination, partial coverage, restart and Stop; 1440/390px dark/light; synthetic API."
+    },
+    {
+      "command": "npm run test:study",
+      "exit_code": 0,
+      "result": "passed",
+      "output": "> signalgen-web@0.1.0 test:study\n> node scripts/test-browser.mjs --study\n\nPASS: batched signal-study browser regression with real Go/WASM; synthetic API/account/provider fixtures."
+    },
+    {
+      "command": "node tests/browser/evaluation-options.mjs",
+      "exit_code": 0,
+      "result": "passed",
+      "report": {
+        "synthetic": true,
+        "realWasm": true,
+        "widths": [
+          1440,
+          390
+        ],
+        "themes": [
+          "dark",
+          "light"
+        ],
+        "modes": [
+          "exact",
+          "target",
+          "tpsl"
+        ],
+        "signals": 3,
+        "exactEvaluated": 2,
+        "exactIncomplete": 1,
+        "exactOpenMean": -8,
+        "exactCloseMean": -10,
+        "targetMean": -2.5,
+        "sameCandlePolicy": "SL-first",
+        "csvRows": 31,
+        "empty": true,
+        "error": true,
+        "loading": true,
+        "keyboard": true
+      }
+    },
+    {
+      "command": "git diff --check 3ee6f3aa684e805c78f6f0d9af484c58ee64ae2c HEAD",
+      "exit_code": 0,
+      "result": "passed"
+    },
+    {
+      "command": "git diff --exit-code 3ee6f3aa684e805c78f6f0d9af484c58ee64ae2c HEAD -- backend",
+      "exit_code": 0,
+      "result": "passed; no backend changes"
+    },
+    {
+      "command": "git merge-base --is-ancestor 3ee6f3aa684e805c78f6f0d9af484c58ee64ae2c HEAD",
+      "exit_code": 0,
+      "result": "passed"
+    }
+  ],
+  "browser_environment": {
+    "base_url": "http://127.0.0.1:5181",
+    "playwright_cli": "/Users/lucienyudistirapurnawarman/.codex/skills/playwright/scripts/playwright_cli.sh",
+    "browser": "installed Google Chrome, headless; fresh isolated session per suite",
+    "node": "v24.15.0",
+    "general_matrix": "10 workspace routes x 1440/390 dark; additional forced light/dark indicator/heatmap cases",
+    "market_and_evaluation_matrix": "1440/390 forced dark/light",
+    "study_matrix": "1440/390 forced dark/light plus 1218 empty-layout checks",
+    "synthetic_account_api_provider_private_decisions": true,
+    "general_screener_compute_mocked": true,
+    "other_three_suites_real_wasm_indexeddb": true,
+    "own_vite_stopped": true,
+    "build_parallel_with_vite_browser_checks": false
+  },
+  "wasm": {
+    "build_commands": [
+      "GOOS=js GOARCH=wasm go build -trimpath -o ../frontend/web/public/wasm/signalgen_core.wasm ./cmd/wasm",
+      "cp \"$(go env GOROOT)/lib/wasm/wasm_exec.js\" ../frontend/web/public/wasm/wasm_exec.js",
+      "go run ./cmd/wasmmanifest --wasm ../frontend/web/public/wasm/signalgen_core.wasm --runtime ../frontend/web/public/wasm/wasm_exec.js --output ../frontend/web/public/wasm/signalgen_core.manifest.json"
+    ],
+    "cwd": "backend",
+    "manifest": {
+      "engine_version": "core-0.5.0",
+      "schema_version": "signal-baseline-1",
+      "feature_schema_version": "screener-features-1",
+      "capabilities_version": "capabilities-5",
+      "worker_protocol": "worker-2",
+      "wasm_file": "signalgen_core.wasm",
+      "runtime_file": "wasm_exec.js",
+      "wasm_sha256": "sha256:2dd0a04825a599d0cf46cec02f69ffd4e820c3fe5052709f4b595974345caadd",
+      "wasm_bytes": 5278039,
+      "runtime_sha256": "sha256:0c949f4996f9a89698e4b5c586de32249c3b69b7baadb64d220073cc04acba14",
+      "runtime_bytes": 16992
+    },
+    "public_and_dist_hash_checks": "passed for binary and runtime; manifests byte-identical",
+    "recovered_attempts": [
+      "Read-only generated wasm_exec.js prevented first copy; chmod u+w on that generated file resolved it",
+      "Initial build packaged binary before manifest refresh; final rebuild after Vite/browser shutdown resolved packaging mismatch"
+    ]
+  },
+  "performance_measurements": {
+    "rerun": false,
+    "benchmark_commit": "84e5a9dc0be7ba26ea57c10278d3398829099721",
+    "documented_tip": "e1e8d99f552f99e135b036b525625fb511ae869b",
+    "measured_product_base": "3ee6f3aa684e805c78f6f0d9af484c58ee64ae2c",
+    "environment": "original M5, macOS 26.6.2 arm64, Node 24.15.0, headless Chrome, Vite port 5183",
+    "measured_optimization": false,
+    "demonstrated_1000_user_capacity": false
+  },
+  "limits": [
+    "No live provider/backend/production validation or cloud mutation",
+    "Target-hit timestamps identify daily candles, not intraday execution",
+    "Separate aggregate target-hit rate absent; win rate includes positive unhit exits",
+    "No combined portfolio return inferred from overlapping independent signals"
+  ],
+  "historical_format_failures": "Original task outcomes and raw failures preserved; full combined-branch formatter now passes",
+  "unresolved_acceptance_blockers": []
+}
