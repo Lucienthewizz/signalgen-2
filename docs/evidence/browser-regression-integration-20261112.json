@@ -44,5 +44,13 @@
     "frontend/web/src/styles/workspace-surfaces.css"
   ],
   "product_code_changed": false,
-  "live_backend_or_provider_verified": false
+  "live_backend_or_provider_verified": false,
+  "follow_up_acceptance": {
+    "task": "task_c4cf0e422870",
+    "status": "scoped browser-regression acceptance completed with coordinator-approved baseline format exception",
+    "baseline_evidence": "browser-regression-integration-format-baseline-20261112.json",
+    "global_format_check": "still failing; pre-existing out-of-scope debt",
+    "original_task": "task_c38ae3f02afc remains historically failed",
+    "runtime_checks": "previously completed results reused; no implementation changes"
+  }
 }

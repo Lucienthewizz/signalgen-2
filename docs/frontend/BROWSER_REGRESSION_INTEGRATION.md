@@ -54,10 +54,36 @@ was unused before this worktree started its own Vite process.
 - `npm run format:check`: failed in five unchanged, out-of-scope files:
   `src/lib/market-news.ts`, `src/styles/foundation-shell.css`,
   `src/styles/news-journal-details.css`, `src/styles/workspace-compatibility.css`
-  and `src/styles/workspace-surfaces.css`. That required check remains unresolved;
+  and `src/styles/workspace-surfaces.css`. The global check still fails;
   this delivery does not claim every repository check passed. The
   [format-check output](../evidence/browser-regression-integration-format-20261112.txt)
   preserves the failure.
+
+## Follow-up acceptance and baseline formatting debt
+
+The coordinator accepted a baseline formatting exception for this browser-regression
+task only, conditional on proving that the five flagged files were unchanged and
+that relevant changed-source checks passed. Those conditions are verified:
+
+- Direct byte comparisons show `base == HEAD == working tree` for all five files
+  against `3ee6f3aa684e805c78f6f0d9af484c58ee64ae2c`. Their Git blob IDs,
+  SHA-256 hashes and byte lengths are recorded in the
+  [baseline evidence](../evidence/browser-regression-integration-format-baseline-20261112.json).
+- `package.json` and `package-lock.json` are also byte-identical to that base.
+  Feeding each flagged file's exact base contents to locked Prettier 3.9.6 with
+  its original `--stdin-filepath` reproduces exit 1 for all five. The integration
+  diff changes no formatter configuration or inputs for those files.
+- `node --check` and the scoped Prettier check passed for
+  `frontend/web/tests/browser/workspace-regression.cli.js`; its existing
+  whole-file `prettier-ignore` remains intact. `git diff --check` from the base
+  also passed. The previously completed browser suites, typecheck, unit tests
+  and build are reused; this follow-up changes documentation/evidence only.
+
+Scoped browser-regression acceptance is complete under that exception. The
+repository-wide `format:check` remains failed and its five baseline issues remain
+outstanding for separate work. Original task `task_c38ae3f02afc` retains its
+historical failed outcome; follow-up task `task_c4cf0e422870` records the verified
+exception without rewriting the original result.
 
 The generated rule-editor mobile/dark and desktop/light screenshots were visually
 inspected, along with the market-screen mobile/light screenshot. No new visual

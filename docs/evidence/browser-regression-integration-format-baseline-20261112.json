@@ -1,0 +1,92 @@
+{
+  "date": "2026-11-12",
+  "base": "3ee6f3aa684e805c78f6f0d9af484c58ee64ae2c",
+  "compared_head": "9450411208c22c1128fb346be9cdfbb202de6412",
+  "files": [
+    {
+      "path": "frontend/web/src/lib/market-news.ts",
+      "base_blob": "8faadbb9d08af93c5587b2c3bde3e2810b55c364",
+      "head_blob": "8faadbb9d08af93c5587b2c3bde3e2810b55c364",
+      "working_tree_blob": "8faadbb9d08af93c5587b2c3bde3e2810b55c364",
+      "sha256": "bdb3cde8bbc0dafb4e4a5bcaeaba281128f02fdd31ddbb3587772677c42531b9",
+      "bytes": 5167,
+      "byte_comparison": "base == HEAD == working tree",
+      "base_prettier_check_exit": 1,
+      "base_prettier_stdout": "(stdin)\n",
+      "base_prettier_stderr": ""
+    },
+    {
+      "path": "frontend/web/src/styles/foundation-shell.css",
+      "base_blob": "6df8d0fcd855b11ce717a64fd54cfedf05c24c46",
+      "head_blob": "6df8d0fcd855b11ce717a64fd54cfedf05c24c46",
+      "working_tree_blob": "6df8d0fcd855b11ce717a64fd54cfedf05c24c46",
+      "sha256": "6fd886734425266d4b6c9898874ae3ab651b370f432d794e2772b10c0d5e0d09",
+      "bytes": 10924,
+      "byte_comparison": "base == HEAD == working tree",
+      "base_prettier_check_exit": 1,
+      "base_prettier_stdout": "(stdin)\n",
+      "base_prettier_stderr": ""
+    },
+    {
+      "path": "frontend/web/src/styles/news-journal-details.css",
+      "base_blob": "8ba7e199b97a794c8966ecaf5b8a816606694d31",
+      "head_blob": "8ba7e199b97a794c8966ecaf5b8a816606694d31",
+      "working_tree_blob": "8ba7e199b97a794c8966ecaf5b8a816606694d31",
+      "sha256": "aded5ad2f60e78b2cd852ccdb943ae6d08676a4f8e84722e9bb2881ea5e9e001",
+      "bytes": 48531,
+      "byte_comparison": "base == HEAD == working tree",
+      "base_prettier_check_exit": 1,
+      "base_prettier_stdout": "(stdin)\n",
+      "base_prettier_stderr": ""
+    },
+    {
+      "path": "frontend/web/src/styles/workspace-compatibility.css",
+      "base_blob": "f9fda79fc0014dd6dd4614ad20500f26a70c87dd",
+      "head_blob": "f9fda79fc0014dd6dd4614ad20500f26a70c87dd",
+      "working_tree_blob": "f9fda79fc0014dd6dd4614ad20500f26a70c87dd",
+      "sha256": "01fa9285956f60956dbe71c58160af3dd2fdf67c0e981130c437ce9c5db02cbe",
+      "bytes": 61296,
+      "byte_comparison": "base == HEAD == working tree",
+      "base_prettier_check_exit": 1,
+      "base_prettier_stdout": "(stdin)\n",
+      "base_prettier_stderr": ""
+    },
+    {
+      "path": "frontend/web/src/styles/workspace-surfaces.css",
+      "base_blob": "550ab3eb15cfcb8162bc34cba977b52dd00055ec",
+      "head_blob": "550ab3eb15cfcb8162bc34cba977b52dd00055ec",
+      "working_tree_blob": "550ab3eb15cfcb8162bc34cba977b52dd00055ec",
+      "sha256": "315b599c62b5120159e52cc842e0a50756a56a6b758470c43e23b403798f2ebb",
+      "bytes": 89654,
+      "byte_comparison": "base == HEAD == working tree",
+      "base_prettier_check_exit": 1,
+      "base_prettier_stdout": "(stdin)\n",
+      "base_prettier_stderr": ""
+    }
+  ],
+  "locked_formatter_inputs": [
+    {
+      "path": "frontend/web/package.json",
+      "base_blob": "5f71b005f9814528048081ea6777111c360e7202",
+      "head_blob": "5f71b005f9814528048081ea6777111c360e7202",
+      "byte_comparison": "base == HEAD == working tree"
+    },
+    {
+      "path": "frontend/web/package-lock.json",
+      "base_blob": "4acbe71b36c0933adeb91de920f346f288045f33",
+      "head_blob": "4acbe71b36c0933adeb91de920f346f288045f33",
+      "byte_comparison": "base == HEAD == working tree"
+    }
+  ],
+  "prettier_version": "3.9.6",
+  "baseline_command": "git show <base>:<repository-relative path> | ./node_modules/.bin/prettier --check --stdin-filepath <path relative to frontend/web> (cwd frontend/web; subprocess input, no checkout mutation)",
+  "changed_source_checks": {
+    "node --check frontend/web/tests/browser/workspace-regression.cli.js": "passed",
+    "frontend/web/node_modules/.bin/prettier --check frontend/web/tests/browser/workspace-regression.cli.js": "passed; existing whole-file prettier-ignore retained",
+    "git diff --check <base> HEAD": "passed"
+  },
+  "global_format_check": "still failing; original raw failure preserved",
+  "disposition": "Coordinator accepts this pre-existing formatting debt as an exception for this scoped browser-regression task only",
+  "original_task": "task_c38ae3f02afc remains historically failed",
+  "runtime_checks": "prior completed results reused; no source change or new runtime gap"
+}
