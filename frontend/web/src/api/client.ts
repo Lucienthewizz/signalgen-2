@@ -828,11 +828,23 @@ export const api = {
     signal: AbortSignal,
   ) =>
     request<import("@/analysis/signal-study-types").StudyContext>(
-      "/api/v1/backtests/studies",
-      { method: "POST", signal, body: JSON.stringify(input) },
+      input.purpose === "screen"
+        ? "/api/v1/screener/scans"
+        : "/api/v1/backtests/studies",
+      {
+        method: "POST",
+        signal,
+        body: JSON.stringify({
+          source: input.source,
+          market: input.market,
+          universe_id: input.universe_id,
+          rule_id: input.rule_id,
+          config: input.config,
+        }),
+      },
     ),
   createStudyGrant: (
-    manifest: BacktestManifest,
+    manifest: import("@/analysis/signal-study-types").StudyManifest,
     study: import("@/analysis/signal-study-types").StudyContext,
     signal: AbortSignal,
   ) =>
@@ -840,7 +852,7 @@ export const api = {
       method: "POST",
       signal,
       body: JSON.stringify({
-        purpose: "backtest",
+        purpose: study.purpose ?? "backtest",
         dataset_id: manifest.dataset_id,
         dataset_version: manifest.version,
         dataset_checksum: manifest.checksum,
@@ -855,9 +867,10 @@ export const api = {
     batch: number,
     signal: AbortSignal,
     retrySymbols?: string[],
+    purpose = "backtest",
   ) =>
     request<import("@/analysis/signal-study-types").StudyBatch>(
-      `/api/v1/backtests/studies/${encodeURIComponent(id)}/batches/${batch}/prepare`,
+      `${purpose === "screen" ? "/api/v1/screener/scans" : "/api/v1/backtests/studies"}/${encodeURIComponent(id)}/batches/${batch}/prepare`,
       {
         method: "POST",
         signal,
@@ -866,16 +879,19 @@ export const api = {
         ),
       },
     ),
-  releaseStudyBatch: (id: string, batch: number) =>
+  releaseStudyBatch: (id: string, batch: number, purpose = "backtest") =>
     request<void>(
-      `/api/v1/backtests/studies/${encodeURIComponent(id)}/batches/${batch}/prepare`,
+      `${purpose === "screen" ? "/api/v1/screener/scans" : "/api/v1/backtests/studies"}/${encodeURIComponent(id)}/batches/${batch}/prepare`,
       { method: "DELETE" },
     ),
-  cancelStudy: (id: string, keepalive = false) =>
-    request<void>(`/api/v1/backtests/studies/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-      keepalive,
-    }),
+  cancelStudy: (id: string, keepalive = false, purpose = "backtest") =>
+    request<void>(
+      `${purpose === "screen" ? "/api/v1/screener/scans" : "/api/v1/backtests/studies"}/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        keepalive,
+      },
+    ),
   prepareBacktest: (
     scope: BacktestScope,
     universeId: string,
@@ -920,9 +936,12 @@ export const api = {
     candidates: import("@/types").ScreenerFeatureCandidate[],
     signal: AbortSignal,
     policy = "holding-next-open-1",
+    purpose = "backtest",
   ) =>
     request<{ policy_version: string; entries: BacktestEntry[] }>(
-      "/api/v1/backtests/signals",
+      purpose === "screen"
+        ? "/api/v1/screener/signals"
+        : "/api/v1/backtests/signals",
       {
         method: "POST",
         signal,

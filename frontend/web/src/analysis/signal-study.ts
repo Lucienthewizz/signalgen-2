@@ -89,7 +89,7 @@ async function verifiedContent(
   signal: AbortSignal,
 ): Promise<BacktestDataset> {
   if (
-    manifest.purpose !== "backtest" ||
+    manifest.purpose !== (context.purpose ?? "backtest") ||
     manifest.timeframe !== "1d" ||
     manifest.backtest?.study_id !== context.id ||
     manifest.backtest.definition_hash !== context.definition_hash ||
@@ -116,7 +116,7 @@ async function verifiedContent(
     backtest: { study_id: string; definition_hash: string };
   };
   if (
-    data.purpose !== "backtest" ||
+    data.purpose !== (context.purpose ?? "backtest") ||
     data.timeframe !== "1d" ||
     data.currency !== context.currency ||
     data.market !== context.market ||
@@ -144,14 +144,25 @@ export async function runSignalStudy(
   check(signal, revision);
   const account = await api.account(signal);
   check(signal, revision);
-  if (account.user.id !== owner || !account.features.includes("backtest"))
-    throw new ApiError("An active backtest entitlement is required.", 403);
+  if (
+    account.user.id !== owner ||
+    !account.features.includes(
+      input.purpose === "screen" ? "screener" : "backtest",
+    )
+  )
+    throw new ApiError(
+      input.purpose === "screen"
+        ? "Active screener access is required."
+        : "Active backtest access is required.",
+      403,
+    );
   const context = previous?.context ?? (await api.createStudy(input, signal));
   check(signal, revision);
   if (
     context.schema_version !== STUDY_SCHEMA ||
     context.policy_version !== STUDY_POLICY ||
-    context.batch_size !== 10
+    context.batch_size !== 10 ||
+    (context.purpose ?? "backtest") !== (input.purpose ?? "backtest")
   )
     throw Error(
       "Study version mismatch. Rebuild backend and WASM, then refresh.",
@@ -293,6 +304,7 @@ export async function runSignalStudy(
               batchIndex,
               signal,
               retrySymbols || undefined,
+              input.purpose,
             ),
           ),
         );
@@ -329,10 +341,12 @@ export async function runSignalStudy(
         // A lost prepare response may still have created handles. Release that
         // batch before advancing; otherwise the next batch would be blocked.
         if (
-          !(await api.releaseStudyBatch(context.id, batchIndex).then(
-            () => true,
-            () => false,
-          ))
+          !(await api
+            .releaseStudyBatch(context.id, batchIndex, input.purpose)
+            .then(
+              () => true,
+              () => false,
+            ))
         )
           throw e;
         continue;
@@ -391,6 +405,7 @@ export async function runSignalStudy(
                 features[0].candidates,
                 signal,
                 STUDY_POLICY,
+                input.purpose,
               ),
             ),
           );
@@ -409,17 +424,46 @@ export async function runSignalStudy(
             )
           )
             throw Error("Server returned a signal outside the snapshot.");
-          const result = await timed("study_ms", () =>
-            engine.study(
-              {
-                schema_version: STUDY_SCHEMA,
-                config: context.config,
-                series: data.series,
-                entries: decisions.entries as StudyEntry[],
-              },
-              signal,
-            ),
-          );
+          const result: StudyResult =
+            input.purpose === "screen"
+              ? {
+                  schema_version: STUDY_SCHEMA,
+                  policy_version: STUDY_POLICY,
+                  config: context.config,
+                  horizons: [],
+                  swing: emptyStudyMetrics(),
+                  by_symbol: [],
+                  by_day: [],
+                  warnings: [],
+                  events: decisions.entries.map((entry) => ({
+                    ...entry,
+                    signal_type: entry.signal_type as "BUY" | "SELL",
+                    reference_price: data.series[0].candles.find(
+                      (c) =>
+                        new Date(c.timestamp).getTime() ===
+                        new Date(entry.timestamp).getTime(),
+                    )!.close,
+                    outcomes: [],
+                    swing: {
+                      basis: "close",
+                      step: 0,
+                      status: "screened",
+                      price: null,
+                      return_pct: null,
+                    },
+                  })),
+                }
+              : await timed("study_ms", () =>
+                  engine.study(
+                    {
+                      schema_version: STUDY_SCHEMA,
+                      config: context.config,
+                      series: data.series,
+                      entries: decisions.entries as StudyEntry[],
+                    },
+                    signal,
+                  ),
+                );
           check(signal, revision);
           await timed("storage_ms", () =>
             storeStudySymbol(owner, context.id, symbol, result, signal),
@@ -456,7 +500,9 @@ export async function runSignalStudy(
         throw e;
       } finally {
         if (session.getIdentityRevision() === revision)
-          await api.releaseStudyBatch(context.id, batchIndex).catch(() => {});
+          await api
+            .releaseStudyBatch(context.id, batchIndex, input.purpose)
+            .catch(() => {});
       }
     }
     publish();

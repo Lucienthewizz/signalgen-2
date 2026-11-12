@@ -111,3 +111,20 @@ func TestBacktestSnapshotsRespectCapacityAndExpiry(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestScreeningSnapshotStopsAtSignalWindow(t *testing.T) {
+	provider := &backtestProvider{}
+	store, _ := NewDynamicStore(provider, fakeUniverseRepository{owner: "user-a"})
+	input := backtestPrepare()
+	input.Purpose = "screen"
+	input.Mode = "rule"
+	input.RuleID = core.BaselineRuleID
+	input.NSteps = 1
+	manifest, err := store.PrepareStudy(context.Background(), "user-a", "scan-1", input, []universe.Instrument{{Symbol: "TEST", ProviderSymbol: "TEST", Exchange: "XNAS", Currency: "USD"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Purpose != "screen" || manifest.AvailableRange.To > "2026-01-25" {
+		t.Fatalf("screening fetched future outcomes: %+v", manifest)
+	}
+}

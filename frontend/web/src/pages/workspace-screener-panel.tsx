@@ -1,3 +1,4 @@
+import { MarketScreenPanel } from "./market-screen-panel";
 import { tierAccess } from "@/lib/tier-access";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -134,7 +135,39 @@ function ruleSummary(rule?: RuleResource) {
   );
 }
 
-export function WorkspaceScreenerPanel({
+export function WorkspaceScreenerPanel(props: Props) {
+  const [mode, setMode] = useState<"latest" | "market">("latest");
+  return (
+    <>
+      <div className="study-actions" role="group" aria-label="Screening mode">
+        <Button
+          variant={mode === "latest" ? "default" : "outline"}
+          aria-pressed={mode === "latest"}
+          onClick={() => setMode("latest")}
+        >
+          Latest universe
+        </Button>
+        <Button
+          variant={mode === "market" ? "default" : "outline"}
+          aria-pressed={mode === "market"}
+          onClick={() => setMode("market")}
+        >
+          Market &amp; historical screening
+        </Button>
+      </div>
+      {mode === "market" && props.authenticated ? (
+        <MarketScreenPanel
+          userId={props.userId}
+          backendOnline={props.backendOnline}
+        />
+      ) : (
+        <LatestScreenerPanel {...props} />
+      )}
+    </>
+  );
+}
+
+function LatestScreenerPanel({
   authenticated,
   backendOnline,
   userId,

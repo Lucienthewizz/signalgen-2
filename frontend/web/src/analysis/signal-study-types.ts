@@ -10,6 +10,7 @@ export type StudyConfig = {
   stop_loss_pct?: number;
 };
 export type StudyInput = {
+  purpose?: "screen" | "backtest";
   source: "market" | "universe";
   market: "IDX" | "US";
   universe_id?: string;
@@ -17,6 +18,9 @@ export type StudyInput = {
   config: StudyConfig;
 };
 export type StudyContext = {
+  source?: "market" | "universe";
+  universe_id?: string;
+  purpose?: "screen" | "backtest";
   engine_version: string;
   rule_schema_version: string;
   id: string;
@@ -33,7 +37,8 @@ export type StudyContext = {
   batches: number;
   expires_at: string;
 };
-export type StudyManifest = BacktestManifest & {
+export type StudyManifest = Omit<BacktestManifest, "purpose"> & {
+  purpose: "screen" | "backtest";
   backtest: BacktestManifest["backtest"] & {
     study_id: string;
     definition_hash: string;

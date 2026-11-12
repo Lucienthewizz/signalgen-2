@@ -13,6 +13,7 @@ const statuses = [
   "time_exit",
   "stop_loss",
   "take_profit",
+  "screened",
 ];
 type CompactOutcome = [
   number,

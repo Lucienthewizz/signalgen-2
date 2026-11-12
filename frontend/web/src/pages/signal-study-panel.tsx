@@ -49,12 +49,43 @@ export function SignalStudyPanel({
   backendOnline: boolean;
   userId?: string;
 }) {
-  const [config, setConfig] = useState(defaults),
-    [source, setSource] = useState("IDX"),
-    [rule, setRule] = useState("default-scalping-v1"),
+  const [screeningSelection] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("signalgen.screening.evaluation");
+      const value = raw ? JSON.parse(raw) : null;
+      return value?.owner === userId &&
+        typeof value.rule === "string" &&
+        ["IDX", "US", "universe"].includes(value.source) &&
+        /^\d{4}-\d{2}-\d{2}$/.test(value.from) &&
+        /^\d{4}-\d{2}-\d{2}$/.test(value.to)
+        ? value
+        : null;
+    } catch {
+      return null;
+    }
+  });
+  useEffect(() => {
+    if (screeningSelection)
+      sessionStorage.removeItem("signalgen.screening.evaluation");
+  }, [screeningSelection]);
+  const [config, setConfig] = useState(() =>
+      screeningSelection
+        ? {
+            ...defaults(),
+            from: screeningSelection.from,
+            to: screeningSelection.to,
+          }
+        : defaults(),
+    ),
+    [source, setSource] = useState<string>(screeningSelection?.source ?? "IDX"),
+    [rule, setRule] = useState<string>(
+      screeningSelection?.rule ?? "default-scalping-v1",
+    ),
     [rules, setRules] = useState<RuleResource[]>([]),
     [universes, setUniverses] = useState<StockUniverse[]>([]),
-    [universe, setUniverse] = useState("");
+    [universe, setUniverse] = useState<string>(
+      screeningSelection?.universe ?? "",
+    );
   const [progress, setProgress] = useState<StudyProgress | null>(null),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),

@@ -66,6 +66,12 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	}
 	router.Handle(http.MethodDelete, "/api/v1/backtests/history", recordsHandler.Serve)
 	backtestsHandler := &backtestsapi.Handler{Context: server.Context}
+	screeningHandler := backtestsapi.NewScreeningHandler(server.Context)
+	router.Handle(http.MethodPost, "/api/v1/screener/scans", screeningHandler.Create)
+	router.Handle(http.MethodPost, "/api/v1/screener/scans/:id/batches/:batch/prepare", screeningHandler.Batch)
+	router.Handle(http.MethodDelete, "/api/v1/screener/scans/:id/batches/:batch/prepare", screeningHandler.Batch)
+	router.Handle(http.MethodDelete, "/api/v1/screener/scans/:id", screeningHandler.Cancel)
+	router.Handle(http.MethodPost, "/api/v1/screener/signals", backtestsHandler.ScreeningSignals)
 	studiesHandler := backtestsapi.NewStudyHandler(server.Context)
 	router.Handle(http.MethodPost, "/api/v1/backtests/studies", studiesHandler.Create)
 	router.Handle(http.MethodPost, "/api/v1/backtests/studies/:id/batches/:batch/prepare", studiesHandler.Batch)

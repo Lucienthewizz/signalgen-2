@@ -6,31 +6,31 @@ function load(file,dependencies={},clock={}){
  const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src',file),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:n=>dependencies[n]??{},AbortController,DOMException,TextEncoder,crypto,performance,setTimeout,clearTimeout,...clock});return exports;
 }
 const types=load('analysis/signal-study-types.ts');
-function harness({failure,quota,version=false}={}){
- const calls={prepare:[],preparedStocks:[],features:[],save:[],release:[],workers:0,disposed:0};let revision=1;
+function harness({failure,quota,version=false,purpose="backtest"}={}){
+ const calls={prepare:[],preparedStocks:[],features:[],save:[],release:[],workers:0,disposed:0,studies:0,events:[]};let revision=1;
  const config={from:'2026-01-20',to:'2026-01-23',n_steps:3};
- const context={id:'study',schema_version:types.STUDY_SCHEMA,policy_version:types.STUDY_POLICY,engine_version:'core-0.5.0',rule_schema_version:'signal-baseline-1',market:'US',currency:'USD',definition_hash:'hash',batch_size:10,batches:3,total:23,config};
+ const context={purpose,id:'study',schema_version:types.STUDY_SCHEMA,policy_version:types.STUDY_POLICY,engine_version:'core-0.5.0',rule_schema_version:'signal-baseline-1',market:'US',currency:'USD',definition_hash:'hash',batch_size:10,batches:3,total:23,config};
  const contents=new Map();let broken=failure;
  class ApiError extends Error {constructor(message,status){super(message);this.status=status}}
  const session={getIdentityRevision:()=>revision,getToken:()=> 'fixture'};
- const api={ensureAppSession:async()=>{},account:async()=>({user:{id:'owner'},features:['backtest']}),createStudy:async()=>context,
+ const api={ensureAppSession:async()=>{},account:async()=>({user:{id:'owner'},features:[purpose==='screen'?'screener':'backtest']}),createStudy:async()=>context,
   prepareStudyBatch:async(_,batch,_signal,subset)=>{
    calls.prepare.push(batch);const manifests=[],failures=[],stocks=[];
    for(let i=batch*10;i<Math.min(23,(batch+1)*10);i++){
     const symbol='STOCK'+i;if(subset&&!subset.includes(symbol))continue;stocks.push(symbol);calls.preparedStocks.push(symbol);if(broken===i){failures.push({symbol,code:'PROVIDER_UNAVAILABLE',retryable:true});continue}
     const candles=Array.from({length:25},(_,i)=>({timestamp:new Date(Date.UTC(2026,0,1+i)).toISOString(),open:100,high:110,low:90,close:100,volume:100}));
     const backtest={study_id:context.id,definition_hash:context.definition_hash,...config};
-    const data={purpose:'backtest',timeframe:'1d',market:'US',currency:'USD',backtest,series:[{symbol,timezone:'UTC',candles}]},raw=JSON.stringify(data);
-    contents.set(symbol,raw);manifests.push({purpose:'backtest',timeframe:'1d',dataset_id:symbol,symbols:[symbol],market:'US',currency:'USD',backtest,decoded_bytes:Buffer.byteLength(raw),checksum:'sha256:'+createHash('sha256').update(raw).digest('hex')});
+    const data={purpose,timeframe:'1d',market:'US',currency:'USD',backtest,series:[{symbol,timezone:'UTC',candles}]},raw=JSON.stringify(data);
+    contents.set(symbol,raw);manifests.push({purpose,timeframe:'1d',dataset_id:symbol,symbols:[symbol],market:'US',currency:'USD',backtest,decoded_bytes:Buffer.byteLength(raw),checksum:'sha256:'+createHash('sha256').update(raw).digest('hex')});
    }return {index:batch,stocks,manifests,failures};
   },getDatasetContentText:async id=>contents.get(id),createStudyGrant:async manifest=>({id:manifest.symbols[0]}),backtestSignals:async(id,candidates)=>({policy_version:types.STUDY_POLICY,entries:[{symbol:id,timestamp:candidates[0].timestamp,signal_type:'BUY'}]}),releaseStudyBatch:async(_,batch)=>calls.release.push(batch)};
  class Engine {
   constructor(){calls.workers++}dispose(){calls.disposed++}
   async initialize(){return {schema_version:types.STUDY_SCHEMA,policy_version:types.STUDY_POLICY}}
   async features(series){calls.features.push(series[0].symbol);return [{engine_version:version?'old':context.engine_version,feature_schema_version:'screener-features-1',candidates:series[0].candles.slice(19).map(c=>({symbol:series[0].symbol,timestamp:c.timestamp,features:{}}))}]}
-  async study(request){const metrics={signals:1,evaluated:1,missing:0,wins:1,losses:0,flats:0,sum_return_pct:5,mean_return_pct:5,win_rate:100};return {schema_version:types.STUDY_SCHEMA,policy_version:types.STUDY_POLICY,events:[],horizons:[{step:1,basis:'close',...metrics}],swing:metrics,by_symbol:[{key:request.series[0].symbol,...metrics}],by_day:[{key:'2026-01-20',...metrics}]}}
+  async study(request){calls.studies++;const metrics={signals:1,evaluated:1,missing:0,wins:1,losses:0,flats:0,sum_return_pct:5,mean_return_pct:5,win_rate:100};return {schema_version:types.STUDY_SCHEMA,policy_version:types.STUDY_POLICY,events:[],horizons:[{step:1,basis:'close',...metrics}],swing:metrics,by_symbol:[{key:request.series[0].symbol,...metrics}],by_day:[{key:'2026-01-20',...metrics}]}}
  }
- const {runSignalStudy}=load('analysis/signal-study.ts',{'@/api/client':{api,session,ApiError},'./signal-study-engine':{SignalStudyEngine:Engine},'./signal-study-types':types,'./signal-study-storage':{storeStudySymbol:async(_owner,_id,symbol)=>{if(quota===symbol)throw new DOMException('Temporary storage quota reached','QuotaExceededError');calls.save.push(symbol)}}});
+ const {runSignalStudy}=load('analysis/signal-study.ts',{'@/api/client':{api,session,ApiError},'./signal-study-engine':{SignalStudyEngine:Engine},'./signal-study-types':types,'./signal-study-storage':{storeStudySymbol:async(_owner,_id,symbol,result)=>{if(quota===symbol)throw new DOMException('Temporary storage quota reached','QuotaExceededError');calls.save.push(symbol);calls.events.push(...result.events)}}});
  return {runSignalStudy,calls,config,fix:()=>broken=undefined,changeIdentity:()=>revision++};
 }
 test('23 frozen stocks use three sequential batches and one reused worker; failed ticker retry never duplicates counts',async()=>{
@@ -69,4 +69,12 @@ test('rate limits honor Retry-After with at most two retries; permission and Sto
  calls=0;await assert.rejects(studyRateLimited(async()=>{calls++;throw new ApiError(429,999999)},new AbortController().signal,()=>{}));assert.equal(calls,3);assert.deepEqual(delays.slice(-2),[120000,120000]);
  for(const status of [401,403,409,503]){calls=0;await assert.rejects(studyRateLimited(async()=>{calls++;throw new ApiError(status)},new AbortController().signal,()=>{}));assert.equal(calls,1)}
  const stop=new AbortController();calls=0;await assert.rejects(studyRateLimited(async()=>{calls++;throw new ApiError(429)},stop.signal,()=>stop.abort()),e=>e.name==='AbortError');assert.equal(calls,1);
+});
+
+test('market screening processes all 23 stocks without backtest access or outcome computation',async()=>{
+ const h=harness({purpose:'screen'});
+ const p=await h.runSignalStudy({purpose:'screen'},'owner',new AbortController().signal,()=>{});
+ assert.equal(p.completed,23);assert.equal(h.calls.studies,0);assert.equal(h.calls.events.length,23);
+ assert.equal(p.horizons.length,0);assert.equal(h.calls.events[0].outcomes.length,0);
+ assert.equal(h.calls.events[0].swing.status,'screened');
 });

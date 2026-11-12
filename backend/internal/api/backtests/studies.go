@@ -17,6 +17,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/api/shared"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/marketdata"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
 )
 
@@ -32,6 +33,9 @@ type StudyInput struct {
 	Config     core.SignalStudyConfig `json:"config"`
 }
 type StudyContext struct {
+	Source            string                 `json:"source"`
+	UniverseID        string                 `json:"universe_id,omitempty"`
+	Purpose           string                 `json:"purpose"`
 	EngineVersion     string                 `json:"engine_version"`
 	RuleSchemaVersion string                 `json:"rule_schema_version"`
 	ID                string                 `json:"id"`
@@ -55,19 +59,33 @@ type StudyContext struct {
 }
 type StudyHandler struct {
 	*shared.Context
-	mu    sync.Mutex
-	items map[string]*StudyContext
+	Purpose string
+	mu      sync.Mutex
+	items   map[string]*StudyContext
 }
 
 func NewStudyHandler(c *shared.Context) *StudyHandler {
 	return &StudyHandler{Context: c, items: map[string]*StudyContext{}}
+}
+func NewScreeningHandler(c *shared.Context) *StudyHandler {
+	return &StudyHandler{Context: c, Purpose: "screen", items: map[string]*StudyContext{}}
+}
+func (h *StudyHandler) purpose() string {
+	if h.Purpose == "screen" {
+		return "screen"
+	}
+	return "backtest"
 }
 func (h *StudyHandler) authorize(w http.ResponseWriter, r *http.Request) (string, string, bool) {
 	p, s, _, ok := h.RequireAppSession(w, r)
 	if !ok {
 		return "", "", false
 	}
-	if err := h.Access.RequireFeature(r.Context(), p.ID, "backtest"); err != nil {
+	feature := "backtest"
+	if h.purpose() == "screen" {
+		feature = "screener"
+	}
+	if err := h.Access.RequireFeature(r.Context(), p.ID, feature); err != nil {
 		shared.WriteAccessError(w, r, err)
 		return "", "", false
 	}
@@ -98,6 +116,16 @@ func (h *StudyHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if shared.DecodeJSON(r, &in) != nil || core.ValidateSignalStudyConfig(in.Config) != nil || in.Config.To > time.Now().UTC().Format("2006-01-02") || in.RuleID == "" || (in.Market != "IDX" && in.Market != "US") || (in.Source != "market" && in.Source != "universe") || (in.Source == "market" && in.UniverseID != "") || (in.Source == "universe" && in.UniverseID == "") {
 		shared.WriteError(w, r, 422, "INVALID_REQUEST", "Choose a rule, one market or an owned universe, and a historical range of at most one year.")
 		return
+	}
+	if h.purpose() == "screen" && (in.Config.NSteps != 1 || in.Config.TakeProfitPct != nil || in.Config.StopLossPct != nil) {
+		shared.WriteError(w, r, 422, "INVALID_REQUEST", "Screening returns signals only; choose evaluation settings in backtest.")
+		return
+	}
+	if h.purpose() == "screen" {
+		if err := subscription.CheckScreening(r.Context(), h.Access, owner, in.RuleID, "1d", 1); err != nil {
+			shared.WriteAccessError(w, r, err)
+			return
+		}
 	}
 	definition, hash, err := h.definition(r.Context(), owner, in.RuleID)
 	if err != nil {
@@ -145,7 +173,7 @@ func (h *StudyHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	raw, _ := json.Marshal(instruments)
 	digest := sha256.Sum256(raw)
-	item := &StudyContext{ID: hex.EncodeToString(idBytes[:]), SchemaVersion: core.SignalStudySchema, PolicyVersion: core.SignalStudyPolicy, Market: market, Currency: currency, Config: in.Config, RuleID: in.RuleID, DefinitionHash: hash, CatalogHash: "sha256:" + hex.EncodeToString(digest[:]), Total: len(instruments), BatchSize: 10, Batches: (len(instruments) + 9) / 10, ExpiresAt: time.Now().Add(2 * time.Hour), owner: owner, session: sid, instruments: instruments, operands: core.RequiredOperands(definition), activeBatch: -1}
+	item := &StudyContext{Source: in.Source, UniverseID: in.UniverseID, Purpose: h.purpose(), ID: hex.EncodeToString(idBytes[:]), SchemaVersion: core.SignalStudySchema, PolicyVersion: core.SignalStudyPolicy, Market: market, Currency: currency, Config: in.Config, RuleID: in.RuleID, DefinitionHash: hash, CatalogHash: "sha256:" + hex.EncodeToString(digest[:]), Total: len(instruments), BatchSize: 10, Batches: (len(instruments) + 9) / 10, ExpiresAt: time.Now().Add(2 * time.Hour), owner: owner, session: sid, instruments: instruments, operands: core.RequiredOperands(definition), activeBatch: -1}
 	item.EngineVersion = core.EngineVersion
 	item.RuleSchemaVersion = core.SchemaVersion
 	h.mu.Lock()
@@ -244,6 +272,12 @@ func (h *StudyHandler) Batch(w http.ResponseWriter, r *http.Request) {
 	copyItem := *item
 	h.mu.Unlock()
 	defer func() { h.mu.Lock(); item.busy = false; h.mu.Unlock() }()
+	if h.purpose() == "screen" {
+		if err := subscription.CheckScreening(r.Context(), h.Access, owner, copyItem.RuleID, "1d", 1); err != nil {
+			shared.WriteAccessError(w, r, err)
+			return
+		}
+	}
 	_, hash, err := h.definition(r.Context(), owner, copyItem.RuleID)
 	if err != nil || hash != copyItem.DefinitionHash {
 		shared.WriteError(w, r, 409, "VERSION_MISMATCH", "The rule changed. Cancel and start a new study.")
@@ -262,7 +296,7 @@ func (h *StudyHandler) Batch(w http.ResponseWriter, r *http.Request) {
 		go func(offset int) {
 			defer workers.Done()
 			for i := offset; i < len(batch); i += 3 {
-				input := dataset.PrepareRequest{Purpose: "backtest", Mode: "rule", RuleID: copyItem.RuleID, From: copyItem.Config.From, To: copyItem.Config.To, NSteps: copyItem.Config.NSteps, Timeframe: "1d", RequiredOperands: copyItem.operands, StudyRuleHash: copyItem.DefinitionHash}
+				input := dataset.PrepareRequest{Purpose: h.purpose(), Mode: "rule", RuleID: copyItem.RuleID, From: copyItem.Config.From, To: copyItem.Config.To, NSteps: copyItem.Config.NSteps, Timeframe: "1d", RequiredOperands: copyItem.operands, StudyRuleHash: copyItem.DefinitionHash}
 				manifests[i], failures[i] = h.Datasets.(studyDatasets).PrepareStudy(ctx, owner, id, input, []universe.Instrument{batch[i]})
 			}
 		}(offset)

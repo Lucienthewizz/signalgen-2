@@ -13,6 +13,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/entitlement"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/screener"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/subscription"
 )
 
 var (
@@ -50,6 +51,12 @@ type Service struct {
 }
 
 func (service Service) Signals(ctx context.Context, owner, sessionID string, input SignalInput) (SignalResult, error) {
+	return service.signals(ctx, owner, sessionID, input, "backtest")
+}
+func (service Service) ScreeningSignals(ctx context.Context, owner, sessionID string, input SignalInput) (SignalResult, error) {
+	return service.signals(ctx, owner, sessionID, input, "screen")
+}
+func (service Service) signals(ctx context.Context, owner, sessionID string, input SignalInput, purpose string) (SignalResult, error) {
 	if input.ComputeGrantID == "" || len(input.Candidates) < 1 || len(input.Candidates) > core.MaxBacktestCandles {
 		return SignalResult{}, ErrInvalid
 	}
@@ -57,22 +64,34 @@ func (service Service) Signals(ctx context.Context, owner, sessionID string, inp
 	if (!study && input.PolicyVersion != core.BacktestPolicyVersion) || input.FeatureSchemaVersion != core.FeatureSchemaVersion {
 		return SignalResult{}, ErrUnsupported
 	}
-	if err := service.Features.RequireFeature(ctx, owner, entitlement.FeatureBacktest); err != nil {
+	feature := entitlement.FeatureBacktest
+	if purpose == "screen" {
+		feature = entitlement.FeatureScreener
+		if !study {
+			return SignalResult{}, ErrUnsupported
+		}
+	}
+	if err := service.Features.RequireFeature(ctx, owner, feature); err != nil {
 		return SignalResult{}, &Failure{"access", err}
 	}
 	grant, err := service.Compute.Verify(ctx, owner, sessionID, input.ComputeGrantID)
 	if err != nil {
 		return SignalResult{}, &Failure{"grant", err}
 	}
-	if grant.Purpose != "backtest" || grant.EngineVersion != core.EngineVersion || grant.SchemaVersion != core.SchemaVersion {
+	if grant.Purpose != purpose || grant.EngineVersion != core.EngineVersion || grant.SchemaVersion != core.SchemaVersion {
 		return SignalResult{}, ErrVersion
 	}
 	content, manifest, err := service.Datasets.Content(ctx, owner, grant.DatasetID)
 	if err != nil {
 		return SignalResult{}, &Failure{"dataset", err}
 	}
-	if manifest.Purpose != "backtest" || manifest.DatasetID != grant.DatasetID || manifest.Version != grant.DatasetVersion || manifest.Checksum != grant.DatasetChecksum || manifest.Backtest == nil || manifest.Backtest.Mode != "rule" || manifest.Backtest.RuleID != grant.RuleID || manifest.Timeframe != "1d" {
+	if manifest.Purpose != purpose || manifest.DatasetID != grant.DatasetID || manifest.Version != grant.DatasetVersion || manifest.Checksum != grant.DatasetChecksum || manifest.Backtest == nil || manifest.Backtest.Mode != "rule" || manifest.Backtest.RuleID != grant.RuleID || manifest.Timeframe != "1d" {
 		return SignalResult{}, ErrVersion
+	}
+	if purpose == "screen" {
+		if err := subscription.CheckScreening(ctx, service.Features, owner, grant.RuleID, "1d", len(manifest.Symbols)); err != nil {
+			return SignalResult{}, &Failure{"access", err}
+		}
 	}
 	resolver := screener.AuthorizationService{Rules: service.Rules}
 	rule, err := resolver.ResolveRule(ctx, screener.Binding{UserID: owner, RuleID: grant.RuleID, DefinitionHash: grant.DefinitionHash, EngineVersion: grant.EngineVersion, SchemaVersion: grant.SchemaVersion})

@@ -13,6 +13,12 @@ import (
 type Handler struct{ *shared.Context }
 
 func (server *Handler) Signals(writer http.ResponseWriter, request *http.Request) {
+	server.signals(writer, request, false)
+}
+func (server *Handler) ScreeningSignals(writer http.ResponseWriter, request *http.Request) {
+	server.signals(writer, request, true)
+}
+func (server *Handler) signals(writer http.ResponseWriter, request *http.Request, screening bool) {
 	principal, appSession, _, ok := server.RequireAppSession(writer, request)
 	if !ok {
 		return
@@ -30,7 +36,13 @@ func (server *Handler) Signals(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	service := backtest.Service{Features: server.Access, Datasets: server.Datasets, Compute: server.Compute, Rules: server.Rules}
-	result, err := service.Signals(request.Context(), principal.ID, appSession.ID, input)
+	var result backtest.SignalResult
+	var err error
+	if screening {
+		result, err = service.ScreeningSignals(request.Context(), principal.ID, appSession.ID, input)
+	} else {
+		result, err = service.Signals(request.Context(), principal.ID, appSession.ID, input)
+	}
 	if err != nil {
 		writeError(writer, request, err)
 		return
