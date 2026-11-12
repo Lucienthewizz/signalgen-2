@@ -1,0 +1,385 @@
+{
+  "date": "2026-11-12",
+  "task": "task_354765c3180d",
+  "branch": "frontend/prof-revisions-integration",
+  "starting_tip": "757c7e6c338c7c875d3476a99f5270977c2f0efa",
+  "tested_implementation_commit": "79a3f00576934173ad42f44bc303489a9dd79513",
+  "source_tips": {
+    "storage": "fffec6bc087f980b5a7b3eca894fed45cbcb8c74",
+    "metrics": "5ceb7057db305cf41364990d8448f4a249735a40",
+    "capacity": "cbcdfa3db92bd66a717e8e92934708b63a649e35"
+  },
+  "merge_commits": [
+    "50833a8a14691e826962c4975e63d095b18f3af1",
+    "0b18235a92b8f2e09d04ec17672e0e9839c9750c",
+    "e2d43c0ad818f860b64f0e43614b0ee7b061f2a4"
+  ],
+  "conflicts": false,
+  "frontend_checks": [
+    {
+      "command": "npm test",
+      "exit_code": 0,
+      "output": "\u2714 events for another owner and edits after unmount cannot upload (3.315334ms)\n\u2139 tests 262\n\u2139 suites 0\n\u2139 pass 262\n\u2139 fail 0\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 2692.388083"
+    },
+    {
+      "command": "npm run typecheck",
+      "exit_code": 0,
+      "output": "> signalgen-web@0.1.0 typecheck\n> tsc -b --pretty false"
+    },
+    {
+      "command": "npm run format:check",
+      "exit_code": 0,
+      "output": "> signalgen-web@0.1.0 format:check\n> prettier --check src vite.config.ts index.html\n\nChecking formatting...\nAll matched files use Prettier code style!"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "output": "dist/assets/workspace-backtest-panel-BJ6Ft4XV.js              90.29 kB \u2502 gzip: 27.31 kB\ndist/assets/index-D4rrGN5N.js                                298.25 kB \u2502 gzip: 96.91 kB\n\u2713 built in 1.67s"
+    },
+    {
+      "command": "npm run check:budgets",
+      "exit_code": 0,
+      "output": "> signalgen-web@0.1.0 check:budgets\n> node scripts/check-performance-budgets.mjs\n\nPASS: performance budgets {\"entryJsGzipBytes\":96905,\"workspaceStaticJsGzipBytes\":163754,\"entryCssGzipBytes\":64584,\"entryFiles\":[\"assets/index-D4rrGN5N.js\",\"assets/index-D9_KMz76.css\"],\"workspaceFiles\":[\"assets/demo-workspace-BKb7yUON.js\",\"assets/demo-workspace-iIBho26m.css\",\"assets/index-D4rrGN5N.js\",\"assets/index-D9_KMz76.css\",\"assets/calendar-CkDbSS7B.js\",\"assets/account-menu-Nsi9dzNd.js\",\"assets/profile-avatar-7Mklrya6.js\",\"assets/badge-D9b_aQQa.js\",\"assets/useValueChanged-BUP2k8Vn.js\",\"assets/input-wblD-Jc6.js\",\"assets/check-Q9E-Fz-v.js\",\"assets/pencil-B9m70xgL.js\"],\"journalFile\":\"assets/workspace-journal-panel-BRYDMqBd.js\"}"
+    },
+    {
+      "command": "npm run test:browser",
+      "exit_code": 0,
+      "output": "> signalgen-web@0.1.0 test:browser\n> node scripts/test-browser.mjs\n\nPASS: 10 workspace routes \u00d7 2 viewport sizes \u00d7 dark theme; public/account routes; history/evidence/CSV; monitor sorting; sidebar navigation; expired-session cleanup. API/account fixtures only."
+    },
+    {
+      "command": "npm run test:market-screen",
+      "exit_code": 0,
+      "output": "> signalgen-web@0.1.0 test:market-screen\n> node scripts/test-browser.mjs --market-screen\n\nPASS: market screening; 23 stocks in three batches, real WASM/IndexedDB, pagination, partial coverage, restart and Stop; 1440/390px dark/light; synthetic API."
+    },
+    {
+      "command": "npm run test:study",
+      "exit_code": 0,
+      "output": "> signalgen-web@0.1.0 test:study\n> node scripts/test-browser.mjs --study\n\nPASS: batched signal-study browser regression with real Go/WASM; synthetic API/account/provider fixtures."
+    },
+    {
+      "command": "node tests/browser/evaluation-options.mjs",
+      "exit_code": 0,
+      "report": {
+        "synthetic": true,
+        "realWasm": true,
+        "widths": [
+          1440,
+          390
+        ],
+        "themes": [
+          "dark",
+          "light"
+        ],
+        "modes": [
+          "exact",
+          "target",
+          "tpsl"
+        ],
+        "signals": 3,
+        "exactEvaluated": 2,
+        "exactIncomplete": 1,
+        "exactOpenMean": -8,
+        "exactCloseMean": -10,
+        "targetMean": -2.5,
+        "sameCandlePolicy": "SL-first",
+        "csvRows": 31,
+        "empty": true,
+        "error": true,
+        "loading": true,
+        "keyboard": true
+      }
+    },
+    {
+      "command": "node tests/browser/target-hit-metrics.mjs",
+      "exit_code": 0,
+      "report": {
+        "synthetic": true,
+        "realWasm": true,
+        "widths": [
+          1440,
+          390
+        ],
+        "themes": [
+          "dark",
+          "light"
+        ],
+        "stocks": 23,
+        "batches": 3,
+        "signals": 64,
+        "evaluated": 63,
+        "incomplete": 1,
+        "targetHits": 1,
+        "targetRate": 1.5873015873015872,
+        "winRate": 100,
+        "slFirstTpExits": 0,
+        "pagination": [
+          50,
+          14
+        ],
+        "summaryCSV": true,
+        "eventCSVRows": 641,
+        "empty": true,
+        "legacyUnavailable": true,
+        "error": true,
+        "loading": true,
+        "keyboard": true
+      }
+    },
+    {
+      "command": "node tests/browser/snapshot-overload.mjs",
+      "exit_code": 0,
+      "report": [
+        {
+          "screen": true,
+          "width": 1440,
+          "theme": "dark",
+          "automaticRecovery": true,
+          "boundedRetries": true,
+          "manualRecovery": true,
+          "stopDuringWait": true,
+          "ownerIsolation": true,
+          "realWasm": true
+        },
+        {
+          "screen": true,
+          "width": 1440,
+          "theme": "light",
+          "automaticRecovery": true,
+          "boundedRetries": true,
+          "manualRecovery": true,
+          "stopDuringWait": true,
+          "ownerIsolation": true,
+          "realWasm": true
+        },
+        {
+          "screen": true,
+          "width": 390,
+          "theme": "dark",
+          "automaticRecovery": true,
+          "boundedRetries": true,
+          "manualRecovery": true,
+          "stopDuringWait": true,
+          "ownerIsolation": true,
+          "realWasm": true
+        },
+        {
+          "screen": true,
+          "width": 390,
+          "theme": "light",
+          "automaticRecovery": true,
+          "boundedRetries": true,
+          "manualRecovery": true,
+          "stopDuringWait": true,
+          "ownerIsolation": true,
+          "realWasm": true
+        },
+        {
+          "screen": false,
+          "width": 1440,
+          "theme": "dark",
+          "automaticRecovery": true,
+          "boundedRetries": true,
+          "manualRecovery": true,
+          "stopDuringWait": true,
+          "ownerIsolation": true,
+          "realWasm": true
+        },
+        {
+          "screen": false,
+          "width": 1440,
+          "theme": "light",
+          "automaticRecovery": true,
+          "boundedRetries": true,
+          "manualRecovery": true,
+          "stopDuringWait": true,
+          "ownerIsolation": true,
+          "realWasm": true
+        },
+        {
+          "screen": false,
+          "width": 390,
+          "theme": "dark",
+          "automaticRecovery": true,
+          "boundedRetries": true,
+          "manualRecovery": true,
+          "stopDuringWait": true,
+          "ownerIsolation": true,
+          "realWasm": true
+        },
+        {
+          "screen": false,
+          "width": 390,
+          "theme": "light",
+          "automaticRecovery": true,
+          "boundedRetries": true,
+          "manualRecovery": true,
+          "stopDuringWait": true,
+          "ownerIsolation": true,
+          "realWasm": true
+        }
+      ]
+    }
+  ],
+  "backend_checks": {
+    "commands": [
+      "go test ./core ./internal/dataset ./internal/api/tests -count=1",
+      "go test -race ./internal/dataset ./internal/api/tests -count=1",
+      "go vet ./core ./internal/dataset ./internal/api/backtests ./internal/api/tests"
+    ],
+    "result": "passed",
+    "output": "ok  \tgithub.com/Lucienthewizz/signalgen-2/backend/core\t0.103s\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/dataset\t0.109s\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/api/tests\t6.573s\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/dataset\t1.159s\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/api/tests\t8.157s\n"
+  },
+  "browser_environment": {
+    "base_url": "http://127.0.0.1:5181",
+    "existing_suites": "installed Playwright CLI wrapper with headless Google Chrome",
+    "overload": "locked Playwright SDK, eight fresh contexts",
+    "provider_account_api_private_decisions": "synthetic only",
+    "real_wasm_indexeddb": "all focused suites; general screener computation mocked",
+    "own_vite_stopped": true,
+    "build_during_vite": false,
+    "visual_review": [
+      "screen overload 390/light",
+      "screen overload 1440/dark"
+    ]
+  },
+  "wasm": {
+    "manifest": {
+      "engine_version": "core-0.5.0",
+      "schema_version": "signal-baseline-1",
+      "feature_schema_version": "screener-features-1",
+      "capabilities_version": "capabilities-5",
+      "worker_protocol": "worker-2",
+      "wasm_file": "signalgen_core.wasm",
+      "runtime_file": "wasm_exec.js",
+      "wasm_sha256": "sha256:a2f6872da1c5dfe5468cd4688a97a7401fae3c1dbb1a17a8c8e8587dee246d61",
+      "wasm_bytes": 5278529,
+      "runtime_sha256": "sha256:0c949f4996f9a89698e4b5c586de32249c3b69b7baadb64d220073cc04acba14",
+      "runtime_bytes": 16992
+    },
+    "build": "isolated offline Go container, RO source/toolchain, bounded scratch",
+    "public_and_dist_integrity": "passed"
+  },
+  "runtime": {
+    "exact_dockerfile_image": {
+      "status": "needs-validation; blocked at isolation preflight before RUN execution",
+      "image_id": null,
+      "reason": "No builder-level enforcement established for RO root/target, scratch-only writes, per-RUN environment and writable-layer disk/PID bounds for unmodified Go.Dockerfile; required cached module/apt inputs not established",
+      "weaker_build_or_dependency_download": false
+    },
+    "compiled_binary_fallback": {
+      "result": "passed",
+      "reproduce": "sh backend/scripts/verify_idx_runtime_local.sh",
+      "toolchain_image_id": "sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+      "collector_binary_sha256": "77d5ecd5ed145f21a8dc9a69ee75113a6807775a879db346bac6e79c3aef9449",
+      "tests": [
+        "compiled help",
+        "synthetic validate-only",
+        "five synthetic incremental publications",
+        "read-only store adapter",
+        "prune dry-run: three eligible, none removed, publication unchanged",
+        "collection/CLI suite and vet"
+      ],
+      "not_an_exact_runtime_image": true
+    },
+    "systemd": {
+      "host_tool": "systemd-analyze unavailable",
+      "syntax": "not validated",
+      "installed_or_activated": false
+    },
+    "unchanged_packaging_collection_proof": {
+      "backend/Go.Dockerfile": {
+        "base_equals_worktree": true,
+        "blob": "0351ea98cbac0153135d859b5c2125c500109e60"
+      },
+      "backend/cmd/collectidx/main.go": {
+        "base_equals_worktree": true,
+        "blob": "2b017744ad48f295590c3c1ffc3b676c5efe4173"
+      },
+      "backend/internal/collection/sync.go": {
+        "base_equals_worktree": true,
+        "blob": "c208228799f7ce17e64dab197a298b04bda92b57"
+      },
+      "backend/internal/collection/runner.go": {
+        "base_equals_worktree": true,
+        "blob": "9f68356d7ac8edb7ea77d30c63ef60cfb32f534c"
+      },
+      "backend/internal/collection/retention.go": {
+        "base_equals_worktree": true,
+        "blob": "97b359b5bb3e888ce793864cace2d557d67e1d45"
+      },
+      "deploy/systemd/signalgen-idx-sync.service": {
+        "base_equals_worktree": true,
+        "blob": "b913b3740fb4e9895bdf73172378b6d3308c0343"
+      },
+      "deploy/systemd/signalgen-idx-sync.timer": {
+        "base_equals_worktree": true,
+        "blob": "d0d1b474a140d3b5969221e091744fcfcedb3c1d"
+      },
+      "docker-compose.idx-history.yml": {
+        "base_equals_worktree": true,
+        "blob": "3a4df7b85c2339e4926a305e632fd00d788e07a9"
+      }
+    }
+  },
+  "isolation": {
+    "all_backend_runs": {
+      "network": "none; isolated Docker loopback only",
+      "root_source_toolchain_module_cache": "read-only",
+      "identity": "65534:65534",
+      "capabilities": "ALL dropped",
+      "no_new_privileges": true,
+      "environment": "env -i safe allowlist; scratch HOME/TMPDIR/GOCACHE; GOPROXY/GOSUMDB off; GOTOOLCHAIN local",
+      "docker_socket_or_credentials_exposed": false
+    },
+    "api_tests_race_vet": {
+      "cpu": 2,
+      "ram_bytes": 2147483648,
+      "pids": 256,
+      "scratch_bytes": 2147483648,
+      "file_bytes": 536870912,
+      "timeout_seconds": 480
+    },
+    "wasm_and_runtime_fallback": {
+      "cpu": 2,
+      "ram_bytes": 1610612736,
+      "pids": 128,
+      "scratch_bytes": 1073741824,
+      "file_bytes": 134217728,
+      "timeout_seconds": 180
+    }
+  },
+  "graph": {
+    "project": "browser_regression_integration",
+    "generation": "2026-11-12T13:42:03Z",
+    "tier": 2,
+    "discovery": "search_graph, trace_path and snippets for study retry/panels and reservations",
+    "coverage": "unchanged code metadata_match; new/changed paths read directly; Go.Dockerfile not_tracked and deploy/scripts excluded, read directly; client.ts parse_unusable so relevant HTTP error/auth/Retry-After source read directly",
+    "caveat": "best effort, no exhaustive graph absence claims"
+  },
+  "tooling_limits": [
+    "Impeccable context launcher permission denied; no PRODUCT.md/DESIGN.md existed; existing project docs and established UI used",
+    "exact image and Linux unit validation not established"
+  ],
+  "recovered_check": [
+    "scoped Prettier warning in new overload runner corrected, scoped format and syntax rerun passed"
+  ],
+  "prior_measurements": {
+    "rerun": false,
+    "benchmark": "original screening-performance commit/environment",
+    "capacity_wave": "capacity worker synthetic counts retained: 32 contexts admitted / 968 rejected, 12 complete batches / 20 whole refusals, zero capacity partial batches",
+    "speedup_or_1000_user_claim": false
+  },
+  "remaining_external_inputs": [
+    "deployment topology and isolated exact-image builder",
+    "premium API specification/cost/licensing",
+    "real IDX catalog coverage and freshness",
+    "staging/device/full-user-load proof"
+  ],
+  "implementation_acceptance_blockers": [],
+  "documentation_validation": {
+    "local_links_checked": 9,
+    "json": "passed",
+    "source_branch_ancestry": "passed",
+    "writing_review": "no-ai-slop, unslop balanced and humanizer embedded; facts, limitations and commands preserved"
+  }
+}
