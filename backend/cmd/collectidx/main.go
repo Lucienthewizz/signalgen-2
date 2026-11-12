@@ -41,6 +41,9 @@ func run() error {
 	limit := flag.Int("limit", 0, "attempt at most N instruments; 0 visits whole catalog")
 	retryFailed := flag.Bool("retry-failed", false, "retry previously failed rows")
 	refresh := flag.Bool("refresh", false, "explicitly refetch saved successes for the same window")
+	incremental := flag.Bool("incremental", false, "maintain a published rolling history store")
+	years := flag.Int("years", 5, "incremental rolling history in years (1..5)")
+	overlap := flag.Int("overlap-days", 7, "incremental correction overlap (1..90 calendar days)")
 	validateOnly := flag.Bool("validate-only", false, "validate/catalog count without making provider requests")
 	flag.Parse()
 	if *catalogPath == "" {
@@ -56,7 +59,16 @@ func run() error {
 	if to.After(latestEnd) {
 		return fmt.Errorf("as-of exceeds closed-day cutoff; current date is eligible only after 18:00 WIB")
 	}
+	if *years < 1 || *years > 5 || *overlap < 1 || *overlap > 90 {
+		return fmt.Errorf("years must be 1..5 and overlap-days 1..90")
+	}
+	if *incremental && (*refresh || *retryFailed) {
+		return fmt.Errorf("incremental mode retries failures automatically; use a separate output store for a full rebuild")
+	}
 	from := to.AddDate(-1, 0, 0)
+	if *incremental {
+		from = to.AddDate(-*years, 0, 0)
+	}
 	if *fromDate != "" {
 		from, err = time.ParseInLocation("2006-01-02", *fromDate, jakarta)
 		if err != nil {
@@ -91,9 +103,16 @@ func run() error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	report, err := collection.Run(ctx, catalog, provider, collection.Options{Directory: *output, From: from, To: to, Interval: *interval, Limit: *limit, RetryFailed: *retryFailed, Refresh: *refresh}, func(entry collection.Entry) {
+	options := collection.Options{Directory: *output, From: from, To: to, Interval: *interval, Limit: *limit, RetryFailed: *retryFailed, Refresh: *refresh}
+	progress := func(entry collection.Entry) {
 		fmt.Printf("%s: %s; candles=%d; %s\n", entry.Code, entry.Status, entry.Candles, entry.Error)
-	})
+	}
+	var report collection.Report
+	if *incremental {
+		report, err = collection.Sync(ctx, catalog, provider, options, *overlap, progress)
+	} else {
+		report, err = collection.Run(ctx, catalog, provider, options, progress)
+	}
 	if err != nil && len(report.Entries) == 0 {
 		return err
 	}
@@ -101,7 +120,11 @@ func run() error {
 	for _, entry := range report.Entries {
 		counts[entry.Status]++
 	}
-	fmt.Printf("Saved report: %s; success=%d failed=%d pending=%d; stop=%s\n", filepath.Join(*output, "report.json"), counts["success"], counts["failed"], counts["pending"], report.StoppedReason)
+	reportLocation := filepath.Join(*output, "report.json")
+	if *incremental {
+		reportLocation = *output + "/generation-*/report.json"
+	}
+	fmt.Printf("Saved report: %s; success=%d failed=%d pending=%d; stop=%s\n", reportLocation, counts["success"], counts["failed"], counts["pending"], report.StoppedReason)
 	if err != nil {
 		return err
 	}

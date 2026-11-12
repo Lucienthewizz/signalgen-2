@@ -1,0 +1,19 @@
+[Unit]
+Description=SignalGen incremental IDX daily history
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=signalgen
+Group=signalgen
+UMask=0077
+StateDirectory=signalgen
+WorkingDirectory=/var/lib/signalgen
+ExecStart=/usr/local/bin/signalgen-collect-idx -catalog /etc/signalgen/idx-catalog.csv -out /var/lib/signalgen/idx-store -incremental -years 5 -overlap-days 7 -delay 1s
+TimeoutStartSec=2h
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/signalgen

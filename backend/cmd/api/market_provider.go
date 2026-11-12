@@ -15,9 +15,11 @@ func configuredMarketProvider(mode, archiveDirectory, yahooBaseURL string) (mark
 	switch strings.TrimSpace(mode) {
 	case "yahoo":
 		return marketdata.NewYahooFinance(yahooBaseURL, nil)
+	case "idx_store":
+		return collection.NewStoreProvider(archiveDirectory)
 	case "idx_archive":
 		return collection.NewArchiveProvider(archiveDirectory)
 	default:
-		return nil, fmt.Errorf("SIGNALGEN_MARKET_DATA_MODE must be yahoo or idx_archive")
+		return nil, fmt.Errorf("SIGNALGEN_MARKET_DATA_MODE must be yahoo, idx_archive or idx_store")
 	}
 }

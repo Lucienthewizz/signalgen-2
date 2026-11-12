@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh SignalGen IDX archive independently of browsers
+
+[Timer]
+OnBootSec=2min
+OnCalendar=*-*-* *:30:00 Asia/Jakarta
+Persistent=true
+RandomizedDelaySec=60
+Unit=signalgen-idx-sync.service
+
+[Install]
+WantedBy=timers.target
