@@ -1,0 +1,809 @@
+{
+  "schema": "prof-local-docker-integration-1",
+  "date": "2026-11-12",
+  "branch": "frontend/prof-revisions-integration",
+  "tested_source_sha": "2c4ad1dfbb6a045b7d5a6968eacf971b6f3b81e2",
+  "delivery_commit_policy": "Final child commit contains documentation/evidence only; it does not change compiled source. Resolve its exact ID from Git delivery.",
+  "inputs": {
+    "integration_base": "5bb111d626625bede93e4f7d590c19227a247699",
+    "local_runtime": "9137d7b8b4dd42c7ed3290dd8d8b3b0625aefc92",
+    "optimization": "f2928c8e7558a8d97a9bfd8ce09704b11be6eeae"
+  },
+  "runtime": {
+    "source_sha": "2c4ad1dfbb6a045b7d5a6968eacf971b6f3b81e2",
+    "runtime_input_id": "sha256:f1baf33b1e06c6a7b54f6226cf758785efd2efe99a358c9f613aa906da2077f4",
+    "toolchain_id": "sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+    "image_id": "sha256:cf5e1397b73b4e463b360897f19f5ac0fe02470288b025dd1114a614efa85a50",
+    "tag": "signalgen-local-runtime:2c4ad1dfbb6a",
+    "artifacts_sha256": {
+      "signalgen-api": "03a662a36982c00c049bb7822727c617cc02577fc6d020eeae13842f7dad231b",
+      "signalgen-admin": "b203d2ed2a52f5a26a91b3bdb1330e30bb9c1d28fd5f9552cbd2f44e295dd257",
+      "signalgen-audit-catalog": "d8d49b659a9012a417b571422eabd9a95dabd76710d524658ff4e226b369b67b",
+      "signalgen-healthcheck": "a6c102760ddfc01596b0376b54e7be4e23258e875bb0211570566c0b10fcd6f9",
+      "signalgen-collect-idx": "e0e3d0811967f68e0a6da640350d4f8f1fcdfb2765715c792977c44a7e51e730",
+      "collection.test": "f682c15f1b0beb8bb8b3e438d9c22bd1c3690a01a61bf8a97c0d666743ecbdf9"
+    },
+    "smoke": "=== RUN   TestCollectorRuntimeSmoke\n    runtime_smoke_test.go:90: PASS: compiled collector help, synthetic validate-only, incremental publications, read-only store and prune dry-run; no Yahoo\n--- PASS: TestCollectorRuntimeSmoke (0.06s)\nPASS\n",
+    "readonly_root_rejection": "incremental store is locked: openat .sync.lock: read-only file system\n",
+    "checks": [
+      "all five packaged binaries byte-match rebuilt artifacts",
+      "non-root runtime",
+      "read-only synthetic catalog",
+      "read-only root and catalog writes rejected",
+      "missing bind source rejected",
+      "compose config with empty env file and synthetic inputs"
+    ],
+    "base_config_review": {
+      "onbuild": null,
+      "entrypoint": null,
+      "cmd": [
+        "signalgen-api"
+      ],
+      "user": "signalgen",
+      "env_names": [
+        "PATH"
+      ]
+    },
+    "full_api_started": false,
+    "original_dockerfile_built": false,
+    "runtime_inputs_sha256": {
+      "runtime/group": "6234afc8b24f4d5a286d1d55edd66a42f388cc27ea09c3a45374ff649c854a78",
+      "runtime/passwd": "0e815a6dbbbdf48dd1f84db450499d2c684488dd43ace12081bbacb018e89571",
+      "runtime/ssl/certs/ca-certificates.crt": "e9c7b63ee2623386e9b0a3ee32f499d01a8ea23dc83b8383ddff9f8e749543b7",
+      "fixtures/default_scalping_v1.json": "a48a9f0e86dfdb94dda495d4f01f0c42fe402896c779107958411137f8698a38",
+      "licenses/TA-Lib.txt": "c8ff055c9bc14b22afa1faa1f44256c407e9fc478f2233bc6012a218e0036f5e"
+    },
+    "recipe_sha256": "b4754a2b06bb1a1fca169c2dbf1bca7279b4a50caf7eeaf0141fda9f3d3d3abc",
+    "compose_sha256": "6353a91ffbd8983eb984cf65db3f10122f3c685874b56cfc7f228cb5bb427fb9",
+    "compiler_input_count": 353,
+    "compiler_input_hash_map_sha256": "6e4931ecde4fd430dc40e782b8b0e06f3877e6481f810f01200b9dc0da1cce5d"
+  },
+  "checks": [
+    {
+      "name": "frontend_unit",
+      "command": "npm test",
+      "result": "pass",
+      "log_sha256": "1782ba3f6761a2fb3c2386e0281aeb2650b531675d494c5aea35cf30f0ce5a2b",
+      "tail": [
+        "\u2139 suites 0",
+        "\u2139 pass 262",
+        "\u2139 fail 0",
+        "\u2139 cancelled 0",
+        "\u2139 skipped 0",
+        "\u2139 todo 0",
+        "\u2139 duration_ms 3043.586291"
+      ]
+    },
+    {
+      "name": "frontend_typecheck",
+      "command": "npm run typecheck",
+      "result": "pass",
+      "log_sha256": "d0cb13039cac260ab88590c095f4301e3d96a3c328fa0d589f633b28e2e025f8",
+      "tail": [
+        "",
+        "> signalgen-web@0.1.0 typecheck",
+        "> tsc -b --pretty false",
+        ""
+      ]
+    },
+    {
+      "name": "frontend_format",
+      "command": "npm run format:check",
+      "result": "pass",
+      "log_sha256": "729f1044271584a3225c98415de3f2d3c4f661c6de52acffed9026676f8432ec",
+      "tail": [
+        "",
+        "> signalgen-web@0.1.0 format:check",
+        "> prettier --check src vite.config.ts index.html",
+        "",
+        "Checking formatting...",
+        "All matched files use Prettier code style!"
+      ]
+    },
+    {
+      "name": "frontend_build",
+      "command": "npm run build",
+      "result": "pass",
+      "log_sha256": "4f91829167433fd3f031ff52b7602c0f0a6401b39446bd4c60208593ca341e15",
+      "tail": [
+        "dist/assets/demo-workspace-BKb7yUON.js                        49.51 kB \u2502 gzip: 16.80 kB",
+        "dist/assets/workspace-screener-panel-C0ys2N1Q.js              59.01 kB \u2502 gzip: 17.93 kB",
+        "dist/assets/date-input-zEA76-0j.js                            77.68 kB \u2502 gzip: 22.97 kB",
+        "dist/assets/badge-D9b_aQQa.js                                 84.10 kB \u2502 gzip: 30.14 kB",
+        "dist/assets/workspace-backtest-panel-BJ6Ft4XV.js              90.29 kB \u2502 gzip: 27.31 kB",
+        "dist/assets/index-D4rrGN5N.js                                298.25 kB \u2502 gzip: 96.91 kB",
+        "\u2713 built in 1.63s"
+      ]
+    },
+    {
+      "name": "frontend_budgets",
+      "command": "npm run check:budgets",
+      "result": "pass",
+      "log_sha256": "2d89e7c4e1f15f2383de1e0bc3286d4615900de855b57a1d516a8c607f4fc04d",
+      "tail": [
+        "",
+        "> signalgen-web@0.1.0 check:budgets",
+        "> node scripts/check-performance-budgets.mjs",
+        "",
+        "PASS: performance budgets {\"entryJsGzipBytes\":96905,\"workspaceStaticJsGzipBytes\":163754,\"entryCssGzipBytes\":64584,\"entryFiles\":[\"assets/index-D4rrGN5N.js\",\"assets/index-D9_KMz76.css\"],\"workspaceFiles\":[\"assets/demo-workspace-BKb7yUON.js\",\"assets/demo-workspace-iIBho26m.css\",\"assets/index-D4rrGN5N.js\",\"assets/index-D9_KMz76.css\",\"assets/calendar-CkDbSS7B.js\",\"assets/account-menu-Nsi9dzNd.js\",\"assets/profile-avatar-7Mklrya6.js\",\"assets/badge-D9b_aQQa.js\",\"assets/useValueChanged-BUP2k8Vn.js\",\"assets/input-wblD-Jc6.js\",\"assets/check-Q9E-Fz-v.js\",\"assets/pencil-B9m70xgL.js\"],\"journalFile\":\"assets/workspace-journal-panel-BRYDMqBd.js\"}"
+      ]
+    },
+    {
+      "name": "general",
+      "command": "npm run test:browser",
+      "result": "pass",
+      "log_sha256": "1220d229ccd0aabcc6d50ac056d2a90ea36fd854fc34403ee5e10efc20971a38",
+      "tail": [
+        "",
+        "> signalgen-web@0.1.0 test:browser",
+        "> node scripts/test-browser.mjs",
+        "",
+        "PASS: 10 workspace routes \u00d7 2 viewport sizes \u00d7 dark theme; public/account routes; history/evidence/CSV; monitor sorting; sidebar navigation; expired-session cleanup. API/account fixtures only."
+      ]
+    },
+    {
+      "name": "market_screen",
+      "command": "npm run test:market-screen",
+      "result": "pass",
+      "log_sha256": "3e86072ba5e6fefea511142ab8e383cb645e208d93a167d6fc93d153321e00cc",
+      "tail": [
+        "",
+        "> signalgen-web@0.1.0 test:market-screen",
+        "> node scripts/test-browser.mjs --market-screen",
+        "",
+        "PASS: market screening; 23 stocks in three batches, real WASM/IndexedDB, pagination, partial coverage, restart and Stop; 1440/390px dark/light; synthetic API."
+      ]
+    },
+    {
+      "name": "study",
+      "command": "npm run test:study",
+      "result": "pass",
+      "log_sha256": "32026a0d3926c9565c5d567dcaec685a00e1af3d49a9bdddd018f459baab62fd",
+      "tail": [
+        "",
+        "> signalgen-web@0.1.0 test:study",
+        "> node scripts/test-browser.mjs --study",
+        "",
+        "PASS: batched signal-study browser regression with real Go/WASM; synthetic API/account/provider fixtures."
+      ]
+    },
+    {
+      "name": "evaluation_options",
+      "command": "node tests/browser/evaluation-options.mjs",
+      "result": "pass",
+      "log_sha256": "a8f7bfd967f8204f37b0002d98f503ab5b5fb710b158b94fb6eb0d2650821710",
+      "tail": [
+        "  \"sameCandlePolicy\": \"SL-first\",",
+        "  \"csvRows\": 31,",
+        "  \"empty\": true,",
+        "  \"error\": true,",
+        "  \"loading\": true,",
+        "  \"keyboard\": true",
+        "}"
+      ]
+    },
+    {
+      "name": "target_hit_metrics",
+      "command": "node tests/browser/target-hit-metrics.mjs",
+      "result": "pass",
+      "log_sha256": "5009d85ff7068932055caa4d032a6535ac452ba37b51ebf7f8760df675634a11",
+      "tail": [
+        "  \"eventCSVRows\": 641,",
+        "  \"empty\": true,",
+        "  \"legacyUnavailable\": true,",
+        "  \"error\": true,",
+        "  \"loading\": true,",
+        "  \"keyboard\": true",
+        "}"
+      ]
+    },
+    {
+      "name": "snapshot_overload",
+      "command": "node tests/browser/snapshot-overload.mjs",
+      "result": "pass",
+      "log_sha256": "c1dc37894331d17f5dee3ef31c9fa30b2c5217ef95e29e5495ff5bfe0e41a5b4",
+      "tail": [
+        "    \"boundedRetries\": true,",
+        "    \"manualRecovery\": true,",
+        "    \"stopDuringWait\": true,",
+        "    \"ownerIsolation\": true,",
+        "    \"realWasm\": true",
+        "  }",
+        "]"
+      ]
+    },
+    {
+      "name": "preflight",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 backend/scripts/test_local_runtime.py",
+      "result": "pass",
+      "log_sha256": "921b60a7fd52e978fbb551cacd29df2d6708879400278e1fcc70fceeb0c6f8e0",
+      "tail": [
+        "...",
+        "----------------------------------------------------------------------",
+        "Ran 3 tests in 0.001s",
+        "",
+        "OK"
+      ]
+    }
+  ],
+  "wasm_manifest": {
+    "engine_version": "core-0.5.0",
+    "schema_version": "signal-baseline-1",
+    "feature_schema_version": "screener-features-1",
+    "capabilities_version": "capabilities-5",
+    "worker_protocol": "worker-2",
+    "wasm_file": "signalgen_core.wasm",
+    "runtime_file": "wasm_exec.js",
+    "wasm_sha256": "sha256:af366a24c478003595dc5d47e126544d74d32412bcc6486632d40bc679b57c51",
+    "wasm_bytes": 5279060,
+    "runtime_sha256": "sha256:0c949f4996f9a89698e4b5c586de32249c3b69b7baadb64d220073cc04acba14",
+    "runtime_bytes": 16992
+  },
+  "core": {
+    "commands": [
+      "SIGNALGEN_STUDY_FIXTURES=/scratch/out/fixtures.json go test ./core -count=1",
+      "go test -race ./core -count=1",
+      "go vet ./core"
+    ],
+    "result": "pass",
+    "log": "ok  \tgithub.com/Lucienthewizz/signalgen-2/backend/core\t0.226s\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/core\t4.224s\n",
+    "native_golden_cases": 29,
+    "wasm_golden_cases": [
+      {
+        "id": "sparse_10x300_h5",
+        "first_ms": 35,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "35d17381ff7f8d09819a3d510e81a02d39b472cd323bc4ea329e00e59d365037",
+        "error": null,
+        "result_bytes": 260703,
+        "events": 110
+      },
+      {
+        "id": "dense_10x300_h5",
+        "first_ms": 179.19999992847443,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "f6da0025205ce96dcaf09e461fb05a8eda948537f7137649259352646a06eadd",
+        "error": null,
+        "result_bytes": 6730584,
+        "events": 2810
+      },
+      {
+        "id": "dense_10x1000_h5",
+        "first_ms": 188,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "52df643ec83c29258805461dddbb1836579e7a5b6eee67057557ddf3fe8598d0",
+        "error": null,
+        "result_bytes": 6730711,
+        "events": 2810
+      },
+      {
+        "id": "sparse_10x2500_h100",
+        "first_ms": 86.80000007152557,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "1e8b039947730fab5956aef3cd7ca4cc174328cbcf19c6b1843df88ffa33ed46",
+        "error": null,
+        "result_bytes": 1966715,
+        "events": 50
+      },
+      {
+        "id": "random_5",
+        "first_ms": 3.5,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "6fb7545d0b6b5c04aa8a0ef1287b55b033c4e769b17587311c8fc2f0438d0553",
+        "error": null,
+        "result_bytes": 178963,
+        "events": 63
+      },
+      {
+        "id": "random_6",
+        "first_ms": 1.1999999284744263,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "4e1bbe104ef80ca4e0dbd516b68fe9b1cec5f685bfe996c80d54d056c36fc03d",
+        "error": null,
+        "result_bytes": 58396,
+        "events": 16
+      },
+      {
+        "id": "random_7",
+        "first_ms": 2,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "0efd5d98f9ecf4b18e6436dbea3ac6e5f079ad89fe03aaf38a8773a903a42ddd",
+        "error": null,
+        "result_bytes": 107075,
+        "events": 28
+      },
+      {
+        "id": "random_8",
+        "first_ms": 16.40000009536743,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "08282e9f6a21bd12c140cba705be82708eda93ab6d1b7ad48c16151fd007e70e",
+        "error": null,
+        "result_bytes": 752037,
+        "events": 186
+      },
+      {
+        "id": "random_9",
+        "first_ms": 2.799999952316284,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "0725d69c54ab5205cc363d5dc093f7ac99608b36a1bd19426c846528ebdaaff5",
+        "error": null,
+        "result_bytes": 166934,
+        "events": 35
+      },
+      {
+        "id": "random_10",
+        "first_ms": 1.3000000715255737,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "2f9857e41a4cb14035a7180643720fd3f607ef71d560e671a96d8ae413111fbc",
+        "error": null,
+        "result_bytes": 41129,
+        "events": 52
+      },
+      {
+        "id": "random_11",
+        "first_ms": 2,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "b9390132d31de588bdeadb1449ce235484a2c433e8c2a191a11b9aa58eaa5da8",
+        "error": null,
+        "result_bytes": 76943,
+        "events": 63
+      },
+      {
+        "id": "random_12",
+        "first_ms": 4.099999904632568,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "98b9b1b47d0eb71ec25b4af9e47da2ac50e70d9b5e3e24fac676220d9220a3ae",
+        "error": null,
+        "result_bytes": 155340,
+        "events": 90
+      },
+      {
+        "id": "random_13",
+        "first_ms": 4.299999952316284,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "6142cf3916b8e3b81f529dd546b2f9dff6b91bcac82a67ae0d4e62dc922a2d9d",
+        "error": null,
+        "result_bytes": 201391,
+        "events": 98
+      },
+      {
+        "id": "random_14",
+        "first_ms": 4.700000047683716,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "82e631c136fa226d35740a398e9fed38adca59097664c4608367daa312665af3",
+        "error": null,
+        "result_bytes": 258219,
+        "events": 105
+      },
+      {
+        "id": "random_15",
+        "first_ms": 2.799999952316284,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "f609dbc78c0044d492b04534271292e4eedf9805704ac05bcd38fc0d2086e74a",
+        "error": null,
+        "result_bytes": 88402,
+        "events": 28
+      },
+      {
+        "id": "random_16",
+        "first_ms": 15.900000095367432,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "623a649fe0113bcf3d0bb258cca53f0e344ef4bb65b1a3e59b136c71f43c3b77",
+        "error": null,
+        "result_bytes": 772191,
+        "events": 236
+      },
+      {
+        "id": "year_1",
+        "first_ms": 0.7000000476837158,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "0f3b629a3882fecd29f6afbcf5baf3c9c43f3bccb38fb789f9470c2bc0686fe4",
+        "error": null,
+        "result_bytes": 20139,
+        "events": 11
+      },
+      {
+        "id": "year_9998",
+        "first_ms": 0.7999999523162842,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "6168b52d4878f310a9bf9add33ce73a55d4a993adc7f90eab194f56722e2fbce",
+        "error": null,
+        "result_bytes": 20156,
+        "events": 11
+      },
+      {
+        "id": "empty_target",
+        "first_ms": 0.20000004768371582,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "a40c434b2e5aa62de0421fdf67e760b1cb5d30b914a84b1bf5cd960ec2fd9d05",
+        "error": null,
+        "result_bytes": 1759,
+        "events": 0
+      },
+      {
+        "id": "empty_no_target",
+        "first_ms": 0.19999992847442627,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": "3807cdc53258852f7375e291707686b473633990f78256a977357f16504c40fe",
+        "error": null,
+        "result_bytes": 1707,
+        "events": 0
+      },
+      {
+        "id": "invalid_timestamp",
+        "first_ms": 0.30000007152557373,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": null,
+        "error": "invalid study signal",
+        "result_bytes": null,
+        "events": null
+      },
+      {
+        "id": "duplicate_instant",
+        "first_ms": 0.19999992847442627,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": null,
+        "error": "signal requires exact warm candle and cannot repeat",
+        "result_bytes": null,
+        "events": null
+      },
+      {
+        "id": "unknown_symbol",
+        "first_ms": 0.10000002384185791,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": null,
+        "error": "signal requires exact warm candle and cannot repeat",
+        "result_bytes": null,
+        "events": null
+      },
+      {
+        "id": "invalid_side",
+        "first_ms": 0.10000002384185791,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": null,
+        "error": "invalid study signal",
+        "result_bytes": null,
+        "events": null
+      },
+      {
+        "id": "warmup",
+        "first_ms": 0.5999999046325684,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": null,
+        "error": "signal outside study range",
+        "result_bytes": null,
+        "events": null
+      },
+      {
+        "id": "invalid_series",
+        "first_ms": 0.10000002384185791,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": null,
+        "error": "candles must be strictly chronological",
+        "result_bytes": null,
+        "events": null
+      },
+      {
+        "id": "invalid_schema",
+        "first_ms": 0.10000002384185791,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": null,
+        "error": "unsupported signal study schema",
+        "result_bytes": null,
+        "events": null
+      },
+      {
+        "id": "outside_range",
+        "first_ms": 0.19999992847442627,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": null,
+        "error": "signal outside study range",
+        "result_bytes": null,
+        "events": null
+      },
+      {
+        "id": "not_exact_nanosecond",
+        "first_ms": 0.10000002384185791,
+        "warmups": 0,
+        "samples": 0,
+        "raw_ms": [],
+        "median_ms": null,
+        "p95_ms": null,
+        "output_sha256": null,
+        "error": "signal requires exact warm candle and cannot repeat",
+        "result_bytes": null,
+        "events": null
+      }
+    ],
+    "browser_performance_loops_disabled": true
+  },
+  "browser_reports": {
+    "evaluation-options": {
+      "synthetic": true,
+      "realWasm": true,
+      "widths": [
+        1440,
+        390
+      ],
+      "themes": [
+        "dark",
+        "light"
+      ],
+      "modes": [
+        "exact",
+        "target",
+        "tpsl"
+      ],
+      "signals": 3,
+      "exactEvaluated": 2,
+      "exactIncomplete": 1,
+      "exactOpenMean": -8,
+      "exactCloseMean": -10,
+      "targetMean": -2.5,
+      "sameCandlePolicy": "SL-first",
+      "csvRows": 31,
+      "empty": true,
+      "error": true,
+      "loading": true,
+      "keyboard": true
+    },
+    "target-hit-metrics": {
+      "synthetic": true,
+      "realWasm": true,
+      "widths": [
+        1440,
+        390
+      ],
+      "themes": [
+        "dark",
+        "light"
+      ],
+      "stocks": 23,
+      "batches": 3,
+      "signals": 64,
+      "evaluated": 63,
+      "incomplete": 1,
+      "targetHits": 1,
+      "targetRate": 1.5873015873015872,
+      "winRate": 100,
+      "slFirstTpExits": 0,
+      "pagination": [
+        50,
+        14
+      ],
+      "summaryCSV": true,
+      "eventCSVRows": 641,
+      "empty": true,
+      "legacyUnavailable": true,
+      "error": true,
+      "loading": true,
+      "keyboard": true
+    },
+    "snapshot-overload": [
+      {
+        "screen": true,
+        "width": 1440,
+        "theme": "dark",
+        "automaticRecovery": true,
+        "boundedRetries": true,
+        "manualRecovery": true,
+        "stopDuringWait": true,
+        "ownerIsolation": true,
+        "realWasm": true
+      },
+      {
+        "screen": true,
+        "width": 1440,
+        "theme": "light",
+        "automaticRecovery": true,
+        "boundedRetries": true,
+        "manualRecovery": true,
+        "stopDuringWait": true,
+        "ownerIsolation": true,
+        "realWasm": true
+      },
+      {
+        "screen": true,
+        "width": 390,
+        "theme": "dark",
+        "automaticRecovery": true,
+        "boundedRetries": true,
+        "manualRecovery": true,
+        "stopDuringWait": true,
+        "ownerIsolation": true,
+        "realWasm": true
+      },
+      {
+        "screen": true,
+        "width": 390,
+        "theme": "light",
+        "automaticRecovery": true,
+        "boundedRetries": true,
+        "manualRecovery": true,
+        "stopDuringWait": true,
+        "ownerIsolation": true,
+        "realWasm": true
+      },
+      {
+        "screen": false,
+        "width": 1440,
+        "theme": "dark",
+        "automaticRecovery": true,
+        "boundedRetries": true,
+        "manualRecovery": true,
+        "stopDuringWait": true,
+        "ownerIsolation": true,
+        "realWasm": true
+      },
+      {
+        "screen": false,
+        "width": 1440,
+        "theme": "light",
+        "automaticRecovery": true,
+        "boundedRetries": true,
+        "manualRecovery": true,
+        "stopDuringWait": true,
+        "ownerIsolation": true,
+        "realWasm": true
+      },
+      {
+        "screen": false,
+        "width": 390,
+        "theme": "dark",
+        "automaticRecovery": true,
+        "boundedRetries": true,
+        "manualRecovery": true,
+        "stopDuringWait": true,
+        "ownerIsolation": true,
+        "realWasm": true
+      },
+      {
+        "screen": false,
+        "width": 390,
+        "theme": "light",
+        "automaticRecovery": true,
+        "boundedRetries": true,
+        "manualRecovery": true,
+        "stopDuringWait": true,
+        "ownerIsolation": true,
+        "realWasm": true
+      }
+    ]
+  },
+  "graph": {
+    "project": "browser_regression_integration",
+    "generation": "2026-11-12T14:25:07Z",
+    "core_and_golden": "metadata_match/no_recorded_issue",
+    "fallback": "scripts/docs excluded; Dockerfile not tracked; direct source read; coverage best effort, not completeness"
+  },
+  "reused_evidence": {
+    "dataset_api_race_vet_collection": "prof-revisions-followup-20261112.md; paths unchanged versus5bb111d",
+    "performance": "signal-study-optimization-validation-20261112.json and paired benchmark reports; not rerun"
+  },
+  "limits": [
+    "No full original Go.Dockerfile clean build",
+    "No external Supabase API health or authenticated API startup",
+    "No live IDX/Yahoo data, premium provider, cloud or timer activation",
+    "No staging, physical-device or1000-user proof",
+    "No new performance samples; prior measurements retain their original environment"
+  ],
+  "scoped_validation": {
+    "json_and_relative_links": "pass",
+    "python_ast": "pass",
+    "protected_compiler_input_hashes_unchanged": "pass",
+    "git_diff_check": "pass",
+    "writing_review": "no-ai-slop and unslop balanced; facts, commands, limits and historical evidence preserved"
+  }
+}
