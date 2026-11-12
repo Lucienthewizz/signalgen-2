@@ -18,6 +18,9 @@ Aturan operasional ada di `AGENTS.md`. Pilih skill berdasarkan pekerjaan yang di
 | `ponytail` | Coding, perbaikan bug, refactoring, dan review kode | “Perbaiki filter yang tidak bekerja dengan perubahan sekecil yang diperlukan.” |
 | `codebase-memory` | Menelusuri struktur, pemanggilan fungsi, dependensi, dan dampak perubahan | “Telusuri alur tombol screener dari UI sampai backend.” |
 | `frontend-design` | Membuat atau memperbaiki halaman dan komponen frontend | “Buat halaman portofolio sesuai identitas SignalGen.” |
+| `impeccable` | Arah desain dan perbaikan UI sesuai lingkup permintaan | “Poles form registrasi tanpa mengganti identitas SignalGen.” |
+| `apple-design` | Feedback interaksi, konsistensi spasial, tipografi, dan motion yang dapat diinterupsi | “Perbaiki respons drawer dan dukungan reduced motion.” |
+| `shadcn` | Komposisi dan penggunaan komponen shadcn/ui yang sesuai konfigurasi proyek | “Perbaiki dialog menggunakan komponen yang sudah tersedia.” |
 | `ui-ux-pro-max` | Desain dan review UI/UX, termasuk responsivitas dan aksesibilitas | “Rapikan dashboard agar nyaman digunakan di HP.” |
 | `playwright` | Verifikasi alur melalui browser | “Uji login dan pesan error-nya di desktop dan HP.” |
 | `security-audit` | Pertanyaan keamanan, review batas kepercayaan, dan audit keamanan | “Periksa apakah endpoint ini membatasi data sesuai pemiliknya.” |
@@ -39,6 +42,7 @@ Aturan operasional ada di `AGENTS.md`. Pilih skill berdasarkan pekerjaan yang di
 | `build-design` | Implementasi berdasarkan Figma atau gambar desain yang diberikan | “Implementasikan desain ini memakai komponen dan token proyek.” |
 | `teardown` | Ilustrasi teknis objek atau cara kerja melalui lapisan dan bagian | “Buat ilustrasi lapisan antarmuka beserta penjelasannya.” |
 | `no-ai-slop` | Pemeriksaan akhir kejelasan, pengulangan, filler, dan klaim generik | “Rapikan penjelasan fitur ini agar langsung ke intinya.” |
+| `humanizer` | Menyunting prosa panjang dan mengurangi pola tulisan AI sambil menjaga isi | “Rapikan penjelasan fitur ini sesuai gaya tulisan saya.” |
 | `unslop` | Pemeriksaan akhir bahasa natural sesuai pembaca dan konteks | “Buat paragraf ini lebih natural, tetap formal dan faktual.” |
 
 `no-ai-slop` dan `unslop` wajib digunakan sebelum jawaban akhir setiap tugas di proyek ini, kecuali pengguna meminta pengecualian. Keduanya juga memeriksa teks UI atau dokumentasi yang dibuat atau diubah. Kalimat yang sudah jelas tidak perlu dipaksakan berubah.
@@ -66,3 +70,21 @@ Permintaan: “Buat form tambah transaksi yang nyaman di HP, dengan validasi dan
 - Verifikasi alur yang terpengaruh dengan pemeriksaan proyek dan `playwright`, lalu gunakan `no-ai-slop` serta `unslop` sebelum pengiriman.
 
 Daftar ini berfokus pada pengembangan SignalGen dan skill yang dibahas dalam sesi ini. Untuk tugas dokumen, spreadsheet, presentasi, Supabase, atau layanan lain, pilih skill khusus yang tersedia di katalog sesi. Context7, DESIGNmd, dan Git adalah alat pendukung, bukan nama skill dalam daftar ini.
+
+## Pemakaian otomatis saat memberi prompt
+
+Di repositori ini, cukup tulis hasil yang ingin dicapai, misalnya “Perbaiki form registrasi di HP”. `AGENTS.md` mengarahkan pemilihan skill sesuai tugas, pembacaan panduan, implementasi, pemeriksaan, dan pengiriman Git. Skill khusus dokumen atau backend dipilih ketika tugasnya sesuai. Workflow yang harus dipanggil secara eksplisit tetap mengikuti batas tersebut.
+
+Skill pribadi terpasang di `~/.codex/skills/` dan dapat digunakan lintas proyek. Aturan otomatis dalam `AGENTS.md` ini berlaku untuk SignalGen; proyek lain mengikuti aturan masing-masing. Skill baru tersedia pada giliran berikutnya atau setelah sesi dimuat ulang bila katalog belum diperbarui.
+
+## Sumber pemasangan skill desain
+
+Ketiga folder dipasang dari commit berikut, beserta referensi dan helper di folder skill. Pemasangan tidak mengubah dependensi aplikasi atau mengaktifkan hook.
+
+| Skill | Sumber | Commit |
+| --- | --- | --- |
+| `impeccable` | [pbakaus/impeccable](https://github.com/pbakaus/impeccable/tree/b4bff1626c344067788c2679f048a20057c7cc5a/.agents/skills/impeccable) | `b4bff1626c344067788c2679f048a20057c7cc5a` |
+| `apple-design` | [emilkowalski/skills](https://github.com/emilkowalski/skills/tree/4061b67b8d976a186aca118594f54b638c5f718a/skills/apple-design) | `4061b67b8d976a186aca118594f54b638c5f718a` |
+| `shadcn` | [shadcn-ui/ui](https://github.com/shadcn-ui/ui/tree/dd41d19e2f80ff6891951f7ced74c2c9a650b065/skills/shadcn) | `dd41d19e2f80ff6891951f7ced74c2c9a650b065` |
+
+Launcher `impeccable` dapat mengunduh engine yang dipatok versinya pada pemakaian pertama dan memverifikasinya terhadap checksum yang disertakan. Kesiapan engine perlu diperiksa saat workflow UI dijalankan; keberadaan folder skill saja belum membuktikan runtime siap.

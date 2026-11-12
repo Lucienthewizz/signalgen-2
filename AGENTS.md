@@ -7,10 +7,22 @@ Always check the available skill catalog before starting a task. When a skill ma
 - Use `scroll-craft` when the request involves scroll-driven experiences, cinematic or layered heroes, scrollytelling, or bespoke landing-page motion. Keep motion aligned with the requested scope and support reduced-motion preferences.
 - Use `no-ai-slop` when editing or reviewing writing for clarity, voice, and generic AI phrasing. This skill primarily concerns writing quality; it does not replace UI design guidance.
 - Use `unslop` for natural writing, humanization, voice matching, or removal of AI tone. Combine its guidance with `no-ai-slop` in the mandatory final review below. Preserve facts and the user's intended meaning.
-- Use other relevant installed skills for their supported tasks, including the frontend and codebase skills required below. These five skills are not an exhaustive list.
+- Use `humanizer` when drafting or revising substantial prose, matching a supplied voice, or removing AI writing patterns. Apply its embedded mode when it supports another task, and file mode when editing a named file. Coordinate it with the mandatory writing reviews in one pass; preserve facts, citations, commands, and code.
+- Use other relevant installed skills for their supported tasks, including the frontend and codebase skills required below. This skill list is not exhaustive.
 - Briefly announce which skill(s) are being applied and why the first time they are used in the conversation. Only claim use after reading and following the applicable instructions.
 - If a required skill is missing or inaccessible, check the configured skill locations, disclose the limitation, and use an available fallback when it can safely complete the task. Do not install skills, enable integrations, upload files, or change accounts without authorization.
 - Follow user instructions and higher-priority requirements when skill guidance conflicts. Do not expand the task, redesign unrelated UI, or add dependencies solely because a skill suggests them.
+
+# Automatic routing for future prompts
+
+These rules apply to every task in this repository, including a new conversation opened here. The user can describe the desired result without naming skills or repeating this workflow. Personal skill installations are shared across projects; these project rules apply within this repository.
+
+- At the start of a task, read the applicable `AGENTS.md` files and check the current skill catalog. Select skills from the requested outcome and affected surface, then read their entrypoints and only the references needed for the task. A skill installed on disk may require the next turn or a new session to appear in the catalog; disclose discovery failures.
+- For implementation or fixes, use `ponytail`; for structural exploration, use `codebase-memory` with its coverage checks. For frontend work, follow the website workflow below and select relevant interface domain skills. For backend-only work, use the relevant backend and security guidance.
+- For documents, PDFs, spreadsheets, presentations, Supabase, or connected services, select the corresponding available skill. For writing, use the writing skills above and the mandatory final review. Consult `SKILLS_GUIDE.md` for examples; its list is not exhaustive.
+- An explicit skill request takes priority in selection. Preserve user-invoked restrictions on specialized workflows. Installing skills does not start audits, background agents, hooks, redesigns, or registry/component installation.
+- Resolve overlapping guidance using the user's current request, applicable project rules, and the existing implementation. Keep the established design tokens, components, content, and architecture unless the requested change requires modifying them. Newer library examples must be checked against the project's installed versions before use.
+- Announce the selected skills briefly once, carry out the authorized work, and verify the affected behavior. Keep the final reply focused on the result, actual checks, and material limitations; a list of skills used is not evidence of success.
 
 # Task completion and skill selection
 
@@ -54,7 +66,10 @@ The user has requested automatic GitHub delivery for future updates made by the 
 
 The user requests the installed frontend skills and CLI tools as the default workflow for every website update.
 
-- Use `frontend-design`, `impeccable`, `apple-design`, and `shadcn` for frontend work, reading their applicable instructions before implementation. Preserve Signalgen's established clean visual identity; Apple guidance informs interaction quality, not an unsolicited visual redesign.
+- Consult `frontend-design`, `impeccable`, `apple-design`, and `shadcn` for frontend work, reading their applicable instructions before implementation. Apply each within its scope: `frontend-design` for composition and implementation; `impeccable` for design direction and targeted refinement; `apple-design` for responsive feedback, spatial consistency, typography, and motion; `shadcn` for existing shadcn/ui components and composition. Preserve Signalgen's established clean visual identity.
+- For `impeccable`, resolve commands from the installed skill directory and load the relevant playbook. Run its context loader when doing UI work; on failure, disclose it and read the existing project context directly as the skill instructs. Read its craft floor before UI edits. Do not enable hooks, repair design artifacts, replace `DESIGN.md`, or start an unrelated redesign as an installation side effect.
+- Apply Apple interaction guidance to the requested surface using existing dependencies. Preserve keyboard operation, reduced-motion support, and existing product tokens; installing `apple-design` does not request glass surfaces, a new font, or additional animation libraries.
+- For shadcn work, inspect the project's actual config, package manager, primitive library, installed components, and local customizations. Fetch current component documentation through the documented CLI and Context7 as applicable. Reuse compatible components; preview updates before applying them and preserve local changes. This installation request authorizes skills only; do not run `shadcn init`, add components, switch presets, or overwrite UI files as part of setup.
 - Use `codebase-memory` and its graph-first discovery and coverage checks when exploring or tracing the implementation.
 - Use Context7 MCP (`context7-mcp`) for current library, framework, SDK, API, and CLI documentation before relying on library-specific syntax or configuration.
 - Use DESIGNmd CLI to consult relevant design-system references. Do not overwrite the project's design system or upload project files without an explicit request. Keep API keys outside the repository and tool output.
