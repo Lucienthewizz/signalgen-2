@@ -44,8 +44,17 @@ func run() error {
 	incremental := flag.Bool("incremental", false, "maintain a published rolling history store")
 	years := flag.Int("years", 5, "incremental rolling history in years (1..5)")
 	overlap := flag.Int("overlap-days", 7, "incremental correction overlap (1..90 calendar days)")
+	keep := flag.Int("keep-generations", 3, "incremental retention: current plus recent retired complete generations (minimum 2)")
+	grace := flag.Duration("retirement-grace", 72*time.Hour, "minimum time since retirement before cleanup (at least 24h)")
+	pruneOnly := flag.Bool("prune-only", false, "clean eligible retired generations without contacting the provider")
+	retentionDryRun := flag.Bool("retention-dry-run", false, "report eligible generations without deleting them")
 	validateOnly := flag.Bool("validate-only", false, "validate/catalog count without making provider requests")
 	flag.Parse()
+	if *pruneOnly {
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		return runRetention(ctx, *output, *keep, *grace, *retentionDryRun)
+	}
 	if *catalogPath == "" {
 		return fmt.Errorf("-catalog is required; no hardcoded list is presented as complete IDX")
 	}
@@ -58,6 +67,9 @@ func run() error {
 	}
 	if to.After(latestEnd) {
 		return fmt.Errorf("as-of exceeds closed-day cutoff; current date is eligible only after 18:00 WIB")
+	}
+	if *keep < 2 || *grace < 24*time.Hour {
+		return fmt.Errorf("keep-generations must be at least 2 and retirement-grace at least 24h")
 	}
 	if *years < 1 || *years > 5 || *overlap < 1 || *overlap > 90 {
 		return fmt.Errorf("years must be 1..5 and overlap-days 1..90")
@@ -128,6 +140,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if *incremental {
+		if e := runRetention(ctx, *output, *keep, *grace, *retentionDryRun); e != nil {
+			return fmt.Errorf("publication saved; retention failed: %w", e)
+		}
+	}
 	if counts["failed"] > 0 || counts["pending"] > 0 {
 		return fmt.Errorf("collection is incomplete; review report and resume/retry explicitly")
 	}
@@ -144,4 +161,16 @@ func closedDayBoundary(now time.Time, location *time.Location) time.Time {
 		boundary = boundary.AddDate(0, 0, 1)
 	}
 	return boundary
+}
+
+func runRetention(ctx context.Context, directory string, keep int, grace time.Duration, dryRun bool) error {
+	retention, err := collection.Prune(ctx, directory, collection.RetentionOptions{Keep: keep, MinAge: grace, DryRun: dryRun})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Retention: eligible=%d removed=%d skipped=%d dry_run=%t\n", len(retention.Eligible), len(retention.Removed), len(retention.Skipped), dryRun)
+	for _, name := range retention.Eligible {
+		fmt.Printf("Eligible generation: %s\n", name)
+	}
+	return nil
 }

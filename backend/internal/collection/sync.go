@@ -83,7 +83,7 @@ func Sync(ctx context.Context, catalog Catalog, provider HistoryProvider, option
 	if err = ctx.Err(); err != nil {
 		return report, err
 	}
-	return report, writeJSON(filepath.Join(root, "current.json"), Publication{Schema: "idx-store-1", Generation: generation})
+	return report, publishGeneration(root, generation, previous)
 }
 func readReport(directory string) (Report, error) {
 	var r Report

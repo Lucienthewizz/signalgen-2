@@ -75,10 +75,39 @@ no collector owns the store before removing that lock. No automatic lock stealin
 is implemented.
 
 Generations retain full local snapshots for coherent reads and rollback. Network
-fetches are incremental; disk snapshots are not append-only. Monitor disk space
-and archive old unreferenced generations during a maintenance window with API
-and collector stopped. Automatic retention is not implemented. Do not delete the
-generation referenced by `current.json` or an incomplete generation being retried.
+fetches are incremental; disk snapshots are not append-only. After a successful
+incremental run, retention keeps the current publication and at least two valid
+retired generations by default. An older generation is eligible only after
+72 hours since it left the current publication. Creation time does not start the
+grace period. Keep/grace options cannot be reduced below two generations total
+and 24 hours. API requests must finish within that retirement grace period.
+
+`retired.json` records retirement times before each publication switch. The
+collector's existing lock also serializes cleanup. The current publication is
+validated before any removal; corrupt current data preserves rollback archives.
+Cleanup validates candidate snapshots and removes only known regular files using
+directory-scoped filesystem handles. Partial generations, symlinks, active locks,
+unexpected files and invalid archives are skipped. Untracked generations from
+older installations remain untouched. These skipped/untracked folders still
+require operator review and disk monitoring.
+
+Review eligible generations without downloading data or deleting files:
+
+```sh
+signalgen-collect-idx -out /private/path/idx-store -prune-only -retention-dry-run
+```
+
+Apply the same retention policy:
+
+```sh
+signalgen-collect-idx -out /private/path/idx-store -prune-only
+```
+
+Use `-keep-generations` and `-retirement-grace` to retain more archives or a longer
+grace period. `-retention-dry-run` can also accompany `-incremental`; it affects
+cleanup only, while data acquisition and publication still run normally. A
+filesystem failure or interruption during cleanup may leave an unreferenced
+partially removed generation for manual review; the current archive stays intact.
 
 One unavailable ticker prevents publication of a new complete catalog. The API
 keeps serving the previous complete generation; inspect per-ticker reports and
@@ -105,3 +134,11 @@ provider, incomplete-run retry, cancellation, lock rejection, corrupt snapshots
 and invalid publication paths. Existing collection/archive and cutoff tests also
 passed. Timer activation on Linux, a new Docker image build, live Yahoo acquisition
 and full-market data completeness have not been verified in this change.
+
+Retention follow-up verification passed the same test/vet commands in the
+isolated container. Seven retention tests cover dry-run versus deletion,
+preserving current/rollback generations, retirement-based grace, unknown files,
+symlinks, incomplete data, active locks, invalid policy/index paths, cancellation,
+corrupt current snapshots and selection of the newest valid rollback. The CLI
+help output also lists the new retention options. No cleanup was applied to an
+operator's actual market-data store during these checks.
