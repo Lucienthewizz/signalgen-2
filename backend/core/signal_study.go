@@ -223,6 +223,7 @@ func RunSignalStudy(r SignalStudyRequest) (SignalStudyResult, error) {
 		}
 		return a.Before(b)
 	})
+	positions := map[string]int{}
 	for _, entry := range entries {
 		stamp, err := time.Parse(time.RFC3339Nano, entry.Timestamp)
 		if err != nil || (entry.SignalType != "BUY" && entry.SignalType != "SELL") {
@@ -234,10 +235,13 @@ func RunSignalStudy(r SignalStudyRequest) (SignalStudyResult, error) {
 		}
 		candles := series[entry.Symbol]
 		idx := -1
-		for i, c := range candles {
-			ts, _ := time.Parse(time.RFC3339Nano, c.Timestamp)
+		// Entries and validated candles are chronological; retain each symbol's
+		// position instead of reparsing its prefix for every subsequent signal.
+		for i := positions[entry.Symbol]; i < len(candles); i++ {
+			ts, _ := time.Parse(time.RFC3339Nano, candles[i].Timestamp)
 			if ts.Equal(stamp) {
 				idx = i
+				positions[entry.Symbol] = i
 				break
 			}
 		}

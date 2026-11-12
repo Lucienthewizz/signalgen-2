@@ -1,0 +1,36 @@
+ok  	github.com/Lucienthewizz/signalgen-2/backend/core	1.159s
+goos: linux
+goarch: arm64
+pkg: github.com/Lucienthewizz/signalgen-2/backend/core
+BenchmarkSignalStudyPerformance/dense_10x1000_h5         	     180	  21262415 ns/op	17622106 B/op	  176674 allocs/op
+PASS
+ok  	github.com/Lucienthewizz/signalgen-2/backend/core	3.838s
+File: core.test
+Build ID: af3e4147dfb617d05d6aec6303f1d13d9a0306f5
+Type: cpu
+Time: 2026-11-12 14:09:20 UTC
+Duration: 3.84s, Total samples = 3830ms (99.84%)
+Showing nodes accounting for 2240ms, 58.49% of 3830ms total
+Dropped 56 nodes (cum <= 19.15ms)
+Showing top 18 nodes out of 122
+      flat  flat%   sum%        cum   cum%
+     290ms  7.57%  7.57%      320ms  8.36%  runtime.tryDeferToSpanScan
+     270ms  7.05% 14.62%     2230ms 58.22%  encoding/json/v2.makeStructArshaler.func2
+     200ms  5.22% 19.84%      200ms  5.22%  time.parseRFC3339[go.shape.string].func1 (inline)
+     190ms  4.96% 24.80%      220ms  5.74%  encoding/json/internal/jsonwire.AppendQuote
+     180ms  4.70% 29.50%      280ms  7.31%  internal/strconv.setDigits
+     150ms  3.92% 33.42%      200ms  5.22%  runtime.findObject
+     140ms  3.66% 37.08%      140ms  3.66%  runtime.memmove
+     110ms  2.87% 39.95%      110ms  2.87%  internal/strconv.fmtEFG
+     100ms  2.61% 42.56%      100ms  2.61%  internal/strconv.formatBase10
+      90ms  2.35% 44.91%      530ms 13.84%  time.parseRFC3339[go.shape.string]
+      70ms  1.83% 46.74%       70ms  1.83%  encoding/json/internal/jsonflags.Flags.Get
+      70ms  1.83% 48.56%     3760ms 98.17%  github.com/Lucienthewizz/signalgen-2/backend/core.RunSignalStudy
+      70ms  1.83% 50.39%      110ms  2.87%  internal/strconv.shortFloat[go.shape.float64]
+      70ms  1.83% 52.22%       70ms  1.83%  runtime.spanOf (inline)
+      60ms  1.57% 53.79%      160ms  4.18%  encoding/json/jsontext.(*encoderState).WriteToken
+      60ms  1.57% 55.35%      440ms 11.49%  encoding/json/v2.makeStringArshaler.func1
+      60ms  1.57% 56.92%      540ms 14.10%  gcWriteBarrier
+      60ms  1.57% 58.49%       60ms  1.57%  time.leadingInt[go.shape.string] (inline)
+ok  	github.com/Lucienthewizz/signalgen-2/backend/core	1.249s
+ok  	github.com/Lucienthewizz/signalgen-2/backend/core	16.949s
