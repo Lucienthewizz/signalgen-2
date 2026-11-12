@@ -51,3 +51,31 @@ export function outcomeDescription(
           : "Exact price";
   return `${status} · T+${outcome.step} · ${outcome.timestamp ?? "time unavailable"} · price ${outcome.price ?? "—"} · ${outcome.return_pct.toFixed(2)}%`;
 }
+
+export function targetHitSummary(metrics: StudyMetrics, config: StudyConfig) {
+  const label =
+    config.stop_loss_pct != null ? "TP exit rate" : "Target reached rate";
+  if (config.take_profit_pct == null)
+    return {
+      label,
+      rate: null,
+      text: "Unavailable · no target configured",
+      available: false,
+    };
+  if (metrics.target_hits == null)
+    return {
+      label,
+      rate: null,
+      text: "Unavailable · reload the updated engine and rerun this study",
+      available: false,
+    };
+  const rate = metrics.evaluated
+    ? (metrics.target_hits / metrics.evaluated) * 100
+    : null;
+  return {
+    label,
+    rate,
+    available: true,
+    text: `${rate == null ? "—" : rate.toFixed(2) + "%"} · ${metrics.target_hits}/${metrics.evaluated} evaluated · ${metrics.missing} incomplete`,
+  };
+}
