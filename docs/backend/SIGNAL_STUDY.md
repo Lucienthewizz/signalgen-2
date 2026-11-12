@@ -90,8 +90,14 @@ format arsip `backtest-2`.
    Index mulai nol. Retry dapat mengirim `{"retry_symbols":["BBCA.JK"]}`,
    hanya subset unik dari batch yang sudah dibekukan; ini mencegah saham berhasil
    menghabiskan kapasitas snapshot lagi. Respons: `stocks`, `manifests`, `failures` per simbol
-   (`PROVIDER_UNAVAILABLE`, `INSUFFICIENT_CANDLES`, `SNAPSHOT_CAPACITY`). Status 200
-   dapat memuat hasil parsial. Tidak menerima simbol di luar batch atau owner dari client.
+   (`PROVIDER_UNAVAILABLE`, `INSUFFICIENT_CANDLES`). Status 200
+   dapat memuat hasil parsial karena kegagalan provider. Kekurangan kapasitas snapshot
+   mengembalikan 429 `SNAPSHOT_CAPACITY` dengan `Retry-After: 1`, tanpa menerbitkan
+   handle baru dari batch tersebut. Slot seluruh batch dipesan sebelum fetch;
+   byte hasil sementara berbagi batas dengan snapshot biasa. Lepas snapshot aktif,
+   lalu retry batch yang sama; tidak ada antrean tunggu tanpa batas. Pembatalan
+   atau timeout melepas reservasi dan hasil sementara. Lihat
+   [kontrol kapasitas](SNAPSHOT_CAPACITY_CONTROL.md). Tidak menerima simbol di luar batch atau owner dari client.
 3. Ambil manifest/content lewat API dataset yang ada. Cek ukuran dan SHA-256;
    manifest/content mengikat `study_id`, rule hash, pasar, tanggal dan horizon.
 4. Hitung fitur seluruh riwayat satu simbol di `signalgenComputeBacktestFeatures`.

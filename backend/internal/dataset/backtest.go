@@ -30,6 +30,10 @@ func validateBacktestPrepare(input PrepareRequest) error {
 }
 
 func (store *DynamicStore) prepareBacktest(ctx context.Context, owner string, input PrepareRequest) (Manifest, error) {
+	return store.prepareBacktestReserved(ctx, owner, input, nil)
+}
+
+func (store *DynamicStore) prepareBacktestReserved(ctx context.Context, owner string, input PrepareRequest, reservation *studyReservation) (Manifest, error) {
 	if err := validateBacktestPrepare(input); err != nil {
 		return Manifest{}, err
 	}
@@ -75,6 +79,9 @@ func (store *DynamicStore) prepareBacktest(ctx context.Context, owner string, in
 	store.mu.Lock()
 	store.pruneExpiredLocked()
 	available := store.hasCapacityLocked(owner, 0)
+	if reservation != nil {
+		available = reservation.validLocked(owner, input.StudyID)
+	}
 	for _, entry := range store.entries {
 		if entry.owner == owner && entry.contextKey == contextKey {
 			available = true
@@ -187,6 +194,13 @@ func (store *DynamicStore) prepareBacktest(ctx context.Context, owner string, in
 		return Manifest{}, err
 	}
 	store.pruneExpiredLocked()
+	if reservation != nil {
+		entry := dynamicEntry{contextKey: contextKey, owner: owner, manifest: cloneManifest(manifest), content: content, expiresAt: expires}
+		if err := reservation.stageLocked(entry); err != nil {
+			return Manifest{}, err
+		}
+		return cloneManifest(manifest), nil
+	}
 	for _, entry := range store.entries {
 		if entry.owner == owner && entry.contextKey == contextKey && entry.manifest.Checksum == manifest.Checksum {
 			return cloneManifest(entry.manifest), nil

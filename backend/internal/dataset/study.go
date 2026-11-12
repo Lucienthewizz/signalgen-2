@@ -20,6 +20,11 @@ func (store *DynamicStore) PrepareStudy(ctx context.Context, owner, studyID stri
 func (store *DynamicStore) ReleaseStudy(owner, studyID string) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	for reservation := range store.reservations {
+		if reservation.owner == owner && reservation.studyID == studyID {
+			reservation.closeLocked()
+		}
+	}
 	for id, e := range store.entries {
 		if e.owner == owner && e.manifest.Backtest != nil && e.manifest.Backtest.StudyID == studyID {
 			store.bytes -= len(e.content)
