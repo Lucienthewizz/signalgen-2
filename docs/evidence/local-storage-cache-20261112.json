@@ -1,0 +1,361 @@
+{
+  "date": "2026-11-12",
+  "task": "task_4dd17926152b",
+  "branch": "frontend/local-storage-cache-plan",
+  "reviewed_base": "757c7e6c338c7c875d3476a99f5270977c2f0efa",
+  "decision": "Retain IndexedDB, bounded Go caches, file generations and Postgres; defer SQLite/index migrations behind workload and deployment gates",
+  "scope": "documentation and source/primary-document review only",
+  "graph": {
+    "project": "browser_regression_integration",
+    "generation": "2026-11-12T09:03:49Z",
+    "mode": "fast",
+    "tier": "Tier 2 verification",
+    "coverage": "25 code paths metadata_match/no_recorded_issue; 12 excluded migration/deployment/report paths read directly",
+    "raw_coverage": "local-storage-cache-coverage-20261112.txt",
+    "caveat": "Best-effort bounded coverage, not completeness",
+    "queries": [
+      "search_graph on signal-study-storage, marketdata/cache and history_cache, dataset/dynamic and backtest, backtests/studies and handlers, collection/archive and sync, historical-cache/store/crypto, records/store and backtest/signals",
+      "Completed cache.go and dynamic.go pagination with offset 30; no unconsumed result pages used for material claims",
+      "get_code_snippet for IndexedDB open/write/page, provider constructor/fetch/key, snapshot defaults/reuse, publication and batch paths, study execution and server signal handler",
+      "trace_path inbound clearAllStudyResults -> historical-lifecycle.clearHistoricalCache; inbound NewCachedProvider -> cmd/api.main; outbound REST signals -> backtest services"
+    ],
+    "bounded_negative_claim": "No event secondary index in signal-study-storage.ts store definition; file-scope coverage returned no recorded issue, and full source was read directly"
+  },
+  "primary_docs": [
+    [
+      "SQLite browser persistence",
+      "https://sqlite.org/wasm/doc/trunk/persistence.md"
+    ],
+    [
+      "SQLite use cases/concurrency",
+      "https://sqlite.org/whentouse.html"
+    ],
+    [
+      "IndexedDB",
+      "https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API"
+    ],
+    [
+      "Browser storage quotas/eviction",
+      "https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria"
+    ],
+    [
+      "PostgreSQL index types",
+      "https://www.postgresql.org/docs/current/indexes-types.html"
+    ],
+    [
+      "PostgreSQL trigram predicates",
+      "https://www.postgresql.org/docs/current/pgtrgm.html"
+    ],
+    [
+      "PostgreSQL EXPLAIN",
+      "https://www.postgresql.org/docs/current/using-explain.html"
+    ],
+    [
+      "Supabase changelog (source-only review, no service operations)",
+      "https://supabase.com/changelog.md"
+    ]
+  ],
+  "context7": {
+    "library": "/sqlite/sqlite-wasm",
+    "query": "OPFS VFS workers/SharedArrayBuffer/COOP-COEP versus SAH-pool concurrency",
+    "cross_check": "Official sqlite.org persistence docs govern the decision; do not apply generic headers requirement to every VFS"
+  },
+  "source_validation": "local-storage-cache-validation-20261112.json",
+  "execution": {
+    "application_tests": "not rerun; doc-only task",
+    "query_plans": "not executed; no timing or deployed-index claim",
+    "browser_server_cloud_provider_scheduler_operations": "none",
+    "product_files_modified": false
+  },
+  "prior_evidence": {
+    "integration": "docs/evidence/prof-revisions-integration-20261112.md",
+    "performance": "docs/backend/SCREENING_PERFORMANCE.md",
+    "scheduler": "docs/backend/IDX_SCHEDULED_SYNC.md",
+    "note": "Prior synthetic test/benchmark results referenced as historical evidence, not new runs"
+  },
+  "missing_inputs": [
+    "deployment target and durable volume/multi-instance topology",
+    "premium API name, official specification, costs and licensing",
+    "authorized current full-catalog data and staging/device/load validation"
+  ],
+  "discovery_corrections": [
+    "An initial handler.go candidate was missing; rg --files found handlers.go, which was read and separately coverage-checked",
+    "Early guessed config/catalog filenames did not exist; searches were corrected to tracked paths before relying on source"
+  ],
+  "unresolved_validation_errors": [],
+  "source_files": [
+    {
+      "path": "frontend/web/src/analysis/signal-study-storage.ts",
+      "base_blob": "d968174cf8b8801cd4057f9b5ac0749755260f5c",
+      "sha256": "02d767b09aaf7d52c2eeb61ac886c8b51c53fa426a221691861463c3f7fef78c",
+      "bytes": 6717,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "frontend/web/src/analysis/signal-study.ts",
+      "base_blob": "728ff1772f6cc8cc2402eded04d9fb4a2107d6d8",
+      "sha256": "667ab626f82f4c50f5da4dece5a37d19921ecd794e83bff715091f03aedad8dc",
+      "bytes": 17141,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "frontend/web/src/data/historical-cache.ts",
+      "base_blob": "6eafcc082aa5e0b354040adc204f4adc01f8ff8b",
+      "sha256": "e029a1bafe1f0e2a8b497c6e0105309020974d802f96de598b27bceb75ebebc0",
+      "bytes": 5101,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "frontend/web/src/data/historical-store.ts",
+      "base_blob": "224a9f097b2b1726e592635abf969d312fadf5eb",
+      "sha256": "b98e83dba48442dbfef1b141aa833b9bd743768d251e65c1613019f5a4d5cc2f",
+      "bytes": 7215,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "frontend/web/src/data/historical-crypto.ts",
+      "base_blob": "933df33406da9614e81fdda542b1601b0dc208e9",
+      "sha256": "c349b483e358b03c5d193a22a0f5f54267b8fe824c7e729d8e02c2f95d87015c",
+      "bytes": 6690,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "frontend/web/src/data/historical-lifecycle.ts",
+      "base_blob": "990ac39fb976ff12df8fd7351a3acacf890b85b7",
+      "sha256": "e1721c0f4a2a190aaee5f09edc75cce7b38f98c08f90397fcc97287e02d841ff",
+      "bytes": 1469,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "frontend/web/src/analysis/screener-dataset.ts",
+      "base_blob": "0781312f300aab12cce75dbe9ab74e881fc26dfb",
+      "sha256": "ca5c0da5421da5e28bb6ee09339f91d4bad8aab2b61e5b96876d2497765c972b",
+      "bytes": 1452,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/marketdata/cache.go",
+      "base_blob": "de2d3aed7b2ac06d83ebb80c5f316347e031cf68",
+      "sha256": "22982f245a6c1ed1d362529f3f767a0d79fd4711ad94a690410dcce33dfc939f",
+      "bytes": 6935,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/marketdata/history_cache.go",
+      "base_blob": "8ad0d3c52d6bd42f09455e760ed3e7e0f2da7556",
+      "sha256": "564d79545599e69dbccdcad07c93e20d1f7edcb39819de900296ba4b7ea9d4bd",
+      "bytes": 3076,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/dataset/dynamic.go",
+      "base_blob": "caaf60901d1f402226b2329ba8a705e36444dd50",
+      "sha256": "3341938205d0590c3e81f48d29946669425a7e48807b8b007a1ebe2b2b180e08",
+      "bytes": 10956,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/dataset/backtest.go",
+      "base_blob": "bda612d1f201b765ad066785349f2b7ea02f1053",
+      "sha256": "0a3a29bea86f30894c0bc20b054e2bb5300a223c15fe8cd6fc3cddc5ede58412",
+      "bytes": 7396,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/dataset/study.go",
+      "base_blob": "cf49b6861bc70add062ebb24f8880461f501d69a",
+      "sha256": "d3817be32a911b080fc603b8913f3e31cc79159dc1c7247d758c3ea49da91c32",
+      "bytes": 1043,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/api/backtests/studies.go",
+      "base_blob": "c25bad5b765ab4e2c07f23818829e1dac48f1a42",
+      "sha256": "a8a8afeca7337d60d5557f87fa2b7a423fc6954c195a7a72c117874fdd18fc0f",
+      "bytes": 13415,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/api/backtests/handlers.go",
+      "base_blob": "732ef1b0a62d9600eb9178cc396ab5edbd66a8a9",
+      "sha256": "3d091ca97c95762deea462cfb961609853786a43e128c3616bb379bb84b21247",
+      "bytes": 3254,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/collection/archive.go",
+      "base_blob": "eb4739444a97dda29d822aef97d0f70ab617d186",
+      "sha256": "3e546a58d53cd245eac2cb2388e565fbf9fb79967d936d215409816448dcd7c1",
+      "bytes": 7083,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/collection/sync.go",
+      "base_blob": "c208228799f7ce17e64dab197a298b04bda92b57",
+      "sha256": "17f4bea3564af5778779b42045caac66172d59b09b6e93f4e4aa021acac46d20",
+      "bytes": 8322,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/collection/retention.go",
+      "base_blob": "97b359b5bb3e888ce793864cace2d557d67e1d45",
+      "sha256": "8fc2131ddccaee035545f799315cda93602212b803f302272c4766af814d3743",
+      "bytes": 6288,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/collection/runner.go",
+      "base_blob": "9f68356d7ac8edb7ea77d30c63ef60cfb32f534c",
+      "sha256": "bcdc26f1372ac1c6d5cd981688847e2deac8839a797fe81bec9c0e73598dd98f",
+      "bytes": 11897,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/cmd/api/main.go",
+      "base_blob": "8aba947841269efdbcdb85a599c6f95d4c6a5b6d",
+      "sha256": "d04c91be08e4cacf6563affb3f55541c1d83f7aae139ea255b063971e3838b68",
+      "bytes": 9865,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/universe/repository.go",
+      "base_blob": "6a9b862c7a1b5efc78cda049d9569e9e25f332b5",
+      "sha256": "c445026653dd1ba282b1cd82d8a1bcc1d154e2f8a3e75ff7b7253b85a00d8794",
+      "bytes": 8919,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/rules/repository.go",
+      "base_blob": "e48dd8046675408e89a47fea2feb9a2961a78a42",
+      "sha256": "0ccd5fc507f27cd4f3848a01dcfa6dcf691fdfa096146eaddbbb1ccbef17c1cf",
+      "bytes": 7201,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/account/management_repository.go",
+      "base_blob": "c2c9258c7217ed62e28c2ff9f7a0a97b6e6e36bc",
+      "sha256": "d073385c48de1fdac269e80d4d02fa818494d87e12c502e37f544f09c90005e3",
+      "bytes": 6966,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/records/store.go",
+      "base_blob": "88120449c820ac71f40fb26890bc4dcbe1832e2b",
+      "sha256": "927d0857909791c2b3bbb4109fdf8a24458b7f8ecadb97f360628379ce818253",
+      "bytes": 5899,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "supabase/migrations/20260929041140_web_multi_user.sql",
+      "base_blob": "fb40a729070f205e82dfcb53fc0786d6a539a926",
+      "sha256": "c383e20e2c8e8820e8a5171439908697243edf0034df47c2d526ad2512e83cc4",
+      "bytes": 6452,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "supabase/migrations/20260930041429_stock_universe.sql",
+      "base_blob": "9b9fc1167cd1124318686d0c84d0470fbc4fd65e",
+      "sha256": "d3c0afbe737547954509430f0f05a144bd67f4323f2b06e4591a7da8cd6c4af1",
+      "bytes": 4392,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "supabase/migrations/20261027080957_journal_and_backtest_records.sql",
+      "base_blob": "382f84a7955560371980bb7bd02fcc13bc2defe2",
+      "sha256": "9b0d71b457bc73b37777a9e222bc0e6cee74c86ff2b1e296ab3816e0c192540b",
+      "bytes": 1444,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "supabase/migrations/20261006053327_operator_account_status.sql",
+      "base_blob": "64661529b01d8d2b4ef0f0d835365d7ddccf7cb8",
+      "sha256": "85e3d4f66fe5af5cccc530b13ecd0bc421210e719413367ee900b87f5fc8d399",
+      "bytes": 636,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "deploy/systemd/signalgen-idx-sync.service",
+      "base_blob": "b913b3740fb4e9895bdf73172378b6d3308c0343",
+      "sha256": "287ee88871646652193660f3b9dd05f0ecf2dea2399e6d7b01aac6cd266a9cbe",
+      "bytes": 581,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "deploy/systemd/signalgen-idx-sync.timer",
+      "base_blob": "d0d1b474a140d3b5969221e091744fcfcedb3c1d",
+      "sha256": "321cc0c43ab09da8eb2d7a2f551a7f85197bd03bd9b8b66c9e58525e9dc574d1",
+      "bytes": 241,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "docs/backend/IDX_SCHEDULED_SYNC.md",
+      "base_blob": "8c745a6583d90460ae07871f79e87b9f852e74e9",
+      "sha256": "44ca99b4433f56db021b81e64f6f46aaaa30855395d164bbe617897cb8018550",
+      "bytes": 7335,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "docs/backend/IDX_HISTORY_COLLECTION.md",
+      "base_blob": "5dd0322a0f9150798105218185d5141b3070b9bd",
+      "sha256": "3414d9a02c01f8df4042c0562098c83012deb2d49082b5525dda2f80a33d5d56",
+      "bytes": 8392,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "docs/backend/IDX_ARCHIVE_API.md",
+      "base_blob": "537f4e0b32ba70bfe3a67c7e0c9eb26e53fffdce",
+      "sha256": "b35d3139e024b8c2124db2cf9306859ee6d2ccea51d134a82fad142e304556af",
+      "bytes": 6480,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "docs/backend/SCREENING_PERFORMANCE.md",
+      "base_blob": "0927de28c77d5ca46a5893506ed77ccd3fd767fc",
+      "sha256": "7a3a0023f8906b8225f0a2f6e573c93f860abb1df5f4aadddb601fdd36860fe1",
+      "bytes": 14054,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "docs/backend/BACKTEST_EVALUATION_OPTIONS.md",
+      "base_blob": "8a7c141419ce63cde59f307a8f9212b78a6c72a7",
+      "sha256": "e200b0625e138ebe2234bfd9fe2f538ecfeb5e3a58354c93701fbc69a64d7e69",
+      "bytes": 5050,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "docs/evidence/prof-revisions-integration-20261112.md",
+      "base_blob": "6f856cad054c6ed82172a9374a21300c60505951",
+      "sha256": "a045b534ef439b4fd2a5658ec396d06d021dcc72ac4dcae9036fd2ad413fc070",
+      "bytes": 5523,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/backtest/signals.go",
+      "base_blob": "7fab5506647913741e022c316b7c5656090ca475",
+      "sha256": "b17f00eae0f416af9980c80c16e2b90d4217e49a4030451aac76ce1994a1abaf",
+      "bytes": 6105,
+      "base_equals_worktree": true
+    },
+    {
+      "path": "backend/internal/api/tests/study_load_test.go",
+      "base_blob": "a882cbbb38586374c32e80601ab4eb7fd41154ac",
+      "sha256": "f26fe54e0ab13c87d06dc9b517d6c0bffd5140f8dde9f214311d3b1e72afabea",
+      "bytes": 6884,
+      "base_equals_worktree": true
+    }
+  ],
+  "validation": {
+    "source_files_unchanged_from_reviewed_base": 37,
+    "local_link_and_anchor_check": "passed; see validation record",
+    "source_markers": "26 assertions passed",
+    "writing_review": "no-ai-slop and unslop balanced; humanizer embedded pass for new prose; facts and links preserved",
+    "unrelated_product_checks": "not required or run for doc-only work",
+    "recovered_checks": [
+      {
+        "command": "git diff --cached --check",
+        "result": "initial failure: extra blank line at EOF in captured coverage text",
+        "resolution": "normalized coverage-text trailing newline; rerun passed"
+      }
+    ]
+  }
+}

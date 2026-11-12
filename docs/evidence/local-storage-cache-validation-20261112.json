@@ -1,0 +1,295 @@
+{
+  "result": "passed",
+  "local_links_checked": 49,
+  "links": [
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "frontend/web/src/analysis/signal-study-storage.ts",
+      "anchor": "L7"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "frontend/web/src/analysis/signal-study-storage.ts",
+      "anchor": "L148"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "frontend/web/src/analysis/signal-study-storage.ts",
+      "anchor": "L78"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "frontend/web/src/data/historical-lifecycle.ts",
+      "anchor": "L11"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "frontend/web/src/data/historical-cache.ts",
+      "anchor": "L20"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "frontend/web/src/data/historical-crypto.ts",
+      "anchor": "L55"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "frontend/web/src/data/historical-store.ts",
+      "anchor": "L14"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "frontend/web/src/analysis/screener-dataset.ts",
+      "anchor": "L6"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "frontend/web/src/analysis/signal-study.ts",
+      "anchor": "L86"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "frontend/web/src/analysis/signal-study.ts",
+      "anchor": "L365"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/backtest/signals.go",
+      "anchor": "L84"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/marketdata/cache.go",
+      "anchor": "L16"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/cmd/api/main.go",
+      "anchor": "L93"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/marketdata/cache.go",
+      "anchor": "L117"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/marketdata/history_cache.go",
+      "anchor": "L18"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/dataset/dynamic.go",
+      "anchor": "L38"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/dataset/backtest.go",
+      "anchor": "L65"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/api/backtests/studies.go",
+      "anchor": "L174"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/dataset/study.go",
+      "anchor": "L21"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/collection/sync.go",
+      "anchor": "L38"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/collection/retention.go",
+      "anchor": "L58"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/collection/runner.go",
+      "anchor": "L300"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/collection/sync.go",
+      "anchor": "L182"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/collection/retention.go",
+      "anchor": "L75"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "supabase/migrations/20260930041429_stock_universe.sql",
+      "anchor": "L4"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/universe/repository.go",
+      "anchor": "L19"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "supabase/migrations/20260930041429_stock_universe.sql",
+      "anchor": "L31"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/universe/repository.go",
+      "anchor": "L43"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "supabase/migrations/20260929041140_web_multi_user.sql",
+      "anchor": "L60"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/rules/repository.go",
+      "anchor": "L85"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "supabase/migrations/20261027080957_journal_and_backtest_records.sql",
+      "anchor": "L10"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/records/store.go",
+      "anchor": "L66"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "supabase/migrations/20261006053327_operator_account_status.sql",
+      "anchor": "L11"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/account/management_repository.go",
+      "anchor": "L159"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "backend/internal/account/management_repository.go",
+      "anchor": "L48"
+    },
+    {
+      "from": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "target": "docs/backend/PROF_REMAINING_GAPS.md",
+      "anchor": ""
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "docs/backend/BACKTEST_EVALUATION_OPTIONS.md",
+      "anchor": ""
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "frontend/web/src/analysis/signal-study.ts",
+      "anchor": "L365"
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "anchor": ""
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "backend/internal/collection/sync.go",
+      "anchor": "L38"
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "backend/internal/collection/retention.go",
+      "anchor": "L75"
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "docs/evidence/prof-revisions-integration-20261112.md",
+      "anchor": ""
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "docs/backend/SCREENING_PERFORMANCE.md",
+      "anchor": ""
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "docs/backend/IDX_SCHEDULED_SYNC.md",
+      "anchor": ""
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "docs/backend/LOCAL_STORAGE_CACHE_DECISION.md",
+      "anchor": ""
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "docs/backend/BACKTEST_EVALUATION_OPTIONS.md",
+      "anchor": ""
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "backend/internal/api/backtests/studies.go",
+      "anchor": "L135"
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "deploy/systemd/signalgen-idx-sync.service",
+      "anchor": "L13"
+    },
+    {
+      "from": "docs/backend/PROF_REMAINING_GAPS.md",
+      "target": "deploy/systemd/signalgen-idx-sync.timer",
+      "anchor": "L6"
+    }
+  ],
+  "source_marker_assertions": 26,
+  "markers": {
+    "frontend/web/src/analysis/signal-study-storage.ts": [
+      "signalgen-study-temporary-1",
+      "indexedDB.open(DB, 2)",
+      "128 * 1024 * 1024",
+      "IDBKeyRange.bound(p, p + \"\\uffff\")",
+      "signal.addEventListener(\"abort\", cancel"
+    ],
+    "backend/internal/marketdata/cache.go": [
+      "TTL: 5 * time.Minute",
+      "FetchTimeout: 15 * time.Second",
+      "MaxEntries: 64",
+      "MaxCandles: 32000",
+      "MaxInFlight: 8",
+      "entries: make(map[string]cachedSeries)",
+      "flights: make(map[string]*providerFlight)"
+    ],
+    "backend/internal/dataset/dynamic.go": [
+      "TTL: 15 * time.Minute",
+      "MaxEntries: 128",
+      "MaxPerOwner: 16",
+      "MaxBytes: 32 << 20"
+    ],
+    "backend/internal/api/backtests/studies.go": [
+      "len(h.items) >= 32",
+      "BatchSize: 10",
+      "time.Now().Add(2 * time.Hour)"
+    ],
+    "deploy/systemd/signalgen-idx-sync.service": [
+      "-years 5",
+      "-overlap-days 7",
+      "-keep-generations 3",
+      "-retirement-grace 72h"
+    ],
+    "deploy/systemd/signalgen-idx-sync.timer": [
+      "OnBootSec=2min",
+      "Asia/Jakarta"
+    ],
+    "backend/internal/account/management_repository.go": [
+      "position(lower($5) in lower(email))>0"
+    ]
+  },
+  "errors": []
+}

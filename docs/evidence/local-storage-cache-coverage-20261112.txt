@@ -1,0 +1,60 @@
+project: browser_regression_integration
+signal: best_effort
+indexed_at: 2026-11-12T09:03:49Z
+metadata:
+  generation: 2026-11-12T09:03:49Z
+  index_mode: fast
+  recorded_at: 2026-11-12T09:03:49Z
+  recording_status: complete
+  ignored_files_stored: 116
+  ignored_files_total: 116
+  hash_records_complete: true
+  coverage_version: 3
+  generation_matches: true
+paths: 37  (cols: requested_path path status freshness recommended_action coverage)
+  frontend/web/src/analysis/signal-study-storage.ts frontend/web/src/analysis/signal-study-storage.ts no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  frontend/web/src/analysis/signal-study.ts frontend/web/src/analysis/signal-study.ts no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  frontend/web/src/data/historical-cache.ts frontend/web/src/data/historical-cache.ts no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  frontend/web/src/data/historical-store.ts frontend/web/src/data/historical-store.ts no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  frontend/web/src/data/historical-crypto.ts frontend/web/src/data/historical-crypto.ts no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  frontend/web/src/data/historical-lifecycle.ts frontend/web/src/data/historical-lifecycle.ts no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  frontend/web/src/analysis/screener-dataset.ts frontend/web/src/analysis/screener-dataset.ts no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/marketdata/cache.go backend/internal/marketdata/cache.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/marketdata/history_cache.go backend/internal/marketdata/history_cache.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/dataset/dynamic.go backend/internal/dataset/dynamic.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/dataset/backtest.go backend/internal/dataset/backtest.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/dataset/study.go backend/internal/dataset/study.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/api/backtests/studies.go backend/internal/api/backtests/studies.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/api/backtests/handlers.go backend/internal/api/backtests/handlers.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/collection/archive.go backend/internal/collection/archive.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/collection/sync.go backend/internal/collection/sync.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/collection/retention.go backend/internal/collection/retention.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/collection/runner.go backend/internal/collection/runner.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/cmd/api/main.go backend/cmd/api/main.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/universe/repository.go backend/internal/universe/repository.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/rules/repository.go backend/internal/rules/repository.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/account/management_repository.go backend/internal/account/management_repository.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/records/store.go backend/internal/records/store.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  supabase/migrations/20260929041140_web_multi_user.sql supabase/migrations/20260929041140_web_multi_user.sql excluded not_tracked read_source_and_reindex "[{\"path\":\"supabase/migrations\",\"kind\":\"not_indexed_dir\",\"match\":\"ancestor\",\"detail\":\"excluded subtree\"}]"
+  supabase/migrations/20260930041429_stock_universe.sql supabase/migrations/20260930041429_stock_universe.sql excluded not_tracked read_source_and_reindex "[{\"path\":\"supabase/migrations\",\"kind\":\"not_indexed_dir\",\"match\":\"ancestor\",\"detail\":\"excluded subtree\"}]"
+  supabase/migrations/20261027080957_journal_and_backtest_records.sql supabase/migrations/20261027080957_journal_and_backtest_records.sql excluded not_tracked read_source_and_reindex "[{\"path\":\"supabase/migrations\",\"kind\":\"not_indexed_dir\",\"match\":\"ancestor\",\"detail\":\"excluded subtree\"}]"
+  supabase/migrations/20261006053327_operator_account_status.sql supabase/migrations/20261006053327_operator_account_status.sql excluded not_tracked read_source_and_reindex "[{\"path\":\"supabase/migrations\",\"kind\":\"not_indexed_dir\",\"match\":\"ancestor\",\"detail\":\"excluded subtree\"}]"
+  deploy/systemd/signalgen-idx-sync.service deploy/systemd/signalgen-idx-sync.service excluded not_tracked read_source_and_reindex "[{\"path\":\"deploy\",\"kind\":\"not_indexed_dir\",\"match\":\"ancestor\",\"detail\":\"excluded subtree\"}]"
+  deploy/systemd/signalgen-idx-sync.timer deploy/systemd/signalgen-idx-sync.timer excluded not_tracked read_source_and_reindex "[{\"path\":\"deploy\",\"kind\":\"not_indexed_dir\",\"match\":\"ancestor\",\"detail\":\"excluded subtree\"}]"
+  docs/backend/IDX_SCHEDULED_SYNC.md docs/backend/IDX_SCHEDULED_SYNC.md excluded not_tracked read_source_and_reindex "[{\"path\":\"docs\",\"kind\":\"not_indexed_dir\",\"match\":\"ancestor\",\"detail\":\"excluded subtree\"}]"
+  docs/backend/IDX_HISTORY_COLLECTION.md docs/backend/IDX_HISTORY_COLLECTION.md excluded not_tracked read_source_and_reindex "[{\"path\":\"docs\",\"kind\":\"not_indexed_dir\",\"match\":\"ancestor\",\"detail\":\"excluded subtree\"}]"
+  docs/backend/IDX_ARCHIVE_API.md docs/backend/IDX_ARCHIVE_API.md excluded not_tracked read_source_and_reindex "[{\"path\":\"docs\",\"kind\":\"not_indexed_dir\",\"match\":\"ancestor\",\"detail\":\"excluded subtree\"}]"
+  docs/backend/SCREENING_PERFORMANCE.md docs/backend/SCREENING_PERFORMANCE.md excluded not_tracked read_source_and_reindex "[{\"path\":\"docs\",\"kind\":\"not_indexed_dir\",\"match\":\"ancestor\",\"detail\":\"excluded subtree\"}]"
+  docs/backend/BACKTEST_EVALUATION_OPTIONS.md docs/backend/BACKTEST_EVALUATION_OPTIONS.md excluded not_tracked read_source_and_reindex "[{\"path\":\"docs\",\"kind\":\"not_indexed_dir\",\"match\":\"ancestor\",\"detail\":\"excluded subtree\"}]"
+  docs/evidence/prof-revisions-integration-20261112.md docs/evidence/prof-revisions-integration-20261112.md excluded not_tracked read_source_and_reindex "[{\"path\":\"docs\",\"kind\":\"not_indexed_dir\",\"match\":\"ancestor\",\"detail\":\"excluded subtree\"}]"
+  backend/internal/backtest/signals.go backend/internal/backtest/signals.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+  backend/internal/api/tests/study_load_test.go backend/internal/api/tests/study_load_test.go no_recorded_issue metadata_match use_graph_with_best_effort_caveat []
+path_total: 37
+path_returned: 37
+path_has_more: false
+scopes: 0
+scope_total: 0
+scope_returned: 0
+scope_truncated: false
+has_more: false
+caveat: "Best-effort signal only. No recorded issue does not prove graph or source completeness; read flagged source and qualify claims when metadata is changed or unavailable."
