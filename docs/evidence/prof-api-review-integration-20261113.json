@@ -1,0 +1,92 @@
+{
+  "merged_source": "e80c480067d9f8fe9e4d67e00d4c23f2e1d82423",
+  "python_tests": 6,
+  "exit_code": 0,
+  "source_hashes": {
+    "verify_local_api_stack.py": "ca0e2da67c9e267589435b2138b4c5bff5f82b5be5223df1d1e602500f3365fc",
+    "test_local_api_stack.py": "cb9b50505e50e34642260ff4dd09fa894b2d13035dbdfc774de0bb7d8f4f408d"
+  },
+  "sandbox": {
+    "image": "sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534",
+    "context": "orbstack",
+    "network": "none",
+    "source_root": "read-only",
+    "env": "empty allowlist",
+    "uid_gid": "65534:65534",
+    "cpus": 1,
+    "memory_bytes": 134217728,
+    "pids": 32,
+    "file_bytes": 8388608,
+    "scratch_bytes": 16777216,
+    "child_seconds": 20,
+    "outer_seconds": 30,
+    "docker_socket_mounted": false,
+    "docker_removals_in_tests": "mocked"
+  },
+  "owned_container_removed": true,
+  "owned_temporary_source_removed": true,
+  "date": "2026-11-13",
+  "branch": "frontend/prof-revisions-integration",
+  "source_refs": {
+    "integration_base": "25ea6006daff8ac2a70f2481f4f0e37fa06b9038",
+    "api_harness": "4b2173c4199345770d58cbdcf927bfd3f193fada",
+    "cleanup": "5a560a8c240f40c1ce06075cc59a70542e4c850e",
+    "review": "27298cf0c8354266c8f549339dce2a9a37780140"
+  },
+  "merge_commits": {
+    "cleanup": "bcea2046f4670a83364a66143ce8c0c2afbf734b",
+    "review": "e80c480067d9f8fe9e4d67e00d4c23f2e1d82423"
+  },
+  "all_refs_are_ancestors": true,
+  "protected_paths_byte_identical_to_base": [
+    "backend/cmd",
+    "backend/core",
+    "backend/internal",
+    "backend/contracts",
+    "backend/contract.go",
+    "backend/go.mod",
+    "backend/go.sum",
+    "backend/openapi.yaml",
+    "frontend/web/src",
+    "frontend/web/package.json",
+    "frontend/web/package-lock.json",
+    "supabase/migrations"
+  ],
+  "protected_git_object_ids": {
+    "backend/cmd": "dc3c342a160046ef048ede54909fba924b613c4f",
+    "backend/core": "da57e43e16c4f4d102beb1f7311daf86774b2e6c",
+    "backend/internal": "2ee56c08463dc46be686e28dd0446e57822d2982",
+    "backend/contracts": "492789d0f301b1aa14e92c22d91320a8bd25a207",
+    "backend/contract.go": "23bb9e99466275680b774a5b737c803b3a2290b2",
+    "backend/go.mod": "0340c8c8ec441937c57877fee278d71e48467b25",
+    "backend/go.sum": "6cafd3dd6c0bb3b196af645166f3a0196d612b41",
+    "backend/openapi.yaml": "d3a9f9b2551923b42b27defc51f67adb551498a4",
+    "frontend/web/src": "a5e39a79bf08d223379a93acd099a9825daf21be",
+    "frontend/web/package.json": "5f71b005f9814528048081ea6777111c360e7202",
+    "frontend/web/package-lock.json": "4acbe71b36c0933adeb91de920f346f288045f33",
+    "supabase/migrations": "b853e89d55c24b6f028fa4a5d3ca026ad8bd23f6"
+  },
+  "reused_not_replayed": [
+    "earlier 240-request real packaged API/restricted Postgres with mock IDP and native feature/outcome client",
+    "262 frontend tests/typecheck/format/build/budgets/six API-mocked browser suites at unchanged product source",
+    "native core/golden/race/vet at unchanged product source",
+    "bounded independent review and separate cleanup fix evidence"
+  ],
+  "not_done": [
+    "fresh runtime rebuild",
+    "full 240-request API stack replay",
+    "browser-to-real-API replay",
+    "unfinished scheduler/cache integration or review",
+    "live provider/cloud/host scheduling activation"
+  ],
+  "static_checks": {
+    "merged_python_syntax": "pass",
+    "changed_document_local_links": "pass",
+    "production_recipe_config_unchanged": true,
+    "combined_whitespace": "pass",
+    "merged_and_changed_document_local_links": "pass",
+    "merged_python_and_retained_probe_syntax": "pass",
+    "staged_scope": "three current docs/evidence files only; inherited changes restricted to accepted test helpers/docs",
+    "credential_patterns": "clear; fixture identifiers are synthetic"
+  }
+}
