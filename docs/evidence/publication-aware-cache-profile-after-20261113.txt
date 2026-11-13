@@ -1,0 +1,27 @@
+goos: linux
+goarch: arm64
+pkg: github.com/Lucienthewizz/signalgen-2/backend/internal/collection
+BenchmarkPublicationStoreResolution 	   39064	     52934 ns/op	   33979 B/op	     102 allocs/op
+PASS
+ok  	github.com/Lucienthewizz/signalgen-2/backend/internal/collection	2.263s
+File: collection.test
+Build ID: 2eb4e2243b9f3d06d6d8ccd5a83eb81b1f576b37
+Type: cpu
+Time: 2026-11-13 07:57:57 UTC
+Duration: 2.26s, Total samples = 2260ms (  100%)
+Showing nodes accounting for 1120ms, 49.56% of 2260ms total
+Dropped 100 nodes (cum <= 11.30ms)
+Showing top 12 nodes out of 167
+      flat  flat%   sum%        cum   cum%
+     250ms 11.06% 11.06%      250ms 11.06%  encoding/json/internal/jsonwire.ConsumeWhitespace (inline)
+     170ms  7.52% 18.58%      170ms  7.52%  encoding/json/internal/jsonwire.ConsumeSimpleString (inline)
+     150ms  6.64% 25.22%      150ms  6.64%  internal/runtime/syscall/linux.Syscall6
+      70ms  3.10% 28.32%       70ms  3.10%  crypto/internal/fips140/sha256.blockSHA2
+      70ms  3.10% 31.42%       70ms  3.10%  encoding/json/internal/jsonflags.Flags.Get
+      70ms  3.10% 34.51%      690ms 30.53%  encoding/json/jsontext.(*decoderState).consumeValue
+      70ms  3.10% 37.61%      120ms  5.31%  runtime.wbBufFlush1
+      60ms  2.65% 40.27%       60ms  2.65%  encoding/json/internal/jsonwire.ConsumeSimpleNumber (inline)
+      60ms  2.65% 42.92%       90ms  3.98%  internal/strconv.setDigits
+      50ms  2.21% 45.13%      120ms  5.31%  encoding/json/jsontext.(*decoderState).PeekKind
+      50ms  2.21% 47.35%      620ms 27.43%  encoding/json/jsontext.(*decoderState).ReadValue
+      50ms  2.21% 49.56%      580ms 25.66%  encoding/json/jsontext.(*decoderState).consumeObject

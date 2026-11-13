@@ -1,0 +1,27 @@
+goos: linux
+goarch: arm64
+pkg: github.com/Lucienthewizz/signalgen-2/backend/internal/collection
+BenchmarkPublicationStoreResolution 	    2580	    919224 ns/op	 1509359 B/op	    3723 allocs/op
+PASS
+ok  	github.com/Lucienthewizz/signalgen-2/backend/internal/collection	2.521s
+File: collection.test
+Build ID: a1c4dbdd42fd3ef7fda2f76768be20a643f7a31e
+Type: cpu
+Time: 2026-11-13 03:14:02 UTC
+Duration: 2.52s, Total samples = 2510ms (99.64%)
+Showing nodes accounting for 1520ms, 60.56% of 2510ms total
+Dropped 92 nodes (cum <= 12.55ms)
+Showing top 12 nodes out of 154
+      flat  flat%   sum%        cum   cum%
+     540ms 21.51% 21.51%      540ms 21.51%  encoding/json/internal/jsonwire.ConsumeSimpleString (inline)
+     270ms 10.76% 32.27%      270ms 10.76%  encoding/json/internal/jsonwire.ConsumeWhitespace (inline)
+     140ms  5.58% 37.85%     1060ms 42.23%  encoding/json/jsontext.(*decoderState).consumeValue
+      90ms  3.59% 41.43%       90ms  3.59%  internal/runtime/syscall/linux.Syscall6
+      90ms  3.59% 45.02%       90ms  3.59%  runtime.tryDeferToSpanScan
+      70ms  2.79% 47.81%      800ms 31.87%  encoding/json/jsontext.(*decoderState).consumeObject
+      70ms  2.79% 50.60%      140ms  5.58%  runtime.scanObject
+      60ms  2.39% 52.99%      800ms 31.87%  encoding/json/jsontext.(*decoderState).ReadValue
+      60ms  2.39% 55.38%       60ms  2.39%  runtime.memmove
+      50ms  1.99% 57.37%       70ms  2.79%  runtime.typePointers.next
+      40ms  1.59% 58.96%       80ms  3.19%  gcWriteBarrier
+      40ms  1.59% 60.56%       70ms  2.79%  runtime.gcmarknewobject

@@ -78,6 +78,10 @@ func (provider *CachedProvider) Candles(ctx context.Context, instruments []unive
 		}
 		seen[instrument.Symbol] = true
 	}
+	upstream, revision, err := provider.snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// A ten-stock cold cache must not require ten sequential network round trips.
 	// Keep at most three concurrent waits per batch; the shared MaxInFlight limit
 	// still caps all upstream work across users. Never fan out without a bound.
@@ -93,7 +97,7 @@ func (provider *CachedProvider) Candles(ctx context.Context, instruments []unive
 		go func() {
 			defer group.Done()
 			for index := offset; index < len(instruments); index += workers {
-				series, err := provider.candleOne(ctx, instruments[index], outputSize, timeframe)
+				series, err := provider.candleOne(ctx, upstream, revision, instruments[index], outputSize, timeframe)
 				if err != nil {
 					firstFailure.Do(func() { batchErr = err; cancel() })
 					return
@@ -114,12 +118,12 @@ func (provider *CachedProvider) Candles(ctx context.Context, instruments []unive
 	return result, nil
 }
 
-func (provider *CachedProvider) candleOne(ctx context.Context, instrument universe.Instrument, outputSize int, timeframe string) (Series, error) {
+func (provider *CachedProvider) candleOne(ctx context.Context, upstream Provider, revision string, instrument universe.Instrument, outputSize int, timeframe string) (Series, error) {
 	if err := ctx.Err(); err != nil {
 		return Series{}, err
 	}
 	policy, _ := Policy(timeframe)
-	key := instrument.Symbol + "\x00" + instrument.ProviderSymbol + "\x00" + instrument.Exchange + "\x00" + instrument.Currency + "\x00" + timeframe + "\x00" + fmt.Sprint(policy.LookbackDays) + "\x00" + strconv.Itoa(outputSize)
+	key := revision + "\x00" + instrument.Symbol + "\x00" + instrument.ProviderSymbol + "\x00" + instrument.Exchange + "\x00" + instrument.Currency + "\x00" + timeframe + "\x00" + fmt.Sprint(policy.LookbackDays) + "\x00" + strconv.Itoa(outputSize)
 	provider.mu.Lock()
 	provider.pruneExpiredLocked()
 	if entry, ok := provider.entries[key]; ok {
@@ -137,7 +141,7 @@ func (provider *CachedProvider) candleOne(ctx context.Context, instrument univer
 		provider.flights[key] = flight
 		// A cancelled browser only stops its own wait. Shared provider work has
 		// an independent timeout, so it can still serve other waiting users.
-		go provider.fetch(key, flight, instrument, outputSize, timeframe)
+		go provider.fetch(key, flight, upstream, instrument, outputSize, timeframe)
 	}
 	provider.mu.Unlock()
 	select {
@@ -148,11 +152,11 @@ func (provider *CachedProvider) candleOne(ctx context.Context, instrument univer
 	}
 }
 
-func (provider *CachedProvider) fetch(key string, flight *providerFlight, instrument universe.Instrument, outputSize int, timeframe string) {
+func (provider *CachedProvider) fetch(key string, flight *providerFlight, upstream Provider, instrument universe.Instrument, outputSize int, timeframe string) {
 	ctx, cancel := context.WithTimeout(context.Background(), provider.options.FetchTimeout)
 	defer cancel()
 	instruments := []universe.Instrument{instrument}
-	series, err := ReadCandles(ctx, provider.upstream, instruments, outputSize, timeframe)
+	series, err := ReadCandles(ctx, upstream, instruments, outputSize, timeframe)
 	if err == nil {
 		err = ValidateSeries(series, instruments, outputSize)
 	}
