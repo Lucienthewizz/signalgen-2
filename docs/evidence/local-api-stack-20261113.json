@@ -1,0 +1,507 @@
+{
+  "backtest_native_outcomes": "passed for all matching stocks",
+  "browser": "needs-validation: no cached isolated browser runtime with required controls",
+  "client_computation": "native portable core, not browser/WASM",
+  "fixtures": [
+    "local identity HTTP provider",
+    "23 synthetic daily market histories",
+    "server-owned test subscriptions"
+  ],
+  "persisted_grants": 46,
+  "real": [
+    "packaged cmd/api",
+    "HTTP router/auth bridge",
+    "Postgres repositories",
+    "app sessions",
+    "private scoring",
+    "grants",
+    "study contexts",
+    "read-only published idx_store"
+  ],
+  "recovery": "active-context 429, batch409, release/cancel/recreate and stale-handle404",
+  "result": "pass",
+  "runtime_role": "signalgen_api",
+  "screening": {
+    "batches": 3,
+    "examples": [
+      {
+        "symbol": "AAAA.JK",
+        "timestamp": "2026-01-20T00:00:00Z",
+        "signal_type": "BUY"
+      },
+      {
+        "symbol": "AAAC.JK",
+        "timestamp": "2026-01-20T00:00:00Z",
+        "signal_type": "BUY"
+      },
+      {
+        "symbol": "AAAE.JK",
+        "timestamp": "2026-01-20T00:00:00Z",
+        "signal_type": "BUY"
+      },
+      {
+        "symbol": "AAAG.JK",
+        "timestamp": "2026-01-20T00:00:00Z",
+        "signal_type": "BUY"
+      },
+      {
+        "symbol": "AAAI.JK",
+        "timestamp": "2026-01-20T00:00:00Z",
+        "signal_type": "BUY"
+      },
+      {
+        "symbol": "AAAK.JK",
+        "timestamp": "2026-01-20T00:00:00Z",
+        "signal_type": "BUY"
+      },
+      {
+        "symbol": "AAAM.JK",
+        "timestamp": "2026-01-20T00:00:00Z",
+        "signal_type": "BUY"
+      },
+      {
+        "symbol": "AAAO.JK",
+        "timestamp": "2026-01-20T00:00:00Z",
+        "signal_type": "BUY"
+      },
+      {
+        "symbol": "AAAQ.JK",
+        "timestamp": "2026-01-20T00:00:00Z",
+        "signal_type": "BUY"
+      },
+      {
+        "symbol": "AAAS.JK",
+        "timestamp": "2026-01-20T00:00:00Z",
+        "signal_type": "BUY"
+      },
+      {
+        "symbol": "AAAU.JK",
+        "timestamp": "2026-01-20T00:00:00Z",
+        "signal_type": "BUY"
+      },
+      {
+        "symbol": "AAAW.JK",
+        "timestamp": "2026-01-20T00:00:00Z",
+        "signal_type": "BUY"
+      }
+    ],
+    "from": "2026-01-20",
+    "matched_symbols": 12,
+    "provider": "yahoo_finance",
+    "rule_hash": "sha256:042fad7ed869c3f7ecb215af2d090b173a133aed5925a457842734af33171678",
+    "stocks": 23,
+    "to": "2026-01-23",
+    "unmatched_symbols": 11
+  },
+  "source_base": "25ea6006daff8ac2a70f2481f4f0e37fa06b9038",
+  "image_id": "sha256:cf5e1397b73b4e463b360897f19f5ac0fe02470288b025dd1114a614efa85a50",
+  "postgres_image": "sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1",
+  "toolchain_image": "sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+  "schema_check": "schema test passed: 14 migrations, 3 policy checks",
+  "bootstrap": "PASS disposable DB seeded: two dummy owners, server-owned Pro subscriptions, 23 synthetic catalog rows",
+  "helper_sha256": "9d44ac376d2750e3f6fa1c84863ae7fb532e5ba6648865bac3c054c92c546bf1",
+  "source_hashes_sha256": "113b3b4aab0ed166046822b00a2181796debd0ec95ab66b04aa14e4bf8d521dc",
+  "input_files": 373,
+  "go_fixture_unit_vet_format": "pass",
+  "helper_artifacts_sha256": {
+    "localstack": "be62bae490d8cf583791d24424361af78f6f02ffeb8957fa5d1e5c51a205a0bc",
+    "schematest": "4d9dec73ee4269f7c9671797b1978e14ca96bc9c07689f77b37345bbb12093e9",
+    "main.go": "9d44ac376d2750e3f6fa1c84863ae7fb532e5ba6648865bac3c054c92c546bf1",
+    "main_test.go": "7bcbe9f4f7a98a7378a7afb759618b0a826de6a3656a0083716fdca79e2673c0"
+  },
+  "execution": "bounded network-none shared-loopback namespace; no host ports; read-only roots/source/toolchain/store; private tmpfs; no ambient env/credentials",
+  "request_assertion_count": 240,
+  "request_trace_sha256": "06a6accdbaa6ad1a41ae28a3799abc0b32f340a68ebd370d68d30803b1e74b2e",
+  "request_groups": [
+    {
+      "method": "DELETE",
+      "route": "/api/v1/backtests/studies/{id}",
+      "status": 204,
+      "error_code": null,
+      "count": 2
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/v1/backtests/studies/{id}/batches/0/prepare",
+      "status": 204,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/v1/backtests/studies/{id}/batches/1/prepare",
+      "status": 204,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/v1/backtests/studies/{id}/batches/2/prepare",
+      "status": 204,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/v1/screener/scans/{id}",
+      "status": 204,
+      "error_code": null,
+      "count": 3
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/v1/screener/scans/{id}/batches/0/prepare",
+      "status": 204,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/v1/screener/scans/{id}/batches/1/prepare",
+      "status": 204,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/v1/screener/scans/{id}/batches/2/prepare",
+      "status": 204,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/account/me",
+      "status": 401,
+      "error_code": "AUTH_REQUIRED",
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/account/me",
+      "status": 403,
+      "error_code": "SESSION_EXPIRED",
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/account/me",
+      "status": 403,
+      "error_code": "SESSION_REVOKED",
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/datasets/{id}/content",
+      "status": 200,
+      "error_code": null,
+      "count": 46
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/datasets/{id}/content",
+      "status": 404,
+      "error_code": "RESOURCE_NOT_FOUND",
+      "count": 52
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/rules/{id}",
+      "status": 404,
+      "error_code": "RESOURCE_NOT_FOUND",
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/stock-universes/{id}",
+      "status": 404,
+      "error_code": "RESOURCE_NOT_FOUND",
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "route": "/health",
+      "status": 200,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "route": "/ready",
+      "status": 200,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/v1/rules/{id}",
+      "status": 200,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/auth/login",
+      "status": 200,
+      "error_code": null,
+      "count": 2
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/backtests/signals",
+      "status": 200,
+      "error_code": null,
+      "count": 23
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/backtests/signals",
+      "status": 403,
+      "error_code": "GRANT_EXPIRED",
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/backtests/signals",
+      "status": 403,
+      "error_code": "GRANT_INVALID",
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/backtests/signals",
+      "status": 422,
+      "error_code": "INVALID_REQUEST",
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/backtests/studies",
+      "status": 201,
+      "error_code": null,
+      "count": 2
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/backtests/studies",
+      "status": 429,
+      "error_code": "STUDY_CAPACITY",
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/backtests/studies/{id}/batches/0/prepare",
+      "status": 200,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/backtests/studies/{id}/batches/0/prepare",
+      "status": 404,
+      "error_code": "RESOURCE_NOT_FOUND",
+      "count": 2
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/backtests/studies/{id}/batches/1/prepare",
+      "status": 200,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/backtests/studies/{id}/batches/1/prepare",
+      "status": 409,
+      "error_code": "STUDY_BUSY",
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/backtests/studies/{id}/batches/2/prepare",
+      "status": 200,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/compute-grants",
+      "status": 201,
+      "error_code": null,
+      "count": 46
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/rules",
+      "status": 201,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/screener/scans",
+      "status": 201,
+      "error_code": null,
+      "count": 3
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/screener/scans",
+      "status": 429,
+      "error_code": "STUDY_CAPACITY",
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/screener/scans/{id}/batches/0/prepare",
+      "status": 200,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/screener/scans/{id}/batches/0/prepare",
+      "status": 404,
+      "error_code": "RESOURCE_NOT_FOUND",
+      "count": 2
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/screener/scans/{id}/batches/0/prepare",
+      "status": 409,
+      "error_code": "VERSION_MISMATCH",
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/screener/scans/{id}/batches/1/prepare",
+      "status": 200,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/screener/scans/{id}/batches/1/prepare",
+      "status": 409,
+      "error_code": "STUDY_BUSY",
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/screener/scans/{id}/batches/2/prepare",
+      "status": 200,
+      "error_code": null,
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/screener/signals",
+      "status": 200,
+      "error_code": null,
+      "count": 23
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/screener/signals",
+      "status": 403,
+      "error_code": "GRANT_INVALID",
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/screener/signals",
+      "status": 422,
+      "error_code": "INVALID_REQUEST",
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/sessions",
+      "status": 201,
+      "error_code": null,
+      "count": 2
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/stock-universes",
+      "status": 201,
+      "error_code": null,
+      "count": 1
+    }
+  ],
+  "schema": "local-api-stack-verification-1",
+  "date": "2026-11-13",
+  "source_policy": "Application and schema inputs byte-match25ea600; API image compiled source2c4ad1d differs from25ea600 only in docs. New helper hashes identify fixture/client code.",
+  "checks": {
+    "python_preflight": "2 passed",
+    "python_syntax": "pass",
+    "go_fixture_unit_vet_format": "pass",
+    "api_stack": "pass",
+    "browser_to_real_api": "needs-validation: required OS sandbox/namespace controls unavailable for host browser; no approved cached browser image supplied",
+    "protected_application_schema_inputs": "all matched base",
+    "prior_product_tests": "not rerun; no product source changed",
+    "scoped_json_links_hashes": "pass",
+    "git_diff_check": "pass"
+  },
+  "execution_limits": {
+    "context": "orbstack",
+    "network": "Postgres owns network-none namespace; all task clients share its loopback; zero published host ports",
+    "root_source_toolchain_store": "read-only",
+    "uid_api": "10001:10001",
+    "uid_pg": "999:999",
+    "uid_compiler": "65534:65534",
+    "cpus": 2,
+    "memory": "1GiB; compiler2GiB",
+    "pids": 128,
+    "nofile": 1024,
+    "file_bytes": 134217728,
+    "tmpfs_mib": {
+      "compiler": 2048,
+      "postgres": 512,
+      "api_and_identity_each": 256,
+      "verify": 64
+    },
+    "wall_seconds": {
+      "compiler": 360,
+      "api_identity_fixture": 240,
+      "postgres": 480
+    },
+    "container_log_driver": "none",
+    "child_environment": "empty allowlist; scratchHOME/tmp/cache; dummy local credentials only",
+    "entrypoints": "explicit reviewed commands override stock hooks",
+    "cleanup": "exact own randomly named containers only"
+  },
+  "files_sha256": {
+    "backend/scripts/localstack/main.go": "9d44ac376d2750e3f6fa1c84863ae7fb532e5ba6648865bac3c054c92c546bf1",
+    "backend/scripts/localstack/main_test.go": "7bcbe9f4f7a98a7378a7afb759618b0a826de6a3656a0083716fdca79e2673c0",
+    "backend/scripts/verify_local_api_stack.py": "3a6017c3dd5f3bbb44a1f81d0286d2af3b29a06605b9b3e69f60e9c6d6d5cddc",
+    "backend/scripts/test_local_api_stack.py": "bab8a772bb05e2a7affe2882229a50875c4c18cfded9995ad01b301441a0b020"
+  },
+  "graph": {
+    "project": "browser_regression_integration",
+    "generation": "2026-11-12T14:25:07Z",
+    "verified_paths": [
+      "backend/cmd/api/main.go",
+      "backend/internal/auth/supabase.go",
+      "backend/internal/api/tests/postgres_integration_test.go",
+      "backend/cmd/schematest/main.go"
+    ],
+    "coverage": "metadata_match/no_recorded_issue for those paths; local_auth_stub partial read directly; migrations excluded read directly",
+    "later_transport": "Transport closed on further graph/search/coverage requests; direct current-source fallback for study/private-scoring/publication/runtime paths and new scripts; no completeness claim"
+  },
+  "references": {
+    "docker_network_none": "https://docs.docker.com/engine/network/drivers/none/",
+    "docker_shared_namespace": "https://docs.docker.com/engine/network/",
+    "docker_logging": "https://docs.docker.com/engine/logging/configure/",
+    "previous_integration": "prof-local-docker-integration-20261112.md",
+    "transient_blocker": "local-api-stack-blocked-20261113.md"
+  },
+  "limits": [
+    "No browser-to-real-API/WASM/IndexedDB proof",
+    "Identity HTTP provider and market histories are fixtures, not live Supabase/Yahoo/IDX",
+    "Native portable-core client verifies outcome handoff; not a browser execution claim",
+    "Ordinary/latest WebSocket path not exercised",
+    "No original-production-Dockerfile clean build, cloud deployment, timer activation, premium provider or1000-user proof"
+  ],
+  "writing_review": "no-ai-slop and unslop balanced, with humanizer prose review; source facts, exact commands and blocked boundaries preserved"
+}
