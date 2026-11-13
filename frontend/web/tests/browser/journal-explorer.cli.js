@@ -76,6 +76,13 @@ async (page) => {
   await page.locator(".journal-ledger tbody tr").first().waitFor();
   const rows = page.locator(".journal-ledger tbody tr");
   if ((await rows.count()) !== 25) throw Error("Initial page is not bounded");
+  const chart = page.getByRole("region", { name: "Saved signals over time", exact: true });
+  await chart.waitFor();
+  if (await chart.getByRole("button").count() !== 2) throw Error("Chart did not group screening dates in SGT");
+  await chart.getByRole("button", { name: /^2026-11-09:/ }).click();
+  if ((await rows.count()) !== 1 || !await rows.first().innerText().then(text => text.includes("AAPL"))) throw Error("Chart date selection did not filter journal");
+  if (await page.locator("#journal-from").inputValue() !== "2026-11-09" || await page.locator("#journal-to").inputValue() !== "2026-11-09") throw Error("Chart date filter did not use SGT date");
+  await page.getByRole("button", {name: "Clear filters", exact: true}).click();
   await page.getByRole("button", { name: "Next results", exact: true }).click();
   if ((await rows.count()) !== 6) throw Error("Next page incorrect");
   await page.locator("#journal-search").fill("AAPL");
@@ -153,7 +160,7 @@ async (page) => {
   await select("sort", "Stock symbol");
   if (!(await rows.first().innerText()).includes("QA01"))
     throw Error("Symbol sorting incorrect");
-  for (const width of [1440, 390])
+  for (const width of [1440, 390, 320])
     for (const theme of ["dark", "light"]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.addStyleTag({
@@ -169,6 +176,28 @@ async (page) => {
         path: `output/playwright/journal-explorer-${width}-${theme}.png`,
         fullPage: true,
       });
+      const calendarControl = page.locator(".signalgen-date-control").filter({ has: page.locator("#journal-from") });
+      await calendarControl.getByRole("button", { name: "Open calendar", exact: true }).click();
+      const calendar = page.getByRole("dialog", { name: "Choose date", exact: true });
+      await calendar.waitFor();
+      const calendarBox = await calendar.boundingBox();
+      if (!calendarBox || calendarBox.width > 318 || calendarBox.x < 0 || calendarBox.x + calendarBox.width > width + 1) throw Error("Calendar is too wide or clipped");
+      const month = calendar.getByRole("combobox", { name: "Choose the Month", exact: true });
+      const year = calendar.getByRole("combobox", { name: "Choose the Year", exact: true });
+      if (await month.evaluate(el => parseFloat(getComputedStyle(el).fontSize)) > 14) throw Error("Calendar month label is oversized");
+      await month.click();
+      const options = page.getByRole("listbox");
+      await options.waitFor();
+      const popup = page.locator(".calendar-caption-options");
+      const dropdownBox = await popup.boundingBox();
+      if (!dropdownBox || dropdownBox.height > 170) throw Error("Calendar dropdown obscures too many date rows");
+      await page.screenshot({ path: `output/playwright/calendar-month-${width}-${theme}.png` });
+      await page.getByRole("option", { name: "January", exact: true }).click();
+      await year.click();
+      await page.getByRole("option", { name: "2025", exact: true }).click();
+      if (await page.locator("#journal-from").inputValue() !== "2026-11-10") throw Error("Browsing calendar months changed the filter date");
+      await page.keyboard.press("Escape");
+      await calendar.waitFor({state: "hidden"});
       if (
         await page.evaluate(
           () => document.documentElement.scrollWidth > innerWidth + 1,

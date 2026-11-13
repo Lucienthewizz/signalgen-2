@@ -85,6 +85,30 @@ export function journalSummary(items: JournalItem[]) {
     topRule,
   };
 }
+
+export function journalActivity(items: JournalItem[]) {
+  const days = new Map<
+    string,
+    { day: string; buy: number; sell: number; other: number; total: number }
+  >();
+  for (const { data } of items) {
+    const day = screeningDay(data.screened_at);
+    if (!day) continue;
+    const counts = days.get(day) ?? {
+      day,
+      buy: 0,
+      sell: 0,
+      other: 0,
+      total: 0,
+    };
+    if (data.signal_type === "BUY") counts.buy++;
+    else if (data.signal_type === "SELL") counts.sell++;
+    else counts.other++;
+    counts.total++;
+    days.set(day, counts);
+  }
+  return [...days.values()].sort((a, b) => a.day.localeCompare(b.day));
+}
 export function journalCsvRows(items: JournalItem[]): unknown[][] {
   return [
     [

@@ -104,6 +104,141 @@
   gap: 1rem;
   padding: 1.25rem;
 }
+
+.journal-activity {
+  min-width: 0;
+  margin-top: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 20px;
+}
+.journal-activity > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+.journal-activity h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+}
+.journal-activity h2 svg {
+  width: 18px;
+  height: 18px;
+  color: var(--green);
+}
+.journal-activity p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.journal-activity__legend {
+  display: flex;
+  gap: 14px;
+  padding: 0;
+  margin: 0;
+  flex-wrap: wrap;
+  list-style: none;
+}
+.journal-activity__legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.journal-activity__legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.journal-activity__legend [data-signal="MATCH"] {
+  color: var(--muted);
+}
+.journal-activity__scroll {
+  overflow-x: auto;
+  margin-top: 24px;
+  padding: 4px;
+}
+.journal-activity__plot {
+  display: flex;
+  gap: 8px;
+  min-height: 192px;
+  border-bottom: 1px solid var(--line);
+}
+.journal-activity .journal-activity__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  flex: 1 0 48px;
+  min-width: 48px;
+  min-height: 192px;
+  padding: 8px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.journal-activity__column {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-direction: column;
+  height: 144px;
+  width: 100%;
+}
+.journal-activity__stack {
+  display: flex;
+  flex-direction: column-reverse;
+  flex-shrink: 0;
+  width: min(100%, 64px);
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+}
+.journal-activity__total {
+  margin-bottom: 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.journal-activity__stack [data-direction="buy"] {
+  background: var(--green);
+}
+.journal-activity__stack [data-direction="sell"] {
+  background: var(--danger);
+}
+.journal-activity__stack [data-direction="other"] {
+  background: var(--muted);
+}
+.journal-activity__day time {
+  white-space: nowrap;
+  font-size: 12px;
+}
+.journal-activity .journal-activity__day:hover {
+  background: var(--accent-surface);
+  color: var(--text);
+}
+.journal-activity__day:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+}
+.journal-activity p.journal-activity__hint {
+  margin-top: 12px;
+}
+.journal-activity p.journal-activity__empty {
+  padding-block: 24px;
+}
 .screening-journal__intro h1 {
   margin: 0;
   font-size: 1.35rem;

@@ -95,3 +95,27 @@ test("CSV exports all filtered rows with evidence and explicit snapshot/UTC/SGT 
   assert.equal(csv[1][9], "2026-11-10");
   assert.equal(csv[1].at(-1), "check");
 });
+
+test("activity uses SGT days, preserves missing signals and follows the filtered set", () => {
+  const activity = lib.journalActivity([...rows].reverse());
+  assert.equal(activity.length, 2);
+  assert.equal(activity[0].day, "2026-11-09");
+  assert.equal(activity[0].sell, 1);
+  assert.equal(activity[1].day, "2026-11-10");
+  assert.equal(activity[1].buy, 1);
+  assert.equal(activity[1].other, 1);
+  assert.equal(
+    activity.reduce((sum, day) => sum + day.total, 0),
+    rows.length,
+  );
+  const filtered = lib.filterJournal(rows, {
+    ...lib.emptyJournalFilters,
+    signal: "BUY",
+  });
+  assert.equal(lib.journalActivity(filtered)[0].total, 1);
+  assert.equal(lib.journalActivity([]).length, 0);
+  assert.equal(
+    lib.journalActivity([item("bad", "BBCA.JK", "BUY", "IDX", "bad")]).length,
+    0,
+  );
+});
