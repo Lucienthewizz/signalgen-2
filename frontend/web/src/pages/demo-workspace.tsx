@@ -1,3 +1,4 @@
+import "@/styles/workspace-forest.css";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import "@/styles/tier-access.css";
 import {

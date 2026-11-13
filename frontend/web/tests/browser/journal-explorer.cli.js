@@ -15,7 +15,7 @@ async (page) => {
     data: {
       schema_version: "screening-journal-1",
       source: "screening",
-      symbol: i === 0 ? "AAPL" : `QA${String(i).padStart(2, "0")}.JK`,
+      symbol: i === 0 ? "AAPL" : i === 2 ? "QA01.JK" : `QA${String(i).padStart(2, "0")}.JK`,
       market: i === 0 ? "US" : "IDX",
       currency: i === 0 ? "USD" : "IDR",
       rule_id: i === 0 ? "sell-rule" : "buy-rule",
@@ -23,10 +23,10 @@ async (page) => {
       definition_hash: "qa-hash",
       timeframe: "1d",
       candle_at: "2026-11-09T09:00:00Z",
-      screened_at: i === 0 ? "2026-11-09T12:00:00Z" : "2026-11-09T17:00:00Z",
+      screened_at: i === 0 ? "2026-11-09T12:00:00Z" : i === 2 ? "2026-11-10T01:00:00Z" : "2026-11-09T17:00:00Z",
       signal_type: i === 0 ? "SELL" : "BUY",
       matched: true,
-      price: 100,
+      price: i === 2 ? 110 : 100,
       features: {
         price: 100,
         rsi14: 55,
@@ -61,6 +61,8 @@ async (page) => {
           ? { user, features: ["screener"], session: { id: "qa" } }
           : p === "/api" || p === "/ready"
             ? { status: "ready", version: "test" }
+            : p === "/api/v1/portfolio"
+              ? {transaction_count:0,positions:[],totals:[]}
             : p === "/api/v1/journal/screenings"
               ? { schema_version: "screening-journal-1", items }
               : p === "/api/v1/subscription"
@@ -71,11 +73,14 @@ async (page) => {
   await page.goto(origin + "/#app/journal");
   await page.reload();
   await page
-    .getByRole("heading", { name: "Saved screening results", exact: true })
+    .getByRole("heading", { name: "Screening journal", exact: true })
     .waitFor();
   await page.locator(".journal-ledger tbody tr").first().waitFor();
   const rows = page.locator(".journal-ledger tbody tr");
   if ((await rows.count()) !== 25) throw Error("Initial page is not bounded");
+  await page.getByRole("region", {name:"Portfolio performance",exact:true}).waitFor();
+  if(await page.locator(".journal-bento .magic-bento__card").count()!==6)throw Error("Missing portfolio bento cards");
+  await page.getByRole("button", {name: "Clear filters", exact: true}).click();
   await page.getByRole("button", { name: "Next results", exact: true }).click();
   if ((await rows.count()) !== 6) throw Error("Next page incorrect");
   await page.locator("#journal-search").fill("AAPL");
@@ -153,7 +158,7 @@ async (page) => {
   await select("sort", "Stock symbol");
   if (!(await rows.first().innerText()).includes("QA01"))
     throw Error("Symbol sorting incorrect");
-  for (const width of [1440, 390])
+  for (const width of [1440, 390, 320])
     for (const theme of ["dark", "light"]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.addStyleTag({
@@ -164,11 +169,36 @@ async (page) => {
         document.documentElement.dataset.theme = theme;
         document.documentElement.classList.toggle("dark", theme === "dark");
       }, theme);
+      await page.locator(".journal-bento").scrollIntoViewIfNeeded();
+      const clipped = await page.locator(".journal-bento .magic-bento__card").evaluateAll(cards => cards.some(card => card.scrollHeight > card.clientHeight + 2 || card.scrollWidth > card.clientWidth + 2));
+      if (clipped) throw Error(`Bento content clipped at ${width}px in ${theme}`);
       await page.locator("#journal-search").scrollIntoViewIfNeeded();
       await page.screenshot({
         path: `output/playwright/journal-explorer-${width}-${theme}.png`,
         fullPage: true,
       });
+      const calendarControl = page.locator(".signalgen-date-control").filter({ has: page.locator("#journal-from") });
+      await calendarControl.getByRole("button", { name: "Open calendar", exact: true }).click();
+      const calendar = page.getByRole("dialog", { name: "Choose date", exact: true });
+      await calendar.waitFor();
+      const calendarBox = await calendar.boundingBox();
+      if (!calendarBox || calendarBox.width > 318 || calendarBox.x < 0 || calendarBox.x + calendarBox.width > width + 1) throw Error("Calendar is too wide or clipped");
+      const month = calendar.getByRole("combobox", { name: "Choose the Month", exact: true });
+      const year = calendar.getByRole("combobox", { name: "Choose the Year", exact: true });
+      if (await month.evaluate(el => parseFloat(getComputedStyle(el).fontSize)) > 14) throw Error("Calendar month label is oversized");
+      await month.click();
+      const options = page.getByRole("listbox");
+      await options.waitFor();
+      const popup = page.locator(".calendar-caption-options");
+      const dropdownBox = await popup.boundingBox();
+      if (!dropdownBox || dropdownBox.height > 170) throw Error("Calendar dropdown obscures too many date rows");
+      await page.screenshot({ path: `output/playwright/calendar-month-${width}-${theme}.png` });
+      await page.getByRole("option", { name: "January", exact: true }).click();
+      await year.click();
+      await page.getByRole("option", { name: "2025", exact: true }).click();
+      if (await page.locator("#journal-from").inputValue() !== "2026-11-10") throw Error("Browsing calendar months changed the filter date");
+      await page.keyboard.press("Escape");
+      await calendar.waitFor({state: "hidden"});
       if (
         await page.evaluate(
           () => document.documentElement.scrollWidth > innerWidth + 1,

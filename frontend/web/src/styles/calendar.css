@@ -37,7 +37,7 @@
   opacity: 0.5;
 }
 .signalgen-date-popup {
-  width: min(352px, calc(100vw - 8px));
+  width: min(316px, calc(100vw - 16px));
   max-height: var(--available-height);
   overflow: auto;
   padding: 12px;
@@ -60,7 +60,7 @@
   font-weight: 600;
 }
 .signalgen-date-popup p {
-  margin: 4px 0 16px;
+  margin: 4px 0 12px;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.6;
@@ -69,13 +69,13 @@
   --rdp-accent-color: var(--green);
   --rdp-accent-background-color: var(--accent-surface);
   --rdp-today-color: var(--green);
-  --rdp-day-width: 44px;
-  --rdp-day-height: 44px;
-  --rdp-day_button-width: 44px;
-  --rdp-day_button-height: 44px;
+  --rdp-day-width: 40px;
+  --rdp-day-height: 40px;
+  --rdp-day_button-width: 40px;
+  --rdp-day_button-height: 40px;
   --rdp-day_button-border-radius: 8px;
-  --rdp-nav_button-width: 44px;
-  --rdp-nav_button-height: 44px;
+  --rdp-nav_button-width: 32px;
+  --rdp-nav_button-height: 40px;
   --rdp-nav-height: 44px;
   --rdp-selected-border: 1px solid var(--green);
   font-family: inherit;
@@ -89,17 +89,38 @@
   padding-inline: 0;
 }
 .signalgen-date-popup .rdp-dropdowns {
-  gap: 4px;
+  gap: 8px;
+  padding-inline-end: 72px;
+  max-width: 100%;
 }
-.signalgen-date-popup .rdp-dropdown_root {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  border-radius: 6px;
-}
-.signalgen-date-popup select {
+.signalgen-date-popup .calendar-caption-select[data-slot="select-trigger"] {
+  width: auto;
+  min-width: 0;
+  height: 36px;
+  gap: 6px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  border-color: var(--line);
+  background: var(--surface);
   color: var(--text);
+}
+.calendar-caption-options[data-slot="select-content"] {
+  max-height: min(168px, var(--available-height));
+  min-width: 112px;
+  border: 1px solid var(--line);
   background: var(--surface-2);
+  color: var(--text);
+}
+.calendar-caption-options [data-slot="select-item"] {
+  min-height: 32px;
+  padding: 6px 28px 6px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
 }
 .signalgen-date-popup .rdp-day_button {
   color: var(--text);
@@ -159,14 +180,6 @@
 .demo-workbench .study-fields [data-study-target="loss"] input {
   border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
   background-color: color-mix(in srgb, var(--danger) 5%, var(--control-bg));
-}
-@media (max-width: 360px) {
-  .signalgen-date-popup {
-    padding: 0;
-  }
-  .signalgen-date-popup > :not(.rdp-root) {
-    margin-inline: 8px;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .signalgen-date-popup {

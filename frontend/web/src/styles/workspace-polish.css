@@ -121,11 +121,12 @@
 .market-monitor .monitor-detail-result {
   width: 100%;
   min-width: 0;
-  padding: 16px;
+  padding: 20px 0 0;
   gap: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 .monitor-detail-result__header {
   display: flex;

@@ -1,10 +1,12 @@
+import ShinyText from "@/components/react-bits/ShinyText";
+import { useVisualPreferences } from "@/lib/visual-preferences";
 import { type PointerEvent } from "react";
 import { ArrowRight, Check } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
 import { FeatureFigure } from "@/components/feature-figure";
-import { MarketTrace } from "@/components/market-trace";
-import { SignalLattice } from "@/components/signal-lattice";
+import "@/styles/feature-motion.css";
+import { LandingBackground } from "@/components/landing-background";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Accordion,
@@ -33,9 +35,9 @@ const capabilityViews = [
   },
   {
     id: "journal",
-    title: "Journal & position",
+    title: "Screening journal",
     description:
-      "Turn results into drafts, log trades, and review positions and P&L.",
+      "Save matched screening results, review captured prices, and inspect the evidence.",
   },
   {
     id: "access",
@@ -67,6 +69,7 @@ export function PublicWorkspace({
   user: User | null;
   onLogout: () => void | Promise<void>;
 }) {
+  const { reduced, light } = useVisualPreferences();
   return (
     <main className="workbench landing-shell">
       <section className="workspace landing-workspace">
@@ -80,7 +83,6 @@ export function PublicWorkspace({
               <Brand compact />
             </a>
             <nav className="landing-header__nav" aria-label="Main navigation">
-              <a href="#product-tour">Preview</a>
               <a href="#capabilities">Features</a>
               <a href="#pricing">Pricing</a>
               <a href="#reviews">Reviews</a>
@@ -94,12 +96,12 @@ export function PublicWorkspace({
                   Register
                 </a>
               )}
-              <a
-                className="landing-header__session"
-                href={user ? "#app/overview" : "#login"}
-              >
-                {user ? "Dashboard" : "Sign in"}
-              </a>
+              {!user && (
+                <a className="landing-header__session" href="#login">
+                  Sign in
+                </a>
+              )}
+
               {user && (
                 <AccountMenu
                   user={user}
@@ -112,17 +114,20 @@ export function PublicWorkspace({
         </header>
         <div className="workspace__content landing-content">
           <section className="market-hero">
-            <div className="market-hero__chart" aria-hidden="true">
-              <MarketTrace />
-            </div>
+            <LandingBackground variant="hero" />
             <div className="market-hero__copy">
-              <span
-                className={`hero-data-note ${backendOnline ? "is-online" : ""}`}
-              >
-                <i /> Local preview · Not live market data
-              </span>
               <h2>
-                Read the market.
+                <ShinyText
+                  text="Read the market."
+                  color={light ? "#10281c" : "#f5f7f5"}
+                  shineColor={light ? "#08784a" : "#5aa48c"}
+                  speed={2}
+                  delay={1.5}
+                  shineWidth={40}
+                  softness={0.8}
+                  trigger="loop"
+                  disabled={reduced}
+                />
                 <br />
                 <em>Verify the signal.</em>
               </h2>
@@ -157,10 +162,8 @@ export function PublicWorkspace({
             </div>
           </section>
           <div className="landing-product-flow">
-            <div className="landing-stage landing-stage--black">
-              <SignalLattice />
-            </div>
-            <div className="landing-stage landing-stage--green landing-stage--footer">
+            <LandingBackground variant="ascii" />
+            <div className="landing-stage landing-stage--green landing-stage--features">
               <section className="capability-section" id="capabilities">
                 <div className="section-heading split-heading">
                   <div>

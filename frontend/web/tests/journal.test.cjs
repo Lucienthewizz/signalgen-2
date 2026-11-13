@@ -85,3 +85,4 @@ test("each same-day trade keeps its own stable point independent of table sortin
   );
   assert.equal(rows[0].id, "c");
 });
+test('portfolio chart preserves the ledger sequence for sub-millisecond executions',()=>{const points=journalTimeline([{id:'a',closedAt:'2026-11-09T01:00:00.000200Z',pnl:2,sequence:1},{id:'z',closedAt:'2026-11-09T01:00:00.000100Z',pnl:1,sequence:0}]);assert.equal(points[1].record.id,'z');assert.equal(points[2].value,3)});

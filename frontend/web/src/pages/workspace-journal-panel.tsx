@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { JournalPortfolio } from "@/components/journal-portfolio";
+import { JournalBento } from "@/components/journal-bento";
 import {
   Empty,
   EmptyHeader,
@@ -46,7 +48,6 @@ import { downloadCsv } from "@/lib/csv";
 import {
   emptyJournalFilters,
   filterJournal,
-  journalSummary,
   journalCsvRows,
 } from "@/lib/journal-explorer";
 
@@ -89,6 +90,9 @@ export function JournalPanel({
   const [reload, setReload] = useState(0);
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState({ ...emptyJournalFilters });
+  const [tradeDraft, setTradeDraft] = useState<ScreeningJournalEntry | null>(
+    null,
+  );
   const [detailId, setDetailId] = useState<string | null>(null);
   const [receiptInvalid, setReceiptInvalid] = useState(false);
   const [exportNotice, setExportNotice] = useState("");
@@ -101,7 +105,6 @@ export function JournalPanel({
     () => filterJournal(items, filters),
     [items, filters],
   );
-  const summary = useMemo(() => journalSummary(filtered), [filtered]);
   const rules = useMemo(
     () =>
       [
@@ -265,11 +268,11 @@ export function JournalPanel({
       <div className="journal-toolbar screening-journal__intro">
         <div>
           <h1 id="workspace-route-heading" tabIndex={-1}>
-            Saved screening results
+            Screening journal
           </h1>
           <p>
-            Keep the matched results you choose in Screener. Prices and signals
-            are captured from that screening.
+            Save screening results, record your executed transactions, and
+            review realized P&L.
           </p>
         </div>
         <Button
@@ -481,47 +484,19 @@ export function JournalPanel({
             </div>
           </div>
           {exportNotice && <p role="status">{exportNotice}</p>}
-          <dl
-            className="journal-explorer-summary"
-            aria-label="Filtered signal summary"
-          >
-            <div>
-              <dt>Saved signals</dt>
-              <dd>{summary.total}</dd>
-            </div>
-            <div data-signal="BUY">
-              <dt>BUY</dt>
-              <dd>{summary.buy}</dd>
-            </div>
-            <div data-signal="SELL">
-              <dt>SELL</dt>
-              <dd>{summary.sell}</dd>
-            </div>
-            <div>
-              <dt>Unspecified</dt>
-              <dd>{summary.other}</dd>
-            </div>
-            <div>
-              <dt>Stocks / rules</dt>
-              <dd>
-                {summary.stocks} / {summary.rules}
-              </dd>
-            </div>
-          </dl>
-          <p className="screening-journal__note">
-            Most frequent stock:{" "}
-            {summary.topStock
-              ? `${summary.topStock[0].replace(/\.JK$/, "")} (${summary.topStock[1]})`
-              : "—"}
-            . Most frequent rule:{" "}
-            {summary.topRule
-              ? `${summary.topRule[1].name} (${summary.topRule[1].count})`
-              : "—"}
-            . Counts reflect the current filters, not returns or trade
-            performance.
-          </p>
         </>
       )}
+      <JournalBento
+        items={filtered}
+        portfolio={
+          <JournalPortfolio
+            key={userId}
+            userId={userId}
+            draft={tradeDraft}
+            onClearDraft={() => setTradeDraft(null)}
+          />
+        }
+      />
       {error && (
         <Alert variant="destructive">
           <AlertTitle>Journal unavailable</AlertTitle>
@@ -628,6 +603,13 @@ export function JournalPanel({
                         }
                       >
                         View {d.symbol.replace(/\.JK$/, "")} details
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setTradeDraft({ ...d })}
+                      >
+                        Record {d.symbol.replace(/\.JK$/, "")} trade
                       </Button>
                     </TableCell>
                   </TableRow>

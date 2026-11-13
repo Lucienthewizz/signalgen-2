@@ -1,12 +1,26 @@
-import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ComponentProps,
+} from "react";
 import { Popover } from "@base-ui/react/popover";
-import { DayPicker } from "react-day-picker";
+import { DayPicker, type DropdownProps } from "react-day-picker";
 import "react-day-picker/style.css";
 import "@/styles/calendar.css";
 import { CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   InputGroup,
   InputGroupAddon,
@@ -30,6 +44,62 @@ type DateInputProps = Omit<
   min?: string;
   max?: string;
 };
+
+function CalendarDropdown({
+  options = [],
+  value,
+  onChange,
+  "aria-label": ariaLabel,
+  disabled,
+  tabIndex,
+  id,
+  name,
+}: DropdownProps) {
+  return (
+    <Select
+      items={options.map((option) => ({
+        value: String(option.value),
+        label: option.label,
+      }))}
+      value={String(value)}
+      disabled={disabled}
+      name={name}
+      onValueChange={(next) => {
+        if (next !== null) {
+          onChange?.({
+            target: { value: next },
+          } as ChangeEvent<HTMLSelectElement>);
+        }
+      }}
+    >
+      <SelectTrigger
+        className="calendar-caption-select"
+        id={id}
+        aria-label={ariaLabel}
+        tabIndex={tabIndex}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent
+        className="calendar-caption-options"
+        side="bottom"
+        align="start"
+        alignItemWithTrigger={false}
+        sideOffset={6}
+      >
+        {options.map((option) => (
+          <SelectItem
+            key={option.value}
+            value={String(option.value)}
+            disabled={option.disabled}
+          >
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 /** Editable ISO value + one themed, keyboard-accessible calendar for every form. */
 export function DateInput({
@@ -140,6 +210,7 @@ export function DateInput({
               showOutsideDays
               fixedWeeks
               captionLayout="dropdown"
+              components={{ Dropdown: CalendarDropdown }}
               startMonth={new Date(1900, 0)}
               endMonth={new Date(2200, 11)}
               disabled={[

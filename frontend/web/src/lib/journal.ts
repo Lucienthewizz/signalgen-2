@@ -44,7 +44,7 @@ export function filterJournalMonth<T extends { closedAt: string }>(
 }
 
 export function journalTimeline<
-  T extends { closedAt: string; pnl: number; id?: string },
+  T extends { closedAt: string; pnl: number; id?: string; sequence?: number },
 >(records: T[]) {
   const ordered = [...records]
     .filter(
@@ -54,7 +54,9 @@ export function journalTimeline<
     )
     .sort(
       (a, b) =>
-        Date.parse(a.closedAt) - Date.parse(b.closedAt) ||
+        (a.sequence !== undefined && b.sequence !== undefined
+          ? a.sequence - b.sequence
+          : Date.parse(a.closedAt) - Date.parse(b.closedAt)) ||
         (a.id ?? "").localeCompare(b.id ?? ""),
     );
   let value = 0;

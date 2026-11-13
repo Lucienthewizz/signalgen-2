@@ -1,3 +1,4 @@
+import { PortfolioOverview } from "@/components/portfolio-overview";
 import { tierName } from "@/lib/tier-access";
 import { screeningSetup } from "@/lib/screening-setup";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
@@ -332,6 +333,7 @@ export function WorkspaceOverviewPanel({
           </button>
         </nav>
       </div>
+      {userId && <PortfolioOverview key={userId} userId={userId} />}
       <section
         className="overview-resources feature-gallery"
         aria-label="Workspace overview"

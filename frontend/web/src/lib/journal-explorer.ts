@@ -85,6 +85,46 @@ export function journalSummary(items: JournalItem[]) {
     topRule,
   };
 }
+
+export function journalPriceSeries(items: JournalItem[]) {
+  const series = new Map<
+    string,
+    {
+      key: string;
+      symbol: string;
+      market: string;
+      currency: string;
+      points: JournalItem[];
+    }
+  >();
+  for (const item of items) {
+    const { data } = item;
+    if (
+      !Number.isFinite(data.price) ||
+      data.price <= 0 ||
+      !screeningDay(data.screened_at)
+    )
+      continue;
+    const key = `${data.market}:${data.symbol}`;
+    const stock = series.get(key) ?? {
+      key,
+      symbol: data.symbol,
+      market: data.market,
+      currency: data.currency,
+      points: [],
+    };
+    stock.points.push(item);
+    series.set(key, stock);
+  }
+  for (const stock of series.values()) {
+    stock.points.sort(
+      (a, b) =>
+        Date.parse(a.data.screened_at) - Date.parse(b.data.screened_at) ||
+        a.id.localeCompare(b.id),
+    );
+  }
+  return [...series.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
 export function journalCsvRows(items: JournalItem[]): unknown[][] {
   return [
     [

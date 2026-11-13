@@ -104,6 +104,157 @@
   gap: 1rem;
   padding: 1.25rem;
 }
+
+.journal-price-chart {
+  min-width: 0;
+  padding: 20px 0;
+  border-block: 1px solid var(--line);
+}
+.journal-price-chart > header,
+.journal-price-chart > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+}
+.journal-price-chart h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 18px;
+  color: var(--text);
+}
+.journal-price-chart h2 svg {
+  width: 18px;
+  height: 18px;
+  color: var(--green);
+}
+.journal-price-chart p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.journal-price-chart [data-slot="select-trigger"] {
+  min-width: 160px;
+  min-height: 44px;
+}
+.journal-price-chart__canvas {
+  display: grid;
+  grid-template-columns: minmax(48px, auto) minmax(0, 1fr);
+  grid-template-rows: 220px auto;
+  gap: 8px 16px;
+  margin: 24px 4px 20px 0;
+}
+.journal-price-chart__scale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-block: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.journal-price-chart__plot {
+  position: relative;
+  min-width: 0;
+}
+.journal-price-chart__plot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.journal-price-chart__grid {
+  stroke: var(--line);
+  vector-effect: non-scaling-stroke;
+}
+.journal-price-chart__line {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+.journal-price-chart .journal-price-chart__point {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.journal-price-chart__point > span {
+  width: 8px;
+  height: 8px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: var(--surface);
+}
+.journal-price-chart__point[data-signal="BUY"] {
+  color: var(--green);
+}
+.journal-price-chart__point[data-signal="SELL"] {
+  color: var(--danger);
+}
+.journal-price-chart__point[aria-pressed="true"] > span,
+.journal-price-chart__point:hover > span {
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+}
+.journal-price-chart__point:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 0;
+}
+.journal-price-chart__dates {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.journal-price-chart footer {
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+.journal-price-chart dl {
+  display: flex;
+  gap: 16px 36px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+.journal-price-chart dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.journal-price-chart dd {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.journal-price-chart p.journal-price-chart__empty {
+  padding-block: 24px;
+}
+@media (max-width: 480px) {
+  .journal-price-chart__canvas {
+    grid-template-rows: 180px auto;
+    gap: 8px;
+  }
+}
 .screening-journal__intro h1 {
   margin: 0;
   font-size: 1.35rem;
