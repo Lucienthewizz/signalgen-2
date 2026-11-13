@@ -49,7 +49,16 @@ func run() error {
 	pruneOnly := flag.Bool("prune-only", false, "clean eligible retired generations without contacting the provider")
 	retentionDryRun := flag.Bool("retention-dry-run", false, "report eligible generations without deleting them")
 	validateOnly := flag.Bool("validate-only", false, "validate/catalog count without making provider requests")
+	scheduled := flag.Bool("schedule", false, "opt-in continuous incremental collection; starts immediately and runs without the website")
+	every := flag.Duration("schedule-every", 24*time.Hour, "delay after a completed scheduled run (1m..168h)")
+	retryDelay := flag.Duration("schedule-retry", time.Hour, "delay after a failed scheduled run (1m..24h)")
+	runTimeout := flag.Duration("run-timeout", 2*time.Hour, "scheduled run timeout (1m..6h)")
 	flag.Parse()
+	explicit := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+	if err := validateScheduledFlags(*scheduled, explicit, *incremental, *validateOnly, *pruneOnly, *refresh, *retryFailed, *years, *overlap, *limit, *runTimeout); err != nil {
+		return err
+	}
 	if *pruneOnly {
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer cancel()
@@ -93,6 +102,25 @@ func run() error {
 	if !strings.HasPrefix(*source, "https://") {
 		return fmt.Errorf("source-url must identify an HTTPS source")
 	}
+	if *scheduled {
+		provider, err := collectorProvider()
+		if err != nil {
+			return err
+		}
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		options := collection.ScheduleOptions{CatalogPath: *catalogPath, SourceURL: *source, Directory: *output, Every: *every, RetryDelay: *retryDelay, RunTimeout: *runTimeout, InstrumentDelay: *interval, Keep: *keep, RetirementGrace: *grace, RetentionDryRun: *retentionDryRun}
+		return collection.RunScheduler(ctx, options, provider, func(result collection.ScheduledResult) {
+			if result.Err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				fmt.Fprintf(os.Stderr, "Scheduled collection failed; retry in %s: %v\n", *retryDelay, result.Err)
+				return
+			}
+			fmt.Printf("Scheduled publication checked: [%s, %s); tickers=%d; next run in %s\n", result.From.Format("2006-01-02"), result.To.Format("2006-01-02"), len(result.Report.Entries), *every)
+		})
+	}
 	catalog, err := collection.ReadCatalog(*catalogPath, *source, now)
 	if err != nil {
 		return err
@@ -102,14 +130,7 @@ func run() error {
 		fmt.Println("Validation only; no price download, no database write.")
 		return nil
 	}
-	baseURL := os.Getenv("YAHOO_FINANCE_BASE_URL")
-	if baseURL == "" {
-		baseURL = "https://query1.finance.yahoo.com"
-	}
-	if !strings.HasPrefix(baseURL, "https://") {
-		return fmt.Errorf("live Yahoo provider must use HTTPS")
-	}
-	provider, err := marketdata.NewYahooFinance(baseURL, nil)
+	provider, err := collectorProvider()
 	if err != nil {
 		return err
 	}
@@ -155,12 +176,7 @@ func run() error {
 // This is not an exchange-calendar or auction-status service: 18:00 WIB gives
 // a buffer after ordinary IDX sessions; provider corrections remain possible.
 func closedDayBoundary(now time.Time, location *time.Location) time.Time {
-	local := now.In(location)
-	boundary := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, location)
-	if local.Hour() >= 18 {
-		boundary = boundary.AddDate(0, 0, 1)
-	}
-	return boundary
+	return collection.ClosedDayBoundary(now, location)
 }
 
 func runRetention(ctx context.Context, directory string, keep int, grace time.Duration, dryRun bool) error {
@@ -171,6 +187,29 @@ func runRetention(ctx context.Context, directory string, keep int, grace time.Du
 	fmt.Printf("Retention: eligible=%d removed=%d skipped=%d dry_run=%t\n", len(retention.Eligible), len(retention.Removed), len(retention.Skipped), dryRun)
 	for _, name := range retention.Eligible {
 		fmt.Printf("Eligible generation: %s\n", name)
+	}
+	return nil
+}
+
+func collectorProvider() (*marketdata.YahooFinance, error) {
+	baseURL := os.Getenv("YAHOO_FINANCE_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://query1.finance.yahoo.com"
+	}
+	if !strings.HasPrefix(baseURL, "https://") {
+		return nil, fmt.Errorf("live Yahoo provider must use HTTPS")
+	}
+	return marketdata.NewYahooFinance(baseURL, nil)
+}
+func validateScheduledFlags(scheduled bool, explicit map[string]bool, incremental, validateOnly, pruneOnly, refresh, retryFailed bool, years, overlap, limit int, timeout time.Duration) error {
+	if !scheduled {
+		if explicit["schedule-every"] || explicit["schedule-retry"] || explicit["run-timeout"] {
+			return fmt.Errorf("schedule timing flags require -schedule")
+		}
+		return nil
+	}
+	if !incremental || validateOnly || pruneOnly || refresh || retryFailed || explicit["as-of"] || explicit["from"] || years != 5 || overlap != 7 || limit != 0 || timeout < time.Minute || timeout > 6*time.Hour {
+		return fmt.Errorf("-schedule requires -incremental, rolling 5 years, 7-day overlap, full catalog and no fixed dates, validate/prune-only or refresh/retry flags; run-timeout must be 1m..6h")
 	}
 	return nil
 }

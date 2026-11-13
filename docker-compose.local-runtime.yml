@@ -67,3 +67,41 @@ services:
         target: /var/lib/signalgen/idx-store
         bind:
           create_host_path: false
+  idx-scheduler:
+    # Explicit opt-in; unlike collector validation, this job may download Yahoo data.
+    profiles: [idx-scheduler]
+    image: ${SIGNALGEN_LOCAL_IMAGE:?Set the verified local image ID}
+    pull_policy: never
+    entrypoint: [signalgen-collect-idx]
+    command: [-schedule, -incremental, -catalog, /catalog/idx.csv, -out, /var/lib/signalgen/idx-store, -schedule-every, 24h, -schedule-retry, 1h, -run-timeout, 2h]
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    stop_grace_period: 30s
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    cpus: 2
+    mem_limit: 1536m
+    ulimits:
+      nofile: {soft: 1024, hard: 1024}
+      fsize: {soft: 134217728, hard: 134217728}
+    environment:
+      HOME: /scratch/home
+      TMPDIR: /scratch/tmp
+    tmpfs:
+      - /scratch:rw,noexec,size=67108864,mode=0700,uid=10001,gid=10001
+    volumes:
+      - type: bind
+        source: ${SIGNALGEN_LOCAL_IDX_CATALOG:?Set a private operator-supplied catalog file}
+        target: /catalog/idx.csv
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SIGNALGEN_LOCAL_IDX_STORE:?Set a private existing published store}
+        target: /var/lib/signalgen/idx-store
+        bind:
+          create_host_path: false

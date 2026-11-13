@@ -1,0 +1,231 @@
+{
+  "schema": "local-idx-scheduler-1",
+  "date": "2026-11-13",
+  "branch": "frontend/local-idx-scheduler",
+  "base_sha": "4b2173c4199345770d58cbdcf927bfd3f193fada",
+  "runtime_source_sha": "304e0b4675313b3599f40ad502140493f0cb16ee",
+  "final_commit_policy": "Child delivery commit contains documentation/evidence only; collector/runtime source stays unchanged",
+  "runtime": {
+    "source_sha": "304e0b4675313b3599f40ad502140493f0cb16ee",
+    "runtime_input_id": "sha256:f1baf33b1e06c6a7b54f6226cf758785efd2efe99a358c9f613aa906da2077f4",
+    "toolchain_id": "sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+    "image_id": "sha256:6341966d32f78ce0adcdb235138a5fce45552bdeb8a9c05c3a0db9493832439b",
+    "tag": "signalgen-local-runtime:304e0b467531",
+    "artifacts_sha256": {
+      "signalgen-api": "2b501ba54824dbad29f80f33f38f395773431f5a8fc720c739517dbe51725f7c",
+      "signalgen-admin": "b203d2ed2a52f5a26a91b3bdb1330e30bb9c1d28fd5f9552cbd2f44e295dd257",
+      "signalgen-audit-catalog": "03bf3f990e0616be3a430804840157721eeedd9b81e6b076ac3beff4d367ec52",
+      "signalgen-healthcheck": "a6c102760ddfc01596b0376b54e7be4e23258e875bb0211570566c0b10fcd6f9",
+      "signalgen-collect-idx": "88af1e08562a40047ca391ffc0af008260f135429fc3ace5a0ee1430ef47d91b",
+      "collection.test": "9f8f04bae88b5610fdf8461140a2c5f95af705e6f440b4a0d93035a59017fc4c"
+    },
+    "smoke": "=== RUN   TestCollectorRuntimeSmoke\n    runtime_smoke_test.go:90: PASS: compiled collector help, synthetic validate-only, incremental publications, read-only store and prune dry-run; no Yahoo\n--- PASS: TestCollectorRuntimeSmoke (0.06s)\nPASS\n",
+    "readonly_root_rejection": "incremental store is locked: openat .sync.lock: read-only file system\n",
+    "checks": [
+      "all five packaged binaries byte-match rebuilt artifacts",
+      "non-root runtime",
+      "read-only synthetic catalog",
+      "read-only root and catalog writes rejected",
+      "missing bind source rejected",
+      "compose config with empty env file and synthetic inputs"
+    ],
+    "base_config_review": {
+      "onbuild": null,
+      "entrypoint": null,
+      "cmd": [
+        "signalgen-api"
+      ],
+      "user": "signalgen",
+      "env_names": [
+        "PATH"
+      ]
+    },
+    "full_api_started": false,
+    "original_dockerfile_built": false,
+    "runtime_inputs_sha256": {
+      "runtime/group": "6234afc8b24f4d5a286d1d55edd66a42f388cc27ea09c3a45374ff649c854a78",
+      "runtime/passwd": "0e815a6dbbbdf48dd1f84db450499d2c684488dd43ace12081bbacb018e89571",
+      "runtime/ssl/certs/ca-certificates.crt": "e9c7b63ee2623386e9b0a3ee32f499d01a8ea23dc83b8383ddff9f8e749543b7",
+      "fixtures/default_scalping_v1.json": "a48a9f0e86dfdb94dda495d4f01f0c42fe402896c779107958411137f8698a38",
+      "licenses/TA-Lib.txt": "c8ff055c9bc14b22afa1faa1f44256c407e9fc478f2233bc6012a218e0036f5e"
+    },
+    "recipe_sha256": "b4754a2b06bb1a1fca169c2dbf1bca7279b4a50caf7eeaf0141fda9f3d3d3abc",
+    "compose_sha256": "6c568cb90b57c215a69ae33af54f314b6c65357ec1feff356e9449aeee592df7",
+    "compiler_input_count": 355,
+    "compiler_input_hash_map_sha256": "1d673e8427fb1fbbeb7c553f82a264e17a81415b16b9649cfc4b021709f4f2c8"
+  },
+  "acceptance": {
+    "commands": [
+      "go test ./internal/collection ./cmd/collectidx -count=1",
+      "go test -race ./internal/collection ./cmd/collectidx -count=1",
+      "go vet ./internal/collection ./cmd/collectidx",
+      "gofmt check on cmd/collectidx/*.go and collection/scheduler*.go"
+    ],
+    "source_sha": "304e0b4675313b3599f40ad502140493f0cb16ee",
+    "result": "pass",
+    "output": "ok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/collection\t12.132s\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/cmd/collectidx\t0.002s\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/collection\t19.493s\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/cmd/collectidx\t1.009s\nPASS FINAL FORMAT UNIT RACE VET\n\n",
+    "full_runtime_collection_suite": "pass",
+    "runtime_timer_smoke": "scheduler_test.go:252: PASS: production scheduler ran twice autonomously with real one-minute timer, 1 synthetic provider fetches, no website/API/Yahoo",
+    "autonomous_iterations": 2,
+    "synthetic_provider_fetches": 1,
+    "website_api_requests": 0,
+    "runtime_log_sha256": "c3e292623c56b00490c5cf28e091725fe7295ea88c130cddae3fb44177abd553",
+    "existing_compiled_collector_smoke": "pass: help, synthetic catalog validation, incremental publications, read-only store and prune dry-run",
+    "packaging_preflights": "3 passed",
+    "scoped_evidence_validation": "pass",
+    "timer_test_duration_seconds": 60.01,
+    "configured_timer_wait_seconds": 60,
+    "cleanup": "No exact own containers remain; four exact own temporary source/artifact directories removed after hash capture; images and other resources retained"
+  },
+  "packaged_checks": {
+    "image_id": "sha256:6341966d32f78ce0adcdb235138a5fce45552bdeb8a9c05c3a0db9493832439b",
+    "source_sha": "304e0b4675313b3599f40ad502140493f0cb16ee",
+    "packaged_cli": [
+      {
+        "args": [
+          "-h"
+        ],
+        "exit": 0,
+        "assertion": "-schedule"
+      },
+      {
+        "args": [
+          "-catalog",
+          "/catalog/idx.csv",
+          "-validate-only"
+        ],
+        "exit": 0,
+        "assertion": "Validation only"
+      },
+      {
+        "args": [
+          "-catalog",
+          "/catalog/idx.csv",
+          "-incremental",
+          "-validate-only"
+        ],
+        "exit": 0,
+        "assertion": "Validation only"
+      },
+      {
+        "args": [
+          "-schedule",
+          "-incremental",
+          "-as-of",
+          "2026-01-20"
+        ],
+        "exit": 1,
+        "assertion": "no fixed dates"
+      },
+      {
+        "args": [
+          "-schedule",
+          "-validate-only"
+        ],
+        "exit": 1,
+        "assertion": "-schedule requires"
+      },
+      {
+        "args": [
+          "-catalog",
+          "/catalog/idx.csv",
+          "-schedule",
+          "-incremental",
+          "-schedule-every",
+          "1s"
+        ],
+        "exit": 1,
+        "assertion": "schedule every must"
+      },
+      {
+        "args": [
+          "-catalog",
+          "/catalog/idx.csv",
+          "-schedule",
+          "-incremental",
+          "-schedule-retry",
+          "0s"
+        ],
+        "exit": 1,
+        "assertion": "schedule every must"
+      },
+      {
+        "args": [
+          "-schedule-every",
+          "1h",
+          "-validate-only"
+        ],
+        "exit": 1,
+        "assertion": "require -schedule"
+      }
+    ],
+    "compose": {
+      "empty_env": true,
+      "default_profile_excludes_scheduler": true,
+      "opt_in_profile": true,
+      "non_root": "10001:10001",
+      "readonly_root": true,
+      "catalog_readonly": true,
+      "scheduler_private_store_writable": true,
+      "api_store_readonly": true,
+      "restart": "unless-stopped",
+      "healthcheck_disabled": true,
+      "shell_dependency": false
+    },
+    "runtime_log_sha256": "c3e292623c56b00490c5cf28e091725fe7295ea88c130cddae3fb44177abd553"
+  },
+  "isolation": {
+    "context": "orbstack",
+    "network": "none for all target execution; no host ports",
+    "source_toolchain_root": "read-only",
+    "writes": "private bounded scratch/tmpfs only",
+    "env": "explicit allowlist with scratchHOME/tmp/cache; no host credentials/socket mounts",
+    "cpus": 2,
+    "memory": "2GiB",
+    "pids": 256,
+    "file_bytes": 134217728,
+    "nofile": 1024,
+    "disk_tmpfs": "2GiB maximum",
+    "native_wall_seconds": 360,
+    "runtime_test_deadline_seconds": 120,
+    "runtime_parent_seconds": 140,
+    "runtime_uid": "10001:10001",
+    "no_pulls": "local immutable image IDs and COPY-only packaging; no dependency download"
+  },
+  "coverage": {
+    "project": "browser_regression_integration",
+    "generation": "2026-11-12T14:25:07Z",
+    "matched": [
+      "backend/cmd/collectidx/main.go before edits",
+      "backend/cmd/collectidx/main_test.go before edits",
+      "backend/internal/collection/sync.go",
+      "backend/internal/collection/runner.go",
+      "backend/internal/collection/retention.go",
+      "backend/internal/collection/catalog.go",
+      "backend/internal/collection/sync_test.go",
+      "backend/internal/collection/runtime_smoke_test.go"
+    ],
+    "fallback": "new scheduler files and Dockerfile not tracked; scripts/docs excluded; read current source directly; best-effort metadata is not completeness"
+  },
+  "resolved_validation_attempts": [
+    {
+      "error": "cmd/collectidx/main.go:212:20: expected '}', found 'EOF'",
+      "resolution": "An intermediate edited disposable snapshot failed formatting; final fresh immutable source passed format/native/race/vet. No source check was waived."
+    },
+    {
+      "error": "unknown flag: --env-file",
+      "resolution": "Trusted parent Compose client initially used scratchHOME and could not discover its CLI plugin/context; rerendered with explicit orbstack and parent client metadata. Target HOME/env isolation was unchanged."
+    }
+  ],
+  "limits": [
+    "No operator catalog supplied; only synthetic ticker fixture used",
+    "Opt-in live profile was rendered but never started; it may contact Yahoo when explicitly started",
+    "Single-file catalog bind sees in-place writes; restart after host atomic replacement",
+    "No real Yahoo/IDX coverage/freshness or exchange calendar validation",
+    "No systemd/host schedule activation, production uptime or1000-user proof",
+    "Cache generation changes belong to another branch and are not included",
+    "Unchanged frontend/core/API acceptance reused from base reports; no unrelated browser/benchmark rerun",
+    "Original full production Dockerfile recipe remains separate from verified local COPY-only packaging"
+  ],
+  "writing_review": "no-ai-slop and unslop balanced; prose reviewed without changing commands, actual results or uncertainty"
+}
