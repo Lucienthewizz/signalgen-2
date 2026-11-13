@@ -1,0 +1,131 @@
+{
+  "merged_source": "99d94b9df38e306cfb9b82e18c6b70f3c8260341",
+  "checks": {
+    "go-scoped": {
+      "exit_code": 0,
+      "stdout": "ok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/collection\t12.080s\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/cmd/collectidx\t0.004s\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/collection\t19.141s\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/cmd/collectidx\t1.011s\n",
+      "stderr": "",
+      "commands": [
+        "go test ./internal/collection ./cmd/collectidx -count=1",
+        "go test -race ./internal/collection ./cmd/collectidx -count=1",
+        "go vet ./internal/collection ./cmd/collectidx",
+        "gofmt check collector main/tests and scheduler source/tests"
+      ]
+    },
+    "python-preflights": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "test_hooks_and_environment_are_rejected (test_local_runtime.PackagingPreflight.test_hooks_and_environment_are_rejected) ... ok\ntest_only_named_bounded_regular_artifacts (test_local_runtime.PackagingPreflight.test_only_named_bounded_regular_artifacts) ... ok\ntest_recipe_cannot_execute_or_resolve_a_remote_base (test_local_runtime.PackagingPreflight.test_recipe_cannot_execute_or_resolve_a_remote_base) ... ok\ntest_artifacts_reject_links_traversal_missing_and_oversize (test_local_api_stack.LocalStackPreflight.test_artifacts_reject_links_traversal_missing_and_oversize) ... ok\ntest_cleanup_attempts_remaining_resources_after_timeout (test_local_api_stack.LocalStackPreflight.test_cleanup_attempts_remaining_resources_after_timeout) ... ok\ntest_cleanup_preserves_original_failure (test_local_api_stack.LocalStackPreflight.test_cleanup_preserves_original_failure) ... ok\ntest_cleanup_reports_command_and_launch_failures (test_local_api_stack.LocalStackPreflight.test_cleanup_reports_command_and_launch_failures) ... ok\ntest_cleanup_success_is_bounded_and_exactly_scoped (test_local_api_stack.LocalStackPreflight.test_cleanup_success_is_bounded_and_exactly_scoped) ... ok\ntest_runtime_has_no_published_port_or_writable_bind (test_local_api_stack.LocalStackPreflight.test_runtime_has_no_published_port_or_writable_bind) ... ok\n\n----------------------------------------------------------------------\nRan 9 tests in 0.004s\n\nOK\n",
+      "command": "python3 -m unittest -v test_local_runtime test_local_api_stack"
+    },
+    "compose": {
+      "exit_code": 0,
+      "default_scheduler_absent": true,
+      "opt_in_mounts_security_command": true,
+      "activated": false
+    }
+  },
+  "graph": "Transport closed; direct source fallback; no fresh graph coverage claim",
+  "reused_image": "sha256:6341966d32f78ce0adcdb235138a5fce45552bdeb8a9c05c3a0db9493832439b",
+  "compiler_input_equality_to_304e0b4": true,
+  "recipe_helper_compose_equality_to_scheduler": true,
+  "sandbox": {
+    "context": "orbstack",
+    "go_image": "sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+    "python_image": "sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534",
+    "network": "none",
+    "read_only_root_source_modules": true,
+    "uid_gid": "65534:65534",
+    "empty_env_allowlist": true,
+    "no_socket_credentials": true,
+    "caps": "ALL dropped",
+    "no_new_privileges": true,
+    "go_limits": "2CPU/2GiB/256PID/128MiBfile/2GiBscratch/360s child390s parent",
+    "python_limits": "1CPU/128MiB/32PID/8MiBfile/16MiBscratch/20s child30s parent",
+    "cleanup": "only exact recorded own CIDs removed and absence verified"
+  },
+  "date": "2026-11-13",
+  "branch": "frontend/prof-revisions-integration",
+  "review": {
+    "disposition": "No confirmed defect in bounded independently reviewed scheduler scope",
+    "files_read": [
+      "backend/cmd/collectidx/main.go",
+      "backend/cmd/collectidx/main_test.go",
+      "backend/internal/collection/scheduler.go",
+      "backend/internal/collection/scheduler_test.go",
+      "backend/internal/collection/sync.go",
+      "backend/internal/collection/runner.go",
+      "backend/internal/collection/retention.go",
+      "backend/internal/collection/catalog.go",
+      "backend/internal/marketdata/yahoo_finance.go",
+      "docker-compose.local-runtime.yml",
+      "docs/backend/LOCAL_IDX_SCHEDULER.md",
+      "docs/evidence/local-idx-scheduler-20261113.md",
+      "docs/evidence/local-idx-scheduler-20261113.json"
+    ],
+    "exclusions": "reviewer-authored target metrics/UI; unfinished cache; full audit; live operation",
+    "coverage": "Own indexing and exact-path coverage returned Transport closed; direct source fallback. Parent generation 2026-11-13T03:23:32Z is not fresh worktree coverage."
+  },
+  "ancestors": [
+    "8bbada0e47eb61ca66618c48af173d94d03a5d95",
+    "f919f358056014de2741fc8d3259f9f1c8aa9454",
+    "4b2173c4199345770d58cbdcf927bfd3f193fada",
+    "5a560a8c240f40c1ce06075cc59a70542e4c850e",
+    "27298cf0c8354266c8f549339dce2a9a37780140"
+  ],
+  "protected_paths": [
+    "backend/cmd",
+    "backend/core",
+    "backend/internal",
+    "backend/contracts",
+    "backend/contract.go",
+    "backend/go.mod",
+    "backend/go.sum",
+    "backend/openapi.yaml",
+    "frontend/web/src",
+    "frontend/web/package.json",
+    "frontend/web/package-lock.json",
+    "supabase/migrations"
+  ],
+  "only_protected_source_changes": [
+    "backend/cmd/collectidx/main.go",
+    "backend/cmd/collectidx/main_test.go",
+    "backend/internal/collection/scheduler.go",
+    "backend/internal/collection/scheduler_test.go"
+  ],
+  "cleanup_fix_unchanged": true,
+  "compiler_input_count": 355,
+  "compiler_input_hash_map_sha256": "1d673e8427fb1fbbeb7c553f82a264e17a81415b16b9649cfc4b021709f4f2c8",
+  "hash_encoding": "SHA256 of sorted compact JSON path-to-SHA256 map",
+  "image_inspection": {
+    "id": "sha256:6341966d32f78ce0adcdb235138a5fce45552bdeb8a9c05c3a0db9493832439b",
+    "revision": "304e0b4675313b3599f40ad502140493f0cb16ee",
+    "executed_or_rebuilt_here": false
+  },
+  "reused_not_rerun": [
+    "scheduler worker packaged binaries/digests/8 CLI/real 1-minute timer evidence",
+    "262 frontend tests/typecheck/format/build/budgets/six browser suites",
+    "earlier core golden/race/vet",
+    "240-request packaged API/restricted Postgres/mock IDP/native client"
+  ],
+  "not_done": [
+    "fresh image build",
+    "unfinished cache merge/review",
+    "live catalog/Yahoo or host activation",
+    "browser-to-real-API",
+    "full production recipe build",
+    "production uptime or 1000-user proof"
+  ],
+  "static_checks": {
+    "ancestry": "pass",
+    "protected_scope": "pass",
+    "compiler_input_digest": "pass",
+    "writing_review": "no-ai-slop/unslop and embedded humanizer; factual limits retained",
+    "python_ast": "pass",
+    "local_links": "pass after structured file written; initial ordering check identified not-yet-written file",
+    "staged_scope": "three docs/evidence files only; merge inherits only eight scheduler files",
+    "credential_patterns": "no private key or common provider credential patterns found",
+    "whitespace": "git diff --check and staged check pass",
+    "snapshot_cleanup": "exact own temporary source removed"
+  }
+}
