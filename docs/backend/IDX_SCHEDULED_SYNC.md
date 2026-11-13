@@ -37,9 +37,13 @@ The first complete publication must exist before starting this mode. Mount the
 store read-only in the API, with permissions matching its unprivileged user.
 The adapter resolves the current immutable generation per request, supports
 latest candles and historical ranges, and never falls back to live Yahoo.
-The shared provider cache retains its existing TTL (up to five minutes), so
-publication does not instantly invalidate every cached response. Snapshot
-available dates and quality warnings remain visible. An unavailable range
+For `idx_store`, each shared-cache request pins an immutable generation and uses
+its revision in latest/history keys. A newly published generation is visible to
+subsequent requests without waiting for the TTL; in-flight reads and existing
+dataset handles retain their original data. Separate history calls select their
+generations independently. Providers without this snapshot capability retain
+their existing TTL behavior. Snapshot available dates and quality warnings remain
+visible. An unavailable range
 is an explicit error; missing future candles remain unavailable for evaluation.
 
 ## Server timer

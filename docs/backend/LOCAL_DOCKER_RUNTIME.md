@@ -107,10 +107,12 @@ existing prune-only/dry-run flags against an operator-selected store. The writab
 state mount is separate from the API's read-only view. Actual acquisition and
 provider networking are not enabled or verified by this candidate.
 
-There is no automatic Docker schedule or cron dependency. A later authorized
-host scheduler can invoke the one-shot collector, with private durable state and
-existing publication/retention policy. Linux systemd activation is not required
-for the current macOS local-Docker target; no unit was installed or activated.
+The separate opt-in scheduler profile now runs the collector serially without
+the website or a cron dependency. See the [scheduler guide](LOCAL_IDX_SCHEDULER.md)
+for its required catalog, provider networking, private state and retry settings.
+The one-shot collector retains its safe default above. Linux systemd activation
+is not required for the current macOS local-Docker target; no unit or real-provider
+scheduled job was activated by this verification.
 
 ## Verification and cleanup boundaries
 

@@ -1,0 +1,182 @@
+{
+  "product_source": "baf888ac34e7afaa7d8495e4adfc40a4ddc23a9a",
+  "prior_integration": "f748de5251cb5fffc8f874cd7af255782a40eee2",
+  "cache_tip": "989db437def01951abce6aa7b23b2d70ca886f91",
+  "independent_review": "22c1a8ae0cb8c6f77b85790f47fb12a1887dcca5",
+  "image_id": "sha256:d4a008edc07e48837b4784a5e1be1f806bd4b8bc522f6704412719c6506f6d02",
+  "runtime_input": "sha256:f1baf33b1e06c6a7b54f6226cf758785efd2efe99a358c9f613aa906da2077f4",
+  "toolchain": "sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+  "compiler_inputs": 360,
+  "compiler_inputs_digest": "990c459e3b3acede621822386a1f0b577c0471cc151eff609bb0442e1d8a78d2",
+  "artifacts_sha256": {
+    "signalgen-api": "e015d1aa2b9bc1d5facb7a27e9bfb239138b540b325f86ed0fe77a782d14fdcb",
+    "signalgen-admin": "b203d2ed2a52f5a26a91b3bdb1330e30bb9c1d28fd5f9552cbd2f44e295dd257",
+    "signalgen-audit-catalog": "54bcce5e17898149a32e6464ebc9ba107c79572d4e7ef21319dcee662d725ed0",
+    "signalgen-healthcheck": "a6c102760ddfc01596b0376b54e7be4e23258e875bb0211570566c0b10fcd6f9",
+    "signalgen-collect-idx": "f80bac392dd64fce1992ef0a679893267ee79f2e58a3c4702f726d8afe1eae1b",
+    "collection.test": "50c74eeca19380311dc342c5ebe5b22cd55c1e1058d154cb36ce38122781cef8"
+  },
+  "checks": {
+    "go_regression": [
+      "internal/collection",
+      "internal/marketdata",
+      "internal/dataset",
+      "internal/api/tests",
+      "cmd/collectidx",
+      "cmd/api"
+    ],
+    "go_race": [
+      "internal/collection",
+      "internal/marketdata",
+      "internal/dataset",
+      "internal/api/tests"
+    ],
+    "go_vet": [
+      "internal/collection",
+      "internal/marketdata",
+      "internal/dataset",
+      "internal/api/backtests",
+      "internal/api/tests",
+      "cmd/collectidx",
+      "cmd/api"
+    ],
+    "all_go_exit": 0,
+    "python_preflights": 9,
+    "packaging": [
+      "all five packaged binaries byte-match rebuilt artifacts",
+      "non-root runtime",
+      "read-only synthetic catalog",
+      "read-only root and catalog writes rejected",
+      "missing bind source rejected",
+      "compose config with empty env file and synthetic inputs"
+    ],
+    "collector_smoke": "=== RUN   TestCollectorRuntimeSmoke\n    runtime_smoke_test.go:90: PASS: compiled collector help, synthetic validate-only, incremental publications, read-only store and prune dry-run; no Yahoo\n--- PASS: TestCollectorRuntimeSmoke (0.07s)\nPASS\n",
+    "autonomous_timer": "=== RUN   TestSchedulerAutonomousTimerSmoke\n    scheduler_test.go:252: PASS: production scheduler ran twice autonomously with real one-minute timer, 1 synthetic provider fetches, no website/API/Yahoo\n--- PASS: TestSchedulerAutonomousTimerSmoke (60.03s)\nPASS\n",
+    "product_source_unchanged_after_image": true,
+    "protected_paths_equal_25ea600": [
+      "frontend/web/src",
+      "backend/core",
+      "backend/internal/api",
+      "backend/internal/dataset",
+      "supabase/migrations"
+    ]
+  },
+  "api_replay": {
+    "result": "pass",
+    "schema_check": "schema test passed: 14 migrations, 3 policy checks",
+    "http_assertions": 240,
+    "http_status_counts": {
+      "200": 103,
+      "201": 55,
+      "401": 1,
+      "403": 5,
+      "404": 58,
+      "429": 2,
+      "409": 3,
+      "422": 2,
+      "204": 11
+    },
+    "screening": {
+      "batches": 3,
+      "examples": [
+        {
+          "symbol": "AAAA.JK",
+          "timestamp": "2026-01-20T00:00:00Z",
+          "signal_type": "BUY"
+        },
+        {
+          "symbol": "AAAC.JK",
+          "timestamp": "2026-01-20T00:00:00Z",
+          "signal_type": "BUY"
+        },
+        {
+          "symbol": "AAAE.JK",
+          "timestamp": "2026-01-20T00:00:00Z",
+          "signal_type": "BUY"
+        },
+        {
+          "symbol": "AAAG.JK",
+          "timestamp": "2026-01-20T00:00:00Z",
+          "signal_type": "BUY"
+        },
+        {
+          "symbol": "AAAI.JK",
+          "timestamp": "2026-01-20T00:00:00Z",
+          "signal_type": "BUY"
+        },
+        {
+          "symbol": "AAAK.JK",
+          "timestamp": "2026-01-20T00:00:00Z",
+          "signal_type": "BUY"
+        },
+        {
+          "symbol": "AAAM.JK",
+          "timestamp": "2026-01-20T00:00:00Z",
+          "signal_type": "BUY"
+        },
+        {
+          "symbol": "AAAO.JK",
+          "timestamp": "2026-01-20T00:00:00Z",
+          "signal_type": "BUY"
+        },
+        {
+          "symbol": "AAAQ.JK",
+          "timestamp": "2026-01-20T00:00:00Z",
+          "signal_type": "BUY"
+        },
+        {
+          "symbol": "AAAS.JK",
+          "timestamp": "2026-01-20T00:00:00Z",
+          "signal_type": "BUY"
+        },
+        {
+          "symbol": "AAAU.JK",
+          "timestamp": "2026-01-20T00:00:00Z",
+          "signal_type": "BUY"
+        },
+        {
+          "symbol": "AAAW.JK",
+          "timestamp": "2026-01-20T00:00:00Z",
+          "signal_type": "BUY"
+        }
+      ],
+      "from": "2026-01-20",
+      "matched_symbols": 12,
+      "provider": "yahoo_finance",
+      "rule_hash": "sha256:042fad7ed869c3f7ecb215af2d090b173a133aed5925a457842734af33171678",
+      "stocks": 23,
+      "to": "2026-01-23",
+      "unmatched_symbols": 11
+    },
+    "persisted_grants": 46,
+    "runtime_role": "signalgen_api",
+    "image_id": "sha256:d4a008edc07e48837b4784a5e1be1f806bd4b8bc522f6704412719c6506f6d02",
+    "source_base": "baf888ac34e7afaa7d8495e4adfc40a4ddc23a9a",
+    "execution": "bounded network-none shared-loopback namespace; no host ports; read-only roots/source/toolchain/store; private tmpfs; no ambient env/credentials",
+    "native_outcomes": "passed for all matching stocks",
+    "browser": "needs-validation: no cached isolated browser runtime with required controls",
+    "harness_adaptations": [
+      "private validation copy; repository helper unchanged",
+      "ROOT points at candidate checkout",
+      "API set to new immutable image",
+      "BASE and expected image revision set to product_source"
+    ],
+    "harness_helper_sha256": "9d44ac376d2750e3f6fa1c84863ae7fb532e5ba6648865bac3c054c92c546bf1",
+    "harness_source_digest": "6d1841881b671f710be4dea2edef2b812a27a823f99a97e78ebec34c00be5933"
+  },
+  "isolation": {
+    "network": "none; API stack shares only private loopback namespace",
+    "source_root_toolchain": "read-only",
+    "environment": "explicit safe child allowlist, scratch HOME/TMPDIR/cache",
+    "go_resources": "2 CPUs,2GiB RAM,256PIDs,512MiB/file,2GiB scratch,420s wall",
+    "python_resources": "1CPU,128MiB RAM,32PIDs,8MiB/file,16MiB scratch,20s child deadline",
+    "timer_resources": "2CPUs,1536MiB RAM,128PIDs,128MiB/file,256MiB scratch,90s child deadline"
+  },
+  "limits": [
+    "synthetic market and mock identity upstream; actual packaged API/private scoring/Postgres",
+    "no browser-real-API or live Supabase/Yahoo/IDX proof",
+    "prior frontend262 and six browser suites reused; product frontend/core unchanged",
+    "no performance benchmark rerun or1000user capacity claim",
+    "no clean original production Dockerfile build or live scheduled job"
+  ]
+}
