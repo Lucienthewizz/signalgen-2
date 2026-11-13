@@ -1,0 +1,69 @@
+/* Original feature artwork, with one interaction sequence per drawing. */
+@media (prefers-reduced-motion: no-preference) {
+  .feature-gallery__item:is(:hover, :focus-visible) .figure-wave {
+    stroke-dasharray: 180;
+    animation: feature-wave-draw 1100ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .feature-gallery__item:is(:hover, :focus-visible) .figure-beacon {
+    animation: feature-beacon 1100ms ease-out both;
+  }
+  .feature-gallery__item:is(:hover, :focus-visible) .figure-rule-dots circle {
+    animation: feature-contact 900ms ease-out both;
+  }
+  .feature-gallery__item:is(:hover, :focus-visible)
+    .figure-rule-dots
+    circle:nth-child(2n) {
+    animation-delay: 120ms;
+  }
+  .feature-gallery__item:is(:hover, :focus-visible)
+    .figure-rule-dots
+    circle:nth-child(3n) {
+    animation-delay: 240ms;
+  }
+  .feature-gallery__item:is(:hover, :focus-visible) .figure-tick {
+    stroke-dasharray: 55;
+    animation: feature-wave-draw 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .feature-gallery__item:is(:hover, :focus-visible) .figure-device--front {
+    transition-delay: 80ms;
+  }
+}
+@keyframes feature-wave-draw {
+  from {
+    stroke-dashoffset: 180;
+    opacity: 0.35;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+@keyframes feature-beacon {
+  0% {
+    opacity: 0.3;
+  }
+  45% {
+    opacity: 1;
+    filter: drop-shadow(0 0 4px currentColor);
+  }
+  100% {
+    opacity: 1;
+    filter: none;
+  }
+}
+@keyframes feature-contact {
+  from {
+    opacity: 0.15;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .feature-gallery__item .feature-figure__art > *,
+  .feature-gallery__item .feature-gallery__depth {
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}

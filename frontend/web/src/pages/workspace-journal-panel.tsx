@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { JournalPriceChart } from "@/components/journal-price-chart";
+import { JournalBento } from "@/components/journal-bento";
 import {
   Empty,
   EmptyHeader,
@@ -47,7 +47,6 @@ import { downloadCsv } from "@/lib/csv";
 import {
   emptyJournalFilters,
   filterJournal,
-  journalSummary,
   journalCsvRows,
 } from "@/lib/journal-explorer";
 
@@ -102,7 +101,6 @@ export function JournalPanel({
     () => filterJournal(items, filters),
     [items, filters],
   );
-  const summary = useMemo(() => journalSummary(filtered), [filtered]);
   const rules = useMemo(
     () =>
       [
@@ -482,7 +480,7 @@ export function JournalPanel({
             </div>
           </div>
           {exportNotice && <p role="status">{exportNotice}</p>}
-          <JournalPriceChart
+          <JournalBento
             items={filtered}
             onSelectDay={(day) => {
               setFilters((current) => ({ ...current, from: day, to: day }));
@@ -491,45 +489,6 @@ export function JournalPanel({
               setExportNotice("");
             }}
           />
-          <dl
-            className="journal-explorer-summary"
-            aria-label="Filtered signal summary"
-          >
-            <div>
-              <dt>Saved signals</dt>
-              <dd>{summary.total}</dd>
-            </div>
-            <div data-signal="BUY">
-              <dt>BUY</dt>
-              <dd>{summary.buy}</dd>
-            </div>
-            <div data-signal="SELL">
-              <dt>SELL</dt>
-              <dd>{summary.sell}</dd>
-            </div>
-            <div>
-              <dt>Unspecified</dt>
-              <dd>{summary.other}</dd>
-            </div>
-            <div>
-              <dt>Stocks / rules</dt>
-              <dd>
-                {summary.stocks} / {summary.rules}
-              </dd>
-            </div>
-          </dl>
-          <p className="screening-journal__note">
-            Most frequent stock:{" "}
-            {summary.topStock
-              ? `${summary.topStock[0].replace(/\.JK$/, "")} (${summary.topStock[1]})`
-              : "—"}
-            . Most frequent rule:{" "}
-            {summary.topRule
-              ? `${summary.topRule[1].name} (${summary.topRule[1].count})`
-              : "—"}
-            . Counts reflect the current filters, not returns or trade
-            performance.
-          </p>
         </>
       )}
       {error && (

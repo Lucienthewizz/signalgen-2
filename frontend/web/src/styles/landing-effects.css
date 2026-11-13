@@ -1,0 +1,53 @@
+.landing-shell .landing-content,
+.landing-shell .landing-product-flow,
+.landing-shell .landing-stage {
+  background: transparent;
+}
+.landing-shell .market-hero,
+.landing-shell .landing-product-flow {
+  position: relative;
+  isolation: isolate;
+}
+.landing-shell .market-hero {
+  background: #010907;
+}
+.landing-shell .market-hero::before,
+.landing-shell .market-hero::after {
+  display: none;
+}
+.landing-background {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.landing-background--hero {
+  overflow: hidden;
+  background: radial-gradient(ellipse at 75% 45%, #064c352e, transparent 70%);
+}
+.landing-background--hero > .ghost-fibers-container {
+  mask-image: linear-gradient(90deg, #0005, #000 70%);
+}
+.landing-background--ascii {
+  overflow: clip;
+  background: #010907;
+}
+.landing-background--ascii > .gradient-ascii-container {
+  position: sticky;
+  top: 82px;
+  height: calc(100svh - 82px);
+  opacity: 0.55;
+  filter: brightness(0.6);
+}
+html[data-theme="light"] .landing-shell .market-hero,
+html[data-theme="light"] .landing-background--ascii {
+  background: #f5faf7;
+}
+html[data-theme="light"]
+  .landing-background--ascii
+  > .gradient-ascii-container {
+  opacity: 0.3;
+  filter: none;
+}
+/* Keep the headline available immediately while the shader initializes. */
+.landing-shell .market-hero__copy { animation: none; }

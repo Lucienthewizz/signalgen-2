@@ -812,9 +812,11 @@ async (page) => {
     if(route==='home'){
       await page.emulateMedia({reducedMotion:'no-preference'});
       await page.locator('.market-hero').hover();
-      if(!await page.locator('.market-hero .trace-line').evaluate(el=>getComputedStyle(el).animationName.includes('market-hover-wave')))throw Error('Hero hover wave missing');
+      if(await page.locator('.market-hero__chart, .signal-lattice').count())throw Error('Old landing charts remain');
+      if(await page.locator('.landing-background canvas').count()!==2)throw Error('Landing backgrounds are missing');
       await page.emulateMedia({reducedMotion:'reduce'});
-      if(!await page.locator('.market-hero .trace-line').evaluate(el=>getComputedStyle(el).animationName==='none'))throw Error('Hero wave ignores reduced motion');
+      await page.locator('.gradient-ascii-canvas').waitFor();
+      if(await page.locator('.pricing-plan').count()!==3)throw Error('Original pricing cards are missing');
     }
     if (!family.includes(route === "home" ? "Manrope Variable" : "Saira Variable")) throw Error(`Public route font mismatch: ${route} ${family}`);
     if (await page.locator(".auth-layout").count() && !await page.locator(".auth-layout").evaluate(el => getComputedStyle(el).backgroundImage.includes("gradient"))) throw Error(`Auth surface gradient missing: ${route}`);

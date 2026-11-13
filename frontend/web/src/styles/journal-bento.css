@@ -1,0 +1,121 @@
+.journal-bento {
+  min-width: 0;
+}
+.journal-bento .magic-bento {
+  grid-auto-rows: minmax(190px, auto) !important;
+}
+.journal-bento .magic-bento__card {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+.journal-bento .magic-bento__content {
+  justify-content: flex-start;
+  padding: 22px;
+  gap: 0;
+}
+.journal-bento h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 20px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--muted);
+}
+.journal-bento h3 svg {
+  width: 17px;
+  height: 17px;
+  color: var(--green);
+}
+.journal-bento__stat > strong {
+  display: block;
+  font-size: clamp(25px, 3vw, 38px);
+  font-weight: 650;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.journal-bento__stat > strong span {
+  color: var(--muted);
+  font-size: 24px;
+}
+.journal-bento__stat > .journal-bento__rule {
+  font-size: 20px;
+  line-height: 1.45;
+}
+.journal-bento p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  margin: 14px 0 0;
+}
+.journal-bento .journal-price-chart {
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.journal-bento .journal-price-chart > header {
+  gap: 14px;
+}
+.journal-bento .journal-price-chart h2 {
+  font-size: 17px;
+}
+.journal-bento__bar {
+  display: flex;
+  width: 100%;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--line);
+  margin-bottom: 18px;
+}
+.journal-bento__bar i {
+  background: var(--green);
+}
+.journal-bento__bar i:nth-child(2) {
+  background: var(--danger);
+}
+.journal-bento__bar i:last-child {
+  background: var(--muted);
+}
+.journal-bento__signals dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+.journal-bento__signals dl > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+.journal-bento__signals dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.journal-bento__signals dt svg {
+  width: 15px;
+  height: 15px;
+}
+.journal-bento__signals dd {
+  margin: 0;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 480px) {
+  .journal-bento .magic-bento__content {
+    padding: 18px;
+  }
+  .journal-bento .journal-price-chart__canvas {
+    grid-template-rows: 180px auto;
+  }
+}
+.journal-bento .magic-bento__card {
+  user-select: text;
+  -webkit-user-select: text;
+}

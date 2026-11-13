@@ -78,6 +78,8 @@ async (page) => {
   if ((await rows.count()) !== 25) throw Error("Initial page is not bounded");
   const chart = page.getByRole("region", { name: "Screening price history", exact: true });
   await chart.waitFor();
+  if (await page.locator(".journal-bento .magic-bento__card").count() !== 6) throw Error("Journal overview must contain six data cards");
+  if (!(await page.locator(".journal-bento").innerText()).includes("Most used rule")) throw Error("Journal overview is missing rule information");
   await chart.getByRole("combobox", {name: "Chart stock", exact: true}).click();
   await page.getByRole("option", {name: "AAPL · US", exact: true}).click();
   if (await chart.locator(".journal-price-chart__point").count() !== 1 || await chart.locator("polyline").count()) throw Error("Single snapshot should show one real price point");
@@ -183,6 +185,9 @@ async (page) => {
         document.documentElement.dataset.theme = theme;
         document.documentElement.classList.toggle("dark", theme === "dark");
       }, theme);
+      await page.locator(".journal-bento").scrollIntoViewIfNeeded();
+      const clipped = await page.locator(".journal-bento .magic-bento__card").evaluateAll(cards => cards.some(card => card.scrollHeight > card.clientHeight + 2 || card.scrollWidth > card.clientWidth + 2));
+      if (clipped) throw Error(`Bento content clipped at ${width}px in ${theme}`);
       await page.locator("#journal-search").scrollIntoViewIfNeeded();
       await page.screenshot({
         path: `output/playwright/journal-explorer-${width}-${theme}.png`,
