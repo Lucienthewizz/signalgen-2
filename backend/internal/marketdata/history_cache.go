@@ -18,7 +18,7 @@ type HistoryProvider interface {
 // Range queries share the same bounded cache/flight budget as screening. The
 // full window is part of the key; latest-100 screening entries cannot satisfy it.
 func (provider *CachedProvider) DailyHistory(ctx context.Context, instrument universe.Instrument, from, to time.Time) (History, error) {
-	upstream, ok := provider.upstream.(HistoryProvider)
+	_, ok := provider.upstream.(HistoryProvider)
 	if !ok {
 		return History{}, ErrHistoryUnavailable
 	}
@@ -28,7 +28,15 @@ func (provider *CachedProvider) DailyHistory(ctx context.Context, instrument uni
 	if err := ctx.Err(); err != nil {
 		return History{}, err
 	}
-	key := fmt.Sprintf("history\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s", instrument.Symbol, instrument.ProviderSymbol, instrument.Exchange, instrument.Currency, from.UTC().Format(time.RFC3339), to.UTC().Format(time.RFC3339))
+	view, revision, err := provider.snapshot(ctx)
+	if err != nil {
+		return History{}, err
+	}
+	upstream, ok := view.(HistoryProvider)
+	if !ok {
+		return History{}, ErrHistoryUnavailable
+	}
+	key := revision + "\x00" + fmt.Sprintf("history\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s", instrument.Symbol, instrument.ProviderSymbol, instrument.Exchange, instrument.Currency, from.UTC().Format(time.RFC3339Nano), to.UTC().Format(time.RFC3339Nano))
 	provider.mu.Lock()
 	provider.pruneExpiredLocked()
 	if entry, ok := provider.entries[key]; ok {
