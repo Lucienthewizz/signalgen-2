@@ -1,11 +1,57 @@
 """Trusted parser/preflight checks; never starts Docker or reads personal env."""
 import io
+import contextlib
+import subprocess
 import tarfile
 import unittest
-from verify_local_api_stack import API, bounded, unpack
+from unittest.mock import patch
+from verify_local_api_stack import API, DOCKER, bounded, cleanup_containers, unpack
 
 
 class LocalStackPreflight(unittest.TestCase):
+    def test_cleanup_attempts_remaining_resources_after_timeout(self):
+        names = ["own-pg", "own-api", "own-verify"]
+        with patch("verify_local_api_stack.subprocess.run", side_effect=[
+            subprocess.TimeoutExpired("docker", 20), None, None,
+        ]) as remove, contextlib.redirect_stderr(io.StringIO()) as errors:
+            with self.assertRaisesRegex(RuntimeError, "own-verify"):
+                cleanup_containers(names)
+        self.assertEqual([call.args[0] for call in remove.call_args_list], [
+            DOCKER + ["rm", "-f", name] for name in reversed(names)
+        ])
+        self.assertIn("TimeoutExpired", errors.getvalue())
+
+    def test_cleanup_reports_command_and_launch_failures(self):
+        with patch("verify_local_api_stack.subprocess.run", side_effect=[
+            subprocess.CalledProcessError(1, "docker"), OSError("unavailable"), None,
+        ]) as remove, contextlib.redirect_stderr(io.StringIO()) as errors:
+            with self.assertRaises(RuntimeError):
+                cleanup_containers(["own-pg", "own-api", "own-verify"])
+        self.assertEqual(remove.call_count, 3)
+        self.assertIn("own-verify (CalledProcessError)", errors.getvalue())
+        self.assertIn("own-api (OSError)", errors.getvalue())
+
+    def test_cleanup_preserves_original_failure(self):
+        original = ValueError("original stack failure")
+        with patch("verify_local_api_stack.subprocess.run", side_effect=[
+            subprocess.TimeoutExpired("docker", 20), None,
+        ]) as remove, contextlib.redirect_stderr(io.StringIO()) as errors:
+            with self.assertRaises(ValueError) as raised:
+                try:
+                    raise original
+                finally:
+                    cleanup_containers(["own-pg", "own-api"])
+        self.assertIs(raised.exception, original)
+        self.assertEqual(remove.call_count, 2)
+        self.assertIn("own-api", errors.getvalue())
+
+    def test_cleanup_success_is_bounded_and_exactly_scoped(self):
+        with patch("verify_local_api_stack.subprocess.run") as remove:
+            cleanup_containers(["own-pg"])
+        remove.assert_called_once_with(DOCKER + ["rm", "-f", "own-pg"],
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                      timeout=20, check=True)
+
     def test_artifacts_reject_links_traversal_missing_and_oversize(self):
         for name, kind, size in [("../main", tarfile.REGTYPE, 1),
                                  ("main", tarfile.SYMTYPE, 0),

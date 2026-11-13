@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import selectors
+import sys
 import tarfile
 import tempfile
 import time
@@ -86,6 +87,23 @@ def bounded(name, image, mounts=(), network="none", user="10001:10001", memory="
     for src, dst in mounts:
         args += ["--mount", f"type=bind,src={src},dst={dst},readonly"]
     return args + [image]
+
+
+def cleanup_containers(names):
+    """Attempt every owned removal and preserve any original stack failure."""
+    original_failure = sys.exc_info()[0] is not None
+    failures = []
+    for name in reversed(names):
+        try:
+            subprocess.run(DOCKER + ["rm", "-f", name], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=20, check=True)
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as error:
+            failures.append(f"{name} ({type(error).__name__})")
+    if failures:
+        message = "Container cleanup incomplete: " + ", ".join(failures)
+        print(message, file=sys.stderr)
+        if not original_failure:
+            raise RuntimeError(message)
 
 
 def run():
@@ -220,8 +238,7 @@ exec postgres -D /scratch/pgdata -h 127.0.0.1 -k /scratch -c shared_buffers=32MB
         print(err.stderr.decode(errors="replace")[-4000:],file=__import__('sys').stderr)
         raise
     finally:
-        for name in reversed(names):
-            subprocess.run(DOCKER + ["rm","-f",name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=20)
+        cleanup_containers(names)
 
 
 if __name__ == "__main__":
