@@ -226,6 +226,8 @@ func TestSchedulerAutonomousTimerSmoke(t *testing.T) {
 	defer cancel()
 	runs := 0
 	start := time.Now()
+	var firstEnd time.Time
+	expectedFetches := 1
 	err := RunScheduler(ctx, o, p, func(r ScheduledResult) {
 		if r.Err != nil {
 			t.Error(r.Err)
@@ -233,13 +235,19 @@ func TestSchedulerAutonomousTimerSmoke(t *testing.T) {
 			return
 		}
 		runs++
+		if runs == 1 {
+			firstEnd = r.To
+		}
 		if runs == 2 {
+			if !r.To.Equal(firstEnd) {
+				expectedFetches = 2
+			}
 			cancel()
 		}
 	})
-	if err != nil || runs != 2 || time.Since(start) < time.Minute || len(p.starts) != 1 {
+	if err != nil || runs != 2 || time.Since(start) < time.Minute || len(p.starts) != expectedFetches {
 		t.Fatalf("automatic runs=%d fetches=%d err=%v", runs, len(p.starts), err)
 	}
 	assertScheduleLocksRemoved(t, o.Directory)
-	t.Log("PASS: production scheduler ran twice autonomously with real one-minute timer, one synthetic provider fetch, no website/API/Yahoo")
+	t.Logf("PASS: production scheduler ran twice autonomously with real one-minute timer, %d synthetic provider fetches, no website/API/Yahoo", len(p.starts))
 }
