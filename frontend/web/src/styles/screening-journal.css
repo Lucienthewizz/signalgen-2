@@ -105,139 +105,155 @@
   padding: 1.25rem;
 }
 
-.journal-activity {
+.journal-price-chart {
   min-width: 0;
-  margin-top: 20px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
-  padding: 20px;
+  padding: 20px 0;
+  border-block: 1px solid var(--line);
 }
-.journal-activity > header {
+.journal-price-chart > header,
+.journal-price-chart > footer {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px 24px;
+  gap: 16px 24px;
 }
-.journal-activity h2 {
+.journal-price-chart h2 {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: var(--text);
   font-size: 18px;
+  color: var(--text);
 }
-.journal-activity h2 svg {
+.journal-price-chart h2 svg {
   width: 18px;
   height: 18px;
   color: var(--green);
 }
-.journal-activity p {
+.journal-price-chart p {
   margin: 6px 0 0;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.6;
 }
-.journal-activity__legend {
-  display: flex;
-  gap: 14px;
-  padding: 0;
-  margin: 0;
-  flex-wrap: wrap;
-  list-style: none;
+.journal-price-chart [data-slot="select-trigger"] {
+  min-width: 160px;
+  min-height: 44px;
 }
-.journal-activity__legend li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
+.journal-price-chart__canvas {
+  display: grid;
+  grid-template-columns: minmax(48px, auto) minmax(0, 1fr);
+  grid-template-rows: 220px auto;
+  gap: 8px 16px;
+  margin: 24px 4px 20px 0;
 }
-.journal-activity__legend i {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: currentColor;
-}
-.journal-activity__legend [data-signal="MATCH"] {
-  color: var(--muted);
-}
-.journal-activity__scroll {
-  overflow-x: auto;
-  margin-top: 24px;
-  padding: 4px;
-}
-.journal-activity__plot {
-  display: flex;
-  gap: 8px;
-  min-height: 192px;
-  border-bottom: 1px solid var(--line);
-}
-.journal-activity .journal-activity__day {
+.journal-price-chart__scale {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  flex: 1 0 48px;
-  min-width: 48px;
-  min-height: 192px;
-  padding: 8px 4px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
+  justify-content: space-between;
+  padding-block: 4px;
   color: var(--muted);
-  font: inherit;
-  cursor: pointer;
-}
-.journal-activity__column {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-direction: column;
-  height: 144px;
-  width: 100%;
-}
-.journal-activity__stack {
-  display: flex;
-  flex-direction: column-reverse;
-  flex-shrink: 0;
-  width: min(100%, 64px);
-  border-radius: 4px 4px 0 0;
-  overflow: hidden;
-}
-.journal-activity__total {
-  margin-bottom: 6px;
-  color: var(--text);
   font-size: 12px;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.journal-activity__stack [data-direction="buy"] {
-  background: var(--green);
+.journal-price-chart__plot {
+  position: relative;
+  min-width: 0;
 }
-.journal-activity__stack [data-direction="sell"] {
-  background: var(--danger);
+.journal-price-chart__plot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
-.journal-activity__stack [data-direction="other"] {
-  background: var(--muted);
+.journal-price-chart__grid {
+  stroke: var(--line);
+  vector-effect: non-scaling-stroke;
 }
-.journal-activity__day time {
-  white-space: nowrap;
+.journal-price-chart__line {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+.journal-price-chart .journal-price-chart__point {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.journal-price-chart__point > span {
+  width: 8px;
+  height: 8px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: var(--surface);
+}
+.journal-price-chart__point[data-signal="BUY"] {
+  color: var(--green);
+}
+.journal-price-chart__point[data-signal="SELL"] {
+  color: var(--danger);
+}
+.journal-price-chart__point[aria-pressed="true"] > span,
+.journal-price-chart__point:hover > span {
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+}
+.journal-price-chart__point:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 0;
+}
+.journal-price-chart__dates {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.journal-price-chart footer {
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+.journal-price-chart dl {
+  display: flex;
+  gap: 16px 36px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+.journal-price-chart dt {
+  color: var(--muted);
   font-size: 12px;
 }
-.journal-activity .journal-activity__day:hover {
-  background: var(--accent-surface);
+.journal-price-chart dd {
+  margin: 4px 0 0;
   color: var(--text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
 }
-.journal-activity__day:focus-visible {
-  outline: 2px solid var(--green);
-  outline-offset: -2px;
-}
-.journal-activity p.journal-activity__hint {
-  margin-top: 12px;
-}
-.journal-activity p.journal-activity__empty {
+.journal-price-chart p.journal-price-chart__empty {
   padding-block: 24px;
+}
+@media (max-width: 480px) {
+  .journal-price-chart__canvas {
+    grid-template-rows: 180px auto;
+    gap: 8px;
+  }
 }
 .screening-journal__intro h1 {
   margin: 0;

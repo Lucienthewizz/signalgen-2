@@ -55,37 +55,12 @@
   font-size: 13px;
   line-height: 1.5;
 }
-.heatmap-popover__title {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 8px;
-}
-.heatmap-popover__title > h2 {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.heatmap-popover__title > button {
-  flex-shrink: 0;
-}
 .heatmap-popover [data-slot="button"] {
   min-height: 44px;
 }
-.heatmap-popover dl {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 16px 0;
-}
-.heatmap-popover dt,
 .heatmap-popover p {
   color: var(--muted);
   font-size: 12px;
-}
-.heatmap-popover dd {
-  margin: 4px 0 0;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
 }
 .stock-heatmap__heading > div > span {
   display: block;

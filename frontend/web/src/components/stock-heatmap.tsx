@@ -1,12 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import {
-  Check,
-  ArrowUpRight,
-  ArrowDownRight,
-  Minus,
-  Info,
-  X,
-} from "lucide-react";
+import { Check, ArrowUpRight, ArrowDownRight, Minus, Info } from "lucide-react";
 import { Popover } from "@base-ui/react/popover";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -169,114 +162,53 @@ export function StockHeatmap({
                 ? ArrowUpRight
                 : ArrowDownRight;
           return (
-            <Popover.Root key={stock.ticker}>
-              <Popover.Trigger
-                openOnHover
-                delay={150}
-                closeDelay={100}
-                render={<button type="button" />}
-                type="button"
-                className="stock-heatmap__tile"
-                data-tone={tone}
-                data-dense={
-                  Math.min(
-                    (box.width * width) / 100,
-                    (box.height * height) / 100,
-                  ) < 100
-                    ? "true"
-                    : undefined
-                }
-                data-compact={
-                  (box.width * width) / 100 < 140 ||
-                  (box.height * height) / 100 < 180
-                    ? "true"
-                    : undefined
-                }
-                aria-pressed={active}
-                onClick={() => onSelect(stock.ticker)}
-                aria-label={`${stock.ticker}, ${stock.name}, ${stock.change == null ? "price change unavailable" : `${formatSignedPercent(stock.change)} open to close`}${stock.stale ? ", older snapshot" : ""}`}
-                style={{
-                  left: `${box.x}%`,
-                  top: `${box.y}%`,
-                  width: `${box.width}%`,
-                  height: `${box.height}%`,
-                }}
-              >
-                {active && (
-                  <Check
-                    className="stock-heatmap__selected"
-                    aria-hidden="true"
-                  />
-                )}
-                <span className="stock-heatmap__mark" aria-hidden="true">
-                  {stock.icon}
-                </span>
-                <strong>{stock.ticker}</strong>
-                <span className="stock-heatmap__change">
-                  {stock.change != null && <ChangeIcon aria-hidden="true" />}
-                  {formatSignedPercent(stock.change)}
-                </span>
-                <small>{stock.name}</small>
-                {stock.change == null ? (
-                  <span className="stock-heatmap__note">No price data</span>
-                ) : stock.stale ? (
-                  <span className="stock-heatmap__note">Older snapshot</span>
-                ) : null}
-              </Popover.Trigger>
-              <Popover.Portal>
-                <Popover.Positioner
-                  className="heatmap-popover-positioner"
-                  sideOffset={8}
-                  collisionPadding={12}
-                >
-                  <Popover.Popup
-                    className="heatmap-popover"
-                    data-preview={preview || undefined}
-                  >
-                    <div className="heatmap-popover__title">
-                      <Popover.Title>
-                        {stock.ticker} · {stock.name}
-                      </Popover.Title>
-                      <Popover.Close
-                        render={
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Close stock details"
-                          />
-                        }
-                      >
-                        <X />
-                      </Popover.Close>
-                    </div>
-                    <Popover.Description>
-                      {preview
-                        ? "Simulation only · not market data"
-                        : "Latest screening candle · not live"}
-                    </Popover.Description>
-                    <dl>
-                      <div>
-                        <dt>Open</dt>
-                        <dd>{stock.open?.toLocaleString("en-GB") ?? "—"}</dd>
-                      </div>
-                      <div>
-                        <dt>Close</dt>
-                        <dd>{stock.close?.toLocaleString("en-GB") ?? "—"}</dd>
-                      </div>
-                      <div>
-                        <dt>Change</dt>
-                        <dd>{formatSignedPercent(stock.change)}</dd>
-                      </div>
-                    </dl>
-                    <p>
-                      {stock.timestamp ??
-                        "No snapshot. Screen this universe to fetch data."}
-                      {stock.stale ? " · Older snapshot" : ""}
-                    </p>
-                  </Popover.Popup>
-                </Popover.Positioner>
-              </Popover.Portal>
-            </Popover.Root>
+            <button
+              key={stock.ticker}
+              type="button"
+              className="stock-heatmap__tile"
+              data-tone={tone}
+              data-dense={
+                Math.min(
+                  (box.width * width) / 100,
+                  (box.height * height) / 100,
+                ) < 100
+                  ? "true"
+                  : undefined
+              }
+              data-compact={
+                (box.width * width) / 100 < 140 ||
+                (box.height * height) / 100 < 180
+                  ? "true"
+                  : undefined
+              }
+              aria-pressed={active}
+              onClick={() => onSelect(stock.ticker)}
+              aria-label={`${stock.ticker}, ${stock.name}, ${stock.change == null ? "price change unavailable" : `${formatSignedPercent(stock.change)} open to close`}${stock.stale ? ", older snapshot" : ""}`}
+              style={{
+                left: `${box.x}%`,
+                top: `${box.y}%`,
+                width: `${box.width}%`,
+                height: `${box.height}%`,
+              }}
+            >
+              {active && (
+                <Check className="stock-heatmap__selected" aria-hidden="true" />
+              )}
+              <span className="stock-heatmap__mark" aria-hidden="true">
+                {stock.icon}
+              </span>
+              <strong>{stock.ticker}</strong>
+              <span className="stock-heatmap__change">
+                {stock.change != null && <ChangeIcon aria-hidden="true" />}
+                {formatSignedPercent(stock.change)}
+              </span>
+              <small>{stock.name}</small>
+              {stock.change == null ? (
+                <span className="stock-heatmap__note">No price data</span>
+              ) : stock.stale ? (
+                <span className="stock-heatmap__note">Older snapshot</span>
+              ) : null}
+            </button>
           );
         })}
       </nav>

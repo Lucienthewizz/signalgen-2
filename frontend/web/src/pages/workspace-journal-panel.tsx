@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { JournalActivityChart } from "@/components/journal-activity-chart";
+import { JournalPriceChart } from "@/components/journal-price-chart";
 import {
   Empty,
   EmptyHeader,
@@ -482,6 +482,15 @@ export function JournalPanel({
             </div>
           </div>
           {exportNotice && <p role="status">{exportNotice}</p>}
+          <JournalPriceChart
+            items={filtered}
+            onSelectDay={(day) => {
+              setFilters((current) => ({ ...current, from: day, to: day }));
+              setPage(0);
+              setDetailId(null);
+              setExportNotice("");
+            }}
+          />
           <dl
             className="journal-explorer-summary"
             aria-label="Filtered signal summary"
@@ -509,15 +518,6 @@ export function JournalPanel({
               </dd>
             </div>
           </dl>
-          <JournalActivityChart
-            items={filtered}
-            onSelectDay={(day) => {
-              setFilters((current) => ({ ...current, from: day, to: day }));
-              setPage(0);
-              setDetailId(null);
-              setExportNotice("");
-            }}
-          />
           <p className="screening-journal__note">
             Most frequent stock:{" "}
             {summary.topStock

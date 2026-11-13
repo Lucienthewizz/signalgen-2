@@ -86,28 +86,44 @@ export function journalSummary(items: JournalItem[]) {
   };
 }
 
-export function journalActivity(items: JournalItem[]) {
-  const days = new Map<
+export function journalPriceSeries(items: JournalItem[]) {
+  const series = new Map<
     string,
-    { day: string; buy: number; sell: number; other: number; total: number }
+    {
+      key: string;
+      symbol: string;
+      market: string;
+      currency: string;
+      points: JournalItem[];
+    }
   >();
-  for (const { data } of items) {
-    const day = screeningDay(data.screened_at);
-    if (!day) continue;
-    const counts = days.get(day) ?? {
-      day,
-      buy: 0,
-      sell: 0,
-      other: 0,
-      total: 0,
+  for (const item of items) {
+    const { data } = item;
+    if (
+      !Number.isFinite(data.price) ||
+      data.price <= 0 ||
+      !screeningDay(data.screened_at)
+    )
+      continue;
+    const key = `${data.market}:${data.symbol}`;
+    const stock = series.get(key) ?? {
+      key,
+      symbol: data.symbol,
+      market: data.market,
+      currency: data.currency,
+      points: [],
     };
-    if (data.signal_type === "BUY") counts.buy++;
-    else if (data.signal_type === "SELL") counts.sell++;
-    else counts.other++;
-    counts.total++;
-    days.set(day, counts);
+    stock.points.push(item);
+    series.set(key, stock);
   }
-  return [...days.values()].sort((a, b) => a.day.localeCompare(b.day));
+  for (const stock of series.values()) {
+    stock.points.sort(
+      (a, b) =>
+        Date.parse(a.data.screened_at) - Date.parse(b.data.screened_at) ||
+        a.id.localeCompare(b.id),
+    );
+  }
+  return [...series.values()].sort((a, b) => a.key.localeCompare(b.key));
 }
 export function journalCsvRows(items: JournalItem[]): unknown[][] {
   return [

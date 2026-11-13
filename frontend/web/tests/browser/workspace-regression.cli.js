@@ -273,13 +273,13 @@ async (page) => {
   await page.getByRole("button", { name: "Analyze stock", exact: true }).click();
   if (!await page.locator(".monitor-board").evaluate(el => el === document.activeElement)) throw Error("Analyze action did not focus the board");
   await page.locator(".stock-heatmap__tile").filter({ hasText: "BBRI" }).click();
-  await page.getByRole('button',{name:'Close stock details',exact:true}).click();
+  if(await page.getByRole('button',{name:'Close stock details',exact:true}).count())throw Error('Selecting heatmap stock opened a detail popup');
   await page.locator('.monitor-chart .tradingview-chart').scrollIntoViewIfNeeded();
   const chartConfig=await page.locator('.monitor-chart .tradingview-widget-container script').textContent().then(JSON.parse);
   if(chartConfig.interval!=='D'||chartConfig.range!=='12M')throw Error('Monitor initial zoom must show normal-sized daily candles');
   const screeningDetails=page.locator('.monitor-detail-result');
-  const detailBox=await screeningDetails.evaluate(el=>{const css=getComputedStyle(el);return {padding:parseFloat(css.paddingLeft),border:parseFloat(css.borderLeftWidth),radius:parseFloat(css.borderTopLeftRadius)};});
-  if(detailBox.padding<16||detailBox.border!==1||detailBox.radius<12)throw Error('Screening details should be a padded, bordered box');
+  const detailBox=await screeningDetails.evaluate(el=>{const css=getComputedStyle(el);return {border:parseFloat(css.borderLeftWidth),top:parseFloat(css.borderTopWidth),radius:parseFloat(css.borderTopLeftRadius)};});
+  if(detailBox.border!==0||detailBox.top!==1||detailBox.radius!==0)throw Error('Screening details should use a divider without a nested card');
   for(const label of ['Screening details','Rule','Candle session','Interval','Last screened','SGT'])if(!(await screeningDetails.innerText()).includes(label))throw Error('Missing screening information '+label);
   for(const width of [1218,390])for(const theme of ['dark','light']){
     await page.setViewportSize({width,height:1000});await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
@@ -1268,17 +1268,16 @@ async (page) => {
     if(await heatTile.getAttribute('aria-pressed')!=='true'||await page.locator('.stock-heatmap__tile').count()!==10)throw Error('Sidebar toggle disrupted the heatmap selection');
     if(await page.locator('.stock-heatmap__tile').evaluateAll(tiles=>tiles.some(tile=>tile.getBoundingClientRect().width<44)))throw Error('Sidebar toggle produced inaccessible heatmap tiles');
   }
-  // Hover/tap details, explicit preview isolation, remembered selection, loading and CTA.
+  // Direct stock selection, explicit preview isolation, remembered selection, loading and CTA.
   await page.emulateMedia({reducedMotion:'reduce'});
   await page.goto(`${origin}/#app/overview`);await page.goto(`${origin}/#app/realtime`);
   await heatTile.waitFor();
   if(await heatTile.getAttribute('aria-pressed')!=='true')throw Error('Cache-first return lost the selected ticker');
   await page.setViewportSize({width:1218,height:1000});
   await heatTile.hover();
-  const candleDetails=page.locator('.heatmap-popover').filter({hasText:'Latest screening candle'});
-  await candleDetails.waitFor();
-  for(const text of ['Open','Close','Change','105','+5.00%'])if(!(await candleDetails.innerText()).includes(text))throw Error('Missing candle detail '+text);
-  await page.mouse.move(0,0);await candleDetails.waitFor({state:'hidden'});
+  if(await page.getByRole('button',{name:'Close stock details',exact:true}).count())throw Error('Heatmap hover opened the removed detail popup');
+  await heatTile.click();
+  if(!await heatTile.evaluate(el=>el===document.activeElement)||await heatTile.getAttribute('aria-pressed')!=='true')throw Error('Heatmap selection lost focus or selection state');
   await page.getByRole('button',{name:'How the heatmap works',exact:true}).click();
   await page.getByRole('heading',{name:'How the heatmap works',exact:true}).waitFor();
   await page.keyboard.press('Escape');
@@ -1295,10 +1294,9 @@ async (page) => {
   if(await page.locator('.stock-heatmap__tile[data-tone="loss-strong"]').count()!==2)throw Error('Preview should contain negative test moves');
   await page.setViewportSize({width:390,height:1000});
   await page.locator('.stock-heatmap__tile').filter({hasText:'BBRI'}).click();
-  const previewDetails=page.locator('.heatmap-popover[data-preview]');await previewDetails.waitFor();
-  if(!(await previewDetails.innerText()).includes('Simulation only')||!(await previewDetails.innerText()).includes('-10.00%'))throw Error('Preview details not clearly simulated');
-  const popupBox=await previewDetails.boundingBox();if(popupBox.x<0||popupBox.x+popupBox.width>391)throw Error('Mobile detail popup overflows');
-  await page.getByRole('button',{name:'Close stock details',exact:true}).click();
+  const previewTile=page.locator('.stock-heatmap__tile').filter({hasText:'BBRI'});
+  if(await previewTile.getAttribute('aria-pressed')!=='true'||!(await previewTile.innerText()).includes('-10.00%'))throw Error('Preview tile did not retain simulated stock selection');
+  if(await page.getByRole('button',{name:'Close stock details',exact:true}).count())throw Error('Preview opened removed detail popup');
   await page.locator('.stock-heatmap').screenshot({path:'output/playwright/stock-heatmap-preview-mobile.png',animations:'disabled'});
   await page.getByRole('button',{name:'Exit test preview',exact:true}).click();
   if(await page.locator('.monitor-chart h3').innerText()!==realTicker)throw Error('Preview changed real selection');
@@ -1335,9 +1333,8 @@ async (page) => {
       await page.locator('.stock-heatmap').screenshot({path:`output/playwright/stock-heatmap-stress-${count}-${width}-${theme}.png`,animations:'disabled'});
     }
     await page.locator('.stock-heatmap__tile').first().click();
-    const longDetails=page.locator('.heatmap-popover').filter({hasText:'Latest screening candle'});await longDetails.waitFor();
-    const box=await longDetails.boundingBox();if(box.x<0||box.x+box.width>391||box.y<0||box.y+box.height>1001)throw Error('Long-name popup outside mobile viewport');
-    await page.getByRole('button',{name:'Close stock details',exact:true}).click();
+    if(await page.locator('.stock-heatmap__tile').first().getAttribute('aria-pressed')!=='true')throw Error('Stock selection failed in stress layout');
+    if(await page.getByRole('button',{name:'Close stock details',exact:true}).count())throw Error('Stress layout opened removed detail popup');
   }
   // Catalogue failures cannot block a usable universe. Both reads are independent.
   let releaseCatalog;const catalogGate=new Promise(resolve=>releaseCatalog=resolve);

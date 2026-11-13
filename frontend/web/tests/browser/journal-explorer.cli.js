@@ -15,7 +15,7 @@ async (page) => {
     data: {
       schema_version: "screening-journal-1",
       source: "screening",
-      symbol: i === 0 ? "AAPL" : `QA${String(i).padStart(2, "0")}.JK`,
+      symbol: i === 0 ? "AAPL" : i === 2 ? "QA01.JK" : `QA${String(i).padStart(2, "0")}.JK`,
       market: i === 0 ? "US" : "IDX",
       currency: i === 0 ? "USD" : "IDR",
       rule_id: i === 0 ? "sell-rule" : "buy-rule",
@@ -23,10 +23,10 @@ async (page) => {
       definition_hash: "qa-hash",
       timeframe: "1d",
       candle_at: "2026-11-09T09:00:00Z",
-      screened_at: i === 0 ? "2026-11-09T12:00:00Z" : "2026-11-09T17:00:00Z",
+      screened_at: i === 0 ? "2026-11-09T12:00:00Z" : i === 2 ? "2026-11-10T01:00:00Z" : "2026-11-09T17:00:00Z",
       signal_type: i === 0 ? "SELL" : "BUY",
       matched: true,
-      price: 100,
+      price: i === 2 ? 110 : 100,
       features: {
         price: 100,
         rsi14: 55,
@@ -76,10 +76,22 @@ async (page) => {
   await page.locator(".journal-ledger tbody tr").first().waitFor();
   const rows = page.locator(".journal-ledger tbody tr");
   if ((await rows.count()) !== 25) throw Error("Initial page is not bounded");
-  const chart = page.getByRole("region", { name: "Saved signals over time", exact: true });
+  const chart = page.getByRole("region", { name: "Screening price history", exact: true });
   await chart.waitFor();
-  if (await chart.getByRole("button").count() !== 2) throw Error("Chart did not group screening dates in SGT");
-  await chart.getByRole("button", { name: /^2026-11-09:/ }).click();
+  await chart.getByRole("combobox", {name: "Chart stock", exact: true}).click();
+  await page.getByRole("option", {name: "AAPL · US", exact: true}).click();
+  if (await chart.locator(".journal-price-chart__point").count() !== 1 || await chart.locator("polyline").count()) throw Error("Single snapshot should show one real price point");
+  await chart.getByRole("combobox", {name: "Chart stock", exact: true}).click();
+  await page.getByRole("option", {name: "QA01 · IDX", exact: true}).click();
+  if (await chart.locator(".journal-price-chart__point").count() !== 2 || await chart.locator("polyline").count() !== 1) throw Error("Stock price chart did not connect its saved snapshots");
+  await chart.locator(".journal-price-chart__point").first().click();
+  if (!(await chart.getByLabel("Selected screening price").innerText()).includes("IDR 100")) throw Error("Selected point does not show the saved price");
+  await chart.locator(".journal-price-chart__point").last().focus();
+  await page.keyboard.press("Enter");
+  if (!(await chart.getByLabel("Selected screening price").innerText()).includes("IDR 110")) throw Error("Keyboard point selection failed");
+  await chart.getByRole("combobox", {name: "Chart stock", exact: true}).click();
+  await page.getByRole("option", {name: "AAPL · US", exact: true}).click();
+  await chart.getByRole("button", {name: "Filter selected date", exact: true}).click();
   if ((await rows.count()) !== 1 || !await rows.first().innerText().then(text => text.includes("AAPL"))) throw Error("Chart date selection did not filter journal");
   if (await page.locator("#journal-from").inputValue() !== "2026-11-09" || await page.locator("#journal-to").inputValue() !== "2026-11-09") throw Error("Chart date filter did not use SGT date");
   await page.getByRole("button", {name: "Clear filters", exact: true}).click();

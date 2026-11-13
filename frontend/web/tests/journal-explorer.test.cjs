@@ -96,26 +96,36 @@ test("CSV exports all filtered rows with evidence and explicit snapshot/UTC/SGT 
   assert.equal(csv[1].at(-1), "check");
 });
 
-test("activity uses SGT days, preserves missing signals and follows the filtered set", () => {
-  const activity = lib.journalActivity([...rows].reverse());
-  assert.equal(activity.length, 2);
-  assert.equal(activity[0].day, "2026-11-09");
-  assert.equal(activity[0].sell, 1);
-  assert.equal(activity[1].day, "2026-11-10");
-  assert.equal(activity[1].buy, 1);
-  assert.equal(activity[1].other, 1);
-  assert.equal(
-    activity.reduce((sum, day) => sum + day.total, 0),
-    rows.length,
+test("price series separate stocks and currencies, sort by time and preserve exact prices", () => {
+  const snapshots = rows.map((row) =>
+    row.id === "c" ? { ...row, data: { ...row.data, price: 120 } } : row,
   );
+  const series = lib.journalPriceSeries([...snapshots].reverse());
+  assert.equal(series.length, 2);
+  const idx = series.find((stock) => stock.key === "IDX:BBCA.JK");
+  assert.equal(idx.currency, "IDR");
+  assert.equal(idx.points.length, 2);
+  assert.equal(idx.points[0].id, "a");
+  assert.equal(idx.points[1].id, "c");
+  assert.equal(idx.points[1].data.price, 120);
+  assert.equal(idx.points[1].data.signal_type, undefined);
+  assert.equal(series.find((stock) => stock.key === "US:AAPL").currency, "USD");
+  assert.equal(snapshots[0].id, "a");
   const filtered = lib.filterJournal(rows, {
     ...lib.emptyJournalFilters,
     signal: "BUY",
   });
-  assert.equal(lib.journalActivity(filtered)[0].total, 1);
-  assert.equal(lib.journalActivity([]).length, 0);
+  assert.equal(lib.journalPriceSeries(filtered)[0].points.length, 1);
+  assert.equal(lib.journalPriceSeries([]).length, 0);
   assert.equal(
-    lib.journalActivity([item("bad", "BBCA.JK", "BUY", "IDX", "bad")]).length,
+    lib.journalPriceSeries([item("bad", "BBCA.JK", "BUY", "IDX", "bad")])
+      .length,
+    0,
+  );
+  assert.equal(
+    lib.journalPriceSeries([
+      { ...rows[0], data: { ...rows[0].data, price: NaN } },
+    ]).length,
     0,
   );
 });
