@@ -1,0 +1,388 @@
+{
+  "source": "4b2173c4199345770d58cbdcf927bfd3f193fada",
+  "integration_tip_at_fetch": "25ea6006daff8ac2a70f2481f4f0e37fa06b9038",
+  "harness_parent": "25ea6006daff8ac2a70f2481f4f0e37fa06b9038",
+  "harness_merged_into_integration_at_fetch": false,
+  "go_top_level_pass_count": 19,
+  "go_failures": 0,
+  "python_preflight_count": 5,
+  "python_preflights_passed": true,
+  "artifacts": [
+    {
+      "name": "signalgen-api",
+      "bytes": 23003296,
+      "sha256": "03a662a36982c00c049bb7822727c617cc02577fc6d020eeae13842f7dad231b",
+      "record_match": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0555"
+    },
+    {
+      "name": "signalgen-admin",
+      "bytes": 19923104,
+      "sha256": "b203d2ed2a52f5a26a91b3bdb1330e30bb9c1d28fd5f9552cbd2f44e295dd257",
+      "record_match": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0555"
+    },
+    {
+      "name": "signalgen-audit-catalog",
+      "bytes": 20971680,
+      "sha256": "d8d49b659a9012a417b571422eabd9a95dabd76710d524658ff4e226b369b67b",
+      "record_match": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0555"
+    },
+    {
+      "name": "signalgen-healthcheck",
+      "bytes": 5439648,
+      "sha256": "a6c102760ddfc01596b0376b54e7be4e23258e875bb0211570566c0b10fcd6f9",
+      "record_match": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0555"
+    },
+    {
+      "name": "signalgen-collect-idx",
+      "bytes": 11206816,
+      "sha256": "e0e3d0811967f68e0a6da640350d4f8f1fcdfb2765715c792977c44a7e51e730",
+      "record_match": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0555"
+    }
+  ],
+  "date": "2026-11-13",
+  "branch": "frontend/prof-revisions-independent-review",
+  "report_only": true,
+  "independent_review_exclusions": [
+    "authored target-hit metrics and evaluation UI",
+    "unfinished scheduler/cache branches"
+  ],
+  "scope_ledger": [
+    {
+      "path": "backend/internal/dataset/study_capacity.go",
+      "kind": "primary_go",
+      "sha256": "f7eb29c88a38ae4232985e70cda822b2ca8ca348f1e01a8e7bfb85f450500956",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/internal/dataset/backtest.go",
+      "kind": "primary_go",
+      "sha256": "e49b2fe2ba9ed27d58399e7f6e84bd6f09a80e94a80dd01e8b61751ae50dac95",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/internal/dataset/dynamic.go",
+      "kind": "primary_go",
+      "sha256": "2c79893f9eaef08520f3090a7935fa60a241d0cb4b6aaa74de296a3d06aa3033",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/internal/dataset/study.go",
+      "kind": "primary_go",
+      "sha256": "1ac277a2e7034ef68570964d7ea284adde875b14c9f96ab25205058432eaf840",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/internal/api/backtests/studies.go",
+      "kind": "primary_go",
+      "sha256": "e16d13d821d781759a0f04142665f195f15ec8b7c0273285dd03422dd8250ceb",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/core/signal_study.go",
+      "kind": "primary_go",
+      "sha256": "fa5d1f998eb05719c4008c890ed55f76a2a1a10c97cf8ac8089393c8a4a5443e",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/core/backtest.go",
+      "kind": "support",
+      "sha256": "b0658208d5e139a9ef41f1517a17bdfa8492b5bb458cbdeb3e52d9a87a6eb26b",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/core/signal_study_performance_test.go",
+      "kind": "support",
+      "sha256": "19085af4ae4d440390e4250b8269d41dde2b14638f25932dab286b6d6ec684b5",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/core/testdata/signal_study_performance_golden.json",
+      "kind": "support",
+      "sha256": "095aa939019a2e08badcdafba035a472a93b4f2b1c575743435f6dc158a98a40",
+      "basis": "direct source read; excluded scripts or non-code input"
+    },
+    {
+      "path": "backend/internal/dataset/study_capacity_test.go",
+      "kind": "support",
+      "sha256": "22ac23fb3edd892a0955fd624ecf632c39351a5ece1df1a65057bf87e397237d",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/internal/dataset/backtest_test.go",
+      "kind": "support",
+      "sha256": "b785f7af4f6a4c7a02807d3e822d0dab36cece30dbf4f2d58b49d54d00aeaf28",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/internal/dataset/dynamic_test.go",
+      "kind": "support",
+      "sha256": "023c76b173452fd596c48819e9671bd0effa74009a76e087f167ecabbf780f18",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/internal/api/tests/snapshot_capacity_test.go",
+      "kind": "support",
+      "sha256": "3f845100d3fccf5776223de0f1babab7fd3a0277fe08e5bf9d9cae202e7bff4e",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/internal/api/tests/signal_study_test.go",
+      "kind": "support",
+      "sha256": "0efb194f08cb732e3e2ab2d8278e126dcda31ef2c8ec521e1a045af5f89767ca",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/internal/api/tests/study_load_test.go",
+      "kind": "support",
+      "sha256": "88220ec8962fd2189b8c78fab372c3a3fc80f091ca5a2205a3af853a9aceb2f7",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/internal/api/routes.go",
+      "kind": "support",
+      "sha256": "88757ff264cf79c355a03f9530e685c3bb77093bb611fc477a35f19c757aa299",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/cmd/api/main.go",
+      "kind": "support",
+      "sha256": "d04c91be08e4cacf6563affb3f55541c1d83f7aae139ea255b063971e3838b68",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "frontend/web/src/analysis/signal-study.ts",
+      "kind": "support",
+      "sha256": "667ab626f82f4c50f5da4dece5a37d19921ecd794e83bff715091f03aedad8dc",
+      "basis": "direct source plus metadata-match/no-recorded-issue graph coverage"
+    },
+    {
+      "path": "backend/scripts/build_local_runtime.py",
+      "kind": "excluded_scripts_direct_read",
+      "sha256": "59f8ab5a4e82fc4bcf6a26882ac84d9d9e120f84c1feee2b9f8bc28c04f7a952",
+      "basis": "direct source read; excluded scripts or non-code input"
+    },
+    {
+      "path": "backend/scripts/test_local_runtime.py",
+      "kind": "excluded_scripts_direct_read",
+      "sha256": "597869c83141811c05e91a0f4b40ac750dd67cc4933e67e15c05a218318bf472",
+      "basis": "direct source read; excluded scripts or non-code input"
+    },
+    {
+      "path": "backend/scripts/verify_local_api_stack.py",
+      "kind": "excluded_scripts_direct_read",
+      "sha256": "3a6017c3dd5f3bbb44a1f81d0286d2af3b29a06605b9b3e69f60e9c6d6d5cddc",
+      "basis": "direct source read; excluded scripts or non-code input"
+    },
+    {
+      "path": "backend/scripts/test_local_api_stack.py",
+      "kind": "excluded_scripts_direct_read",
+      "sha256": "bab8a772bb05e2a7affe2882229a50875c4c18cfded9995ad01b301441a0b020",
+      "basis": "direct source read; excluded scripts or non-code input"
+    },
+    {
+      "path": "backend/scripts/localstack/main.go",
+      "kind": "excluded_scripts_direct_read",
+      "sha256": "9d44ac376d2750e3f6fa1c84863ae7fb532e5ba6648865bac3c054c92c546bf1",
+      "basis": "direct source read; excluded scripts or non-code input"
+    },
+    {
+      "path": "backend/scripts/localstack/main_test.go",
+      "kind": "excluded_scripts_direct_read",
+      "sha256": "7bcbe9f4f7a98a7378a7afb759618b0a826de6a3656a0083716fdca79e2673c0",
+      "basis": "direct source read; excluded scripts or non-code input"
+    },
+    {
+      "path": "backend/LocalRuntime.Dockerfile",
+      "kind": "configuration_direct_read",
+      "sha256": "b4754a2b06bb1a1fca169c2dbf1bca7279b4a50caf7eeaf0141fda9f3d3d3abc",
+      "basis": "direct source read; excluded scripts or non-code input"
+    },
+    {
+      "path": "docker-compose.local-runtime.yml",
+      "kind": "configuration_direct_read",
+      "sha256": "6353a91ffbd8983eb984cf65db3f10122f3c685874b56cfc7f228cb5bb427fb9",
+      "basis": "direct source read; excluded scripts or non-code input"
+    }
+  ],
+  "checks": {
+    "go_top_level_tests_passed": 19,
+    "go_top_level_tests_failed": 0,
+    "dataset_and_api_race_detector": true,
+    "cursor_canonical_cases": 29,
+    "paired_metrics_base_cursor_golden_passes": 2,
+    "original_python_preflights_passed": 5,
+    "patched_cleanup_preflights_passed": 6,
+    "full_api_pg_stack_replayed": false,
+    "fresh_runtime_binary_rebuild": false
+  },
+  "cleanup_finding": {
+    "id": "R1",
+    "baseline": "4b2173c4199345770d58cbdcf927bfd3f193fada",
+    "location": "backend/scripts/verify_local_api_stack.py:222-224",
+    "classification": "ordinary harness reliability; no demonstrated trust-boundary violation",
+    "reproduction": {
+      "probe": "exact existing finally AST; Docker calls mocked",
+      "fault": "first exact-name removal raises TimeoutExpired",
+      "attempted": [
+        "own-verify"
+      ],
+      "remaining_not_attempted": [
+        "own-api",
+        "own-pg"
+      ],
+      "actual_docker_calls": 0,
+      "finding_reproduced": true
+    },
+    "fix_sha": "5a560a8c240f40c1ce06075cc59a70542e4c850e",
+    "disposition": "addressed in independently tested separate cleanup fix; not merged into report branch",
+    "patch_files_sha256": {
+      "backend/scripts/verify_local_api_stack.py": "ca0e2da67c9e267589435b2138b4c5bff5f82b5be5223df1d1e602500f3365fc",
+      "backend/scripts/test_local_api_stack.py": "cb9b50505e50e34642260ff4dd09fa894b2d13035dbdfc774de0bb7d8f4f408d"
+    }
+  },
+  "own_container_cleanup": [
+    {
+      "phase": "pair",
+      "removed": true
+    },
+    {
+      "phase": "patched-python",
+      "removed": true
+    },
+    {
+      "phase": "python",
+      "removed": true
+    },
+    {
+      "phase": "cleanup",
+      "removed": true
+    },
+    {
+      "phase": "go",
+      "removed": true
+    }
+  ],
+  "historical_stack_record": {
+    "path": "docs/evidence/local-api-stack-20261113.json",
+    "request_assertion_count": 240,
+    "group_count": 45,
+    "grouped_count_sum": 240,
+    "helper_source_hash_matches": true,
+    "identity_and_market_are_fixtures": true,
+    "feature_and_outcome_client": "native portable Go core",
+    "replayed_in_this_review": false
+  },
+  "limits": [
+    "No whole-app security approval",
+    "No live or cloud service test",
+    "No fresh full-package rebuild",
+    "No 240-request stack replay",
+    "No browser-to-real-API test",
+    "No host scheduling activation",
+    "No independent review of own target metrics/UI"
+  ],
+  "sandbox": {
+    "docker_context": "orbstack",
+    "images": {
+      "go": "sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+      "python": "sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534"
+    },
+    "common": [
+      "network none",
+      "pull never",
+      "read-only root/source/toolchain",
+      "non-root 65534:65534",
+      "ALL capabilities dropped",
+      "no-new-privileges",
+      "no Docker socket or credentials mounted",
+      "empty env allowlist with scratch HOME/TMPDIR/cache",
+      "exact own container-ID cleanup"
+    ],
+    "go_tests": {
+      "cpus": 2,
+      "memory_bytes": 2147483648,
+      "pids": 256,
+      "file_bytes": 268435456,
+      "scratch_bytes": 2147483648,
+      "child_seconds": 240,
+      "outer_seconds": 270,
+      "module_cache": "existing read-only; lookup disabled"
+    },
+    "paired_cursor": {
+      "cpus": 2,
+      "memory_bytes": 2147483648,
+      "pids": 128,
+      "file_bytes": 268435456,
+      "scratch_bytes": 2147483648,
+      "child_seconds": 90,
+      "outer_seconds": 110
+    },
+    "original_python": {
+      "cpus": 1,
+      "memory_bytes": 268435456,
+      "pids": 64,
+      "file_bytes": 8388608,
+      "scratch_bytes": 67108864,
+      "child_seconds": 40,
+      "outer_seconds": 55
+    },
+    "cleanup_fault_probe": {
+      "cpus": 1,
+      "memory_bytes": 134217728,
+      "pids": 32,
+      "file_bytes": 1048576,
+      "scratch_bytes": 16777216,
+      "child_seconds": 10,
+      "outer_seconds": 20
+    },
+    "patched_python": {
+      "cpus": 1,
+      "memory_bytes": 134217728,
+      "pids": 32,
+      "file_bytes": 8388608,
+      "scratch_bytes": 16777216,
+      "child_seconds": 20,
+      "outer_seconds": 30
+    }
+  },
+  "commands_inside_bounded_containers": {
+    "base_go": [
+      "go test ./core -run 'TestSignalStudyPerformanceCanonicalGolden' -count=1 -timeout=45s -v",
+      "go test -race ./internal/dataset -run '^Test(Study|BacktestSnapshot|DynamicSnapshots|CancelledPreparation)' -count=1 -timeout=45s -v",
+      "go test -race ./internal/api/tests -run '^Test(SnapshotCapacityHTTP|SignalStudyPartial|SignalStudyRetry|SignalStudyFrozen|MarketScreeningFrozen)' -count=1 -timeout=45s -v"
+    ],
+    "original_python": "python3 -m unittest -v test_local_runtime test_local_api_stack",
+    "cleanup_baseline": "python3 /probe.py (retained AST probe mounted read-only; original 4b2173c source at /target)",
+    "patched_python": "python3 -m unittest -v test_local_api_stack (only patched Python files from 5a560a8 in separate read-only snapshot)",
+    "cursor_pair": "copy core to bounded /scratch; restore only signal_study.go from 5ceb705; run TestSignalStudyPerformanceCanonicalGolden on that copy and on /target with the same frozen oracle"
+  },
+  "graph": {
+    "project": "backtest-evaluation-options",
+    "generation": "2026-11-13T03:09:07Z",
+    "tier": "Tier 2 verification",
+    "excluded_direct_fallback": [
+      "backend/scripts subtree",
+      "backend/core/testdata JSON"
+    ],
+    "other_fallback": [
+      "LocalRuntime.Dockerfile not tracked by index; directly read",
+      "HTTP route callbacks absent from CALLS trace; confirmed literal registrations"
+    ],
+    "clean_coverage_caveat": "Metadata-match/no-recorded-issue is best-effort, not completeness"
+  }
+}
