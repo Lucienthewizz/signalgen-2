@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   BookOpen,
   ArrowUpRight,
@@ -10,17 +10,16 @@ import {
 import MagicBento, {
   type MagicBentoItem,
 } from "@/components/react-bits/MagicBento";
-import { JournalPriceChart } from "@/components/journal-price-chart";
 import { journalSummary, type JournalItem } from "@/lib/journal-explorer";
 import { useVisualPreferences } from "@/lib/visual-preferences";
 import "@/styles/journal-bento.css";
 
 export function JournalBento({
   items,
-  onSelectDay,
+  portfolio,
 }: {
   items: JournalItem[];
-  onSelectDay: (day: string) => void;
+  portfolio: ReactNode;
 }) {
   const summary = useMemo(() => journalSummary(items), [items]);
   const { light, reduced } = useVisualPreferences();
@@ -31,7 +30,7 @@ export function JournalBento({
       id: "prices",
       colSpan: 2,
       rowSpan: 2,
-      content: <JournalPriceChart items={items} onSelectDay={onSelectDay} />,
+      content: portfolio,
     },
     {
       id: "saved",
@@ -145,8 +144,8 @@ export function JournalBento({
         disableAnimations={reduced}
       />
       <p className="screening-journal__note">
-        Counts reflect saved screening snapshots in the current filters. Prices
-        are captured at screening time.
+        Signal counts follow the screening filters. Portfolio P&L follows the
+        market and portfolio selected in the chart.
       </p>
     </section>
   );

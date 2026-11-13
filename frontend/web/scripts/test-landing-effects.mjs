@@ -37,13 +37,18 @@ try {
     if (u.pathname.startsWith("/api")) return route.fulfill({ json: {} });
     return route.continue();
   });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto(baseURL + "/#home");
   await page.locator(".ghost-fibers-canvas").waitFor();
   await page.locator(".gradient-ascii-canvas").waitFor();
   await page.waitForTimeout(2500);
+  if (await page.locator(".hero-data-note").count())
+    throw Error("Local preview label remains");
+  if (!(await page.locator(".market-hero h2 .shiny-text").count()))
+    throw Error("Shiny headline is missing");
   if (await page.locator(".market-hero__chart, .signal-lattice").count())
     throw Error("Old landing chart remains");
-  if (await page.locator(".pixel-card").count())
+  if (await page.locator("#pricing .pixel-card").count())
     throw Error("Pixel pricing styling must be removed");
   if ((await page.locator(".feature-figure__art").count()) !== 4)
     throw Error("Original feature artwork must be restored");
@@ -52,9 +57,14 @@ try {
   for (const width of [1456, 390]) {
     await page.setViewportSize({ width, height: 853 });
     await page.locator(".market-hero").scrollIntoViewIfNeeded();
-    await page.waitForFunction(() => getComputedStyle(document.querySelector(".market-hero__copy")).opacity === "1");
+    await page.waitForFunction(
+      () =>
+        getComputedStyle(document.querySelector(".market-hero__copy"))
+          .opacity === "1",
+    );
     const copy = await page.locator(".market-hero__copy").boundingBox();
-    if (!copy || copy.width > width) throw Error("Hero copy does not fit the viewport");
+    if (!copy || copy.width > width)
+      throw Error("Hero copy does not fit the viewport");
     await page.screenshot({
       path: `/tmp/signalgen-landing-effects-${width}.png`,
     });
@@ -86,6 +96,26 @@ try {
       })),
     ),
   );
+  await page.locator(".landing-footer").scrollIntoViewIfNeeded();
+  const bounds = await page.evaluate(() => ({
+    flow: document
+      .querySelector(".landing-product-flow")
+      .getBoundingClientRect().bottom,
+    footer: document.querySelector(".landing-footer").getBoundingClientRect()
+      .bottom,
+  }));
+  if (bounds.flow < bounds.footer - 1)
+    throw Error("Background ends before the footer");
+  const before = await page.locator(".gradient-ascii-canvas").screenshot();
+  await page.waitForTimeout(1000);
+  const after = await page.locator(".gradient-ascii-canvas").screenshot();
+  if (before.equals(after))
+    throw Error("ASCII background is static when motion is enabled");
+  await page.screenshot({ path: "/tmp/signalgen-footer-background.png" });
+  await page.locator("#reviews").scrollIntoViewIfNeeded();
+  if (!(await page.locator("#reviews .pixel-card").count()))
+    throw Error("Testimonial pixel cards are missing");
+  await page.screenshot({ path: "/tmp/signalgen-testimonial-pixels.png" });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
   await page.waitForTimeout(500);

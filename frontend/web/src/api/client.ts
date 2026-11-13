@@ -650,6 +650,25 @@ export const api = {
       body: JSON.stringify({ receipt }),
       signal,
     }),
+  portfolio: (signal?: AbortSignal) =>
+    request<import("@/lib/portfolio").PortfolioSummary>("/api/v1/portfolio", {
+      signal,
+    }),
+  portfolioTransactions: (signal?: AbortSignal) =>
+    request<{ items: import("@/lib/portfolio").PortfolioTransaction[] }>(
+      "/api/v1/portfolio/transactions",
+      { signal },
+    ),
+  savePortfolioTransaction: (
+    id: string,
+    version: number,
+    data: import("@/lib/portfolio").PortfolioData,
+    signal?: AbortSignal,
+  ) =>
+    request<import("@/lib/portfolio").PortfolioTransaction>(
+      `/api/v1/portfolio/transactions/${encodeURIComponent(id)}`,
+      { method: "PUT", body: JSON.stringify({ version, data }), signal },
+    ),
   listRecords: <T>(kind: "backtest" | "journal", signal?: AbortSignal) =>
     request<{ items: import("@/lib/server-records").ServerRecord<T>[] }>(
       kind === "backtest"

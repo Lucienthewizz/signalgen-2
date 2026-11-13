@@ -50,4 +50,49 @@ html[data-theme="light"]
   filter: none;
 }
 /* Keep the headline available immediately while the shader initializes. */
-.landing-shell .market-hero__copy { animation: none; }
+.landing-shell .market-hero__copy {
+  animation: none;
+}
+
+.landing-shell .market-hero__copy h2 {
+  font-weight: 800;
+}
+.landing-shell .landing-stage--features {
+  padding-top: 0;
+  margin-top: 0;
+}
+.landing-shell .landing-footer {
+  background: transparent;
+}
+.landing-shell .landing-footer::before {
+  background: none;
+}
+.landing-shell .testimonial-pixels {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: none;
+}
+.landing-shell .testimonial-pixels .testimonial-marquee__card {
+  background: transparent;
+}
+.landing-shell .testimonial-pixels .pixel-card-canvas {
+  z-index: 1;
+}
+.landing-shell .testimonial-pixels .testimonial-marquee__card > * {
+  position: relative;
+  z-index: 2;
+}
+.landing-shell .testimonial-marquee:focus-within .testimonial-marquee__track {
+  animation-play-state: paused;
+}
+
+@media (forced-colors: active) {
+  .landing-shell .shiny-text {
+    background: none !important;
+    -webkit-text-fill-color: CanvasText;
+  }
+}

@@ -191,3 +191,7 @@ The screenshot sits in a restrained window frame with an explanatory caption. Fe
 - **Don't** decorate every section with a raised card.
 - **Don't** rely on color alone for success, warning, or failure.
 - **Don't** disguise illustrative market values as live data or pending releases as available installers.
+
+## Workspace forest surfaces
+
+Workspace routes use a darker forest variant from `workspace-forest.css`: canvas `#030b07`, sidebar `#050e09`, surfaces `#081a12`, `#0c2117` and `#112b1e`, with dividers `#203c2d`. A single diagonal gradient moves from `#0a2117` to `#050f0a` on cards. Existing typography, spacing, control sizing and semantic gain/loss colors remain the reference. The landing page keeps its separate GhostFibers and ASCII backgrounds.

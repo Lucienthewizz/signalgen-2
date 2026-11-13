@@ -61,6 +61,8 @@ async (page) => {
           ? { user, features: ["screener"], session: { id: "qa" } }
           : p === "/api" || p === "/ready"
             ? { status: "ready", version: "test" }
+            : p === "/api/v1/portfolio"
+              ? {transaction_count:0,positions:[],totals:[]}
             : p === "/api/v1/journal/screenings"
               ? { schema_version: "screening-journal-1", items }
               : p === "/api/v1/subscription"
@@ -71,31 +73,13 @@ async (page) => {
   await page.goto(origin + "/#app/journal");
   await page.reload();
   await page
-    .getByRole("heading", { name: "Saved screening results", exact: true })
+    .getByRole("heading", { name: "Screening journal", exact: true })
     .waitFor();
   await page.locator(".journal-ledger tbody tr").first().waitFor();
   const rows = page.locator(".journal-ledger tbody tr");
   if ((await rows.count()) !== 25) throw Error("Initial page is not bounded");
-  const chart = page.getByRole("region", { name: "Screening price history", exact: true });
-  await chart.waitFor();
-  if (await page.locator(".journal-bento .magic-bento__card").count() !== 6) throw Error("Journal overview must contain six data cards");
-  if (!(await page.locator(".journal-bento").innerText()).includes("Most used rule")) throw Error("Journal overview is missing rule information");
-  await chart.getByRole("combobox", {name: "Chart stock", exact: true}).click();
-  await page.getByRole("option", {name: "AAPL · US", exact: true}).click();
-  if (await chart.locator(".journal-price-chart__point").count() !== 1 || await chart.locator("polyline").count()) throw Error("Single snapshot should show one real price point");
-  await chart.getByRole("combobox", {name: "Chart stock", exact: true}).click();
-  await page.getByRole("option", {name: "QA01 · IDX", exact: true}).click();
-  if (await chart.locator(".journal-price-chart__point").count() !== 2 || await chart.locator("polyline").count() !== 1) throw Error("Stock price chart did not connect its saved snapshots");
-  await chart.locator(".journal-price-chart__point").first().click();
-  if (!(await chart.getByLabel("Selected screening price").innerText()).includes("IDR 100")) throw Error("Selected point does not show the saved price");
-  await chart.locator(".journal-price-chart__point").last().focus();
-  await page.keyboard.press("Enter");
-  if (!(await chart.getByLabel("Selected screening price").innerText()).includes("IDR 110")) throw Error("Keyboard point selection failed");
-  await chart.getByRole("combobox", {name: "Chart stock", exact: true}).click();
-  await page.getByRole("option", {name: "AAPL · US", exact: true}).click();
-  await chart.getByRole("button", {name: "Filter selected date", exact: true}).click();
-  if ((await rows.count()) !== 1 || !await rows.first().innerText().then(text => text.includes("AAPL"))) throw Error("Chart date selection did not filter journal");
-  if (await page.locator("#journal-from").inputValue() !== "2026-11-09" || await page.locator("#journal-to").inputValue() !== "2026-11-09") throw Error("Chart date filter did not use SGT date");
+  await page.getByRole("region", {name:"Portfolio performance",exact:true}).waitFor();
+  if(await page.locator(".journal-bento .magic-bento__card").count()!==6)throw Error("Missing portfolio bento cards");
   await page.getByRole("button", {name: "Clear filters", exact: true}).click();
   await page.getByRole("button", { name: "Next results", exact: true }).click();
   if ((await rows.count()) !== 6) throw Error("Next page incorrect");

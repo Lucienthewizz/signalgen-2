@@ -185,6 +185,8 @@ function LatestScreenerPanel({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [errorOpen, setErrorOpen] = useState(false);
+  const [performanceOpen, setPerformanceOpen] = useState(false);
+  const performanceTrigger = useRef<HTMLButtonElement>(null);
   const [monitorInfoOpen, setMonitorInfoOpen] = useState(false);
   const startRef = useRef<HTMLButtonElement>(null);
   const monitorInfoRef = useRef<HTMLButtonElement>(null);
@@ -1591,63 +1593,69 @@ function LatestScreenerPanel({
               </div>
             </div>
             <div className="analysis-results-toolbar">
-              <details className="analysis-performance">
-                <summary>
-                  <span
-                    className="analysis-performance__icon"
-                    aria-hidden="true"
-                  >
-                    <Gauge />
-                  </span>
-                  <span>Browser performance details</span>
-                  <ChevronDown
-                    className="analysis-performance__chevron"
-                    aria-hidden="true"
-                  />
-                </summary>
-                <dl>
-                  {[
-                    ["Load selections (network included)", resourceMs],
-                    ["Access / session wait", run.metrics?.access_ms],
-                    [
-                      "Prepare snapshot / rule (network included)",
-                      run.metrics?.preparation_ms,
-                    ],
-                    ["Load / verify dataset", run.metrics?.dataset_ms],
-                    ["WASM startup", run.metrics?.startup_ms],
-                    ["Indicator computation", run.metrics?.compute_ms],
-                    [
-                      "Worker round trip, startup included",
-                      run.metrics?.feature_ms,
-                    ],
-                    [
-                      "Private scoring (network included)",
-                      run.metrics?.scoring_ms,
-                    ],
-                    ["Total analysis", run.metrics?.total_ms],
-                    ["UI commit to next frame", renderMs],
-                  ].map(([label, value]) => (
-                    <div key={String(label)}>
-                      <dt>{label}</dt>
-                      <dd>
-                        {typeof value === "number"
-                          ? `${Math.round(value)} ms`
-                          : "Not recorded"}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-                <p>
-                  {run.metrics?.reused
-                    ? "Unchanged snapshot reused after online access checks."
-                    : run.metrics?.cold
-                      ? "Cold engine run."
-                      : "Engine reuse not recorded or warm run."}{" "}
-                  These browser timings are not server CPU measurements or
-                  production capacity benchmarks. Historical runs may not
-                  contain every timing.
-                </p>
-              </details>
+              <div className="analysis-performance">
+                <Button
+                  ref={performanceTrigger}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPerformanceOpen(true)}
+                >
+                  <Gauge aria-hidden="true" /> Browser performance details
+                </Button>
+                <InfoDialog
+                  open={performanceOpen}
+                  onOpenChange={setPerformanceOpen}
+                  returnFocus={performanceTrigger}
+                  title="Browser performance details"
+                  description="Time spent preparing data, computing indicators and scoring this screening run."
+                  wide
+                >
+                  <div className="performance-details">
+                    <dl>
+                      {[
+                        ["Load selections (network included)", resourceMs],
+                        ["Access / session wait", run.metrics?.access_ms],
+                        [
+                          "Prepare snapshot / rule (network included)",
+                          run.metrics?.preparation_ms,
+                        ],
+                        ["Load / verify dataset", run.metrics?.dataset_ms],
+                        ["WASM startup", run.metrics?.startup_ms],
+                        ["Indicator computation", run.metrics?.compute_ms],
+                        [
+                          "Worker round trip, startup included",
+                          run.metrics?.feature_ms,
+                        ],
+                        [
+                          "Private scoring (network included)",
+                          run.metrics?.scoring_ms,
+                        ],
+                        ["Total analysis", run.metrics?.total_ms],
+                        ["UI commit to next frame", renderMs],
+                      ].map(([label, value]) => (
+                        <div key={String(label)}>
+                          <dt>{label}</dt>
+                          <dd>
+                            {typeof value === "number"
+                              ? `${Math.round(value)} ms`
+                              : "Not recorded"}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <p>
+                      {run.metrics?.reused
+                        ? "Unchanged snapshot reused after online access checks."
+                        : run.metrics?.cold
+                          ? "Cold engine run."
+                          : "Engine reuse not recorded or warm run."}{" "}
+                      These browser timings are not server CPU measurements or
+                      production capacity benchmarks. Historical runs may not
+                      contain every timing.
+                    </p>
+                  </div>
+                </InfoDialog>
+              </div>
               <div
                 className="analysis-selection-bar"
                 aria-label="Journal selection"

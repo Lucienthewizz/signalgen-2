@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { JournalPortfolio } from "@/components/journal-portfolio";
 import { JournalBento } from "@/components/journal-bento";
 import {
   Empty,
@@ -89,6 +90,9 @@ export function JournalPanel({
   const [reload, setReload] = useState(0);
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState({ ...emptyJournalFilters });
+  const [tradeDraft, setTradeDraft] = useState<ScreeningJournalEntry | null>(
+    null,
+  );
   const [detailId, setDetailId] = useState<string | null>(null);
   const [receiptInvalid, setReceiptInvalid] = useState(false);
   const [exportNotice, setExportNotice] = useState("");
@@ -264,11 +268,11 @@ export function JournalPanel({
       <div className="journal-toolbar screening-journal__intro">
         <div>
           <h1 id="workspace-route-heading" tabIndex={-1}>
-            Saved screening results
+            Screening journal
           </h1>
           <p>
-            Keep the matched results you choose in Screener. Prices and signals
-            are captured from that screening.
+            Save screening results, record your executed transactions, and
+            review realized P&L.
           </p>
         </div>
         <Button
@@ -480,17 +484,19 @@ export function JournalPanel({
             </div>
           </div>
           {exportNotice && <p role="status">{exportNotice}</p>}
-          <JournalBento
-            items={filtered}
-            onSelectDay={(day) => {
-              setFilters((current) => ({ ...current, from: day, to: day }));
-              setPage(0);
-              setDetailId(null);
-              setExportNotice("");
-            }}
-          />
         </>
       )}
+      <JournalBento
+        items={filtered}
+        portfolio={
+          <JournalPortfolio
+            key={userId}
+            userId={userId}
+            draft={tradeDraft}
+            onClearDraft={() => setTradeDraft(null)}
+          />
+        }
+      />
       {error && (
         <Alert variant="destructive">
           <AlertTitle>Journal unavailable</AlertTitle>
@@ -597,6 +603,13 @@ export function JournalPanel({
                         }
                       >
                         View {d.symbol.replace(/\.JK$/, "")} details
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setTradeDraft({ ...d })}
+                      >
+                        Record {d.symbol.replace(/\.JK$/, "")} trade
                       </Button>
                     </TableCell>
                   </TableRow>

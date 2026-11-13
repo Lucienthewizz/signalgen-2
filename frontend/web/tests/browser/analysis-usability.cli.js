@@ -137,9 +137,13 @@ async (page) => {
     if(width===390 && selectionBox.y<performanceBox.y+performanceBox.height)throw Error("Mobile journal controls overlap performance details");
     const textSize=await selection.locator('[role="status"]').evaluate(el=>parseFloat(getComputedStyle(el).fontSize));
     if(textSize>12)throw Error("Journal selection count is not compact");
-    await performance.locator("summary").click();
-    if(!await performance.locator("dl").isVisible())throw Error("Performance details no longer expand");
-    await performance.locator("summary").click();
+    await performance.getByRole("button", {name:"Browser performance details", exact:true}).click();
+    const performanceDialog=page.getByRole("dialog", {name:"Browser performance details",exact:true});
+    await performanceDialog.waitFor();
+    if(!await performanceDialog.locator("dl").isVisible())throw Error("Performance metrics missing from popup");
+    await performanceDialog.getByRole("button", {name:"Close",exact:true}).click();
+    await performanceDialog.waitFor({state:"hidden"});
+    await page.waitForFunction(() => document.activeElement?.textContent?.includes("Browser performance details"));
     const ledger=page.locator(".screener-result-ledger");
     if(await ledger.locator("thead input[type=checkbox]").count())throw Error("Number heading still contains a select-all checkbox");
     if((await ledger.locator("thead th").first().innerText())!=="No." || (await ledger.locator("thead th").last().innerText())!=="Add to journal")throw Error("Number or journal heading is missing");
@@ -167,7 +171,7 @@ async (page) => {
   await page.getByRole("checkbox",{name:"Select BBCA for journal",exact:true}).check();
   await page.getByRole("checkbox",{name:"Select BBRI for journal",exact:true}).check();
   await page.getByRole("button",{name:"Add 2 to journal",exact:true}).click();
-  await page.getByRole("heading",{name:"Saved screening results",exact:true}).waitFor();
+  await page.getByRole("heading",{name:"Screening journal",exact:true}).waitFor();
   const selection=page.getByRole("region",{name:"Selected screening results",exact:true});
   await selection.waitFor();
   if(writes.length)throw Error("Selection saved results before explicit confirmation");
@@ -194,7 +198,7 @@ async (page) => {
     await page.screenshot({path:`output/playwright/screening-only-journal-${width}-${theme}.png`,animations:'disabled',fullPage:true});
     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error(`Journal overflow at ${width}/${theme}`);
   }
-  journalMode='fail';await page.goto(`${origin}/#app/news`);await page.locator('.news-feed').waitFor();await page.goto(`${origin}/#app/journal`);await page.getByRole('heading',{name:'Saved screening results',exact:true}).waitFor();
+  journalMode='fail';await page.goto(`${origin}/#app/news`);await page.locator('.news-feed').waitFor();await page.goto(`${origin}/#app/journal`);await page.getByRole('heading',{name:'Screening journal',exact:true}).waitFor();
   await page.getByText('Journal unavailable',{exact:true}).waitFor();
   if(!await page.evaluate(()=>sessionStorage.getItem('signalgen.access-token')==='synthetic-not-real'))throw Error('Journal outage logged out the account');
   journalMode='normal';await page.getByRole('button',{name:'Retry journal',exact:true}).click();

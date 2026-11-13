@@ -43,9 +43,10 @@ export function LandingBackground({ variant }: { variant: "hero" | "ascii" }) {
           glyphOpacity={0.85}
           gradientOpacity={0.35}
           glow={0.1}
-          flicker={0.08}
+          flicker={0.2}
           grain={0}
-          speed={0.3}
+          speed={1}
+          flow={0.9}
           mouseInteraction={!reduced}
           clickEffect="none"
           intro={false}

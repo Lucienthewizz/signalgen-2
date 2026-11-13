@@ -12,6 +12,7 @@ import {
 type ChartTrade = {
   id: string;
   closedAt: string;
+  sequence?: number;
   pnl: number;
   symbol: string;
   exit: number;
@@ -54,7 +55,7 @@ export function JournalPnlChart({
     const element = chartRef.current;
     if (!element) return;
     const measure = () =>
-      setMeasuredWidth(Math.max(640, Math.round(element.clientWidth)));
+      setMeasuredWidth(Math.max(280, Math.round(element.clientWidth)));
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
@@ -103,16 +104,14 @@ export function JournalPnlChart({
     <figure className="journal-pnl-chart journal-pnl-chart--dated">
       <figcaption>
         <span>Cumulative realized P&amp;L</span>
-        <small>
-          {currency} · one point per closed trade · same filters as the table
-        </small>
+        <small>{currency} · one point per recorded SELL</small>
       </figcaption>
       {!records.length ? (
         <Empty>
           <EmptyHeader>
-            <EmptyTitle>No closed trades in this period</EmptyTitle>
+            <EmptyTitle>No realized P&L yet</EmptyTitle>
             <EmptyDescription>
-              Choose another month or clear the filters.
+              Record a BUY, then a SELL to plot realized results.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -129,10 +128,10 @@ export function JournalPnlChart({
               viewBox={`0 0 ${width} 275`}
               style={{ width }}
               role="group"
-              aria-label={`Cumulative realized P&L in ${currency}, one point per closed trade`}
+              aria-label={`Cumulative realized P&L in ${currency}, one point per recorded SELL`}
             >
               <text x="100" y="20" className="journal-chart-axis-title">
-                Cumulative P&amp;L ({currency})
+                {currency}
               </text>
               {(high === low ? [0] : [low, (low + high) / 2, high]).map(
                 (value, index) => (
@@ -250,7 +249,7 @@ export function JournalPnlChart({
           <p className="journal-chart-readout" role="status">
             {active
               ? describe(active)
-              : "Click or tap a trade point for details. Use Tab, arrow keys and Enter on a keyboard."}
+              : "Select a point for transaction details. Arrow keys move between points."}
           </p>
           {selected?.record && (
             <section
@@ -286,7 +285,10 @@ export function JournalPnlChart({
                 {[
                   ["Entry date", date(selected.record.openedAt)],
                   ["Exit date", date(selected.record.closedAt)],
-                  ["Entry price", money(selected.record.entry)],
+                  [
+                    "Average entry cost, including fees",
+                    money(selected.record.entry),
+                  ],
                   ["Exit price", money(selected.record.exit)],
                   ["Trade P&L", money(selected.record.pnl)],
                   ["Cumulative P&L", money(selected.value)],
@@ -317,8 +319,7 @@ export function JournalPnlChart({
             </section>
           )}
           <p className="journal-chart-order-note">
-            Same-day trades have a stable display order, not an intraday
-            execution sequence. Open trades are excluded.
+            Points follow recorded execution time in Singapore Time (SGT).
           </p>
         </>
       )}

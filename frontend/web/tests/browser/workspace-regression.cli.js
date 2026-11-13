@@ -232,7 +232,7 @@ async (page) => {
   await page.getByRole("checkbox",{name:"Select BBCA for journal",exact:true}).check();
   await page.getByRole("button",{name:"Add 1 to journal",exact:true}).click();
   await page.waitForURL('**/#app/journal');
-  await page.getByRole("heading",{name:"Saved screening results",exact:true}).waitFor();
+  await page.getByRole("heading",{name:"Screening journal",exact:true}).waitFor();
   const journalSelection=page.getByRole("region",{name:"Selected screening results",exact:true});
   await journalSelection.waitFor();
   if(!(await journalSelection.innerText()).includes('BBCA'))throw Error('Captured screening missing');
@@ -251,7 +251,7 @@ async (page) => {
   if(await page.locator('.journal-ledger tbody tr').count()!==5)throw Error('Saved snapshot missing');
   await page.getByRole('button',{name:'Done',exact:true}).click();
   await page.reload();
-  await page.getByRole('heading',{name:'Saved screening results',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Screening journal',exact:true}).waitFor();
   if(await page.evaluate(key=>localStorage.getItem(key),journalKey)!=='preserve-existing-drafts')throw Error('Legacy drafts were changed');
   if(await page.locator('.journal-capture,.journal-pnl-chart').count())throw Error('Manual journal restored after reload');
   await page.route("**/api/v1/stock-universes", route => route.fulfill({ json: { items: [universe, { ...universe, id: "fixture-energy", name: "Energy selection", symbols: ["PTBA.JK"] }] } }));
