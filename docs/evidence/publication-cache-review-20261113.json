@@ -1,0 +1,138 @@
+{
+  "schema": "publication-cache-independent-review-1",
+  "date": "2026-11-13",
+  "reviewed_commit": "989db437def01951abce6aa7b23b2d70ca886f91",
+  "base_commit": "4b2173c4199345770d58cbdcf927bfd3f193fada",
+  "branch": "frontend/publication-cache-independent-review",
+  "scope": "bounded independent source/local-runtime review; report/probes only; no implementation edits or integration merge",
+  "verdict": "No new defect demonstrated within reviewed scope; not whole-application approval or full security audit",
+  "confirmed_findings": [],
+  "unresolved_conditions": [
+    {
+      "id": "DEPLOYMENT-FS-1",
+      "classification": "conditional deployment assumption; no demonstrated vulnerability",
+      "source": "backend/internal/collection/store_cache.go:45,88",
+      "condition": "Private stable root and immutable generations; Lstat/Open is not atomic no-follow; mutex/filesystem metadata resolution is not covered by later fetch timeout",
+      "evidence": "source inspection only; no API-controlled writer or boundary crossing demonstrated",
+      "safe_followup": "Verify chosen volume writer/ACL and slow-storage behavior; descriptor-relative/no-follow hardening only if untrusted concurrent writers are in scope"
+    }
+  ],
+  "tradeoffs": [
+    "One latest multi-instrument method request is generation coherent; separate history calls can select different generations",
+    "Old-generation flights consume shared configured capacity; new generation can fail unavailable until timeout/release",
+    "Metadata view reuse is not in-place archive tamper detection",
+    "Pinned views do not lease old generation files beyond existing retention grace",
+    "Optional future history adapters must expose HistoryProvider on upstream and pinned view",
+    "Pointer read adds hot-hit overhead; synthetic benchmark is not production throughput"
+  ],
+  "independent_checks": {
+    "native_marketdata_repeats": 5,
+    "native_collection_repeats": 5,
+    "race_marketdata_repeats": 3,
+    "race_collection_repeats": 3,
+    "dataset_native_repeats": 1,
+    "dataset_race_repeats": 1,
+    "vet": [
+      "internal/marketdata",
+      "internal/collection",
+      "internal/dataset"
+    ],
+    "summaries": {
+      "marketdata": "ok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/marketdata\t10.323s",
+      "collection": "ok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/collection\t1.706s",
+      "dataset": "ok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/dataset\t0.110s",
+      "race-marketdata": "ok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/marketdata\t7.234s",
+      "race-collection": "ok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/collection\t18.002s",
+      "race-dataset": "ok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/dataset\t1.151s"
+    },
+    "result": "pass",
+    "formatted_probe_race_repeats": 1,
+    "formatted_probe_output": "LOG:/scratch/out/formatted-probes.log\n=== RUN   TestIndependentReviewGenerationFlightsShareLimitAndTimeout\n=== RUN   TestIndependentReviewGenerationFlightsShareLimitAndTimeout/latest\n=== RUN   TestIndependentReviewGenerationFlightsShareLimitAndTimeout/history\n--- PASS: TestIndependentReviewGenerationFlightsShareLimitAndTimeout (2.01s)\n    --- PASS: TestIndependentReviewGenerationFlightsShareLimitAndTimeout/latest (1.00s)\n    --- PASS: TestIndependentReviewGenerationFlightsShareLimitAndTimeout/history (1.00s)\nPASS\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/marketdata\t3.019s\n=== RUN   TestIndependentReviewMultiSymbolPublicationPin\n--- PASS: TestIndependentReviewMultiSymbolPublicationPin (0.02s)\n=== RUN   TestIndependentReviewWarmPointerAndTargetFailures\n--- PASS: TestIndependentReviewWarmPointerAndTargetFailures (0.01s)\n=== RUN   TestIndependentReviewMetadataReuseAndSeparateHistoryViews\n--- PASS: TestIndependentReviewMetadataReuseAndSeparateHistoryViews (0.01s)\nPASS\nok  \tgithub.com/Lucienthewizz/signalgen-2/backend/internal/collection\t1.046s\nPASS INDEPENDENT FOCUSED REVIEW\n\n",
+    "first_run_log_sha256": "9a1d86c655c7a3b5ae78863222c5c1153016db4f17b1fd8f71505fb49e14cb57",
+    "final_probe_log_sha256": "28254927d62f8c6a0cdbfaaf37fe744376d582c506da947e39746087746d601a"
+  },
+  "probes": {
+    "docs/evidence/publication-cache-review-collection_test.go.txt": {
+      "final_sha256": "601dc0dcb568baec7a83489caf01b7954e7c01782c9e9ce4ae442f314907d945",
+      "original_overlay_sha256": "553ba51d9fca9e4ec99640467b61fe2ab365f008f741a42c406447a8d078c96a",
+      "overlay_path": "backend/internal/collection/independent_review_probe_test.go"
+    },
+    "docs/evidence/publication-cache-review-marketdata_test.go.txt": {
+      "final_sha256": "44ed430724da64003840741051f4d558f75c9a4331e98793319111f25851622e",
+      "original_overlay_sha256": "d9b832c3292a5772fdc73860df010f77887c8a4b26608da28e3482e3ed52e706",
+      "overlay_path": "backend/internal/marketdata/independent_review_probe_test.go"
+    }
+  },
+  "source_evidence": {
+    "reviewed_git_blobs": {
+      "backend/internal/marketdata/cache.go": "247e60be8bd5f17e445535788d9b1bd99daed997",
+      "backend/internal/marketdata/history_cache.go": "c4d34f3774c33e5d830676a675d1566e02943da6",
+      "backend/internal/marketdata/snapshot.go": "3fa089bb25ddac2fe595ecdcf37c607eef78161a",
+      "backend/internal/marketdata/snapshot_test.go": "3f04f6ec60373b6da49ef042788925deab6e27d2",
+      "backend/internal/collection/sync.go": "02769f3fff921202fba7dc15ec3077ab434e5e3b",
+      "backend/internal/collection/store_cache.go": "852f2430c2d6c28188fa7aa397f0e2c504db4612",
+      "backend/internal/collection/store_cache_test.go": "ab900a7a3dd15f721974758b2e8b25df14a256b9",
+      "backend/internal/collection/store_cache_benchmark_test.go": "b3940f047f2d4ed8ca8ad87b31cde7a79764c349"
+    },
+    "protected_source_file_count": 368,
+    "protected_source_sha256_map_hash": "daddb58a46265b6aa3c02a6da41ba3d1c850fcbb430433760128ef0aab3e175b",
+    "working_source_identical_to_reviewed_commit": true,
+    "worker_validation_and_performance_blob_checks": "all recorded source blobs match989db437"
+  },
+  "reused_performance": {
+    "source": "publication-aware-cache-performance-20261113.json",
+    "independently_rerun": false,
+    "hot_latest_median_sample_mean_ms": 0.0033083500000000003,
+    "hot_history_median_sample_mean_ms": 0.0031542000000000002,
+    "one_changed_generation_latest_ms": 1.267304,
+    "limits": "500 synthetic symbols/40 candles,15 sample means of20calls,local tmpfs,GOMAXPROCS1,uncontrolled other host load; no individual-request p95 or throughput claim"
+  },
+  "isolation": {
+    "docker_context": "orbstack",
+    "image_id": "sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+    "network": "none",
+    "root_source_toolchain_modules": "read-only",
+    "uid": "65534:65534",
+    "env_allowlist": [
+      "PATH",
+      "HOME",
+      "TMPDIR",
+      "GOCACHE",
+      "GOMODCACHE",
+      "GOPROXY=off",
+      "GOSUMDB=off",
+      "GOTOOLCHAIN=local"
+    ],
+    "scratch_home_tmp_cache": true,
+    "cpu": 2,
+    "ram_bytes": 2147483648,
+    "pids": 256,
+    "nofile": 1024,
+    "file_bytes": 134217728,
+    "scratch_bytes": 2147483648,
+    "target_wall_seconds": 360,
+    "parent_seconds": 375,
+    "per_go_test_seconds": 90,
+    "persistent_logging": "disabled",
+    "capabilities": "ALL dropped;no-new-privileges",
+    "docker_socket_or_host_credentials_mounted": false,
+    "downloads_or_installs": false,
+    "formatter": "separate offline non-root1CPU256MiB64PIDs8MiB scratch10s target/15s parent"
+  },
+  "graph": {
+    "project_requested": "browser_regression_integration",
+    "index_status": "Transport closed",
+    "search_graph": "Transport closed",
+    "exact_path_coverage": "Transport closed on both requested path groups; direct current-source fallback",
+    "completeness_claim": false
+  },
+  "not_rerun": [
+    "scheduler",
+    "full frontend/browser suites",
+    "real packaged API240 stack",
+    "worker performance benchmarks",
+    "live providers/real IDX",
+    "whole application/security audit"
+  ],
+  "writing_review": "no-ai-slop and unslop balanced; preserve technical meaning and limits"
+}

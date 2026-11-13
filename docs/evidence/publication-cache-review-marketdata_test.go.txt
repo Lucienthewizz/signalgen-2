@@ -1,0 +1,73 @@
+package marketdata
+
+import (
+	"context"
+	"errors"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
+	"testing"
+	"time"
+)
+
+func TestIndependentReviewGenerationFlightsShareLimitAndTimeout(t *testing.T) {
+	for _, history := range []bool{false, true} {
+		t.Run(map[bool]string{false: "latest", true: "history"}[history], func(t *testing.T) {
+			a := &revisionView{price: 100, started: make(chan struct{}), release: make(chan struct{})}
+			b := &revisionView{price: 200}
+			upstream := &revisionProvider{revision: "A", view: a}
+			options := DefaultCacheOptions()
+			options.MaxInFlight = 1
+			options.FetchTimeout = time.Second
+			cache, e := NewCachedProvider(upstream, options)
+			if e != nil {
+				t.Fatal(e)
+			}
+			item := universe.Instrument{Symbol: "TEST", ProviderSymbol: "TEST"}
+			from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			to := from.AddDate(0, 1, 0)
+			read := func(ctx context.Context) (float64, error) {
+				if history {
+					h, e := cache.DailyHistory(ctx, item, from, to)
+					if e != nil {
+						return 0, e
+					}
+					return h.Series.Candles[0].Close, nil
+				}
+				s, e := cache.Daily(ctx, []universe.Instrument{item}, 20)
+				if e != nil {
+					return 0, e
+				}
+				return s[0].Candles[0].Close, nil
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { _, err := read(ctx); done <- err }()
+			<-a.started
+			upstream.set("B", b, nil)
+			if _, e = read(context.Background()); !errors.Is(e, ErrUnavailable) {
+				t.Fatal("new generation bypassed global flight bound", e)
+			}
+			cancel()
+			if e = <-done; !errors.Is(e, context.Canceled) {
+				t.Fatal("request cancellation lost", e)
+			}
+			deadline := time.Now().Add(2 * time.Second)
+			for {
+				cache.mu.Lock()
+				flights := len(cache.flights)
+				cache.mu.Unlock()
+				if flights == 0 {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("shared timeout leaked flight")
+				}
+				time.Sleep(time.Millisecond)
+			}
+			value, e := read(context.Background())
+			if e != nil || value != 201 || a.calls.Load() != 1 || b.calls.Load() != 1 {
+				t.Fatal("B failed after old flight timeout", value, e)
+			}
+		})
+	}
+}

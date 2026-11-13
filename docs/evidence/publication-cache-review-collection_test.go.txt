@@ -1,0 +1,215 @@
+package collection
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/marketdata"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
+)
+
+// Independent probe: a real publication occurs within a multi-instrument latest request.
+type reviewPublishingProvider struct {
+	store   *StoreProvider
+	once    sync.Once
+	publish func() error
+	err     error
+}
+type reviewPublishingView struct {
+	marketdata.Provider
+	parent *reviewPublishingProvider
+}
+
+func (p *reviewPublishingProvider) Snapshot(ctx context.Context) (string, marketdata.Provider, error) {
+	revision, view, err := p.store.Snapshot(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	return revision, &reviewPublishingView{Provider: view, parent: p}, nil
+}
+func (p *reviewPublishingProvider) Daily(ctx context.Context, items []universe.Instrument, n int) ([]marketdata.Series, error) {
+	return p.store.Daily(ctx, items, n)
+}
+func (v *reviewPublishingView) Daily(ctx context.Context, items []universe.Instrument, n int) ([]marketdata.Series, error) {
+	v.parent.once.Do(func() { v.parent.err = v.parent.publish() })
+	if v.parent.err != nil {
+		return nil, v.parent.err
+	}
+	return v.Provider.Daily(ctx, items, n)
+}
+func TestIndependentReviewMultiSymbolPublicationPin(t *testing.T) {
+	c, o, prices := publicationFixture(t, 5)
+	store, err := NewStoreProvider(o.Directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revA, _, err := store.Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &reviewPublishingProvider{store: store}
+	provider.publish = func() error {
+		o.To = o.To.AddDate(0, 0, 1)
+		prices.price = 200
+		_, e := Sync(context.Background(), c, prices, o, 7, nil)
+		return e
+	}
+	cache, err := marketdata.NewCachedProvider(provider, marketdata.DefaultCacheOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := []universe.Instrument{}
+	for _, item := range c.Items {
+		items = append(items, universe.Instrument{Symbol: item.ProviderSymbol, ProviderSymbol: item.ProviderSymbol})
+	}
+	a, err := cache.Daily(context.Background(), items, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revB, _, err := store.Snapshot(context.Background())
+	if err != nil || revA == revB {
+		t.Fatal("publication did not advance", err)
+	}
+	for i, s := range a {
+		if s.Symbol != items[i].Symbol || s.Candles[19].Close != 101 || !strings.Contains(strings.Join(s.QualityWarnings, " "), revA) || strings.Contains(strings.Join(s.QualityWarnings, " "), revB) {
+			t.Fatal("multi-symbol request mixed data/provenance")
+		}
+	}
+	b, err := cache.Daily(context.Background(), items, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range b {
+		if s.Candles[19].Close != 201 {
+			t.Fatal("next request missed B")
+		}
+	}
+}
+func TestIndependentReviewWarmPointerAndTargetFailures(t *testing.T) {
+	c, o, prices := publicationFixture(t, 1)
+	store, err := NewStoreProvider(o.Directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache, _ := marketdata.NewCachedProvider(store, marketdata.DefaultCacheOptions())
+	item := universe.Instrument{Symbol: c.Items[0].ProviderSymbol, ProviderSymbol: c.Items[0].ProviderSymbol}
+	ctx := context.Background()
+	checkGood := func() {
+		t.Helper()
+		if _, e := cache.Daily(ctx, []universe.Instrument{item}, 20); e != nil {
+			t.Fatal(e)
+		}
+		if _, e := cache.DailyHistory(ctx, item, o.From, o.To); e != nil {
+			t.Fatal(e)
+		}
+	}
+	checkBad := func() {
+		t.Helper()
+		if _, e := cache.Daily(ctx, []universe.Instrument{item}, 20); !errors.Is(e, marketdata.ErrUnavailable) {
+			t.Fatal("latest accepted invalid publication", e)
+		}
+		if _, e := cache.DailyHistory(ctx, item, o.From, o.To); !errors.Is(e, marketdata.ErrUnavailable) {
+			t.Fatal("history accepted invalid publication", e)
+		}
+	}
+	checkGood()
+	pointer := filepath.Join(o.Directory, "current.json")
+	original, e := os.ReadFile(pointer)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, bad := range []string{"", `{"schema":"idx-store-1","generation":"generation-missing","extra":1}`, strings.Repeat(" ", 4097)} {
+		if e = os.WriteFile(pointer, []byte(bad), 0600); e != nil {
+			t.Fatal(e)
+		}
+		checkBad()
+	}
+	if e = os.Remove(pointer); e != nil {
+		t.Fatal(e)
+	}
+	checkBad()
+	if e = os.Mkdir(pointer, 0700); e != nil {
+		t.Fatal(e)
+	}
+	checkBad()
+	if e = os.Remove(pointer); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(pointer, original, 0600); e != nil {
+		t.Fatal(e)
+	}
+	checkGood()
+	// New B metadata is corrupt before the first B view is selected: A must not be fallback.
+	o.To = o.To.AddDate(0, 0, 1)
+	prices.price = 200
+	if _, e = Sync(ctx, c, prices, o, 7, nil); e != nil {
+		t.Fatal(e)
+	}
+	publication, e := readPublication(o.Directory)
+	if e != nil {
+		t.Fatal(e)
+	}
+	report := filepath.Join(o.Directory, publication.Generation, "report.json")
+	saved, e := os.ReadFile(report)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(report, []byte(`{`), 0600); e != nil {
+		t.Fatal(e)
+	}
+	checkBad()
+	if e = os.WriteFile(report, saved, 0600); e != nil {
+		t.Fatal(e)
+	}
+	checkGood()
+}
+func TestIndependentReviewMetadataReuseAndSeparateHistoryViews(t *testing.T) {
+	c, o, prices := publicationFixture(t, 2)
+	store, e := NewStoreProvider(o.Directory)
+	if e != nil {
+		t.Fatal(e)
+	}
+	revision, view, e := store.Snapshot(context.Background())
+	if e != nil {
+		t.Fatal(e)
+	}
+	// Deliberately outside the immutable-generation contract: observe absence of repeated metadata reads.
+	catalog := filepath.Join(o.Directory, revision, "catalog.json")
+	if e = os.Rename(catalog, catalog+".held"); e != nil {
+		t.Fatal(e)
+	}
+	_, again, e := store.Snapshot(context.Background())
+	if e != nil || again != view {
+		t.Fatal("hot resolution reread catalog or changed pinned view", e)
+	}
+	if e = os.Rename(catalog+".held", catalog); e != nil {
+		t.Fatal(e)
+	}
+	cache, _ := marketdata.NewCachedProvider(store, marketdata.DefaultCacheOptions())
+	items := []universe.Instrument{}
+	for _, i := range c.Items {
+		items = append(items, universe.Instrument{Symbol: i.ProviderSymbol, ProviderSymbol: i.ProviderSymbol})
+	}
+	a, e := cache.DailyHistory(context.Background(), items[0], o.From, o.To)
+	if e != nil {
+		t.Fatal(e)
+	}
+	oldTo := o.To
+	o.To = o.To.AddDate(0, 0, 1)
+	prices.price = 200
+	if _, e = Sync(context.Background(), c, prices, o, 7, nil); e != nil {
+		t.Fatal(e)
+	}
+	b, e := cache.DailyHistory(context.Background(), items[1], o.From, oldTo)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if a.Series.Candles[len(a.Series.Candles)-1].Close != 101 || b.Series.Candles[len(b.Series.Candles)-1].Close != 201 {
+		t.Fatal("separate-call contract changed")
+	}
+}
