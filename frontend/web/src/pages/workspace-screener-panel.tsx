@@ -183,6 +183,7 @@ function LatestScreenerPanel({
   const [universeId, setUniverseId] = useState("");
   const [loadingResources, setLoadingResources] = useState(true);
   const [state, setState] = useState<RunState>("idle");
+  const [runStage, setRunStage] = useState<0 | 1 | 2>(0);
   const [stage, setStage] = useState("Ready to screen");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -371,6 +372,7 @@ function LatestScreenerPanel({
       setUniverseId("");
       setPreferencesReady(false);
       setState("idle");
+      setRunStage(0);
       restoredUser.current = null;
     }
     if (authenticated) void loadResources();
@@ -505,6 +507,7 @@ function LatestScreenerPanel({
         setError(null);
         setErrorOpen(false);
         setState("loading");
+        setRunStage(1);
         setProgress(5);
         setStage("Checking completed candles");
         return runLiveScreener(
@@ -540,6 +543,7 @@ function LatestScreenerPanel({
         setProgress(100);
         setStage("Waiting for the next data check");
         setState("completed");
+        setRunStage(2);
       },
       error: (caught, retrying) => {
         setFailure(
@@ -563,6 +567,7 @@ function LatestScreenerPanel({
             : "Monitoring stopped",
         );
         setState("failed");
+        setRunStage(0);
         // Open once per Start, not on every automatic background retry.
         if (!failurePresented) {
           failurePresented = true;
@@ -576,6 +581,7 @@ function LatestScreenerPanel({
   function cancel() {
     monitor.stop();
     setState(run ? "completed" : "idle");
+    setRunStage((current) => (current === 2 ? 2 : 0));
     setProgress(0);
     setStage("Monitoring stopped");
   }
@@ -775,7 +781,7 @@ function LatestScreenerPanel({
           </div>
         ) : (
           <div className="screener-console__body">
-            <Stepper stage={state === "loading" ? 1 : run ? 2 : 0} />
+            <Stepper stage={runStage} />
             {selectionIssue && (
               <Alert>
                 <CircleAlert aria-hidden="true" />
@@ -801,7 +807,10 @@ function LatestScreenerPanel({
                   }))}
                   value={ruleId}
                   disabled={monitorState.active}
-                  onValueChange={(value) => setRuleId(value ?? "")}
+                  onValueChange={(value) => {
+                    setRuleId(value ?? "");
+                    setRunStage(0);
+                  }}
                 >
                   <SelectTrigger id="screen-rule">
                     <SelectValue>{selectedRule?.name}</SelectValue>
@@ -834,8 +843,12 @@ function LatestScreenerPanel({
                   value={timeframe}
                   disabled={monitorState.active}
                   onValueChange={(value) => {
-                    if (screenerIntervals.some((item) => item.value === value))
+                    if (
+                      screenerIntervals.some((item) => item.value === value)
+                    ) {
                       setTimeframe(value as ScreenerTimeframe);
+                      setRunStage(0);
+                    }
                   }}
                 >
                   <SelectTrigger id="screen-interval">
@@ -878,7 +891,10 @@ function LatestScreenerPanel({
                   }))}
                   value={universeId}
                   disabled={monitorState.active}
-                  onValueChange={(value) => setUniverseId(value ?? "")}
+                  onValueChange={(value) => {
+                    setUniverseId(value ?? "");
+                    setRunStage(0);
+                  }}
                 >
                   <SelectTrigger id="screen-universe">
                     <SelectValue>{selectedUniverse?.name}</SelectValue>
@@ -2040,6 +2056,7 @@ function LatestScreenerPanel({
                     disabled={monitorState.active}
                     onClick={() => {
                       setRun(item.run);
+                      setRunStage(0);
                       setRunContext(null);
                       setHistoricalRun(item);
                       setDetailSymbol(null);

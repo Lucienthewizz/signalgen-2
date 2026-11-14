@@ -15,11 +15,13 @@ export default function Stepper({
           <li
             key={index}
             data-state={
-              index < stage
-                ? "complete"
-                : index === stage
-                  ? "current"
-                  : "waiting"
+              stage === 0
+                ? "waiting"
+                : index < stage
+                  ? "complete"
+                  : index === stage
+                    ? "current"
+                    : "waiting"
             }
             aria-current={index === stage ? "step" : undefined}
           >
