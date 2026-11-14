@@ -1,0 +1,11 @@
+.sidebar-dock .nav-group button > svg {
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-dock .nav-group button > svg {
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}

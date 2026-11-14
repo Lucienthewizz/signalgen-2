@@ -458,6 +458,24 @@ async (page) => {
           await page.getByRole("button", { name: "Close details", exact: true }).click({ timeout: 5000 });
         }
         if (view === "overview") {
+          const primary=await page.evaluate(()=>{const button=document.createElement('button');button.className='bg-primary text-primary-foreground';document.querySelector('.demo-workbench').append(button);const css=getComputedStyle(button);const result={background:css.backgroundColor,color:css.color};button.remove();return result;});
+          if(primary.background!=='rgb(6, 76, 53)'||primary.color!=='rgb(255, 255, 255)')throw Error(`Primary action palette changed: ${JSON.stringify(primary)}`);
+          if(width===1440){
+            const dock=page.getByRole("navigation",{name:"Workspace navigation",exact:true});
+            const dashboard=dock.getByRole("button",{name:"Dashboard",exact:true});
+            const initialBox=await dashboard.boundingBox();
+            await page.emulateMedia({reducedMotion:"no-preference"});
+            await dashboard.hover();
+            await page.waitForFunction(()=>Number(document.querySelector('.sidebar-dock button[aria-label="Dashboard"] svg')?.style.transform.match(/scale\(([^)]+)\)/)?.[1])>1.3);
+            const hoverBox=await dashboard.boundingBox();
+            if(Math.abs(initialBox.height-hoverBox.height)>1||Math.abs(initialBox.width-hoverBox.width)>1)throw Error("Dock magnification moves the navigation hit target");
+            await page.locator('.sidebar').screenshot({path:'/tmp/signalgen-sidebar-dock-hover.png'});
+            await page.mouse.move(800,100);
+            await dock.getByRole("button",{name:"Screener",exact:true}).focus();
+            await page.waitForFunction(()=>Number(document.querySelector('.sidebar-dock button[aria-label="Screener"] svg')?.style.transform.match(/scale\(([^)]+)\)/)?.[1])>1.3);
+            await page.emulateMedia({reducedMotion:"reduce"});
+            await page.waitForFunction(()=>matchMedia('(prefers-reduced-motion: reduce)').matches&&Array.from(document.querySelectorAll('.sidebar-dock button > svg')).every(el=>getComputedStyle(el).transform==='none'),null,{timeout:3000});
+          }
           await page.getByRole("heading", { name: "Follow the market", exact: true }).waitFor({ timeout: 5000 });
           const box = await page.locator(".overview-launch").evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), background: getComputedStyle(el).backgroundImage }));
           if (box.radius < 24 || !box.background.includes("linear-gradient")) throw Error("Dashboard rounded gradient box missing");
@@ -645,6 +663,9 @@ async (page) => {
       await rules.press('Tab'); await page.keyboard.press('Shift+Tab');
       await tooltip.waitFor();
       await page.keyboard.press('Escape');
+      // Native toggle clicks take focus out of the dock; isolate panel motion from icon magnification.
+      await page.locator('.sidebar-boundary-toggle').focus();
+      await page.mouse.move(800,100);
       await page.emulateMedia({reducedMotion:'no-preference'});
       const motion=await page.evaluate(async()=>{
         const sidebar=document.querySelector('#workspace-sidebar'),workspace=document.querySelector('.workspace'),toggle=document.querySelector('.sidebar-boundary-toggle');
@@ -813,9 +834,9 @@ async (page) => {
       await page.emulateMedia({reducedMotion:'no-preference'});
       await page.locator('.market-hero').hover();
       if(await page.locator('.market-hero__chart, .signal-lattice').count())throw Error('Old landing charts remain');
-      if(await page.locator('.landing-background canvas').count()!==2)throw Error('Landing backgrounds are missing');
+      if(await page.locator('.landing-background canvas').count()!==1)throw Error('Hero should have the only animated background');
       await page.emulateMedia({reducedMotion:'reduce'});
-      await page.locator('.gradient-ascii-canvas').waitFor();
+      await page.locator('.landing-background--gradient').waitFor();
       if(await page.locator('.pricing-plan').count()!==3)throw Error('Original pricing cards are missing');
     }
     if (!family.includes(route === "home" ? "Manrope Variable" : "Saira Variable")) throw Error(`Public route font mismatch: ${route} ${family}`);

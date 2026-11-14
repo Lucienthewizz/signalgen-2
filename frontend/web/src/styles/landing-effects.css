@@ -29,9 +29,21 @@
   mask-image: linear-gradient(90deg, #0005, #000 70%);
 }
 .landing-background--gradient {
-  background:
-    radial-gradient(ellipse at 80% 18%, #064c3514, transparent 55%),
-    linear-gradient(180deg, #020b07 0%, #061a11 50%, #020805 100%);
+  background: linear-gradient(
+    180deg,
+    #020b07 0%,
+    #061a11 12%,
+    #020805 23%,
+    #020805 28%,
+    #061a11 40%,
+    #020805 51%,
+    #020805 56%,
+    #061a11 68%,
+    #020805 79%,
+    #020805 84%,
+    #061a11 93%,
+    #020805 100%
+  );
 }
 .landing-background--hero::after {
   content: "";
@@ -93,5 +105,35 @@ html[data-theme="light"] .landing-background--hero::after {
   .landing-shell .shiny-text {
     background: none !important;
     -webkit-text-fill-color: CanvasText;
+  }
+}
+
+.landing-shell .landing-product-flow {
+  padding-top: clamp(28px, 4vw, 56px);
+}
+.landing-shell .testimonial-marquee__track {
+  padding-block: 22px 26px;
+}
+.landing-shell .testimonial-pixels {
+  transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: center;
+}
+.landing-shell .testimonial-pixels:focus-visible {
+  transform: translateY(-4px) scale(1.045);
+  z-index: 4;
+}
+@media (hover: hover) and (pointer: fine) {
+  .landing-shell .testimonial-pixels:hover {
+    transform: translateY(-4px) scale(1.045);
+    z-index: 4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-shell .testimonial-pixels {
+    transition: none;
+  }
+  .landing-shell .testimonial-pixels:hover,
+  .landing-shell .testimonial-pixels:focus-visible {
+    transform: none;
   }
 }

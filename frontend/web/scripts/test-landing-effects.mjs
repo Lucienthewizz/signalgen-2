@@ -48,6 +48,16 @@ try {
     throw Error("Local preview label remains");
   if (!(await page.locator(".market-hero h2 .shiny-text").count()))
     throw Error("Shiny headline is missing");
+  const verify = page.locator(".market-hero h2 em .shiny-text");
+  await verify.waitFor();
+  const initialShine = await verify.evaluate((el) => el.style.backgroundImage);
+  await page.waitForFunction(
+    (previous) =>
+      document.querySelector(".market-hero h2 em .shiny-text")?.style
+        .backgroundImage !== previous,
+    initialShine,
+    { timeout: 6000 },
+  );
   if (await page.locator(".market-hero__chart, .signal-lattice").count())
     throw Error("Old landing chart remains");
   if (await page.locator("#pricing .pixel-card").count())
@@ -124,8 +134,47 @@ try {
   await page.locator("#reviews").scrollIntoViewIfNeeded();
   if (!(await page.locator("#reviews .pixel-card").count()))
     throw Error("Testimonial pixel cards are missing");
+  await page.locator("#reviews .testimonial-marquee").hover();
+  const visibleIndex = await page
+    .locator("#reviews .testimonial-pixels")
+    .evaluateAll((nodes) =>
+      nodes.findIndex((node) => {
+        const r = node.getBoundingClientRect();
+        return r.left > 40 && r.right < innerWidth - 40;
+      }),
+    );
+  if (visibleIndex < 0) throw Error("No visible testimonial to hover");
+  const card = page.locator("#reviews .testimonial-pixels").nth(visibleIndex);
+  const pixelSizeBefore = await card
+    .locator("canvas")
+    .evaluate((el) => `${el.width}x${el.height}`);
+  await card.hover();
+  await page.waitForFunction((index) => {
+    const el = document.querySelectorAll("#reviews .testimonial-pixels")[index];
+    return new DOMMatrixReadOnly(getComputedStyle(el).transform).a > 1.03;
+  }, visibleIndex);
+  if (
+    (await page
+      .locator("#reviews .testimonial-pixels")
+      .evaluateAll(
+        (nodes) =>
+          nodes.filter(
+            (el) =>
+              new DOMMatrixReadOnly(getComputedStyle(el).transform).a > 1.01,
+          ).length,
+      )) !== 1
+  )
+    throw Error("More than the hovered card was magnified");
+  if (
+    (await card
+      .locator("canvas")
+      .evaluate((el) => `${el.width}x${el.height}`)) !== pixelSizeBefore
+  )
+    throw Error("Hover zoom resized the pixel buffer");
   await page.screenshot({ path: "/tmp/signalgen-testimonial-pixels.png" });
   await page.emulateMedia({ reducedMotion: "reduce" });
+  if ((await card.evaluate((el) => getComputedStyle(el).transform)) !== "none")
+    throw Error("Reduced motion still zooms testimonials");
   await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
   await page.waitForTimeout(500);
   await page.locator(".market-hero").scrollIntoViewIfNeeded();

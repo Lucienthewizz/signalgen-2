@@ -276,9 +276,9 @@ export default function PixelCard({
 
     const build = () => {
       const s = settingsRef.current;
-      const rect = container.getBoundingClientRect();
-      const width = Math.max(1, Math.round(rect.width));
-      const height = Math.max(1, Math.round(rect.height));
+      // CSS hover magnification should not rebuild the pixel buffer per frame.
+      const width = Math.max(1, container.clientWidth);
+      const height = Math.max(1, container.clientHeight);
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
       const key = [
         width,
@@ -572,7 +572,12 @@ export default function PixelCard({
 
     const local = (event: PointerEvent) => {
       const rect = container.getBoundingClientRect();
-      return [event.clientX - rect.left, event.clientY - rect.top];
+      return [
+        ((event.clientX - rect.left) * container.clientWidth) /
+          Math.max(1, rect.width),
+        ((event.clientY - rect.top) * container.clientHeight) /
+          Math.max(1, rect.height),
+      ];
     };
 
     const onEnter = (event: PointerEvent) => {

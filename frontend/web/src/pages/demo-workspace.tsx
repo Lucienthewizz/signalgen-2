@@ -1,3 +1,4 @@
+import Dock from "@/components/react-bits/Dock";
 import "@/styles/workspace-forest.css";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import "@/styles/tier-access.css";
@@ -1924,7 +1925,7 @@ export function DemoWorkspace({
           </Tooltip.Root>
         </div>
         <Tooltip.Provider delay={250}>
-          <nav aria-label="Workspace navigation">
+          <Dock disabled={mobileViewport}>
             {navGroups.map((group, index) => {
               const visibleItems = group.items;
               if (!visibleItems.length) return null;
@@ -1972,7 +1973,7 @@ export function DemoWorkspace({
                 </div>
               );
             })}
-          </nav>
+          </Dock>
         </Tooltip.Provider>
         <div className="sidebar__footer">
           {authenticated && user ? (

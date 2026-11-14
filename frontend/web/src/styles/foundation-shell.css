@@ -41,7 +41,7 @@
   --dim: #919b93;
   --green: #45e69f;
   --green-bright: #7af5bd;
-  --green-deep: #168f5a;
+  --green-deep: #064c35;
   --green-soft: #9df8cc;
   --danger: #ff8585;
   --warning: #e8bf75;
@@ -281,7 +281,7 @@ a {
       rgba(137, 213, 168, 0.28),
       transparent 46%
     ),
-    linear-gradient(118deg, rgba(38, 111, 75, 0.96), rgba(15, 57, 38, 0.98));
+    linear-gradient(118deg, rgba(6, 76, 53, 0.96), rgba(4, 46, 31, 0.98));
   box-shadow:
     inset 0 1px 0 rgba(211, 255, 226, 0.16),
     0 10px 26px rgba(4, 31, 18, 0.28);
@@ -296,7 +296,7 @@ a {
       rgba(147, 224, 178, 0.32),
       transparent 48%
     ),
-    linear-gradient(118deg, rgba(42, 122, 82, 0.98), rgba(17, 66, 43, 0.98));
+    linear-gradient(118deg, rgba(8, 92, 62, 0.98), rgba(5, 58, 39, 0.98));
   box-shadow:
     inset 0 1px 0 rgba(223, 255, 234, 0.2),
     0 13px 31px rgba(4, 36, 21, 0.36);

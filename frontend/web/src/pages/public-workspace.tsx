@@ -129,7 +129,19 @@ export function PublicWorkspace({
                   disabled={reduced}
                 />
                 <br />
-                <em>Verify the signal.</em>
+                <em>
+                  <ShinyText
+                    text="Verify the signal."
+                    color={light ? "#0d6f46" : "#a3f6d2"}
+                    shineColor={light ? "#063a27" : "#1c9165"}
+                    speed={2.4}
+                    delay={1.5}
+                    shineWidth={40}
+                    softness={0.8}
+                    trigger="loop"
+                    disabled={reduced}
+                  />
+                </em>
               </h2>
               <p>
                 Build rules, run screenings, and inspect the evidence behind
