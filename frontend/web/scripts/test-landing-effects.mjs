@@ -173,15 +173,55 @@ try {
     throw Error("Hover zoom resized the pixel buffer");
   await page.screenshot({ path: "/tmp/signalgen-testimonial-pixels.png" });
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.waitForFunction(
+    (index) =>
+      getComputedStyle(
+        document.querySelectorAll("#reviews .testimonial-pixels")[index],
+      ).transform === "none",
+    visibleIndex,
+  );
   if ((await card.evaluate((el) => getComputedStyle(el).transform)) !== "none")
     throw Error("Reduced motion still zooms testimonials");
   await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
   await page.waitForTimeout(500);
   await page.locator(".market-hero").scrollIntoViewIfNeeded();
   await page.screenshot({ path: "/tmp/signalgen-landing-effects-light.png" });
+  for (const width of [1456, 390]) {
+    await page.setViewportSize({ width, height: 853 });
+    await page.goto(baseURL + "/#home");
+    const workflow = page.getByRole("button", {
+      name: "Explore the workflow",
+      exact: true,
+    });
+    await workflow.click();
+    await page.waitForURL((url) => url.hash === "#login");
+    await page.goto(baseURL + "/#home");
+    const demoLinks = page.getByRole("link", { name: "Demo", exact: true });
+    if (
+      (
+        await demoLinks.evaluateAll((nodes) =>
+          nodes.map((node) => node.getAttribute("href")),
+        )
+      ).some((href) => href !== "#login")
+    )
+      throw Error("Guest Demo link bypasses login");
+    await page
+      .locator(".landing-footer")
+      .getByRole("link", { name: "Demo", exact: true })
+      .click();
+    await page.waitForURL((url) => url.hash === "#login");
+    if (width === 1456) {
+      await page.goto(baseURL + "/#home");
+      await page
+        .locator(".landing-header__nav")
+        .getByRole("link", { name: "Demo", exact: true })
+        .click();
+      await page.waitForURL((url) => url.hash === "#login");
+    }
+  }
   if (errors.length) throw Error(errors.join("\n"));
   console.log(
-    "PASS: landing effects, pricing, features, mobile and reduced motion/light rendering",
+    "PASS: landing effects, pricing, features, mobile, reduced motion/light rendering and guest workflow/Demo login routes",
   );
 } finally {
   await browser.close();

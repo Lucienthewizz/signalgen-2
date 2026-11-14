@@ -490,6 +490,19 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
 
   await page.goto(baseURL + "/#home");
+  if (
+    (
+      await page
+        .getByRole("link", { name: "Demo", exact: true })
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href")))
+    ).some((href) => href !== "#app/overview")
+  )
+    throw Error("Signed-in Demo link does not open workspace");
+  await page
+    .getByRole("button", { name: "Explore the workflow", exact: true })
+    .click();
+  await page.waitForURL((url) => url.hash === "#app/overview");
+  await page.goto(baseURL + "/#home");
   if (await page.locator(".landing-header__session").count())
     throw Error("Dashboard still appears outside the account dropdown");
   await page

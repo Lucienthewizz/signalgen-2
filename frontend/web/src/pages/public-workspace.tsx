@@ -70,6 +70,7 @@ export function PublicWorkspace({
   onLogout: () => void | Promise<void>;
 }) {
   const { reduced, light } = useVisualPreferences();
+  const workflowHref = user ? "#app/overview" : "#login";
   return (
     <main className="workbench landing-shell">
       <section className="workspace landing-workspace">
@@ -87,7 +88,7 @@ export function PublicWorkspace({
               <a href="#pricing">Pricing</a>
               <a href="#reviews">Reviews</a>
               <a href="#faq">FAQ</a>
-              <a href="#app/overview">Demo</a>
+              <a href={workflowHref}>Demo</a>
             </nav>
             <div className="landing-header__actions">
               <ThemeToggle compact />
@@ -151,7 +152,7 @@ export function PublicWorkspace({
                 <Button
                   className="ui-button ui-button--primary"
                   onClick={() => {
-                    location.hash = "app/overview";
+                    location.hash = workflowHref;
                   }}
                 >
                   Explore the workflow <ArrowRight />
@@ -264,7 +265,7 @@ export function PublicWorkspace({
                     <a href="#capabilities">Features</a>
                     <a href="#pricing">Pricing</a>
                     <a href="#faq">FAQ</a>
-                    <a href="#app/overview">Demo</a>
+                    <a href={workflowHref}>Demo</a>
                     <a href="#creators">Creators</a>
                   </nav>
                 </div>

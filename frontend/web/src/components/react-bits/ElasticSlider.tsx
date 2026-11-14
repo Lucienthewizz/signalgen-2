@@ -28,37 +28,39 @@ export default function ElasticSlider({
         } as CSSProperties
       }
     >
-      <input
-        type="range"
-        min={1}
-        max={100}
-        step={1}
-        value={safeValue}
-        aria-label={label}
-        aria-describedby={describedBy}
-        aria-valuetext={`${safeValue} completed daily candles`}
-        onChange={(event) => onChange(Number(event.target.value))}
-        onPointerDown={(event) =>
-          event.currentTarget.setPointerCapture(event.pointerId)
-        }
-        onPointerMove={(event) => {
-          if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-          const box = event.currentTarget.getBoundingClientRect();
-          const overflow =
-            event.clientX < box.left
-              ? event.clientX - box.left
-              : event.clientX > box.right
-                ? event.clientX - box.right
-                : 0;
-          setStretch(
-            Math.sign(overflow) * Math.min(8, Math.abs(overflow) ** 0.6),
-          );
-        }}
-        onPointerUp={() => setStretch(0)}
-        onLostPointerCapture={() => setStretch(0)}
-        onPointerCancel={() => setStretch(0)}
-        onBlur={() => setStretch(0)}
-      />
+      <div className="elastic-slider__control">
+        <input
+          type="range"
+          min={1}
+          max={100}
+          step={1}
+          value={safeValue}
+          aria-label={label}
+          aria-describedby={describedBy}
+          aria-valuetext={`${safeValue} completed daily candles`}
+          onChange={(event) => onChange(Number(event.target.value))}
+          onPointerDown={(event) =>
+            event.currentTarget.setPointerCapture(event.pointerId)
+          }
+          onPointerMove={(event) => {
+            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+            const box = event.currentTarget.getBoundingClientRect();
+            const overflow =
+              event.clientX < box.left
+                ? event.clientX - box.left
+                : event.clientX > box.right
+                  ? event.clientX - box.right
+                  : 0;
+            setStretch(
+              Math.sign(overflow) * Math.min(8, Math.abs(overflow) ** 0.6),
+            );
+          }}
+          onPointerUp={() => setStretch(0)}
+          onLostPointerCapture={() => setStretch(0)}
+          onPointerCancel={() => setStretch(0)}
+          onBlur={() => setStretch(0)}
+        />
+      </div>
       <div className="elastic-slider__limits" aria-hidden="true">
         <span>1 candle</span>
         <span>100 candles</span>

@@ -334,6 +334,12 @@ async (page) => {
     if (await numeric.inputValue() !== "99") throw Error("Slider arrow step is not one candle");
     await page.keyboard.press("Home");
     if (await numeric.inputValue() !== "1") throw Error("Slider Home did not clamp to one candle");
+    const shell = await slider.locator("..").evaluate(el => {
+      const style = getComputedStyle(el), input = el.querySelector("input");
+      const inner = input.getBoundingClientRect(), outer = el.getBoundingClientRect();
+      return {radius: parseFloat(style.borderRadius), inset: inner.x - outer.x, top: inner.y - outer.y};
+    });
+    if (shell.radius < 20 || shell.inset < 12 || shell.top < 5) throw Error("Slider shell is not rounded or inset");
     const track = await slider.boundingBox();
     await page.mouse.move(track.x + track.width / 2, track.y + track.height / 2);
     await page.mouse.down();
