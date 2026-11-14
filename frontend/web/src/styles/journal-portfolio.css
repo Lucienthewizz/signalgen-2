@@ -147,3 +147,56 @@
     width: 100%;
   }
 }
+
+/* Fill the portfolio's five-row grid area down to Most used rule. */
+.journal-bento .magic-bento__cell:first-child .magic-bento__content {
+  height: 100%;
+}
+.journal-portfolio {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 100%;
+}
+.journal-portfolio > footer {
+  margin-top: auto;
+  padding-top: 12px;
+}
+.journal-portfolio__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.portfolio-example {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.portfolio-example__notice {
+  padding-block: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.portfolio-example__notice strong {
+  color: var(--text);
+}
+.portfolio-example__outcomes {
+  margin-top: auto;
+  display: grid;
+  gap: 0;
+}
+.portfolio-example__outcomes > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.portfolio-example__outcomes dd {
+  margin: 0;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+.portfolio-example__outcomes dd[data-negative] {
+  color: var(--danger);
+}

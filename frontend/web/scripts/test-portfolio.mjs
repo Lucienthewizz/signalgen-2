@@ -144,6 +144,91 @@ try {
   });
   await page.goto(baseURL + "/#app/journal");
   await page
+    .getByRole("button", { name: "Preview test data", exact: true })
+    .click();
+  const example = page.getByLabel("Portfolio chart example", { exact: true });
+  await example.getByText("IDR 60,000", { exact: true }).waitFor();
+  if ((await example.locator(".journal-chart-point").count()) !== 4)
+    throw Error("Expected start plus three completed example trades");
+  if (writes !== 0 || items.length !== 0)
+    throw Error("Chart preview wrote account data");
+  for (const width of [1440, 1218, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    if (width > 860) {
+      const edges = await page
+        .locator(".journal-bento .magic-bento__card")
+        .evaluateAll((nodes) => [
+          nodes[0].getBoundingClientRect().bottom,
+          nodes.at(-1).getBoundingClientRect().bottom,
+        ]);
+      if (Math.abs(edges[0] - edges[1]) > 2)
+        throw Error(
+          `Portfolio does not align with Most used rule at ${width}: ${edges}`,
+        );
+    }
+    if (
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth + 1,
+      )
+    )
+      throw Error("Preview overflow at " + width);
+    await example.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: `/tmp/signalgen-journal-example-${width}.png`,
+      fullPage: true,
+    });
+  }
+  await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
+  await page.screenshot({
+    path: "/tmp/signalgen-journal-example-light.png",
+    fullPage: true,
+  });
+  if (
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth + 1,
+    )
+  )
+    throw Error("Light preview overflow");
+  await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
+  await example.getByRole("button", { name: /^Trade 3 / }).click();
+  await example
+    .getByRole("region", { name: "Selected trade details", exact: true })
+    .getByText(/TLKM/)
+    .waitFor();
+  const point = example.getByRole("button", { name: /^Trade 3 / });
+  await point.focus();
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Enter");
+  await example
+    .getByRole("region", { name: "Selected trade details", exact: true })
+    .getByText(/BBCA/)
+    .waitFor();
+  await page.setViewportSize({ width: 1218, height: 1000 });
+  const detailEdges = await page
+    .locator(".journal-bento .magic-bento__card")
+    .evaluateAll((nodes) => [
+      nodes[0].getBoundingClientRect().bottom,
+      nodes.at(-1).getBoundingClientRect().bottom,
+    ]);
+  if (Math.abs(detailEdges[0] - detailEdges[1]) > 2)
+    throw Error("Expanded chart details break the card alignment");
+  await page
+    .getByRole("button", { name: "Show my portfolio", exact: true })
+    .click();
+  await page.getByText("No realized P&L yet", { exact: true }).waitFor();
+  if (writes !== 0 || items.length !== 0)
+    throw Error("Example records leaked into the account ledger");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const emptyEdges = await page
+    .locator(".journal-bento .magic-bento__card")
+    .evaluateAll((nodes) => [
+      nodes[0].getBoundingClientRect().bottom,
+      nodes.at(-1).getBoundingClientRect().bottom,
+    ]);
+  if (Math.abs(emptyEdges[0] - emptyEdges[1]) > 2)
+    throw Error("Empty portfolio does not extend to Most used rule");
+
+  await page
     .getByRole("button", { name: "Record BBCA trade", exact: true })
     .waitFor();
   await page
@@ -336,7 +421,7 @@ try {
     throw Error("Portfolio leaked between accounts");
   if (errors.length) throw Error(errors.join("\n"));
   console.log(
-    "PASS: screening draft → BUY → SELL, server P&L, fees, SGT, chart, reload, edit, dashboard, 1440/390px and account isolation. Synthetic API only.",
+    "PASS: read-only 3-trade preview, keyboard chart selection, aligned cards at 1440/1218px, mobile/light layout, zero preview writes; BUY/SELL, fees, SGT, monthly CSV, reload/edit/dashboard/account isolation. Synthetic API only.",
   );
 } catch (error) {
   console.error(error);

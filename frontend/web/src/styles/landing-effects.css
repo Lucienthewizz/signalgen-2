@@ -9,7 +9,7 @@
   isolation: isolate;
 }
 .landing-shell .market-hero {
-  background: #010907;
+  background: #020b07;
 }
 .landing-shell .market-hero::before,
 .landing-shell .market-hero::after {
@@ -28,26 +28,25 @@
 .landing-background--hero > .ghost-fibers-container {
   mask-image: linear-gradient(90deg, #0005, #000 70%);
 }
-.landing-background--ascii {
-  overflow: clip;
-  background: #010907;
+.landing-background--gradient {
+  background:
+    radial-gradient(ellipse at 80% 18%, #064c3514, transparent 55%),
+    linear-gradient(180deg, #020b07 0%, #061a11 50%, #020805 100%);
 }
-.landing-background--ascii > .gradient-ascii-container {
-  position: sticky;
-  top: 82px;
-  height: calc(100svh - 82px);
-  opacity: 0.55;
-  filter: brightness(0.6);
+.landing-background--hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 65%, #020b07 100%);
 }
-html[data-theme="light"] .landing-shell .market-hero,
-html[data-theme="light"] .landing-background--ascii {
+html[data-theme="light"] .landing-shell .market-hero {
   background: #f5faf7;
 }
-html[data-theme="light"]
-  .landing-background--ascii
-  > .gradient-ascii-container {
-  opacity: 0.3;
-  filter: none;
+html[data-theme="light"] .landing-background--gradient {
+  background: linear-gradient(180deg, #f5faf7, #eaf4ed 50%, #f1f8f3);
+}
+html[data-theme="light"] .landing-background--hero::after {
+  background: linear-gradient(180deg, transparent 65%, #f5faf7);
 }
 /* Keep the headline available immediately while the shader initializes. */
 .landing-shell .market-hero__copy {

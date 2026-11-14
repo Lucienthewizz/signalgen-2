@@ -124,7 +124,7 @@
   grid-template-columns: minmax(0, 2fr) minmax(210px, 1fr) !important;
   grid-template-rows: auto !important;
   grid-auto-rows: auto !important;
-  align-items: start;
+  align-items: stretch;
 }
 .journal-bento .magic-bento__cell {
   grid-column: auto !important;
@@ -133,6 +133,7 @@
 }
 .journal-bento .magic-bento__cell:first-child {
   grid-row: span 5 !important;
+  align-self: stretch;
 }
 .journal-bento .magic-bento__content {
   padding: 20px;

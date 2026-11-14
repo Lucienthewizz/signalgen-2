@@ -40,7 +40,9 @@ try {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto(baseURL + "/#home");
   await page.locator(".ghost-fibers-canvas").waitFor();
-  await page.locator(".gradient-ascii-canvas").waitFor();
+  await page.locator(".landing-background--gradient").waitFor();
+  if (await page.locator(".gradient-ascii-canvas").count())
+    throw Error("ASCII background remains after hero");
   await page.waitForTimeout(2500);
   if (await page.locator(".hero-data-note").count())
     throw Error("Local preview label remains");
@@ -106,11 +108,18 @@ try {
   }));
   if (bounds.flow < bounds.footer - 1)
     throw Error("Background ends before the footer");
-  const before = await page.locator(".gradient-ascii-canvas").screenshot();
-  await page.waitForTimeout(1000);
-  const after = await page.locator(".gradient-ascii-canvas").screenshot();
-  if (before.equals(after))
-    throw Error("ASCII background is static when motion is enabled");
+  const gradient = await page
+    .locator(".landing-background--gradient")
+    .evaluate((el) => getComputedStyle(el).backgroundImage);
+  if (
+    !gradient.includes("linear-gradient") ||
+    !gradient.includes("rgb(2, 11, 7)") ||
+    !gradient.includes("rgb(6, 26, 17)") ||
+    !gradient.includes("rgb(2, 8, 5)")
+  )
+    throw Error("Agreed forest gradient is missing");
+  if ((await page.locator(".landing-background canvas").count()) !== 1)
+    throw Error("Expected only the hero background canvas");
   await page.screenshot({ path: "/tmp/signalgen-footer-background.png" });
   await page.locator("#reviews").scrollIntoViewIfNeeded();
   if (!(await page.locator("#reviews .pixel-card").count()))

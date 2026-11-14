@@ -162,7 +162,7 @@ export function PublicWorkspace({
             </div>
           </section>
           <div className="landing-product-flow">
-            <LandingBackground variant="ascii" />
+            <LandingBackground variant="gradient" />
             <div className="landing-stage landing-stage--green landing-stage--features">
               <section className="capability-section" id="capabilities">
                 <div className="section-heading split-heading">

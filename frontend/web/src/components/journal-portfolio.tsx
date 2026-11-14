@@ -1,3 +1,4 @@
+import { PortfolioExample } from "@/components/portfolio-example";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { api, session } from "@/api/client";
@@ -70,6 +71,7 @@ export function JournalPortfolio({
   const [market, setMarket] = useState<"IDX" | "US">("IDX");
   const [book, setBook] = useState("");
   const [month, setMonth] = useState("");
+  const [example, setExample] = useState(false);
   const [form, setForm] = useState<Form>(blank);
   const [edit, setEdit] = useState<PortfolioTransaction | null>(null);
   const [open, setOpen] = useState(false);
@@ -155,6 +157,7 @@ export function JournalPortfolio({
     setBusy(false);
     setBook("");
     setMonth("");
+    setExample(false);
     return () => operation.current?.abort();
   }, [userId]);
   useEffect(() => {
@@ -279,6 +282,24 @@ export function JournalPortfolio({
       </SelectContent>
     </Select>
   );
+  if (example)
+    return (
+      <section
+        className="journal-portfolio journal-portfolio--example"
+        aria-label="Portfolio performance"
+      >
+        <header>
+          <div>
+            <h2>Portfolio · chart example</h2>
+            <p>Read-only preview</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setExample(false)}>
+            Show my portfolio
+          </Button>
+        </header>
+        <PortfolioExample />
+      </section>
+    );
   return (
     <section
       className="journal-portfolio"
@@ -290,9 +311,14 @@ export function JournalPortfolio({
           <h2>Portfolio</h2>
           <p>Recorded transactions · realized P&amp;L after fees</p>
         </div>
-        <Button ref={trigger} size="sm" variant="outline" onClick={create}>
-          Record transaction
-        </Button>
+        <div className="journal-portfolio__header-actions">
+          <Button size="sm" variant="ghost" onClick={() => setExample(true)}>
+            Preview test data
+          </Button>
+          <Button ref={trigger} size="sm" variant="outline" onClick={create}>
+            Record transaction
+          </Button>
+        </div>
       </header>
       <div className="journal-portfolio__filters">
         {choose(
