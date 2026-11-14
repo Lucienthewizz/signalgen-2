@@ -122,3 +122,10 @@ export function portfolioClosedTrades(items: PortfolioTransaction[]) {
   }
   return result;
 }
+
+/** Calendar month of an execution, independent of the browser timezone. */
+export function portfolioMonth(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return "";
+  return new Date(date.getTime() + 8 * 3600000).toISOString().slice(0, 7);
+}

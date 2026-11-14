@@ -66,6 +66,7 @@ try {
     reducedMotion: "reduce",
   });
   await context.addInitScript(() => {
+    if (location.hostname !== "127.0.0.1") return;
     sessionStorage.setItem(
       "signalgen.access-token",
       "synthetic-portfolio-token",
@@ -196,6 +197,26 @@ try {
     .locator(".journal-portfolio__value")
     .filter({ hasText: "1,980.00" })
     .waitFor();
+  // Filter on sale month after reconciling all earlier purchases.
+  await page.getByRole("button", { name: "All months", exact: true }).click();
+  await page.getByRole("button", { name: "October 2026", exact: true }).click();
+  await page.getByText("No realized P&L yet", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Oct 2026", exact: true }).click();
+  await page
+    .getByRole("button", { name: "November 2026", exact: true })
+    .click();
+  await page
+    .locator(".journal-portfolio__value")
+    .filter({ hasText: "1,980.00" })
+    .waitFor();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page
+      .getByRole("button", { name: "Export transactions CSV", exact: true })
+      .click(),
+  ]);
+  if (download.suggestedFilename() !== "portfolio-transactions-IDX-2026-11.csv")
+    throw Error("Portfolio CSV scope missing");
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.locator(".journal-portfolio").scrollIntoViewIfNeeded();
@@ -235,6 +256,65 @@ try {
     .getByRole("region", { name: "Realized portfolio P&L", exact: true })
     .getByText("IDR 2,980.00", { exact: true })
     .waitFor();
+  await page
+    .getByText(/^Updated /)
+    .filter({ has: page.locator("time") })
+    .waitFor();
+  const amountFont = await page
+    .locator(".overview-portfolio__totals strong > span")
+    .first()
+    .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  if (amountFont < 24)
+    throw Error("Animated P&L lost the financial value type scale");
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const resources = page.getByRole("region", {
+      name: "Workspace overview",
+      exact: true,
+    });
+    const cards = await resources
+      .locator(".feature-gallery__item")
+      .evaluateAll((nodes) =>
+        nodes.map((el) => el.getBoundingClientRect().height),
+      );
+    if (cards.length !== 4 || cards.some((h) => h < 200 || h > 280))
+      throw Error("Dashboard resource card sizes changed");
+    if (
+      !(await resources
+        .locator(".overview-resources__value span")
+        .evaluateAll((nodes) =>
+          nodes.every((el) => parseFloat(getComputedStyle(el).fontSize) >= 24),
+        ))
+    )
+      throw Error("CountUp lost the resource value type scale");
+    if (
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth + 1,
+      )
+    )
+      throw Error("Dashboard overflow");
+    await resources.screenshot({
+      path: `/tmp/signalgen-dashboard-bento-final-${width}.png`,
+    });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({
+    path: "/tmp/signalgen-overview-portfolio-final.png",
+    fullPage: true,
+  });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.reload();
+  await page
+    .locator(".overview-portfolio__totals")
+    .getByText("IDR 2,980.00", { exact: true })
+    .waitFor();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(baseURL + "/#app/news");
+  await page.locator(".news-video__poster").waitFor();
+  if (await page.locator(".news-video iframe").count())
+    throw Error("Video loaded before interaction");
+  await page.locator(".news-video__poster").click();
+  await page.locator(".news-video iframe").waitFor();
   await page.goto(baseURL + "/#home");
   if (await page.locator(".landing-header__session").count())
     throw Error("Dashboard still appears outside the account dropdown");

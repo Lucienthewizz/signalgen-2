@@ -1,3 +1,7 @@
+import CountUp from "@/components/react-bits/CountUp";
+import MagicBento from "@/components/react-bits/MagicBento";
+import { useVisualPreferences } from "@/lib/visual-preferences";
+import "@/styles/overview-bento.css";
 import { PortfolioOverview } from "@/components/portfolio-overview";
 import { tierName } from "@/lib/tier-access";
 import { screeningSetup } from "@/lib/screening-setup";
@@ -64,6 +68,7 @@ export function WorkspaceOverviewPanel({
   workspaceReady,
   go,
 }: Props) {
+  const { light, reduced } = useVisualPreferences();
   const [account, setAccount] = useState<AccountState | null>(null);
   const [rules, setRules] = useState<RuleResource[]>(
     () => ui.peekRules(userId)?.items ?? [],
@@ -335,72 +340,97 @@ export function WorkspaceOverviewPanel({
       </div>
       {userId && <PortfolioOverview key={userId} userId={userId} />}
       <section
-        className="overview-resources feature-gallery"
+        className="overview-resources overview-bento"
         aria-label="Workspace overview"
       >
-        {(
-          [
-            {
-              view: "rules",
-              icon: ListChecks,
-              label: "Rules",
-              value: pending.rules && !rules.length ? "Loading…" : rules.length,
-              action: "Manage rules",
-            },
-            {
-              view: "universes",
-              icon: Boxes,
-              label: "Stock universes",
-              value:
-                pending.universes && !universes.length
-                  ? "Loading…"
-                  : universes.length,
-              action: "Manage universes",
-            },
-            {
-              view: "subscription",
-              icon: Crown,
-              label: "Plan",
-              value: account?.access
-                ? tierName(account.access.plan_code)
-                : (subscription?.plan_name ??
-                  (pending.account || pending.subscription
+        <MagicBento
+          columns={4}
+          rowHeight={180}
+          gap={12}
+          radius={12}
+          theme={light ? "light" : "dark"}
+          disableAnimations={reduced}
+          intro={false}
+          enableTilt={false}
+          enableMagnetism={false}
+          enableStars={false}
+          clickEffect={false}
+          textAutoHide={false}
+          glowColor="#45e69f"
+          items={(
+            [
+              {
+                view: "rules",
+                icon: ListChecks,
+                label: "Rules",
+                value:
+                  pending.rules && !rules.length ? "Loading…" : rules.length,
+                action: "Manage rules",
+              },
+              {
+                view: "universes",
+                icon: Boxes,
+                label: "Stock universes",
+                value:
+                  pending.universes && !universes.length
                     ? "Loading…"
-                    : account
-                      ? "Free"
-                      : "—")),
-              action: "View plan",
-            },
-            {
-              view: "access",
-              icon: UserRound,
-              label: "Account",
-              value:
-                account?.user.status === "active"
-                  ? "Active"
-                  : (account?.user.status ??
-                    (pending.account ? "Loading…" : "—")),
-              action: "View account",
-            },
-          ] as const
-        ).map(({ icon: Icon, ...resource }) => (
-          <a
-            className="feature-gallery__item"
-            href={`#app/${resource.view}`}
-            key={resource.view}
-          >
-            <div className="feature-gallery__figure overview-resources__icon">
-              <Icon aria-hidden="true" strokeWidth={1.25} />
-            </div>
-            <div className="feature-gallery__copy">
-              <strong>{resource.label}</strong>
-              <p className="overview-resources__value">{resource.value}</p>
-              <span>
-                {resource.action} <ArrowUpRight aria-hidden="true" />
-              </span>
-            </div>
-          </a>
-        ))}
+                    : universes.length,
+                action: "Manage universes",
+              },
+              {
+                view: "subscription",
+                icon: Crown,
+                label: "Plan",
+                value: account?.access
+                  ? tierName(account.access.plan_code)
+                  : (subscription?.plan_name ??
+                    (pending.account || pending.subscription
+                      ? "Loading…"
+                      : account
+                        ? "Free"
+                        : "—")),
+                action: "View plan",
+              },
+              {
+                view: "access",
+                icon: UserRound,
+                label: "Account",
+                value:
+                  account?.user.status === "active"
+                    ? "Active"
+                    : (account?.user.status ??
+                      (pending.account ? "Loading…" : "—")),
+                action: "View account",
+              },
+            ] as const
+          ).map(({ icon: Icon, ...resource }) => ({
+            id: resource.view,
+            content: (
+              <a
+                className="feature-gallery__item"
+                href={`#app/${resource.view}`}
+                key={resource.view}
+              >
+                <div className="feature-gallery__figure overview-resources__icon">
+                  <Icon aria-hidden="true" strokeWidth={1.25} />
+                </div>
+                <div className="feature-gallery__copy">
+                  <strong>{resource.label}</strong>
+                  <p className="overview-resources__value">
+                    {typeof resource.value === "number" ? (
+                      <CountUp to={resource.value} />
+                    ) : (
+                      resource.value
+                    )}
+                  </p>
+                  <span>
+                    {resource.action} <ArrowUpRight aria-hidden="true" />
+                  </span>
+                </div>
+              </a>
+            ),
+          }))}
+        />
       </section>
       {!latest && !preparing && account && (
         <section

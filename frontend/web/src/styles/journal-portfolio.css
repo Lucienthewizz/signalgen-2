@@ -96,3 +96,54 @@
     flex-direction: column;
   }
 }
+
+.journal-portfolio__filters > .journal-month-trigger {
+  flex: 1;
+  min-width: 130px;
+}
+.journal-portfolio__filters [data-slot="popover-trigger"] {
+  min-width: 130px;
+}
+.journal-section-heading {
+  font-size: 18px;
+  margin: 24px 0 8px;
+}
+@media (max-width: 700px) {
+  .journal-ledger .journal-secondary-column {
+    display: none;
+  }
+  .journal-ledger td:last-child {
+    white-space: normal;
+  }
+  .journal-ledger td:last-child button {
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+  .journal-ledger table {
+    min-width: 0;
+  }
+}
+/* The legacy journal chart reserved desktop width even for a single sale. */
+.journal-portfolio .journal-pnl-chart__scroll {
+  width: 100%;
+  min-width: 0;
+}
+.journal-portfolio .journal-pnl-chart--dated svg {
+  min-width: 0;
+}
+.journal-portfolio .journal-pnl-chart figcaption {
+  justify-content: flex-start;
+  text-align: left;
+}
+@media (max-width: 480px) {
+  .journal-portfolio__filters {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .journal-portfolio__filters [data-slot="select-trigger"] {
+    width: 100%;
+  }
+  .journal-portfolio__filters .journal-month-trigger {
+    width: 100%;
+  }
+}

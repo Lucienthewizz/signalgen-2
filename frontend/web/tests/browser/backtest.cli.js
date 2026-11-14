@@ -535,6 +535,7 @@ async (page) => {
         path: `output/playwright/backtest-manual-${width}-${theme}.png`,
         fullPage: true,
       });
+      await page.locator("details.run-advanced > summary").click();
       await page
         .getByLabel("Commission per side (%)", { exact: true })
         .fill("1");
@@ -735,7 +736,7 @@ async (page) => {
     const settings=page.getByRole("navigation",{name:"Account settings navigation",exact:true});
     await settings.getByRole("button",{name:"Plan & access",exact:true}).click();
     await page.getByRole("heading",{name:"Your plan",exact:true}).waitFor();
-    await page.getByRole("heading",{name:"QA Pro",exact:true}).waitFor();
+    await page.getByText("Pro",{exact:true}).waitFor();
     if(await page.getByRole("link",{name:"Open plan & access",exact:true}).count()) throw Error("Plan settings still require an intermediate link");
     await assertLayout(width);
     await page.screenshot({path:`output/playwright/account-plan-${width}-${theme}.png`,fullPage:true});

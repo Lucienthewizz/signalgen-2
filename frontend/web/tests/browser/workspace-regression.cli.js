@@ -480,7 +480,7 @@ async (page) => {
           const resourceSizes = await resources.locator('.feature-gallery__item').evaluateAll(items => items.map(el => ({height:el.getBoundingClientRect().height,width:el.getBoundingClientRect().width})));
           if (resourceSizes.some(size=>size.height>280 || size.height<200 || Math.abs(size.height-resourceSizes[0].height)>1)) throw Error(`Dashboard cards are not compact and equal: ${JSON.stringify(resourceSizes)}`);
           if (!await resources.locator('.feature-gallery__copy').evaluateAll(items=>items.every(el=>getComputedStyle(el).textAlign==='center' && getComputedStyle(el).justifyItems==='center'))) throw Error('Overview resource copy must be centered');
-          if (width===390 && await resources.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)!==2) throw Error('Compact mobile resources must use two columns');
+          if (width===390 && await resources.locator('.magic-bento').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)!==2) throw Error('Compact mobile resources must use two columns');
           const destinations = await resources.locator('a').evaluateAll(links => links.map(link=>link.getAttribute('href')));
           if (destinations.join(',') !== '#app/rules,#app/universes,#app/subscription,#app/access') throw Error('Dashboard resource navigation changed');
           const values = await resources.locator('.overview-resources__value').allTextContents();
@@ -956,7 +956,7 @@ async (page) => {
   healthOffline = false;
   await page.getByText("Connection interrupted", { exact: true }).waitFor({ state: "hidden", timeout: 10000 });
   if (await page.locator('.workspace-connection').innerText() !== 'Connected') throw Error('Global API status did not recover');
-  if (await draftInput.inputValue() !== "Offline draft retained" || !await draftNode.evaluate(el => el.isConnected)) throw Error("Connection recovery resets the draft editor");
+  if (await draftInput.inputValue() !== "Offline draft retained" || !await draftNode.evaluate(el => el.isConnected)) throw Error(`Connection recovery resets the draft editor: value=${await draftInput.inputValue()}, connected=${await draftNode.evaluate(el => el.isConnected)}`);
   await draftInput.fill("Bullish EMA cross");
   await page.getByRole("button", { name: "Add condition", exact: true }).click();
   await page.getByRole("button", { name: "Add condition", exact: true }).click();

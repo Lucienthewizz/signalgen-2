@@ -1,3 +1,4 @@
+import Stepper from "@/components/react-bits/Stepper";
 import type { AccountState } from "@/types";
 import { BacktestPreview } from "./backtest-preview";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -537,6 +538,7 @@ function PortfolioBacktestPanel({
     );
   return (
     <div className="backtest-workspace">
+      <Stepper stage={busy ? 1 : result ? 2 : 0} />
       {(!backendOnline || loadError) && (
         <Alert variant="destructive">
           <AlertTitle>Backtest connection needs attention</AlertTitle>
@@ -579,6 +581,10 @@ function PortfolioBacktestPanel({
           </p>
         ) : (
           <form
+            onInvalidCapture={(event) => {
+              const details = (event.target as HTMLElement).closest("details");
+              if (details) details.open = true;
+            }}
             onSubmit={(event) => {
               event.preventDefault();
               void execute(config.mode === "manual");
@@ -779,45 +785,54 @@ function PortfolioBacktestPanel({
                   </Field>
                 </FieldGroup>
               </fieldset>
-              <fieldset className="backtest-config-section">
-                <legend>Trading costs</legend>
-                <FieldGroup className="backtest-fields" data-columns={2}>
-                  <Field className="backtest-field">
-                    <FieldLabel htmlFor="bt-fee">
-                      Commission per side (%)
-                    </FieldLabel>
-                    <Input
-                      id="bt-fee"
-                      type="number"
-                      required
-                      min="0"
-                      max="10"
-                      step="any"
-                      value={config.commission_pct}
-                      onChange={(event) =>
-                        update("commission_pct", Number(event.target.value))
-                      }
-                    />
-                  </Field>
-                  <Field className="backtest-field">
-                    <FieldLabel htmlFor="bt-slip">
-                      Slippage per side (%)
-                    </FieldLabel>
-                    <Input
-                      id="bt-slip"
-                      type="number"
-                      required
-                      min="0"
-                      max="10"
-                      step="any"
-                      value={config.slippage_pct}
-                      onChange={(event) =>
-                        update("slippage_pct", Number(event.target.value))
-                      }
-                    />
-                  </Field>
-                </FieldGroup>
-              </fieldset>
+              <details className="run-advanced">
+                <summary>
+                  Trading costs{" "}
+                  <small>
+                    Commission {config.commission_pct}% · slippage{" "}
+                    {config.slippage_pct}%
+                  </small>
+                </summary>
+                <fieldset className="backtest-config-section">
+                  <legend className="sr-only">Trading costs</legend>
+                  <FieldGroup className="backtest-fields" data-columns={2}>
+                    <Field className="backtest-field">
+                      <FieldLabel htmlFor="bt-fee">
+                        Commission per side (%)
+                      </FieldLabel>
+                      <Input
+                        id="bt-fee"
+                        type="number"
+                        required
+                        min="0"
+                        max="10"
+                        step="any"
+                        value={config.commission_pct}
+                        onChange={(event) =>
+                          update("commission_pct", Number(event.target.value))
+                        }
+                      />
+                    </Field>
+                    <Field className="backtest-field">
+                      <FieldLabel htmlFor="bt-slip">
+                        Slippage per side (%)
+                      </FieldLabel>
+                      <Input
+                        id="bt-slip"
+                        type="number"
+                        required
+                        min="0"
+                        max="10"
+                        step="any"
+                        value={config.slippage_pct}
+                        onChange={(event) =>
+                          update("slippage_pct", Number(event.target.value))
+                        }
+                      />
+                    </Field>
+                  </FieldGroup>
+                </fieldset>
+              </details>
             </fieldset>
             {config.mode === "rule" && !ruleId && (
               <p role="status">
@@ -892,6 +907,35 @@ function PortfolioBacktestPanel({
             {prepared.manifest.currency} · {prepared.manifest.candle_count}{" "}
             candles · Available {prepared.manifest.available_range.from} to{" "}
             {prepared.manifest.available_range.to}
+          </p>
+          <dl className="dataset-coverage">
+            <div>
+              <dt>Coverage</dt>
+              <dd>
+                {prepared.manifest.quality.status === "complete"
+                  ? "Complete for this request"
+                  : "Partial coverage"}
+              </dd>
+            </div>
+            <div>
+              <dt>Requested period</dt>
+              <dd>
+                {prepared.manifest.requested_range.from} –{" "}
+                {prepared.manifest.requested_range.to}
+              </dd>
+            </div>
+            <div>
+              <dt>Provider / version</dt>
+              <dd>Yahoo Finance · {prepared.manifest.version}</dd>
+            </div>
+            <div>
+              <dt>Latest available session</dt>
+              <dd>{prepared.manifest.available_range.to}</dd>
+            </div>
+          </dl>
+          <p className="backtest-note">
+            Coverage describes this historical request. The latest session above
+            is not a live quote or the collector's last run.
           </p>
           <details>
             <summary>Data quality and assumptions</summary>

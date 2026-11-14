@@ -1,3 +1,4 @@
+import AnimatedList from "@/components/react-bits/AnimatedList";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, Newspaper, Play, RefreshCw, Video } from "lucide-react";
@@ -39,6 +40,7 @@ const newsDateFormat = new Intl.DateTimeFormat("en-GB", {
 });
 
 export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
+  const [playing, setPlaying] = useState(false);
   const [selected, setSelected] = useState(IDX_VIDEOS[0]);
   const [articles, setArticles] = useState<MarketArticle[]>(
     () => getCachedMarketNews()?.items ?? [],
@@ -122,14 +124,32 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
         </header>
         <div className="news-video__layout">
           <div className="news-video__player">
-            <iframe
-              key={selected.id}
-              src={`https://www.youtube-nocookie.com/embed/${selected.id}?autoplay=0`}
-              title={selected.title}
-              allow="encrypted-media; picture-in-picture; fullscreen"
-              allowFullScreen
-              referrerPolicy="strict-origin-when-cross-origin"
-            />
+            {playing ? (
+              <iframe
+                key={selected.id}
+                src={`https://www.youtube-nocookie.com/embed/${selected.id}?autoplay=1`}
+                title={selected.title}
+                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+            ) : (
+              <button
+                className="news-video__poster"
+                type="button"
+                onClick={() => setPlaying(true)}
+                aria-label={`Play ${selected.title}`}
+              >
+                <img
+                  src={`https://i.ytimg.com/vi/${selected.id}/hqdefault.jpg`}
+                  alt=""
+                  loading="lazy"
+                />
+                <Play aria-hidden="true" />
+                <span>{selected.title}</span>
+                <span>Play video</span>
+              </button>
+            )}
           </div>
           <div className="news-video__choices">
             {IDX_VIDEOS.map((video) => (
@@ -137,7 +157,10 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                 key={video.id}
                 type="button"
                 aria-pressed={selected.id === video.id}
-                onClick={() => setSelected(video)}
+                onClick={() => {
+                  setSelected(video);
+                  setPlaying(false);
+                }}
               >
                 <Play aria-hidden="true" />
                 <span>{video.title}</span>
@@ -229,7 +252,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
             ))}
           </div>
         ) : visibleArticles.length ? (
-          <ul>
+          <AnimatedList>
             {visibleArticles.map((article) => (
               <li key={article.url}>
                 <div>
@@ -246,7 +269,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                 </a>
               </li>
             ))}
-          </ul>
+          </AnimatedList>
         ) : (
           (!error || articles.length > 0) && (
             <Empty>

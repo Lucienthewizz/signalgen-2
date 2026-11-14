@@ -1,3 +1,4 @@
+import AnimatedList from "@/components/react-bits/AnimatedList";
 import { tierAccess, tierName, monthlyPrice } from "@/lib/tier-access";
 import type { AccountState } from "@/types";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -489,7 +490,7 @@ export function StockUniversesPanel({
             </EmptyHeader>
           </Empty>
         ) : (
-          <div className="universe-library__rows">
+          <AnimatedList as="div" className="universe-library__rows">
             {universes.slice(0, 2).map((universe) => (
               <article
                 key={universe.id}
@@ -541,7 +542,7 @@ export function StockUniversesPanel({
                 </div>
               </article>
             ))}
-          </div>
+          </AnimatedList>
         )}
         {universes.length > 2 && (
           <Button

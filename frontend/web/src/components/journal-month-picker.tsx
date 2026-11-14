@@ -19,8 +19,10 @@ const months = Array.from({ length: 12 }, (_, index) => ({
 export function JournalMonthPicker({
   value,
   onChange,
+  description = "Exit month, or entry month for open trades. Singapore Time (SGT).",
 }: {
   value: string;
+  description?: string;
   onChange: (value: string) => void;
 }) {
   const today = parseCalendarDate(singaporeDateTime().slice(0, 10))!;
@@ -66,9 +68,7 @@ export function JournalMonthPicker({
             initialFocus={preferredMonth}
           >
             <Popover.Title>Filter by month</Popover.Title>
-            <Popover.Description>
-              Exit month, or entry month for open trades. Singapore Time (SGT).
-            </Popover.Description>
+            <Popover.Description>{description}</Popover.Description>
             <div className="journal-month-year">
               <Button
                 variant="ghost"

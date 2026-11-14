@@ -1,3 +1,4 @@
+import AnimatedList from "@/components/react-bits/AnimatedList";
 import { tierAccess } from "@/lib/tier-access";
 import type { AccountState } from "@/types";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -1218,7 +1219,7 @@ export function ServerRulesPanel({
           <div className="rule-library__groups">
             {privateRules.length > 0 && (
               <div>
-                <div className="rule-library__rows">
+                <AnimatedList as="div" className="rule-library__rows">
                   {privateRules.map((rule) => (
                     <article key={rule.id}>
                       <div>
@@ -1259,7 +1260,7 @@ export function ServerRulesPanel({
                       </div>
                     </article>
                   ))}
-                </div>
+                </AnimatedList>
               </div>
             )}
             {systemRules.length > 0 && (
@@ -1267,7 +1268,7 @@ export function ServerRulesPanel({
                 <span className="rule-library__eyebrow">
                   System rules · read only
                 </span>
-                <div className="rule-library__rows">
+                <AnimatedList as="div" className="rule-library__rows">
                   {systemRules.map((rule) => (
                     <article key={rule.id}>
                       <div>
@@ -1281,7 +1282,7 @@ export function ServerRulesPanel({
                       <Badge variant="secondary">System</Badge>
                     </article>
                   ))}
-                </div>
+                </AnimatedList>
               </div>
             )}
           </div>

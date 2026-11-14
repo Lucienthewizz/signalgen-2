@@ -53,6 +53,7 @@ async(page)=>{
   await page.setViewportSize({width,height:1000});await page.goto(origin+"/#app/backtest");await page.reload();
   const source=page.getByLabel("Stock source",{exact:true});await source.waitFor({timeout:20000});
   await page.evaluate(async()=>{await document.fonts.ready;await Promise.all(document.getAnimations().filter(a=>a.effect?.getComputedTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})))});
+  await page.locator("details.run-advanced > summary").click();
   for(const name of ["Source & rule","Test period","Take profit & stop loss"])if(await page.getByRole("group",{name,exact:true}).count()!==1)throw Error("Missing settings group: "+name);
   const tp=await page.getByLabel("Take profit % (optional)",{exact:true}).boundingBox(),sl=await page.getByLabel("Stop loss % (optional)",{exact:true}).boundingBox();
   if(!tp||!sl||(width>480?(Math.abs(tp.y-sl.y)>1||Math.abs(tp.width-sl.width)>1):sl.y<=tp.y))throw Error("Target fields not aligned at "+width);
@@ -93,6 +94,9 @@ async(page)=>{
    partial=false;await page.getByRole("button",{name:"Retry failed stocks",exact:true}).click();
    await page.getByText("Completed the frozen catalog. Review data-quality limits before interpreting results.",{exact:true}).waitFor({timeout:30000});
    if(scored.length!==23||new Set(scored).size!==23||JSON.stringify(prepares)!=="[0,1,2,0]")throw Error("Retry duplicated stocks");
+   await page.getByRole("button",{name:"Keep result for comparison",exact:true}).click();
+   if(await page.getByRole("region",{name:"Compare historical studies",exact:true}).locator("tbody tr").count()!==9)throw Error("Study comparison metrics missing");
+   if(await page.locator(".run-stepper [aria-current=step]").innerText().then(t=>!t.includes("Results")))throw Error("Completed step missing");
    const details=page.locator("table").filter({has:page.locator("caption",{hasText:"Signal details"})});
    if(await details.locator("tbody tr").count()!==50)throw Error("Signal page is not bounded at 50");
    await page.getByRole("button",{name:"Next signals",exact:true}).click();
@@ -104,6 +108,16 @@ async(page)=>{
     try{TextEncoder.prototype.encode=()=>({length:s.STUDY_STORAGE_LIMIT+1});await s.storeStudySymbol(owner,"study-qa","QUOTA",{events:[]},new AbortController().signal);return false}catch(e){if(!String(e).includes("128 MiB"))throw e}finally{TextEncoder.prototype.encode=encode}
     const after=await s.studyEventPage(owner,"study-qa");return before.total===92&&after.total===92;
    },user.id);if(!quota)throw Error("Quota destroyed completed rows");
+   if(width===1440&&theme==="dark"){
+    await page.getByLabel("From (daily session, SGT)",{exact:true}).fill("2026-01-21");
+    await page.getByRole("button",{name:"Start signal study",exact:true}).click();
+    await page.getByText("Completed the frozen catalog. Review data-quality limits before interpreting results.",{exact:true}).waitFor({timeout:30000});
+    const comparison=page.getByRole("region",{name:"Compare historical studies",exact:true});
+    const period=comparison.getByRole("row",{name:/^Period /});
+    if(!(await period.innerText()).includes("2026-01-20")||!(await period.innerText()).includes("2026-01-21"))throw Error("Comparison did not retain the previous period");
+    const evaluated=comparison.getByRole("row",{name:/^Evaluated signals /});
+    if((await evaluated.locator("td").allTextContents()).join(",")!=="92,69")throw Error("Comparison did not keep independent result metrics");
+   }
    if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error(`Page overflow ${width}/${theme}`);
    await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:`output/playwright/signal-study-${width}-${theme}.png`,fullPage:true});
   }

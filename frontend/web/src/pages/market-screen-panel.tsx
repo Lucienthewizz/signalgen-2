@@ -1,3 +1,4 @@
+import Stepper from "@/components/react-bits/Stepper";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError } from "@/api/client";
 import { runSignalStudy, type StudyProgress } from "@/analysis/signal-study";
@@ -169,6 +170,10 @@ export function MarketScreenPanel({
         <Badge variant="outline">Daily candles</Badge>
       </header>
       <form onSubmit={start}>
+        <Stepper
+          stage={busy ? 1 : progress ? 2 : 0}
+          partial={!!progress && progress.completed !== progress.context.total}
+        />
         <fieldset disabled={busy} className="study-fields">
           <legend>Screening settings</legend>
           <FieldGroup className="study-form-grid">

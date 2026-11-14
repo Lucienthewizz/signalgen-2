@@ -1,0 +1,178 @@
+.run-stepper {
+  display: flex;
+  list-style: none;
+  gap: 0;
+  padding: 16px 0;
+  margin: 0 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+.run-stepper li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  flex: 1;
+}
+.run-stepper li:not(:last-child)::after {
+  content: "";
+  height: 1px;
+  background: var(--line);
+  flex: 1;
+  margin: 0 14px;
+}
+.run-stepper li > span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-variant-numeric: tabular-nums;
+  transition: background 180ms ease;
+}
+.run-stepper li[data-state="current"] {
+  color: var(--text);
+  font-weight: 600;
+}
+.run-stepper li[data-state="current"] > span,
+.run-stepper li[data-state="complete"] > span {
+  border-color: var(--green);
+  color: var(--green);
+}
+.run-stepper li[data-state="complete"]::after {
+  background: var(--green);
+}
+.run-advanced {
+  margin-block: 20px;
+  border-block: 1px solid var(--line);
+  padding-block: 16px;
+}
+.run-advanced > summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+.run-advanced[open] > summary {
+  margin-bottom: 20px;
+}
+.run-advanced > summary small {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 10px;
+}
+.study-comparison {
+  border-block: 1px solid var(--line);
+  margin-block: 24px;
+  padding-block: 20px;
+}
+.study-comparison h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+.study-comparison p {
+  color: var(--muted);
+  font-size: 12px;
+}
+.study-comparison table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.study-comparison th,
+.study-comparison td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.study-comparison__scroll {
+  overflow-x: auto;
+}
+.news-video__poster {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 220px;
+  place-content: center;
+  gap: 16px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  background: #06170f;
+  text-align: center;
+  cursor: pointer;
+}
+.news-video__poster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.35;
+}
+.news-video__poster > span,
+.news-video__poster > svg {
+  position: relative;
+  z-index: 1;
+  justify-self: center;
+}
+.news-video__poster svg {
+  width: 48px;
+  height: 48px;
+  padding: 12px;
+  background: #064c35;
+  border-radius: 50%;
+}
+.news-video__poster:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -4px;
+}
+@media (max-width: 600px) {
+  .run-stepper li {
+    font-size: 11px;
+    gap: 5px;
+  }
+  .run-stepper li:not(:last-child)::after {
+    margin-inline: 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .run-stepper li > span {
+    transition: none;
+  }
+}
+
+.dataset-coverage {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding-block: 16px;
+  border-block: 1px solid var(--line);
+}
+.dataset-coverage dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.dataset-coverage dd {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.backtest-config > form > .backtest-actions,
+.study-config-actions {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+@media (max-width: 480px) {
+  .dataset-coverage {
+    grid-template-columns: 1fr;
+  }
+}

@@ -359,6 +359,11 @@ export function JournalPanel({
       )}
       {items.length > 0 && (
         <>
+          <h2 className="journal-section-heading">Saved screening results</h2>
+          <p className="screening-journal__note">
+            Search and date filters below apply to saved screening snapshots.
+            Portfolio controls are separate.
+          </p>
           <FieldGroup
             className="journal-explorer-filters"
             aria-label="Filter screening journal"
@@ -561,13 +566,21 @@ export function JournalPanel({
             <TableHeader>
               <TableRow>
                 <TableHead>Stock</TableHead>
-                <TableHead>Market</TableHead>
-                <TableHead>Rule</TableHead>
+                <TableHead className="journal-secondary-column">
+                  Market
+                </TableHead>
+                <TableHead className="journal-secondary-column">Rule</TableHead>
                 <TableHead>Signal</TableHead>
-                <TableHead>Interval</TableHead>
-                <TableHead>Candle time (SGT)</TableHead>
+                <TableHead className="journal-secondary-column">
+                  Interval
+                </TableHead>
+                <TableHead className="journal-secondary-column">
+                  Candle time (SGT)
+                </TableHead>
                 <TableHead>Screening price</TableHead>
-                <TableHead>Screened at (SGT)</TableHead>
+                <TableHead className="journal-secondary-column">
+                  Screened at (SGT)
+                </TableHead>
                 <TableHead>Details</TableHead>
               </TableRow>
             </TableHeader>
@@ -579,19 +592,27 @@ export function JournalPanel({
                     <TableCell>
                       <strong>{d.symbol.replace(/\.JK$/, "")}</strong>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="journal-secondary-column">
                       {d.market} / {d.currency}
                     </TableCell>
-                    <TableCell>{d.rule_name}</TableCell>
+                    <TableCell className="journal-secondary-column">
+                      {d.rule_name}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline" data-signal={d.signal_type}>
                         {d.signal_type ?? "Match"}
                       </Badge>
                     </TableCell>
-                    <TableCell>{d.timeframe}</TableCell>
-                    <TableCell>{time(d.candle_at)}</TableCell>
+                    <TableCell className="journal-secondary-column">
+                      {d.timeframe}
+                    </TableCell>
+                    <TableCell className="journal-secondary-column">
+                      {time(d.candle_at)}
+                    </TableCell>
                     <TableCell>{price(d.price, d.currency)}</TableCell>
-                    <TableCell>{time(d.screened_at)}</TableCell>
+                    <TableCell className="journal-secondary-column">
+                      {time(d.screened_at)}
+                    </TableCell>
                     <TableCell>
                       <Button
                         size="sm"

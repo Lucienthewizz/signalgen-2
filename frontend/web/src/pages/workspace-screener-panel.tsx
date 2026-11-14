@@ -1,3 +1,5 @@
+import AnimatedList from "@/components/react-bits/AnimatedList";
+import Stepper from "@/components/react-bits/Stepper";
 import { MarketScreenPanel } from "./market-screen-panel";
 import { tierAccess } from "@/lib/tier-access";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
@@ -773,6 +775,7 @@ function LatestScreenerPanel({
           </div>
         ) : (
           <div className="screener-console__body">
+            <Stepper stage={state === "loading" ? 1 : run ? 2 : 0} />
             {selectionIssue && (
               <Alert>
                 <CircleAlert aria-hidden="true" />
@@ -1962,7 +1965,7 @@ function LatestScreenerPanel({
               No saved screens match these filters.
             </p>
           )}
-          <ul className="screener-history-list">
+          <AnimatedList className="screener-history-list">
             {filteredHistory.map((item) => (
               <li key={`${item.run.result.request_id}-${item.recordedAt}`}>
                 <div>
@@ -2065,7 +2068,7 @@ function LatestScreenerPanel({
                 </div>
               </li>
             ))}
-          </ul>
+          </AnimatedList>
           {history.length > 1 && (
             <section
               className="screener-comparison"

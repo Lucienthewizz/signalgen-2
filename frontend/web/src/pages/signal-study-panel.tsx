@@ -1,3 +1,4 @@
+import Stepper from "@/components/react-bits/Stepper";
 import { Profiler, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, session, ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -86,6 +87,14 @@ export function SignalStudyPanel({
     [universe, setUniverse] = useState<string>(
       screeningSelection?.universe ?? "",
     );
+  const [comparison, setComparison] = useState<{
+    owner: string;
+    context: StudyProgress["context"];
+    metrics: StudyMetrics;
+  } | null>(null);
+  useEffect(() => {
+    setComparison(null);
+  }, [userId]);
   const [progress, setProgress] = useState<StudyProgress | null>(null),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
@@ -452,7 +461,15 @@ export function SignalStudyPanel({
           </div>
           <Badge variant="outline">Daily candles</Badge>
         </header>
+        <Stepper
+          stage={busy ? 1 : progress ? 2 : 0}
+          partial={!!progress && progress.completed !== progress.context.total}
+        />
         <form
+          onInvalidCapture={(event) => {
+            const details = (event.target as HTMLElement).closest("details");
+            if (details) details.open = true;
+          }}
           onSubmit={(e: FormEvent) => {
             e.preventDefault();
             void start();
@@ -574,57 +591,73 @@ export function SignalStudyPanel({
                 </Field>
               </FieldGroup>
             </FieldSet>
-            <FieldSet className="study-settings-section">
-              <FieldLegend>Take profit &amp; stop loss</FieldLegend>
-              <FieldGroup className="study-form-grid">
-                <Field data-study-target="profit">
-                  <FieldLabel htmlFor="study-tp">
-                    Take profit % (optional)
-                  </FieldLabel>
-                  <Input
-                    id="study-tp"
-                    type="number"
-                    min="0.01"
-                    max="99.99"
-                    step="any"
-                    value={config.take_profit_pct ?? ""}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        take_profit_pct: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                  />
-                </Field>
-                <Field data-study-target="loss">
-                  <FieldLabel htmlFor="study-sl">
-                    Stop loss % (optional)
-                  </FieldLabel>
-                  <Input
-                    id="study-sl"
-                    type="number"
-                    min="0.01"
-                    max="99.99"
-                    step="any"
-                    value={config.stop_loss_pct ?? ""}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        stop_loss_pct: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                  />
-                </Field>
-              </FieldGroup>
-              <p className="study-settings-note">
-                Leave a target empty to skip it. If both are touched in the same
-                candle, stop loss comes first.
-              </p>
-            </FieldSet>
+            <details className="run-advanced">
+              <summary>
+                Take profit &amp; stop loss{" "}
+                <small>
+                  {config.take_profit_pct
+                    ? `TP ${config.take_profit_pct}%`
+                    : "No take profit"}{" "}
+                  ·{" "}
+                  {config.stop_loss_pct
+                    ? `SL ${config.stop_loss_pct}%`
+                    : "No stop loss"}
+                </small>
+              </summary>
+              <FieldSet className="study-settings-section">
+                <FieldLegend className="sr-only">
+                  Take profit &amp; stop loss
+                </FieldLegend>
+                <FieldGroup className="study-form-grid">
+                  <Field data-study-target="profit">
+                    <FieldLabel htmlFor="study-tp">
+                      Take profit % (optional)
+                    </FieldLabel>
+                    <Input
+                      id="study-tp"
+                      type="number"
+                      min="0.01"
+                      max="99.99"
+                      step="any"
+                      value={config.take_profit_pct ?? ""}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          take_profit_pct: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field data-study-target="loss">
+                    <FieldLabel htmlFor="study-sl">
+                      Stop loss % (optional)
+                    </FieldLabel>
+                    <Input
+                      id="study-sl"
+                      type="number"
+                      min="0.01"
+                      max="99.99"
+                      step="any"
+                      value={config.stop_loss_pct ?? ""}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          stop_loss_pct: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                    />
+                  </Field>
+                </FieldGroup>
+                <p className="study-settings-note">
+                  Leave a target empty to skip it. If both are touched in the
+                  same candle, stop loss comes first.
+                </p>
+              </FieldSet>
+            </details>
           </fieldset>
           <div className="study-actions study-config-actions">
             <Button type="submit" disabled={busy || !backendOnline}>
@@ -686,6 +719,141 @@ export function SignalStudyPanel({
               {selectedMetrics!.missing} · Win rate:{" "}
               {pct(selectedMetrics!.win_rate)}
             </p>
+            <section
+              className="study-comparison"
+              aria-label="Compare historical studies"
+            >
+              <h3>Compare periods</h3>
+              <p>
+                Keep a completed result, change the dates, then run again. The
+                reference stays in this page until you reload or change account.
+                Different rules or stock coverage can also change the results.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={
+                  busy ||
+                  progress.completed !== ready!.total ||
+                  progress.failures.length > 0
+                }
+                onClick={() =>
+                  setComparison({
+                    owner: userId!,
+                    context: structuredClone(ready!),
+                    metrics: { ...selectedMetrics! },
+                  })
+                }
+              >
+                Keep result for comparison
+              </Button>
+              {comparison?.owner === userId && (
+                <>
+                  <div className="study-comparison__scroll">
+                    <table>
+                      <caption className="sr-only">
+                        Reference and current independent signal study
+                      </caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Metric</th>
+                          <th scope="col">Reference</th>
+                          <th scope="col">
+                            Current
+                            {busy
+                              ? " (processing)"
+                              : progress.completed !== ready!.total ||
+                                  progress.failures.length
+                                ? " (partial)"
+                                : ""}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <th scope="row">Period</th>
+                          <td>
+                            {comparison.context.config.from} –{" "}
+                            {comparison.context.config.to}
+                          </td>
+                          <td>
+                            {ready!.config.from} – {ready!.config.to}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th scope="row">Source / stocks</th>
+                          <td>
+                            {comparison.context.market} /{" "}
+                            {comparison.context.total}
+                          </td>
+                          <td>
+                            {ready!.market} / {ready!.total}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th scope="row">Rule</th>
+                          <td>{comparison.context.rule_id}</td>
+                          <td>{ready!.rule_id}</td>
+                        </tr>
+                        <tr>
+                          <th scope="row">Horizon</th>
+                          <td>T+{comparison.context.config.n_steps}</td>
+                          <td>T+{ready!.config.n_steps}</td>
+                        </tr>
+                        <tr>
+                          <th scope="row">TP / SL</th>
+                          <td>
+                            {comparison.context.config.take_profit_pct ?? "Off"}{" "}
+                            / {comparison.context.config.stop_loss_pct ?? "Off"}
+                          </td>
+                          <td>
+                            {ready!.config.take_profit_pct ?? "Off"} /{" "}
+                            {ready!.config.stop_loss_pct ?? "Off"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th scope="row">Source</th>
+                          <td>
+                            {comparison.context.source === "universe"
+                              ? comparison.context.universe_id
+                              : "Entire catalog"}
+                          </td>
+                          <td>
+                            {ready!.source === "universe"
+                              ? ready!.universe_id
+                              : "Entire catalog"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th scope="row">Evaluated signals</th>
+                          <td>{comparison.metrics.evaluated}</td>
+                          <td>{selectedMetrics!.evaluated}</td>
+                        </tr>
+                        <tr>
+                          <th scope="row">Win rate</th>
+                          <td>{pct(comparison.metrics.win_rate)}</td>
+                          <td>{pct(selectedMetrics!.win_rate)}</td>
+                        </tr>
+                        <tr>
+                          <th scope="row">Mean return</th>
+                          <td>{pct(comparison.metrics.mean_return_pct)}</td>
+                          <td>{pct(selectedMetrics!.mean_return_pct)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setComparison(null)}
+                  >
+                    Clear reference
+                  </Button>
+                </>
+              )}
+            </section>
             {!!(
               progress.failures.some((f) => f.retryable) ||
               progress.failedBatches.length
