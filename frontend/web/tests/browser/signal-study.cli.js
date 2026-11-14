@@ -66,6 +66,12 @@ async(page)=>{
     if(!anchor||fields.some(field=>Math.abs(field.x-anchor.x)>1||Math.abs(field.width-anchor.width)>1))throw Error("Settings columns have different widths or edges at "+width);
    }
   }
+  const slider=page.getByRole("slider",{name:"Trading candles slider",exact:true});
+  const number=page.getByLabel("Trading candles after signal",{exact:true});
+  const previous=await number.inputValue();
+  await slider.focus();await page.keyboard.press("End");if(await number.inputValue()!=="100")throw Error("Study slider maximum failed");
+  await page.keyboard.press("Home");if(await number.inputValue()!=="1")throw Error("Study slider minimum failed");
+  await number.fill(previous);if(await slider.inputValue()!==previous)throw Error("Study slider/numeric input out of sync");
   const targetColors=await page.locator('[data-study-target] [data-slot="field-label"]').evaluateAll(items=>items.map(item=>getComputedStyle(item).color.match(/\d+/g).map(Number)));
   if(targetColors.length!==2||targetColors[0][1]<=targetColors[0][0]||targetColors[1][0]<=targetColors[1][1])throw Error("Take profit/stop loss semantic colors missing");
   const arrow=await source.evaluate(el=>{const s=getComputedStyle(el);return{appearance:s.appearance,padding:parseFloat(s.paddingRight),image:s.backgroundImage}});

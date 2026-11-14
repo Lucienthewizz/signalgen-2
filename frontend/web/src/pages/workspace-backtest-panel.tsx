@@ -1,3 +1,4 @@
+import ElasticSlider from "@/components/react-bits/ElasticSlider";
 import Stepper from "@/components/react-bits/Stepper";
 import type { AccountState } from "@/types";
 import { BacktestPreview } from "./backtest-preview";
@@ -716,6 +717,11 @@ function PortfolioBacktestPanel({
                       onChange={(event) =>
                         update("n_steps", Number(event.target.value))
                       }
+                    />
+                    <ElasticSlider
+                      value={config.n_steps}
+                      label="Holding period slider"
+                      onChange={(value) => update("n_steps", value)}
                     />
                     <FieldDescription id="bt-horizon-help">
                       1–100 completed daily candles, not calendar days.

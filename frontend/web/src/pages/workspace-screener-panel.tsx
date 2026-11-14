@@ -1,3 +1,4 @@
+import AnimatedContent from "@/components/react-bits/AnimatedContent";
 import AnimatedList from "@/components/react-bits/AnimatedList";
 import Stepper from "@/components/react-bits/Stepper";
 import { MarketScreenPanel } from "./market-screen-panel";
@@ -1285,7 +1286,9 @@ function LatestScreenerPanel({
         ) : (
           <>
             {detailRow && (
-              <section
+              <AnimatedContent
+                as="section"
+                animationKey={detailRow.decision.symbol}
                 className="stock-detail"
                 ref={detailRef}
                 tabIndex={-1}
@@ -1459,7 +1462,7 @@ function LatestScreenerPanel({
                   decisions above come from the screening snapshot, not the
                   chart.
                 </p>
-              </section>
+              </AnimatedContent>
             )}
             <FieldGroup className="screener-result-filters">
               <Field>

@@ -1,3 +1,4 @@
+import AnimatedContent from "@/components/react-bits/AnimatedContent";
 import { useEffect, useMemo, useRef, useState } from "react";
 import "@/styles/screening-journal.css";
 import { Download, NotebookTabs, SearchCheck } from "lucide-react";
@@ -641,7 +642,9 @@ export function JournalPanel({
         </div>
       ) : null}
       {detail && (
-        <section
+        <AnimatedContent
+          as="section"
+          animationKey={detailId ?? undefined}
           id="journal-snapshot-detail"
           className="journal-snapshot-detail"
           aria-label="Screening snapshot details"
@@ -733,7 +736,7 @@ export function JournalPanel({
               </div>
             </dl>
           </details>
-        </section>
+        </AnimatedContent>
       )}
       {filtered.length > 25 && (
         <nav className="screening-journal__actions" aria-label="Journal pages">

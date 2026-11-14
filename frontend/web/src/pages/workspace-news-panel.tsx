@@ -1,3 +1,4 @@
+import Carousel from "@/components/react-bits/Carousel";
 import AnimatedList from "@/components/react-bits/AnimatedList";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useMemo, useState } from "react";
@@ -141,8 +142,12 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                 aria-label={`Play ${selected.title}`}
               >
                 <img
+                  key={selected.id}
                   src={`https://i.ytimg.com/vi/${selected.id}/hqdefault.jpg`}
                   alt=""
+                  onError={(event) => {
+                    event.currentTarget.hidden = true;
+                  }}
                   loading="lazy"
                 />
                 <Play aria-hidden="true" />
@@ -152,20 +157,14 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
             )}
           </div>
           <div className="news-video__choices">
-            {IDX_VIDEOS.map((video) => (
-              <button
-                key={video.id}
-                type="button"
-                aria-pressed={selected.id === video.id}
-                onClick={() => {
-                  setSelected(video);
-                  setPlaying(false);
-                }}
-              >
-                <Play aria-hidden="true" />
-                <span>{video.title}</span>
-              </button>
-            ))}
+            <Carousel
+              items={IDX_VIDEOS}
+              selected={selected.id}
+              onSelect={(video) => {
+                setSelected(video);
+                setPlaying(false);
+              }}
+            />
             <a
               href={`https://www.youtube.com/watch?v=${selected.id}`}
               target="_blank"

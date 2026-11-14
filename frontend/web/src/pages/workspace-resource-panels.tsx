@@ -1,3 +1,4 @@
+import AnimatedContent from "@/components/react-bits/AnimatedContent";
 import AnimatedList from "@/components/react-bits/AnimatedList";
 import { tierAccess, tierName, monthlyPrice } from "@/lib/tier-access";
 import type { AccountState } from "@/types";
@@ -312,7 +313,9 @@ export function StockUniversesPanel({
 
   return (
     <div className="universe-workspace">
-      <form
+      <AnimatedContent
+        as="form"
+        animationKey={`${editing?.id ?? "new"}:${market}`}
         onSubmit={save}
         className="universe-editor universe-form"
         aria-labelledby="universe-editor-title"
@@ -444,7 +447,7 @@ export function StockUniversesPanel({
           </div>
           {error && <FieldError>{error}</FieldError>}
         </StockCatalogPicker>
-      </form>
+      </AnimatedContent>
 
       <section
         className="universe-library"

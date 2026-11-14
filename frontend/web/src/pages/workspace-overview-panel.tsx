@@ -1,3 +1,4 @@
+import SpotlightCard from "@/components/react-bits/SpotlightCard";
 import CountUp from "@/components/react-bits/CountUp";
 import MagicBento from "@/components/react-bits/MagicBento";
 import { useVisualPreferences } from "@/lib/visual-preferences";
@@ -320,22 +321,22 @@ export function WorkspaceOverviewPanel({
         </section>
         <nav className="overview-shortcuts" aria-label="Quick access">
           <h3>Follow the market</h3>
-          <button onClick={() => go("realtime")}>
+          <SpotlightCard onClick={() => go("realtime")}>
             <Activity aria-hidden="true" />
             <span>
               <strong>Market monitor</strong>
               <small>Charts and prices for your watchlist</small>
             </span>
             <ArrowUpRight aria-hidden="true" />
-          </button>
-          <button onClick={() => go("news")}>
+          </SpotlightCard>
+          <SpotlightCard onClick={() => go("news")}>
             <Newspaper aria-hidden="true" />
             <span>
               <strong>News & videos</strong>
               <small>Company updates and market news</small>
             </span>
             <ArrowUpRight aria-hidden="true" />
-          </button>
+          </SpotlightCard>
         </nav>
       </div>
       {userId && <PortfolioOverview key={userId} userId={userId} />}

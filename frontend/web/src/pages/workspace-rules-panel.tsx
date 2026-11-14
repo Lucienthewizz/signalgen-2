@@ -1,3 +1,4 @@
+import AnimatedContent from "@/components/react-bits/AnimatedContent";
 import AnimatedList from "@/components/react-bits/AnimatedList";
 import { tierAccess } from "@/lib/tier-access";
 import type { AccountState } from "@/types";
@@ -516,7 +517,12 @@ export function ServerRulesPanel({
           </AlertDescription>
         </Alert>
       )}
-      <section className="rule-composer" aria-labelledby="rule-composer-title">
+      <AnimatedContent
+        as="section"
+        animationKey={editing?.id ?? "new"}
+        className="rule-composer"
+        aria-labelledby="rule-composer-title"
+      >
         <header className="rule-composer__header">
           <div className="resource-title-lockup">
             <span aria-hidden="true">
@@ -1094,7 +1100,7 @@ export function ServerRulesPanel({
             </footer>
           </fieldset>
         </form>
-      </section>
+      </AnimatedContent>
     </>
   );
   return (

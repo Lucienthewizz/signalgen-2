@@ -1,3 +1,4 @@
+import ElasticSlider from "@/components/react-bits/ElasticSlider";
 import Stepper from "@/components/react-bits/Stepper";
 import { Profiler, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, session, ApiError } from "@/api/client";
@@ -583,6 +584,13 @@ export function SignalStudyPanel({
                     value={config.n_steps}
                     onChange={(e) =>
                       setConfig({ ...config, n_steps: Number(e.target.value) })
+                    }
+                  />
+                  <ElasticSlider
+                    value={config.n_steps}
+                    label="Trading candles slider"
+                    onChange={(value) =>
+                      setConfig({ ...config, n_steps: value })
                     }
                   />
                   <FieldDescription>

@@ -325,6 +325,23 @@ async (page) => {
     await page
       .getByLabel("Entry mode", { exact: true })
       .waitFor({ timeout: 20000 });
+    const slider = page.getByRole("slider", { name: "Holding period slider", exact: true });
+    const numeric = page.getByLabel("Holding period (candles)", { exact: true });
+    const previous = await numeric.inputValue();
+    await slider.focus(); await page.keyboard.press("End");
+    if (await numeric.inputValue() !== "100") throw Error("Slider End did not update numeric horizon");
+    await page.keyboard.press("ArrowLeft");
+    if (await numeric.inputValue() !== "99") throw Error("Slider arrow step is not one candle");
+    await page.keyboard.press("Home");
+    if (await numeric.inputValue() !== "1") throw Error("Slider Home did not clamp to one candle");
+    const track = await slider.boundingBox();
+    await page.mouse.move(track.x + track.width / 2, track.y + track.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(track.x + track.width + 40, track.y + track.height / 2, {steps:8});
+    await page.mouse.up();
+    if (await numeric.inputValue() !== "100") throw Error("Dragging slider beyond its end did not clamp at 100");
+    await numeric.fill(previous);
+    if (await slider.inputValue() !== previous) throw Error("Numeric horizon did not update slider");
     if(await page.locator("html").getAttribute("data-theme")!=="dark" || await page.getByRole("button",{name:/Switch to .* mode/}).count()) throw Error("Saved light preference must not enable light mode");
   }
   async function dates() {
