@@ -23,8 +23,10 @@ export default function Stepper({
             }
             aria-current={index === stage ? "step" : undefined}
           >
-            <span aria-hidden="true">{index + 1}</span>
-            {label}
+            <span className="run-stepper__number" aria-hidden="true">
+              {index + 1}
+            </span>
+            <span className="run-stepper__label">{label}</span>
           </li>
         ),
       )}
