@@ -114,68 +114,6 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
   }, [revision]);
   return (
     <div className="workspace-news">
-      <section className="news-video" aria-labelledby="idx-video-title">
-        <header>
-          <WindowDots />
-          <h3 id="idx-video-title">
-            <Video aria-hidden="true" />
-            Video
-          </h3>
-          <span aria-hidden="true" />
-        </header>
-        <div className="news-video__layout">
-          <div className="news-video__player">
-            {playing ? (
-              <iframe
-                key={selected.id}
-                src={`https://www.youtube-nocookie.com/embed/${selected.id}?autoplay=1`}
-                title={selected.title}
-                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                allowFullScreen
-                referrerPolicy="strict-origin-when-cross-origin"
-              />
-            ) : (
-              <button
-                className="news-video__poster"
-                type="button"
-                onClick={() => setPlaying(true)}
-                aria-label={`Play ${selected.title}`}
-              >
-                <img
-                  key={selected.id}
-                  src={`https://i.ytimg.com/vi/${selected.id}/hqdefault.jpg`}
-                  alt=""
-                  onError={(event) => {
-                    event.currentTarget.hidden = true;
-                  }}
-                  loading="lazy"
-                />
-                <Play aria-hidden="true" />
-                <span>{selected.title}</span>
-                <span>Play video</span>
-              </button>
-            )}
-          </div>
-          <div className="news-video__choices">
-            <Carousel
-              items={IDX_VIDEOS}
-              selected={selected.id}
-              onSelect={(video) => {
-                setSelected(video);
-                setPlaying(false);
-              }}
-            />
-            <a
-              href={`https://www.youtube.com/watch?v=${selected.id}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Watch on YouTube
-              <ExternalLink aria-hidden="true" />
-            </a>
-          </div>
-        </div>
-      </section>
       <section
         className="news-feed"
         aria-labelledby="market-news-title"
@@ -300,6 +238,68 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
             </Empty>
           )
         )}
+      </section>
+      <section className="news-video" aria-labelledby="idx-video-title">
+        <header>
+          <WindowDots />
+          <h3 id="idx-video-title">
+            <Video aria-hidden="true" />
+            Video
+          </h3>
+          <span aria-hidden="true" />
+        </header>
+        <div className="news-video__layout">
+          <div className="news-video__player">
+            {playing ? (
+              <iframe
+                key={selected.id}
+                src={`https://www.youtube-nocookie.com/embed/${selected.id}?autoplay=1`}
+                title={selected.title}
+                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+            ) : (
+              <button
+                className="news-video__poster"
+                type="button"
+                onClick={() => setPlaying(true)}
+                aria-label={`Play ${selected.title}`}
+              >
+                <img
+                  key={selected.id}
+                  src={`https://i.ytimg.com/vi/${selected.id}/hqdefault.jpg`}
+                  alt=""
+                  onError={(event) => {
+                    event.currentTarget.hidden = true;
+                  }}
+                  loading="lazy"
+                />
+                <Play aria-hidden="true" />
+                <span>{selected.title}</span>
+                <span>Play video</span>
+              </button>
+            )}
+          </div>
+          <div className="news-video__choices">
+            <Carousel
+              items={IDX_VIDEOS}
+              selected={selected.id}
+              onSelect={(video) => {
+                setSelected(video);
+                setPlaying(false);
+              }}
+            />
+            <a
+              href={`https://www.youtube.com/watch?v=${selected.id}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Watch on YouTube
+              <ExternalLink aria-hidden="true" />
+            </a>
+          </div>
+        </div>
       </section>
     </div>
   );

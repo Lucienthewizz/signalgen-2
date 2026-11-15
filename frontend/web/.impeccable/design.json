@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-14T22:26:35.190590+00:00",
+  "title": "Design System: Signalgen Pen workspace",
+  "extensions": {
+    "typographyMeta": {
+      "workspace-heading": {
+        "displayName": "Workspace headings",
+        "purpose": "Rajdhani 600 for headings and actions."
+      },
+      "workspace-body": {
+        "displayName": "Workspace prose",
+        "purpose": "Inter Variable for explanatory copy."
+      },
+      "workspace-data": {
+        "displayName": "Workspace data",
+        "purpose": "IBM Plex Mono for tables and financial values."
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [
+      {
+        "name": "study-guide-stack",
+        "value": "1180px"
+      },
+      {
+        "name": "workspace-stack-and-drawer",
+        "value": "860px"
+      },
+      {
+        "name": "workspace-compact",
+        "value": "520px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Workspace primary button",
+      "kind": "button",
+      "description": "Mint action with Rajdhani 600.",
+      "html": "<button class=\"ds-primary\">Run screening</button>",
+      "css": ".ds-primary{background:var(--primary,#6de5af);color:var(--primary-foreground,#101514);border:1px solid transparent;border-radius:6px;padding:10px 16px;font:600 13px Rajdhani,sans-serif}.ds-primary:hover{background:color-mix(in srgb,var(--primary,#6de5af) 88%,var(--text,#edf3ef))}.ds-primary:focus-visible{outline:2px solid var(--green,#6de5af);outline-offset:3px}.ds-primary:disabled{opacity:.5}",
+      "refersTo": "workspace-button-primary"
+    },
+    {
+      "name": "Workspace secondary button",
+      "kind": "button",
+      "description": "A quiet supporting action.",
+      "html": "<button class=\"ds-secondary\">Cancel</button>",
+      "css": ".ds-secondary{background:var(--surface-2,#202924);color:var(--text,#edf3ef);border:1px solid var(--line,#2b3632);border-radius:6px;padding:10px 16px;font:600 13px Rajdhani,sans-serif}.ds-secondary:hover{background:var(--surface-3,#26322c)}.ds-secondary:focus-visible{outline:2px solid var(--green,#6de5af);outline-offset:3px}"
+    },
+    {
+      "name": "Workspace input",
+      "kind": "input",
+      "description": "Visible label and a bordered control.",
+      "html": "<label class=\"ds-label\" for=\"ds-rule\">Rule name</label><input class=\"ds-input\" id=\"ds-rule\" value=\"Momentum rule\">",
+      "css": ".ds-label{display:block;margin-bottom:6px;color:var(--muted,#a0afa7);font:450 12px \"Inter Variable\",sans-serif}.ds-input{background:var(--control-bg,#101514);color:var(--text,#edf3ef);border:1px solid var(--control-border,#36453e);border-radius:6px;padding:10px 12px;font:400 13px \"Inter Variable\",sans-serif}.ds-input:hover{border-color:var(--muted,#a0afa7)}.ds-input:focus-visible{outline:2px solid var(--green,#6de5af);outline-offset:2px}"
+    },
+    {
+      "name": "Workspace navigation",
+      "kind": "nav",
+      "description": "Active navigation has a tonal mint selection.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Workspace\"><button class=\"ds-active\" aria-current=\"page\">Dashboard</button><button>Screener</button></nav>",
+      "css": ".ds-nav{display:grid;gap:5px;background:var(--sidebar,#151c19);padding:16px}.ds-nav button{min-height:44px;text-align:left;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--muted,#a0afa7);padding:10px 12px;font:600 15px Rajdhani,sans-serif}.ds-nav button:hover{background:var(--surface-2,#202924);color:var(--text,#edf3ef)}.ds-nav .ds-active,.ds-nav .ds-active:hover{background:var(--accent-surface,#203b2e);color:var(--green,#6de5af)}.ds-nav button:focus-visible{outline:2px solid var(--green,#6de5af);outline-offset:2px}"
+    },
+    {
+      "name": "Workspace status",
+      "kind": "chip",
+      "description": "Text preserves meaning alongside a semantic color.",
+      "html": "<span class=\"ds-status\">Screening complete</span>",
+      "css": ".ds-status{display:inline-block;color:var(--muted,#a0afa7);border:1px solid transparent;border-radius:6px;padding:4px 8px;font:400 12px \"Inter Variable\",sans-serif}"
+    },
+    {
+      "name": "Workspace panel",
+      "kind": "card",
+      "description": "A flat tonal container with a fine border.",
+      "html": "<section class=\"ds-panel\"><h3>Portfolio</h3><p>Review saved positions and screening activity.</p></section>",
+      "css": ".ds-panel{background:var(--surface,#181f1d);color:var(--text,#edf3ef);border:1px solid var(--line,#2b3632);border-radius:10px;padding:24px;box-shadow:none}.ds-panel h3{margin:0 0 8px;font:600 17px Rajdhani,sans-serif}.ds-panel p{margin:0;color:var(--muted,#a0afa7);font:400 13px/1.55 \"Inter Variable\",sans-serif}",
+      "refersTo": "workspace-panel"
+    }
+  ],
+  "narrative": {
+    "overview": "The user-supplied Pen frames establish a flat charcoal-and-mint workspace.",
+    "keyCharacteristics": [
+      "Flat charcoal surfaces and mint selection.",
+      "Rajdhani headings, Inter prose, and IBM Plex Mono data.",
+      "Eight workspace routes; landing and authentication retain their identity."
+    ],
+    "rules": [],
+    "dos": [
+      "Do apply this identity only to the eight authorized workspace routes.",
+      "Do retain keyboard focus, responsive navigation, semantic states, and reduced-motion support."
+    ],
+    "donts": [
+      "Don't extend this redesign to landing/auth or replace financial and account logic to match a visual reference.",
+      "Don't treat synthetic preview data as evidence of a live backend or market feed."
+    ]
+  }
+}

@@ -21,6 +21,18 @@ colors:
   accent-ink: "#04120a"
   skeleton: "#1a211c"
   skeleton-resolve: "#29332d"
+  workspace-canvas: "#101514"
+  workspace-sidebar: "#151c19"
+  workspace-surface: "#181f1d"
+  workspace-surface-2: "#202924"
+  workspace-surface-3: "#26322c"
+  workspace-line: "#2b3632"
+  workspace-line-soft: "#26302c"
+  workspace-text: "#edf3ef"
+  workspace-muted: "#a0afa7"
+  workspace-mint: "#6de5af"
+  workspace-mint-bright: "#8debc3"
+  workspace-accent-surface: "#203b2e"
 typography:
   display:
     fontFamily: '"Manrope Variable", sans-serif'
@@ -52,7 +64,27 @@ typography:
     fontSize: "11px"
     fontWeight: 670
     lineHeight: 1
+  workspace-heading:
+    fontFamily: '"Rajdhani", ui-sans-serif, sans-serif'
+    fontSize: "28px"
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: "-.025em"
+  workspace-body:
+    fontFamily: '"Inter Variable", ui-sans-serif, sans-serif'
+    fontSize: "13px"
+    lineHeight: 1.55
+  workspace-navigation:
+    fontFamily: '"Rajdhani", ui-sans-serif, sans-serif'
+    fontSize: "15px"
+    fontWeight: 600
+  workspace-data:
+    fontFamily: '"IBM Plex Mono", ui-monospace, monospace'
+    fontSize: "13px"
+    lineHeight: 1.6
 rounded:
+  workspace-control: "6px"
+  workspace-panel: "10px"
   tag: "6px"
   web-control: "8px"
   desktop-control: "9px"
@@ -88,6 +120,15 @@ components:
     backgroundColor: "{colors.surface}"
     rounded: "{rounded.panel}"
     padding: "{spacing.panel}"
+  workspace-button-primary:
+    backgroundColor: "{colors.workspace-mint}"
+    textColor: "{colors.workspace-canvas}"
+    rounded: "{rounded.workspace-control}"
+  workspace-panel:
+    backgroundColor: "{colors.workspace-surface}"
+    textColor: "{colors.workspace-text}"
+    rounded: "{rounded.workspace-panel}"
+    padding: "{spacing.panel}"
   loading-placeholder:
     backgroundColor: "{colors.skeleton}"
     rounded: "{rounded.web-control}"
@@ -98,6 +139,8 @@ components:
 ## Overview
 
 **Creative North Star: "The institutional control ledger"**
+
+**Scope:** The original tokens and guidance below remain the public landing/auth and legacy desktop reference. The user-approved Pen workspace identity overrides them only for the eight routes listed in the scoped workspace section. Its normative tokens use the `workspace-` prefix; do not propagate them to public pages.
 
 Signalgen presents analysis as a legible workspace: near-black surfaces, precise rules, compact controls, and green reserved for action and market state. The desktop establishes the visual world. The public web inherits its colors, Manrope typography, subtle edges, and supplied green candlestick mark, while using larger type and more breathing room.
 
@@ -192,6 +235,40 @@ The screenshot sits in a restrained window frame with an explanatory caption. Fe
 - **Don't** rely on color alone for success, warning, or failure.
 - **Don't** disguise illustrative market values as live data or pending releases as available installers.
 
-## Workspace forest surfaces
+## Pen workspace identity
 
-Workspace routes use a darker forest variant from `workspace-forest.css`: canvas `#030b07`, sidebar `#050e09`, surfaces `#081a12`, `#0c2117` and `#112b1e`, with dividers `#203c2d`. A single diagonal gradient moves from `#0a2117` to `#050f0a` on cards. Existing typography, spacing, control sizing and semantic gain/loss colors remain the reference. The landing page keeps its separate GhostFibers and ASCII backgrounds.
+The user-supplied Pen frames establish a flat charcoal-and-mint workspace. This replaces the earlier forest gradient treatment for `/#app/overview`, `/#app/analysis`, `/#app/backtest`, `/#app/journal`, `/#app/rules`, `/#app/universes`, `/#app/realtime`, and `/#app/news`. The landing page and authentication keep their current identity. Implementation authority is `frontend/web/src/styles/pen-workspace.css`, scoped to `.pen-workbench` and `html[data-typography="workspace"]`.
+
+### Colors
+
+Use the prefixed workspace tokens above for dark mode: charcoal canvas, progressively lighter panel surfaces, fine neutral dividers, pale text, and mint actions/selection. Preserve semantic gain, loss, warning, disabled, and focus states. Light mode uses the stylesheet's separate light palette; it is an adaptation of the supplied dark reference.
+
+### Typography
+
+Headings, navigation, buttons, and summaries use Rajdhani (600). Explanatory copy and form text use Inter Variable. Tables and financial values use IBM Plex Mono (400/600) with tabular figures. Page headings are 28px on desktop and 25px at 520px and below; table values use 13px. The font files are local assets. These roles supersede Manrope only within the workspace.
+
+### Layout
+
+The expanded desktop sidebar is 224px; the collapsed sidebar is 76px. At 860px and below it becomes the existing overlay drawer. Workspace gutters step from 32px to 20px, then 18px at 520px. Panels typically use 24px padding and gaps. Rules, dashboard, monitor, and news columns stack at 860px; the study guide stacks at 1180px. Preserve usable table scrolling and existing form behavior.
+
+### Elevation & Depth
+
+Resting workspace panels are flat, with tonal separation and one-pixel borders. Page and card gradients are disabled. Existing ReactBits components and interaction logic remain available within the adapted composition; this scoped identity does not inherit the earlier blanket prohibition on carousels or animated components.
+
+### Shapes
+
+Workspace controls use 6px corners and panels use 10px corners. Preserve the supplied Signalgen mark, visible focus, status labels, and reduced-motion behavior.
+
+### Components
+
+Mint primary actions use dark ink in dark mode and white text on dark green in light mode. Active navigation combines mint text with a darker green surface. Inputs use a distinct control background and border. Tables use subdued headers, fine row dividers, and monospaced data. Account menus, dialogs, screening, studies, portfolio calculations, and API ownership retain their existing behavior.
+
+### Do's and Don'ts
+
+- **Do** apply this identity only to the eight authorized workspace routes.
+- **Do** keep Rajdhani for headings/actions, IBM Plex Mono for data, and Inter for prose.
+- **Do** retain keyboard focus, responsive navigation, semantic states, and reduced-motion support.
+- **Don't** extend this redesign to landing/auth or replace financial and account logic to match a visual reference.
+- **Don't** treat synthetic preview data as evidence of a live backend or market feed.
+
+The workspace extension sidecar is `frontend/web/.impeccable/design.json`. The root `.impeccable/design.json` and config contained pre-existing unrelated state and are not updated by this redesign. Route composition, evidence, and rollback details live in `docs/frontend/PEN_WORKSPACE_REDESIGN.md`.

@@ -448,725 +448,764 @@ export function SignalStudyPanel({
         recordSample("react_render_ms", duration)
       }
     >
-      <section className="signal-study-panel" aria-labelledby="study-heading">
-        <header className="study-config-heading">
-          <span className="study-config-heading__icon" aria-hidden="true">
-            <SlidersHorizontal />
-          </span>
-          <div>
-            <h2 id="study-heading">Analyse every signal</h2>
-            <p>
-              Independent daily observations from the signal candle’s close. Not
-              a cash portfolio or executed trades.
-            </p>
-          </div>
-          <Badge variant="outline">Daily candles</Badge>
-        </header>
-        <Stepper
-          stage={busy ? 1 : progress ? 2 : 0}
-          partial={!!progress && progress.completed !== progress.context.total}
-        />
-        <form
-          onInvalidCapture={(event) => {
-            const details = (event.target as HTMLElement).closest("details");
-            if (details) details.open = true;
-          }}
-          onSubmit={(e: FormEvent) => {
-            e.preventDefault();
-            void start();
-          }}
-        >
-          <fieldset disabled={busy} className="study-fields">
-            <legend className="sr-only">Historical study settings</legend>
-            <FieldSet className="study-settings-section">
-              <FieldLegend>Source &amp; rule</FieldLegend>
-              <FieldGroup className="study-form-grid">
-                <Field>
-                  <FieldLabel htmlFor="study-source">Stock source</FieldLabel>
-                  <select
-                    id="study-source"
-                    aria-label="Stock source"
-                    value={source}
-                    onChange={(e) => setSource(e.target.value)}
-                  >
-                    <option value="IDX">Entire IDX catalog · IDR</option>
-                    <option value="US">Entire US catalog · USD</option>
-                    <option value="universe" disabled={!universes.length}>
-                      My stock universe
-                    </option>
-                  </select>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="study-rule">Screening rule</FieldLabel>
-                  <select
-                    id="study-rule"
-                    aria-label="Screening rule"
-                    required
-                    value={rule}
-                    onChange={(e) => setRule(e.target.value)}
-                  >
-                    <option value="default-scalping-v1">
-                      Default Scalping
-                    </option>
-                    {rules
-                      .filter((r) => r.id !== "default-scalping-v1")
-                      .map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name} ·{" "}
-                          {r.definition?.signal_type ?? "System rule"}
-                        </option>
-                      ))}
-                  </select>
-                </Field>
-                {source === "universe" && (
-                  <Field className="study-universe-field">
-                    <FieldLabel htmlFor="study-universe">
-                      Stock universe
-                    </FieldLabel>
+      <div
+        className={`pen-study-layout ${progress || busy ? "has-results" : ""}`}
+      >
+        <section className="signal-study-panel" aria-labelledby="study-heading">
+          <header className="study-config-heading">
+            <span className="study-config-heading__icon" aria-hidden="true">
+              <SlidersHorizontal />
+            </span>
+            <div>
+              <h2 id="study-heading">Analyse every signal</h2>
+              <p>
+                Independent daily observations from the signal candle’s close.
+                Not a cash portfolio or executed trades.
+              </p>
+            </div>
+            <Badge variant="outline">Daily candles</Badge>
+          </header>
+          <Stepper
+            stage={busy ? 1 : progress ? 2 : 0}
+            partial={
+              !!progress && progress.completed !== progress.context.total
+            }
+          />
+          <form
+            onInvalidCapture={(event) => {
+              const details = (event.target as HTMLElement).closest("details");
+              if (details) details.open = true;
+            }}
+            onSubmit={(e: FormEvent) => {
+              e.preventDefault();
+              void start();
+            }}
+          >
+            <fieldset disabled={busy} className="study-fields">
+              <legend className="sr-only">Historical study settings</legend>
+              <FieldSet className="study-settings-section">
+                <FieldLegend>Source &amp; rule</FieldLegend>
+                <FieldGroup className="study-form-grid">
+                  <Field>
+                    <FieldLabel htmlFor="study-source">Stock source</FieldLabel>
                     <select
-                      id="study-universe"
-                      aria-label="Stock universe"
-                      required
-                      value={universe}
-                      onChange={(e) => setUniverse(e.target.value)}
+                      id="study-source"
+                      aria-label="Stock source"
+                      value={source}
+                      onChange={(e) => setSource(e.target.value)}
                     >
-                      {universes.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                        </option>
-                      ))}
+                      <option value="IDX">Entire IDX catalog · IDR</option>
+                      <option value="US">Entire US catalog · USD</option>
+                      <option value="universe" disabled={!universes.length}>
+                        My stock universe
+                      </option>
                     </select>
                   </Field>
-                )}
-              </FieldGroup>
-            </FieldSet>
-            <FieldSet className="study-settings-section">
-              <FieldLegend>Test period</FieldLegend>
-              <FieldGroup className="study-form-grid">
-                <Field>
-                  <FieldLabel htmlFor="study-from">
-                    From (daily session, SGT)
-                  </FieldLabel>
-                  <DateInput
-                    id="study-from"
-                    required
-                    type="date"
-                    value={config.from}
-                    onValueChange={(value) =>
-                      setConfig({ ...config, from: value })
-                    }
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="study-to">
-                    To (inclusive, SGT)
-                  </FieldLabel>
-                  <DateInput
-                    id="study-to"
-                    required
-                    type="date"
-                    value={config.to}
-                    onValueChange={(value) =>
-                      setConfig({ ...config, to: value })
-                    }
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="study-horizon">
-                    Trading candles after signal
-                  </FieldLabel>
-                  <Input
-                    id="study-horizon"
-                    required
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={config.n_steps}
-                    onChange={(e) =>
-                      setConfig({ ...config, n_steps: Number(e.target.value) })
-                    }
-                  />
-                  <ElasticSlider
-                    value={config.n_steps}
-                    label="Trading candles slider"
-                    onChange={(value) =>
-                      setConfig({ ...config, n_steps: value })
-                    }
-                  />
-                  <FieldDescription>
-                    1–100 completed daily candles, not calendar days.
-                  </FieldDescription>
-                </Field>
-              </FieldGroup>
-            </FieldSet>
-            <details className="run-advanced">
-              <summary>
-                Take profit &amp; stop loss{" "}
-                <small>
-                  {config.take_profit_pct
-                    ? `TP ${config.take_profit_pct}%`
-                    : "No take profit"}{" "}
-                  ·{" "}
-                  {config.stop_loss_pct
-                    ? `SL ${config.stop_loss_pct}%`
-                    : "No stop loss"}
-                </small>
-              </summary>
+                  <Field>
+                    <FieldLabel htmlFor="study-rule">Screening rule</FieldLabel>
+                    <select
+                      id="study-rule"
+                      aria-label="Screening rule"
+                      required
+                      value={rule}
+                      onChange={(e) => setRule(e.target.value)}
+                    >
+                      <option value="default-scalping-v1">
+                        Default Scalping
+                      </option>
+                      {rules
+                        .filter((r) => r.id !== "default-scalping-v1")
+                        .map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name} ·{" "}
+                            {r.definition?.signal_type ?? "System rule"}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                  {source === "universe" && (
+                    <Field className="study-universe-field">
+                      <FieldLabel htmlFor="study-universe">
+                        Stock universe
+                      </FieldLabel>
+                      <select
+                        id="study-universe"
+                        aria-label="Stock universe"
+                        required
+                        value={universe}
+                        onChange={(e) => setUniverse(e.target.value)}
+                      >
+                        {universes.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  )}
+                </FieldGroup>
+              </FieldSet>
               <FieldSet className="study-settings-section">
-                <FieldLegend className="sr-only">
-                  Take profit &amp; stop loss
-                </FieldLegend>
+                <FieldLegend>Test period</FieldLegend>
                 <FieldGroup className="study-form-grid">
-                  <Field data-study-target="profit">
-                    <FieldLabel htmlFor="study-tp">
-                      Take profit % (optional)
+                  <Field>
+                    <FieldLabel htmlFor="study-from">
+                      From (daily session, SGT)
                     </FieldLabel>
-                    <Input
-                      id="study-tp"
-                      type="number"
-                      min="0.01"
-                      max="99.99"
-                      step="any"
-                      value={config.take_profit_pct ?? ""}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          take_profit_pct: e.target.value
-                            ? Number(e.target.value)
-                            : undefined,
-                        })
+                    <DateInput
+                      id="study-from"
+                      required
+                      type="date"
+                      value={config.from}
+                      onValueChange={(value) =>
+                        setConfig({ ...config, from: value })
                       }
                     />
                   </Field>
-                  <Field data-study-target="loss">
-                    <FieldLabel htmlFor="study-sl">
-                      Stop loss % (optional)
+                  <Field>
+                    <FieldLabel htmlFor="study-to">
+                      To (inclusive, SGT)
+                    </FieldLabel>
+                    <DateInput
+                      id="study-to"
+                      required
+                      type="date"
+                      value={config.to}
+                      onValueChange={(value) =>
+                        setConfig({ ...config, to: value })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="study-horizon">
+                      Trading candles after signal
                     </FieldLabel>
                     <Input
-                      id="study-sl"
+                      id="study-horizon"
+                      required
                       type="number"
-                      min="0.01"
-                      max="99.99"
-                      step="any"
-                      value={config.stop_loss_pct ?? ""}
+                      min={1}
+                      max={100}
+                      value={config.n_steps}
                       onChange={(e) =>
                         setConfig({
                           ...config,
-                          stop_loss_pct: e.target.value
-                            ? Number(e.target.value)
-                            : undefined,
+                          n_steps: Number(e.target.value),
                         })
                       }
                     />
+                    <ElasticSlider
+                      value={config.n_steps}
+                      label="Trading candles slider"
+                      onChange={(value) =>
+                        setConfig({ ...config, n_steps: value })
+                      }
+                    />
+                    <FieldDescription>
+                      1–100 completed daily candles, not calendar days.
+                    </FieldDescription>
                   </Field>
                 </FieldGroup>
-                <p className="study-settings-note">
-                  Leave a target empty to skip it. If both are touched in the
-                  same candle, stop loss comes first.
-                </p>
               </FieldSet>
-            </details>
-          </fieldset>
-          <div className="study-actions study-config-actions">
-            <Button type="submit" disabled={busy || !backendOnline}>
-              <Play data-icon="inline-start" />
-              Start signal study
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!busy}
-              onClick={cancel}
-            >
-              <Square data-icon="inline-start" />
-              Stop study
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => setReload((n) => n + 1)}
-            >
-              <RefreshCw data-icon="inline-start" />
-              Reload selections
-            </Button>
-          </div>
-        </form>
-        {optionsError && <p role="status">{optionsError}</p>}
-        {!backendOnline && (
-          <p role="status">
-            Backend unavailable. Existing results remain visible; reconnect
-            before starting.
-          </p>
-        )}
-        <p role="status" aria-live="polite" aria-atomic="true">
-          {message}
-        </p>
-        {error && <p role="alert">{error}</p>}
-        {busy && <StudyEstimate progress={progress} />}
-        {progress && (
-          <>
-            <progress
-              aria-label="Catalog study progress"
-              max={ready!.total}
-              value={progress.completed}
-            />
-            <p>
-              {progress.completed}/{ready!.total} stocks processed ·{" "}
-              {progress.failures.length} failed · {progress.remaining} remaining
-              · {ready!.market}/{ready!.currency}
-            </p>
-            <p>
-              Frozen period: {ready!.config.from}–{ready!.config.to}; T+
-              {ready!.config.n_steps}. Catalog{" "}
-              {ready!.catalog_hash.slice(0, 20)}…
-            </p>
-            <p>
-              Signals: {selectedMetrics!.signals} · Evaluated swing:{" "}
-              {selectedMetrics!.evaluated} · Missing future data:{" "}
-              {selectedMetrics!.missing} · Win rate:{" "}
-              {pct(selectedMetrics!.win_rate)}
-            </p>
-            <section
-              className="study-comparison"
-              aria-label="Compare historical studies"
-            >
-              <h3>Compare periods</h3>
-              <p>
-                Keep a completed result, change the dates, then run again. The
-                reference stays in this page until you reload or change account.
-                Different rules or stock coverage can also change the results.
-              </p>
+              <details className="run-advanced">
+                <summary>
+                  Take profit &amp; stop loss{" "}
+                  <small>
+                    {config.take_profit_pct
+                      ? `TP ${config.take_profit_pct}%`
+                      : "No take profit"}{" "}
+                    ·{" "}
+                    {config.stop_loss_pct
+                      ? `SL ${config.stop_loss_pct}%`
+                      : "No stop loss"}
+                  </small>
+                </summary>
+                <FieldSet className="study-settings-section">
+                  <FieldLegend className="sr-only">
+                    Take profit &amp; stop loss
+                  </FieldLegend>
+                  <FieldGroup className="study-form-grid">
+                    <Field data-study-target="profit">
+                      <FieldLabel htmlFor="study-tp">
+                        Take profit % (optional)
+                      </FieldLabel>
+                      <Input
+                        id="study-tp"
+                        type="number"
+                        min="0.01"
+                        max="99.99"
+                        step="any"
+                        value={config.take_profit_pct ?? ""}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            take_profit_pct: e.target.value
+                              ? Number(e.target.value)
+                              : undefined,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field data-study-target="loss">
+                      <FieldLabel htmlFor="study-sl">
+                        Stop loss % (optional)
+                      </FieldLabel>
+                      <Input
+                        id="study-sl"
+                        type="number"
+                        min="0.01"
+                        max="99.99"
+                        step="any"
+                        value={config.stop_loss_pct ?? ""}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            stop_loss_pct: e.target.value
+                              ? Number(e.target.value)
+                              : undefined,
+                          })
+                        }
+                      />
+                    </Field>
+                  </FieldGroup>
+                  <p className="study-settings-note">
+                    Leave a target empty to skip it. If both are touched in the
+                    same candle, stop loss comes first.
+                  </p>
+                </FieldSet>
+              </details>
+            </fieldset>
+            <div className="study-actions study-config-actions">
+              <Button type="submit" disabled={busy || !backendOnline}>
+                <Play data-icon="inline-start" />
+                Start signal study
+              </Button>
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
-                disabled={
-                  busy ||
-                  progress.completed !== ready!.total ||
-                  progress.failures.length > 0
-                }
-                onClick={() =>
-                  setComparison({
-                    owner: userId!,
-                    context: structuredClone(ready!),
-                    metrics: { ...selectedMetrics! },
-                  })
-                }
+                disabled={!busy}
+                onClick={cancel}
               >
-                Keep result for comparison
+                <Square data-icon="inline-start" />
+                Stop study
               </Button>
-              {comparison?.owner === userId && (
-                <>
-                  <div className="study-comparison__scroll">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => setReload((n) => n + 1)}
+              >
+                <RefreshCw data-icon="inline-start" />
+                Reload selections
+              </Button>
+            </div>
+          </form>
+          {optionsError && <p role="status">{optionsError}</p>}
+          {!backendOnline && (
+            <p role="status">
+              Backend unavailable. Existing results remain visible; reconnect
+              before starting.
+            </p>
+          )}
+          <p role="status" aria-live="polite" aria-atomic="true">
+            {message}
+          </p>
+          {error && <p role="alert">{error}</p>}
+          {busy && <StudyEstimate progress={progress} />}
+          {progress && (
+            <>
+              <progress
+                aria-label="Catalog study progress"
+                max={ready!.total}
+                value={progress.completed}
+              />
+              <p>
+                {progress.completed}/{ready!.total} stocks processed ·{" "}
+                {progress.failures.length} failed · {progress.remaining}{" "}
+                remaining · {ready!.market}/{ready!.currency}
+              </p>
+              <p>
+                Frozen period: {ready!.config.from}–{ready!.config.to}; T+
+                {ready!.config.n_steps}. Catalog{" "}
+                {ready!.catalog_hash.slice(0, 20)}…
+              </p>
+              <p>
+                Signals: {selectedMetrics!.signals} · Evaluated swing:{" "}
+                {selectedMetrics!.evaluated} · Missing future data:{" "}
+                {selectedMetrics!.missing} · Win rate:{" "}
+                {pct(selectedMetrics!.win_rate)}
+              </p>
+              <section
+                className="study-comparison"
+                aria-label="Compare historical studies"
+              >
+                <h3>Compare periods</h3>
+                <p>
+                  Keep a completed result, change the dates, then run again. The
+                  reference stays in this page until you reload or change
+                  account. Different rules or stock coverage can also change the
+                  results.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={
+                    busy ||
+                    progress.completed !== ready!.total ||
+                    progress.failures.length > 0
+                  }
+                  onClick={() =>
+                    setComparison({
+                      owner: userId!,
+                      context: structuredClone(ready!),
+                      metrics: { ...selectedMetrics! },
+                    })
+                  }
+                >
+                  Keep result for comparison
+                </Button>
+                {comparison?.owner === userId && (
+                  <>
+                    <div className="study-comparison__scroll">
+                      <table>
+                        <caption className="sr-only">
+                          Reference and current independent signal study
+                        </caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">Metric</th>
+                            <th scope="col">Reference</th>
+                            <th scope="col">
+                              Current
+                              {busy
+                                ? " (processing)"
+                                : progress.completed !== ready!.total ||
+                                    progress.failures.length
+                                  ? " (partial)"
+                                  : ""}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <th scope="row">Period</th>
+                            <td>
+                              {comparison.context.config.from} –{" "}
+                              {comparison.context.config.to}
+                            </td>
+                            <td>
+                              {ready!.config.from} – {ready!.config.to}
+                            </td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Source / stocks</th>
+                            <td>
+                              {comparison.context.market} /{" "}
+                              {comparison.context.total}
+                            </td>
+                            <td>
+                              {ready!.market} / {ready!.total}
+                            </td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Rule</th>
+                            <td>{comparison.context.rule_id}</td>
+                            <td>{ready!.rule_id}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Horizon</th>
+                            <td>T+{comparison.context.config.n_steps}</td>
+                            <td>T+{ready!.config.n_steps}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">TP / SL</th>
+                            <td>
+                              {comparison.context.config.take_profit_pct ??
+                                "Off"}{" "}
+                              /{" "}
+                              {comparison.context.config.stop_loss_pct ?? "Off"}
+                            </td>
+                            <td>
+                              {ready!.config.take_profit_pct ?? "Off"} /{" "}
+                              {ready!.config.stop_loss_pct ?? "Off"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Source</th>
+                            <td>
+                              {comparison.context.source === "universe"
+                                ? comparison.context.universe_id
+                                : "Entire catalog"}
+                            </td>
+                            <td>
+                              {ready!.source === "universe"
+                                ? ready!.universe_id
+                                : "Entire catalog"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Evaluated signals</th>
+                            <td>{comparison.metrics.evaluated}</td>
+                            <td>{selectedMetrics!.evaluated}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Win rate</th>
+                            <td>{pct(comparison.metrics.win_rate)}</td>
+                            <td>{pct(selectedMetrics!.win_rate)}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Mean return</th>
+                            <td>{pct(comparison.metrics.mean_return_pct)}</td>
+                            <td>{pct(selectedMetrics!.mean_return_pct)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setComparison(null)}
+                    >
+                      Clear reference
+                    </Button>
+                  </>
+                )}
+              </section>
+              {!!(
+                progress.failures.some((f) => f.retryable) ||
+                progress.failedBatches.length
+              ) && (
+                <Button
+                  disabled={
+                    busy ||
+                    closed ||
+                    frozenSelection.current !== selectionSignature
+                  }
+                  variant="outline"
+                  onClick={() => void start(true)}
+                >
+                  Retry failed stocks
+                </Button>
+              )}
+              {frozenSelection.current !== selectionSignature && (
+                <p role="status">
+                  Settings changed. Start a new study to apply them; the
+                  displayed result still uses its frozen context.
+                </p>
+              )}
+              <div className="study-actions">
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => void exportEvents()}
+                >
+                  Export signal details CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    downloadCsv("signal-study-horizons.csv", [
+                      [
+                        "step",
+                        "basis",
+                        "evaluated",
+                        "missing",
+                        "wins",
+                        "losses",
+                        "flats",
+                        "win_rate_pct",
+                        "mean_return_pct",
+                      ],
+                      ...progress.horizons.map((h) => [
+                        h.step,
+                        h.basis,
+                        h.evaluated,
+                        h.missing,
+                        h.wins,
+                        h.losses,
+                        h.flats,
+                        h.win_rate,
+                        h.mean_return_pct,
+                      ]),
+                    ])
+                  }
+                >
+                  Export all horizons CSV
+                </Button>
+              </div>
+              <p>
+                High is historical potential, not an obtainable sale price.
+                Same-candle TP/SL assumes SL first. No broker orders, fees, or
+                cash allocation are simulated in this mode.
+              </p>
+              <div className="study-table-scroll">
+                <table>
+                  <caption>All signal outcomes by horizon</caption>
+                  <thead>
+                    <tr>
+                      <th>Horizon</th>
+                      <th>Basis</th>
+                      <th>Evaluated</th>
+                      <th>Missing</th>
+                      <th>Win / loss / flat</th>
+                      <th>Win rate</th>
+                      <th>Mean return</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {progress.horizons
+                      .slice(horizonPage * 30, (horizonPage + 1) * 30)
+                      .map((h) => (
+                        <tr key={h.step + h.basis}>
+                          <td>T+{h.step}</td>
+                          <td>{h.basis}</td>
+                          <td>{h.evaluated}</td>
+                          <td>{h.missing}</td>
+                          <td>
+                            {h.wins}/{h.losses}/{h.flats}
+                          </td>
+                          <td>{pct(h.win_rate)}</td>
+                          <td>{pct(h.mean_return_pct)}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="study-actions">
+                <Button
+                  variant="ghost"
+                  disabled={!horizonPage}
+                  onClick={() => setHorizonPage((p) => p - 1)}
+                >
+                  Previous horizons
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={(horizonPage + 1) * 30 >= progress.horizons.length}
+                  onClick={() => setHorizonPage((p) => p + 1)}
+                >
+                  Next horizons
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    downloadCsv("signal-study-coverage.csv", [
+                      [
+                        "study_id",
+                        "catalog_hash",
+                        "rule_hash",
+                        "market",
+                        "currency",
+                        "total",
+                        "completed",
+                        "failed",
+                        "remaining",
+                        "status",
+                      ],
+                      [
+                        ready!.id,
+                        ready!.catalog_hash,
+                        ready!.definition_hash,
+                        ready!.market,
+                        ready!.currency,
+                        ready!.total,
+                        progress.completed,
+                        progress.failures.length,
+                        progress.remaining,
+                        progress.completed === ready!.total
+                          ? "complete"
+                          : "partial",
+                      ],
+                      ["symbol", "error_code", "retryable", "batch"],
+                      ...progress.failures.map((f) => [
+                        f.symbol,
+                        f.code,
+                        f.retryable,
+                        f.batch,
+                      ]),
+                      ["unresolved_batches", ...progress.pendingBatches],
+                    ])
+                  }
+                >
+                  Export coverage CSV
+                </Button>
+              </div>
+              <details>
+                <summary>By stock and signal day (swing outcomes)</summary>
+                {[progress.bySymbol, progress.byDay].map((items, i) => (
+                  <div key={i} className="study-table-scroll">
                     <table>
-                      <caption className="sr-only">
-                        Reference and current independent signal study
-                      </caption>
+                      <caption>{i ? "By signal day" : "By stock"}</caption>
                       <thead>
                         <tr>
-                          <th scope="col">Metric</th>
-                          <th scope="col">Reference</th>
-                          <th scope="col">
-                            Current
-                            {busy
-                              ? " (processing)"
-                              : progress.completed !== ready!.total ||
-                                  progress.failures.length
-                                ? " (partial)"
-                                : ""}
-                          </th>
+                          <th>{i ? "Day" : "Symbol"}</th>
+                          <th>Signals</th>
+                          <th>Evaluated</th>
+                          <th>Missing</th>
+                          <th>Win rate</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr>
-                          <th scope="row">Period</th>
-                          <td>
-                            {comparison.context.config.from} –{" "}
-                            {comparison.context.config.to}
-                          </td>
-                          <td>
-                            {ready!.config.from} – {ready!.config.to}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th scope="row">Source / stocks</th>
-                          <td>
-                            {comparison.context.market} /{" "}
-                            {comparison.context.total}
-                          </td>
-                          <td>
-                            {ready!.market} / {ready!.total}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th scope="row">Rule</th>
-                          <td>{comparison.context.rule_id}</td>
-                          <td>{ready!.rule_id}</td>
-                        </tr>
-                        <tr>
-                          <th scope="row">Horizon</th>
-                          <td>T+{comparison.context.config.n_steps}</td>
-                          <td>T+{ready!.config.n_steps}</td>
-                        </tr>
-                        <tr>
-                          <th scope="row">TP / SL</th>
-                          <td>
-                            {comparison.context.config.take_profit_pct ?? "Off"}{" "}
-                            / {comparison.context.config.stop_loss_pct ?? "Off"}
-                          </td>
-                          <td>
-                            {ready!.config.take_profit_pct ?? "Off"} /{" "}
-                            {ready!.config.stop_loss_pct ?? "Off"}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th scope="row">Source</th>
-                          <td>
-                            {comparison.context.source === "universe"
-                              ? comparison.context.universe_id
-                              : "Entire catalog"}
-                          </td>
-                          <td>
-                            {ready!.source === "universe"
-                              ? ready!.universe_id
-                              : "Entire catalog"}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th scope="row">Evaluated signals</th>
-                          <td>{comparison.metrics.evaluated}</td>
-                          <td>{selectedMetrics!.evaluated}</td>
-                        </tr>
-                        <tr>
-                          <th scope="row">Win rate</th>
-                          <td>{pct(comparison.metrics.win_rate)}</td>
-                          <td>{pct(selectedMetrics!.win_rate)}</td>
-                        </tr>
-                        <tr>
-                          <th scope="row">Mean return</th>
-                          <td>{pct(comparison.metrics.mean_return_pct)}</td>
-                          <td>{pct(selectedMetrics!.mean_return_pct)}</td>
-                        </tr>
+                        {summaries(items).map((r) => (
+                          <tr key={r.key}>
+                            <td>{r.key}</td>
+                            <td>{r.signals}</td>
+                            <td>{r.evaluated}</td>
+                            <td>{r.missing}</td>
+                            <td>{pct(r.win_rate)}</td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setComparison(null)}
-                  >
-                    Clear reference
-                  </Button>
-                </>
-              )}
-            </section>
-            {!!(
-              progress.failures.some((f) => f.retryable) ||
-              progress.failedBatches.length
-            ) && (
-              <Button
-                disabled={
-                  busy ||
-                  closed ||
-                  frozenSelection.current !== selectionSignature
-                }
-                variant="outline"
-                onClick={() => void start(true)}
-              >
-                Retry failed stocks
-              </Button>
-            )}
-            {frozenSelection.current !== selectionSignature && (
-              <p role="status">
-                Settings changed. Start a new study to apply them; the displayed
-                result still uses its frozen context.
-              </p>
-            )}
-            <div className="study-actions">
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => void exportEvents()}
-              >
-                Export signal details CSV
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  downloadCsv("signal-study-horizons.csv", [
-                    [
-                      "step",
-                      "basis",
-                      "evaluated",
-                      "missing",
-                      "wins",
-                      "losses",
-                      "flats",
-                      "win_rate_pct",
-                      "mean_return_pct",
-                    ],
-                    ...progress.horizons.map((h) => [
-                      h.step,
-                      h.basis,
-                      h.evaluated,
-                      h.missing,
-                      h.wins,
-                      h.losses,
-                      h.flats,
-                      h.win_rate,
-                      h.mean_return_pct,
-                    ]),
-                  ])
-                }
-              >
-                Export all horizons CSV
-              </Button>
-            </div>
-            <p>
-              High is historical potential, not an obtainable sale price.
-              Same-candle TP/SL assumes SL first. No broker orders, fees, or
-              cash allocation are simulated in this mode.
-            </p>
-            <div className="study-table-scroll">
-              <table>
-                <caption>All signal outcomes by horizon</caption>
-                <thead>
-                  <tr>
-                    <th>Horizon</th>
-                    <th>Basis</th>
-                    <th>Evaluated</th>
-                    <th>Missing</th>
-                    <th>Win / loss / flat</th>
-                    <th>Win rate</th>
-                    <th>Mean return</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {progress.horizons
-                    .slice(horizonPage * 30, (horizonPage + 1) * 30)
-                    .map((h) => (
-                      <tr key={h.step + h.basis}>
-                        <td>T+{h.step}</td>
-                        <td>{h.basis}</td>
-                        <td>{h.evaluated}</td>
-                        <td>{h.missing}</td>
+                ))}
+                <Button
+                  variant="ghost"
+                  disabled={groupPage === 0}
+                  onClick={() => setGroupPage((p) => p - 1)}
+                >
+                  Previous summary
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={
+                    (groupPage + 1) * 25 >=
+                    Math.max(progress.bySymbol.length, progress.byDay.length)
+                  }
+                  onClick={() => setGroupPage((p) => p + 1)}
+                >
+                  Next summary
+                </Button>
+              </details>
+              <div className="study-table-scroll">
+                <table>
+                  <caption>
+                    Signal details — T+{ready!.config.n_steps} and swing;{" "}
+                    {total} signals
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th>Stock</th>
+                      <th>Signal candle</th>
+                      <th>Direction</th>
+                      <th>Reference close</th>
+                      <th>Open return</th>
+                      <th>High return</th>
+                      <th>Close return</th>
+                      <th>Swing</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((e) => (
+                      <tr key={e.symbol + e.timestamp}>
+                        <td>{e.symbol}</td>
+                        <td>{e.timestamp.slice(0, 10)}</td>
+                        <td>{e.signal_type}</td>
+                        <td>{e.reference_price}</td>
+                        {e.outcomes
+                          .filter((o) => o.step === ready!.config.n_steps)
+                          .map((o) => (
+                            <td key={o.basis}>{pct(o.return_pct)}</td>
+                          ))}
                         <td>
-                          {h.wins}/{h.losses}/{h.flats}
+                          {e.swing.status} · {pct(e.swing.return_pct)}
                         </td>
-                        <td>{pct(h.win_rate)}</td>
-                        <td>{pct(h.mean_return_pct)}</td>
                       </tr>
                     ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="study-actions">
-              <Button
-                variant="ghost"
-                disabled={!horizonPage}
-                onClick={() => setHorizonPage((p) => p - 1)}
-              >
-                Previous horizons
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={(horizonPage + 1) * 30 >= progress.horizons.length}
-                onClick={() => setHorizonPage((p) => p + 1)}
-              >
-                Next horizons
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  downloadCsv("signal-study-coverage.csv", [
-                    [
-                      "study_id",
-                      "catalog_hash",
-                      "rule_hash",
-                      "market",
-                      "currency",
-                      "total",
-                      "completed",
-                      "failed",
-                      "remaining",
-                      "status",
-                    ],
-                    [
-                      ready!.id,
-                      ready!.catalog_hash,
-                      ready!.definition_hash,
-                      ready!.market,
-                      ready!.currency,
-                      ready!.total,
-                      progress.completed,
-                      progress.failures.length,
-                      progress.remaining,
-                      progress.completed === ready!.total
-                        ? "complete"
-                        : "partial",
-                    ],
-                    ["symbol", "error_code", "retryable", "batch"],
-                    ...progress.failures.map((f) => [
-                      f.symbol,
-                      f.code,
-                      f.retryable,
-                      f.batch,
-                    ]),
-                    ["unresolved_batches", ...progress.pendingBatches],
-                  ])
-                }
-              >
-                Export coverage CSV
-              </Button>
-            </div>
-            <details>
-              <summary>By stock and signal day (swing outcomes)</summary>
-              {[progress.bySymbol, progress.byDay].map((items, i) => (
-                <div key={i} className="study-table-scroll">
-                  <table>
-                    <caption>{i ? "By signal day" : "By stock"}</caption>
-                    <thead>
-                      <tr>
-                        <th>{i ? "Day" : "Symbol"}</th>
-                        <th>Signals</th>
-                        <th>Evaluated</th>
-                        <th>Missing</th>
-                        <th>Win rate</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {summaries(items).map((r) => (
-                        <tr key={r.key}>
-                          <td>{r.key}</td>
-                          <td>{r.signals}</td>
-                          <td>{r.evaluated}</td>
-                          <td>{r.missing}</td>
-                          <td>{pct(r.win_rate)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-              <Button
-                variant="ghost"
-                disabled={groupPage === 0}
-                onClick={() => setGroupPage((p) => p - 1)}
-              >
-                Previous summary
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={
-                  (groupPage + 1) * 25 >=
-                  Math.max(progress.bySymbol.length, progress.byDay.length)
-                }
-                onClick={() => setGroupPage((p) => p + 1)}
-              >
-                Next summary
-              </Button>
-            </details>
-            <div className="study-table-scroll">
-              <table>
-                <caption>
-                  Signal details — T+{ready!.config.n_steps} and swing; {total}{" "}
-                  signals
-                </caption>
-                <thead>
-                  <tr>
-                    <th>Stock</th>
-                    <th>Signal candle</th>
-                    <th>Direction</th>
-                    <th>Reference close</th>
-                    <th>Open return</th>
-                    <th>High return</th>
-                    <th>Close return</th>
-                    <th>Swing</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((e) => (
-                    <tr key={e.symbol + e.timestamp}>
-                      <td>{e.symbol}</td>
-                      <td>{e.timestamp.slice(0, 10)}</td>
-                      <td>{e.signal_type}</td>
-                      <td>{e.reference_price}</td>
-                      {e.outcomes
-                        .filter((o) => o.step === ready!.config.n_steps)
-                        .map((o) => (
-                          <td key={o.basis}>{pct(o.return_pct)}</td>
-                        ))}
-                      <td>
-                        {e.swing.status} · {pct(e.swing.return_pct)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="study-actions">
-              <Button
-                variant="ghost"
-                disabled={page === 0}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous signals
-              </Button>
-              <span>Page {page + 1}</span>
-              <Button
-                variant="ghost"
-                disabled={(page + 1) * 50 >= total}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next signals
-              </Button>
-            </div>
-            {!!progress.failures.length && (
+                  </tbody>
+                </table>
+              </div>
+              <div className="study-actions">
+                <Button
+                  variant="ghost"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  Previous signals
+                </Button>
+                <span>Page {page + 1}</span>
+                <Button
+                  variant="ghost"
+                  disabled={(page + 1) * 50 >= total}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next signals
+                </Button>
+              </div>
+              {!!progress.failures.length && (
+                <details>
+                  <summary>
+                    Provider and history failures ({progress.failures.length})
+                  </summary>
+                  <ul>
+                    {progress.failures.slice(0, 100).map((f) => (
+                      <li key={f.symbol}>
+                        {f.symbol}: {f.code}{" "}
+                        {f.retryable
+                          ? "(retry available)"
+                          : "(insufficient history)"}
+                      </li>
+                    ))}
+                  </ul>
+                  {progress.failures.length > 100 && (
+                    <p>
+                      First 100 failures shown. Coverage counts include all
+                      failures.
+                    </p>
+                  )}
+                </details>
+              )}
               <details>
-                <summary>
-                  Provider and history failures ({progress.failures.length})
-                </summary>
-                <ul>
-                  {progress.failures.slice(0, 100).map((f) => (
-                    <li key={f.symbol}>
-                      {f.symbol}: {f.code}{" "}
-                      {f.retryable
-                        ? "(retry available)"
-                        : "(insufficient history)"}
-                    </li>
-                  ))}
-                </ul>
-                {progress.failures.length > 100 && (
-                  <p>
-                    First 100 failures shown. Coverage counts include all
-                    failures.
-                  </p>
-                )}
+                <summary>Measured stages for this run (milliseconds)</summary>
+                <pre>{JSON.stringify(progress.timings, null, 2)}</pre>
+                <p>
+                  Decoded candle bytes:{" "}
+                  {progress.traffic.decoded_candle_bytes.toLocaleString()} ·
+                  Feature candidate JSON bytes:{" "}
+                  {progress.traffic.candidate_json_bytes.toLocaleString()}.
+                  Excludes HTTP headers, grant/context metadata, and
+                  compression.
+                </p>
+                <Button variant="outline" onClick={exportPerformance}>
+                  Export measured stages JSON
+                </Button>
+                <p>
+                  Client elapsed time includes requests and waiting; it is not
+                  server CPU time or a production benchmark.
+                </p>
               </details>
-            )}
-            <details>
-              <summary>Measured stages for this run (milliseconds)</summary>
-              <pre>{JSON.stringify(progress.timings, null, 2)}</pre>
-              <p>
-                Decoded candle bytes:{" "}
-                {progress.traffic.decoded_candle_bytes.toLocaleString()} ·
-                Feature candidate JSON bytes:{" "}
-                {progress.traffic.candidate_json_bytes.toLocaleString()}.
-                Excludes HTTP headers, grant/context metadata, and compression.
-              </p>
-              <Button variant="outline" onClick={exportPerformance}>
-                Export measured stages JSON
-              </Button>
-              <p>
-                Client elapsed time includes requests and waiting; it is not
-                server CPU time or a production benchmark.
-              </p>
-            </details>
-          </>
+            </>
+          )}
+        </section>
+        {!progress && !busy && (
+          <aside className="pen-study-guide" aria-label="Understand the study">
+            <h3>Understand the study</h3>
+            <p>
+              Each matched signal is an independent daily observation, measured
+              from the signal candle’s close.
+            </p>
+            <ol>
+              <li>
+                <strong>Configure</strong>
+                <span>Choose your rule, market, and period.</span>
+              </li>
+              <li>
+                <strong>Process</strong>
+                <span>Evaluate completed daily candles.</span>
+              </li>
+              <li>
+                <strong>Review</strong>
+                <span>Inspect outcomes for each signal.</span>
+              </li>
+            </ol>
+            <p className="pen-study-guide__note">
+              This is not a cash portfolio or a record of executed trades.
+            </p>
+          </aside>
         )}
-      </section>
+      </div>
     </Profiler>
   );
 }

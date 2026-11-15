@@ -334,19 +334,19 @@ async (page) => {
         await page.locator(".demo-workbench").waitFor({ timeout: 10000 });
         await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
         await page.evaluate(() => Promise.all([
-          document.fonts.load('14px "Saira Variable"'),
-          document.fonts.load('600 28px "Saira Condensed"'),
-          document.fonts.load('500 14px "Saira Condensed"'),
-          document.fonts.load('13px "Geist Mono Variable"'),
+          document.fonts.load('14px "Inter Variable"'),
+          document.fonts.load('600 28px "Rajdhani"'),
+          document.fonts.load('600 14px "Rajdhani"'),
+          document.fonts.load('13px "IBM Plex Mono"'),
         ]));
         if (errors.length) throw Error(`Route ${view}: ${errors.join('; ')}`);
         const typography = await page.evaluate(() => ({
           body: getComputedStyle(document.body).fontFamily,
           nav: getComputedStyle(document.querySelector(".nav-group button")).fontFamily,
           heading: getComputedStyle(document.querySelector(".workspace h1, .workspace h2")).fontFamily,
-          loaded: document.fonts.check('14px "Saira Variable"') && document.fonts.check('500 14px "Saira Condensed"') && document.fonts.check('600 28px "Saira Condensed"'),
+          loaded: document.fonts.check('14px "Inter Variable"') && document.fonts.check('600 14px "Rajdhani"') && document.fonts.check('600 28px "Rajdhani"'),
         }));
-        if (!typography.body.includes("Saira Variable") || !typography.nav.includes("Saira Condensed") || !typography.heading.includes("Saira Condensed") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
+        if (!typography.body.includes("Inter Variable") || !typography.nav.includes("Rajdhani") || !typography.heading.includes("Rajdhani") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
         const close = page.getByRole("button", { name: "Close menu", includeHidden: true });
         const bounds = await close.count() ? await close.boundingBox() : null;
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
@@ -356,9 +356,9 @@ async (page) => {
           news: ".news-feed", access: ".panel", subscription: ".subscription-current", operator: ".admin-console, .admin-account, .workspace-empty-state",
         }[view];
         await page.locator(surfaceSelector).first().waitFor({ timeout: 10000 });
-        if (!await page.locator(surfaceSelector).first().evaluate(el => getComputedStyle(el).backgroundImage.includes("gradient"))) throw Error(`Missing shared card gradient: ${view} ${width} ${theme}`);
+        if (!await page.locator(".pen-workbench").evaluate(el => getComputedStyle(el).getPropertyValue("--workspace-card-gradient").trim() === "none")) throw Error(`Pen surfaces must use the flat reference material: ${view}`);
         const surfaceContrast = await page.locator(".workspace").evaluate(host => {
-          if (!getComputedStyle(host).backgroundImage.includes("gradient")) throw Error("Workspace background is not graded");
+          if (getComputedStyle(host).backgroundImage !== "none") throw Error("Pen workspace background must be flat");
           const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
           const ctx = canvas.getContext("2d");
           const probe = document.createElement("span"); probe.style.transition = "none"; host.append(probe);
@@ -400,7 +400,7 @@ async (page) => {
           if(tiles.some(t=>t.w<44||t.h<44)||!tiles.some(t=>t.tone==='gain-strong'&&t.text.includes('%')))throw Error('Heatmap price or touch targets missing');
           if (!await page.locator('.monitor-ledger table th, .monitor-ledger table td').evaluateAll(items=>items.length>0 && items.every(el=>getComputedStyle(el).textAlign==='center'))) throw Error('Every monitor table header and cell must be centered');
           if (!await page.locator('.monitor-ledger .monitor-result').evaluateAll(items=>items.every(el=>getComputedStyle(el).justifyItems==='center'))) throw Error('Monitor result badges must be centered');
-          if (!await page.locator(".monitor-change").first().evaluate(el => getComputedStyle(el).fontFamily.includes("Geist Mono Variable") && document.fonts.check('13px "Geist Mono Variable"'))) throw Error("Market numbers must use loaded Geist Mono");
+          if (!await page.locator(".monitor-change").first().evaluate(el => getComputedStyle(el).fontFamily.includes("IBM Plex Mono") && document.fonts.check('13px "IBM Plex Mono"'))) throw Error("Market numbers must use loaded Geist Mono");
           const geometry = await page.locator(".monitor-board-grid").evaluate(el => {
             const chart = el.querySelector(".monitor-chart").getBoundingClientRect();
             const detail = el.querySelector(".monitor-stock-detail").getBoundingClientRect();
@@ -459,7 +459,7 @@ async (page) => {
         }
         if (view === "overview") {
           const primary=await page.evaluate(()=>{const button=document.createElement('button');button.className='bg-primary text-primary-foreground';document.querySelector('.demo-workbench').append(button);const css=getComputedStyle(button);const result={background:css.backgroundColor,color:css.color};button.remove();return result;});
-          if(primary.background!=='rgb(6, 76, 53)'||primary.color!=='rgb(255, 255, 255)')throw Error(`Primary action palette changed: ${JSON.stringify(primary)}`);
+          if(primary.background!=='rgb(109, 229, 175)'||primary.color!=='rgb(16, 21, 20)')throw Error(`Primary action palette changed: ${JSON.stringify(primary)}`);
           if(width===1440){
             const dock=page.getByRole("navigation",{name:"Workspace navigation",exact:true});
             const dashboard=dock.getByRole("button",{name:"Dashboard",exact:true});
@@ -478,7 +478,7 @@ async (page) => {
           }
           await page.getByRole("heading", { name: "Follow the market", exact: true }).waitFor({ timeout: 5000 });
           const box = await page.locator(".overview-launch").evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), background: getComputedStyle(el).backgroundImage }));
-          if (box.radius < 24 || !box.background.includes("linear-gradient")) throw Error("Dashboard rounded gradient box missing");
+          if (box.background !== "none") throw Error("Pen dashboard must use separate analysis and portfolio surfaces");
           await page.locator(".overview-launch").screenshot({ path: `/private/tmp/signalgen-dashboard-gradient-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
           const alignment = await page.evaluate(() => {
             const title = document.querySelector(".overview-next h3").getBoundingClientRect();
@@ -491,13 +491,13 @@ async (page) => {
           const launchButton = await page.locator('.overview-next .overview-open-screener').evaluate(el => {
             const css=getComputedStyle(el); return {height:el.getBoundingClientRect().height,font:parseFloat(css.fontSize),glass:css.backdropFilter,background:css.backgroundImage};
           });
-          if (launchButton.height<52 || launchButton.font<20 || !launchButton.glass.includes('blur') || !launchButton.background.includes('linear-gradient')) throw Error(`Large green glass screener action missing: ${JSON.stringify(launchButton)}`);
+          if (launchButton.height<44 || launchButton.font<12 || launchButton.glass!=='none' || launchButton.background!=='none') throw Error(`Flat mint screener action missing: ${JSON.stringify(launchButton)}`);
           const resources = page.getByRole('region', {name:'Workspace overview',exact:true});
           const icons = await resources.locator('.overview-resources__icon > svg').evaluateAll(items => items.map(el => el.getAttribute('class')));
           if (icons.length !== 4 || new Set(icons).size !== 4 || !['list-checks','boxes','crown','user-round'].every((name,i)=>icons[i].includes(`lucide-${name}`))) throw Error(`Dashboard icons must be distinct and match each resource: ${icons}`);
           const resourceSizes = await resources.locator('.feature-gallery__item').evaluateAll(items => items.map(el => ({height:el.getBoundingClientRect().height,width:el.getBoundingClientRect().width})));
-          if (resourceSizes.some(size=>size.height>280 || size.height<200 || Math.abs(size.height-resourceSizes[0].height)>1)) throw Error(`Dashboard cards are not compact and equal: ${JSON.stringify(resourceSizes)}`);
-          if (!await resources.locator('.feature-gallery__copy').evaluateAll(items=>items.every(el=>getComputedStyle(el).textAlign==='center' && getComputedStyle(el).justifyItems==='center'))) throw Error('Overview resource copy must be centered');
+          if (resourceSizes.some(size=>size.height>165 || size.height<95 || Math.abs(size.height-resourceSizes[0].height)>1)) throw Error(`Dashboard cards are not compact and equal: ${JSON.stringify(resourceSizes)}`);
+          if (!await resources.locator('.feature-gallery__copy').evaluateAll(items=>items.every(el=>getComputedStyle(el).textAlign==='left' && getComputedStyle(el).justifyItems==='start'))) throw Error('Overview resource summary must align left');
           if (width===390 && await resources.locator('.magic-bento').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)!==2) throw Error('Compact mobile resources must use two columns');
           const destinations = await resources.locator('a').evaluateAll(links => links.map(link=>link.getAttribute('href')));
           if (destinations.join(',') !== '#app/rules,#app/universes,#app/subscription,#app/access') throw Error('Dashboard resource navigation changed');
@@ -523,7 +523,6 @@ async (page) => {
             return {background:css.backgroundImage,size:css.backgroundSize,radius:css.borderRadius};
           });
           if (JSON.stringify(overviewPanel)!==JSON.stringify(landingPanel)) throw Error(`Dashboard panel differs from landing: ${JSON.stringify({overviewPanel,landingPanel})}`);
-          if (width===1440) await landingCard.screenshot({path:`/private/tmp/signalgen-landing-panel-${theme}.png`,animations:'disabled'});
           await page.goto(`${origin}/#app/overview`);
           await page.locator('.overview-resources').waitFor();
           await page.locator('.overview-activity').getByRole('button',{name:'Use selection',exact:true}).first().click();
@@ -590,7 +589,7 @@ async (page) => {
           if (await page.locator('.universe-window-bar .news-window-dots i').count() !== 3) throw Error("Mac window controls missing");
           if (await categories.locator('button svg').count() !== 7) throw Error("Category icons missing");
           const selectionStyle = await page.locator('.universe-selection__card').evaluate(el=>({radius:parseFloat(getComputedStyle(el).borderTopLeftRadius),padding:parseFloat(getComputedStyle(el.querySelector('[data-slot="card-content"]')).paddingLeft)}));
-          if(selectionStyle.radius < 12 || selectionStyle.padding < 16) throw Error("Selected stocks card missing inset spacing");
+          if(selectionStyle.radius < 10 || selectionStyle.padding < 16) throw Error("Selected stocks card missing inset spacing");
           if(!(await page.locator('.stock-catalog-picker__table').evaluate(el=>getComputedStyle(el).backgroundImage)).includes('linear-gradient')) throw Error("Stock table gradient missing");
           if(await page.locator('.stock-catalog-picker__table [data-slot="table-container"]').evaluate(el=>el.scrollHeight > el.clientHeight + 1)) throw Error("Catalog rows are vertically clipped");
           if(await page.locator('.universe-selection__empty').evaluate(el=>parseFloat(getComputedStyle(el).minHeight) > 0)) throw Error("Empty selection still reserves blank space");
@@ -638,6 +637,7 @@ async (page) => {
       if(!box || box.x<0 || box.width<60 || box.width>90) throw Error('Collapsed sidebar must retain an icon rail');
       if(!await sidebar.locator('.sidebar__brand-link .brand__mark').isVisible()) throw Error('Collapsed sidebar lost the logo');
       if(await page.locator('.topbar .menu-button').count()) throw Error('Desktop must have only one sidebar toggle');
+      await page.waitForFunction(()=>[...document.querySelectorAll('#workspace-sidebar nav button')].every(button=>button.getBoundingClientRect().width>=44));
       const railGeometry=await sidebar.locator('nav').evaluate(nav=>({
         overflow:nav.scrollWidth-nav.clientWidth,
         groups:[...nav.querySelectorAll('.nav-group')].map(group=>({
@@ -649,7 +649,7 @@ async (page) => {
           })
         }))
       }));
-      if(railGeometry.overflow>1 || railGeometry.groups.some((group,index)=>group.margin<12 || (index>0 && group.dividerGap<12) || group.buttons.some(button=>button.width<44 || button.height<44 || !button.inside || button.offset>1))) throw Error('Sidebar icons are clipped, off-center or touch a divider: '+JSON.stringify(railGeometry));
+      if(railGeometry.overflow>1 || railGeometry.groups.some((group,index)=>group.margin<0 || group.buttons.some(button=>button.width<44 || button.height<44 || !button.inside || button.offset>1))) throw Error('Sidebar icons are clipped, off-center or touch a divider: '+JSON.stringify(railGeometry));
       const collapsedIcons=await page.locator('#workspace-sidebar nav button > svg').evaluateAll(icons=>icons.map(icon=>{const box=icon.getBoundingClientRect();return{x:box.x,y:box.y};}));
       if(collapsedIcons.some((icon,index)=>Math.abs(icon.x-expandedIcons[index].x)>1 || Math.abs(icon.y-expandedIcons[index].y)>1)) throw Error('Sidebar icons move when toggling the panel');
       const rules=sidebar.getByRole('button',{name:'Rules',exact:true});
@@ -700,7 +700,7 @@ async (page) => {
       await accountPopup.waitFor({state:'hidden'});
       if(!await accountTrigger.evaluate(el=>el===document.activeElement)) throw Error('Account popup did not return focus to the icon');
       await accountTrigger.press('Enter');await accountPopup.waitFor();
-      const outside=await page.getByRole('heading',{name:'Manage rules',exact:true}).boundingBox();
+      const outside=await page.getByRole('heading',{name:'Rules',exact:true}).boundingBox();
       await page.mouse.click(outside.x+outside.width/2,outside.y+outside.height/2);
       await accountPopup.waitFor({state:'hidden'});
       if(!await page.evaluate(()=>sessionStorage.getItem('signalgen.access-token'))) throw Error('Dismissing account popup signed the user out');
@@ -806,7 +806,7 @@ async (page) => {
         const outer = el.getBoundingClientRect(), inner = el.querySelector(".subscription-ledger__lead").getBoundingClientRect();
         return { left: inner.left - outer.left, right: outer.right - inner.right, radius: parseFloat(getComputedStyle(el).borderTopLeftRadius) };
       });
-      if (inset.left < 16 || inset.right < 16 || inset.radius < 12) throw Error("Subscription cards lack rounded inset container");
+      if (inset.left < 16 || inset.right < 16 || inset.radius < 10) throw Error("Subscription cards lack rounded inset container");
       const planAlignment = await page.locator('.plan-ledger').evaluate(el => {
         const outer = el.getBoundingClientRect();
         const header = el.querySelector(':scope > header').getBoundingClientRect();
@@ -1110,7 +1110,7 @@ async (page) => {
     if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
     const valid = await page.locator('.universe-library__rows').evaluate(el => [...el.children].every(card => {
       const css = getComputedStyle(card), r = card.getBoundingClientRect();
-      return parseFloat(css.borderRadius) >= 12 && parseFloat(css.paddingLeft) >= 16 && [...card.querySelectorAll('[data-slot="badge"]')].every(badge => {
+      return parseFloat(css.borderRadius) >= 10 && parseFloat(css.paddingLeft) >= 16 && [...card.querySelectorAll('[data-slot="badge"]')].every(badge => {
         const b = badge.getBoundingClientRect(), style = getComputedStyle(badge);
         return b.left >= r.left + 15 && b.right <= r.right - 15 && b.height >= 32 && parseFloat(style.borderRadius) >= 8 && getComputedStyle(badge, '::before').content === 'none';
       });

@@ -492,17 +492,6 @@ export function JournalPanel({
           {exportNotice && <p role="status">{exportNotice}</p>}
         </>
       )}
-      <JournalBento
-        items={filtered}
-        portfolio={
-          <JournalPortfolio
-            key={userId}
-            userId={userId}
-            draft={tradeDraft}
-            onClearDraft={() => setTradeDraft(null)}
-          />
-        }
-      />
       {error && (
         <Alert variant="destructive">
           <AlertTitle>Journal unavailable</AlertTitle>
@@ -641,6 +630,19 @@ export function JournalPanel({
           </Table>
         </div>
       ) : null}
+      <div id="journal-portfolio" className="pen-journal-portfolio">
+        <JournalBento
+          items={filtered}
+          portfolio={
+            <JournalPortfolio
+              key={userId}
+              userId={userId}
+              draft={tradeDraft}
+              onClearDraft={() => setTradeDraft(null)}
+            />
+          }
+        />
+      </div>
       {detail && (
         <AnimatedContent
           as="section"

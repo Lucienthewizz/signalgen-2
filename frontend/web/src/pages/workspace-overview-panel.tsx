@@ -319,27 +319,28 @@ export function WorkspaceOverviewPanel({
                 : setup.label}
           </Button>
         </section>
-        <nav className="overview-shortcuts" aria-label="Quick access">
-          <h3>Follow the market</h3>
-          <SpotlightCard onClick={() => go("realtime")}>
-            <Activity aria-hidden="true" />
-            <span>
-              <strong>Market monitor</strong>
-              <small>Charts and prices for your watchlist</small>
-            </span>
-            <ArrowUpRight aria-hidden="true" />
-          </SpotlightCard>
-          <SpotlightCard onClick={() => go("news")}>
-            <Newspaper aria-hidden="true" />
-            <span>
-              <strong>News & videos</strong>
-              <small>Company updates and market news</small>
-            </span>
-            <ArrowUpRight aria-hidden="true" />
-          </SpotlightCard>
-        </nav>
+        {userId && <PortfolioOverview key={userId} userId={userId} />}
       </div>
-      {userId && <PortfolioOverview key={userId} userId={userId} />}
+
+      <nav className="overview-shortcuts" aria-label="Quick access">
+        <h3>Follow the market</h3>
+        <SpotlightCard onClick={() => go("realtime")}>
+          <Activity aria-hidden="true" />
+          <span>
+            <strong>Market monitor</strong>
+            <small>Charts and prices for your watchlist</small>
+          </span>
+          <ArrowUpRight aria-hidden="true" />
+        </SpotlightCard>
+        <SpotlightCard onClick={() => go("news")}>
+          <Newspaper aria-hidden="true" />
+          <span>
+            <strong>News & videos</strong>
+            <small>Company updates and market news</small>
+          </span>
+          <ArrowUpRight aria-hidden="true" />
+        </SpotlightCard>
+      </nav>
       <section
         className="overview-resources overview-bento"
         aria-label="Workspace overview"

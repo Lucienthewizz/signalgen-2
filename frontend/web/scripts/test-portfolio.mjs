@@ -362,13 +362,13 @@ try {
       .evaluateAll((nodes) =>
         nodes.map((el) => el.getBoundingClientRect().height),
       );
-    if (cards.length !== 4 || cards.some((h) => h < 200 || h > 280))
+    if (cards.length !== 4 || cards.some((h) => h < 95 || h > 165))
       throw Error("Dashboard resource card sizes changed");
     if (
       !(await resources
         .locator(".overview-resources__value span")
         .evaluateAll((nodes) =>
-          nodes.every((el) => parseFloat(getComputedStyle(el).fontSize) >= 24),
+          nodes.every((el) => parseFloat(getComputedStyle(el).fontSize) >= 22),
         ))
     )
       throw Error("CountUp lost the resource value type scale");
