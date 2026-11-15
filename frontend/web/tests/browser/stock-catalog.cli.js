@@ -90,10 +90,13 @@ async (page) => {
   await page.getByText("Catalog unavailable", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Toggle empty" }).click();
   await search.fill("");
+  await page.evaluate(()=>document.documentElement.dataset.theme=document.querySelector('main[data-theme]').dataset.theme);
   for (const width of [1440, 900, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (let theme = 0; theme < 1; theme++) {
-      if(await page.getByRole("button", { name: "Toggle theme" }).count()) throw Error("Theme toggle must be hidden in dark-only mode");
+    for (const theme of ['dark', 'light']) {
+      // This isolated component fixture deliberately exposes both themes.
+      if(await page.evaluate(()=>document.documentElement.dataset.theme)!==theme) await page.getByRole('button',{name:'Toggle theme',exact:true}).click();
+      if(await page.evaluate(()=>document.documentElement.dataset.theme)!==theme) throw Error('Fixture theme did not change');
       if (
         await page.evaluate(
           () => document.documentElement.scrollWidth > innerWidth + 1,
@@ -114,6 +117,6 @@ async (page) => {
     document.body.setAttribute("data-signalgen-catalog-tests", "complete"),
   );
   console.log(
-    "PASS: categories, search, bounded DOM, 10 selections, limit, paging, keyboard, empty/loading, 1440/900/390px and dark theme.",
+    "PASS: categories, search, bounded DOM, 10 selections, limit, paging, keyboard, empty/loading, 1440/900/390px and dark/light themes.",
   );
 }

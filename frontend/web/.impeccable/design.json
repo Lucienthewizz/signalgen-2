@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-14T22:26:35.190590+00:00",
+  "generatedAt": "2026-11-16T00:00:00+08:00",
   "title": "Design System: Signalgen Pen workspace",
   "extensions": {
     "typographyMeta": {
@@ -31,6 +31,14 @@
       {
         "name": "workspace-compact",
         "value": "520px"
+      },
+      {
+        "name": "rules-stack",
+        "value": "1100px"
+      },
+      {
+        "name": "catalog-news-stack",
+        "value": "1000px"
       }
     ]
   },
@@ -38,9 +46,9 @@
     {
       "name": "Workspace primary button",
       "kind": "button",
-      "description": "Mint action with Rajdhani 600.",
+      "description": "Dark-green action with pale text and Rajdhani 600.",
       "html": "<button class=\"ds-primary\">Run screening</button>",
-      "css": ".ds-primary{background:var(--primary,#6de5af);color:var(--primary-foreground,#101514);border:1px solid transparent;border-radius:6px;padding:10px 16px;font:600 13px Rajdhani,sans-serif}.ds-primary:hover{background:color-mix(in srgb,var(--primary,#6de5af) 88%,var(--text,#edf3ef))}.ds-primary:focus-visible{outline:2px solid var(--green,#6de5af);outline-offset:3px}.ds-primary:disabled{opacity:.5}",
+      "css": ".ds-primary{background:var(--primary,#064c35);color:var(--primary-foreground,#f1fbf6);border:1px solid transparent;border-radius:6px;padding:10px 16px;font:600 13px Rajdhani,sans-serif}.ds-primary:hover{background:color-mix(in srgb,var(--primary,#064c35) 88%,var(--text,#edf3ef))}.ds-primary:focus-visible{outline:2px solid var(--green,#6de5af);outline-offset:3px}.ds-primary:disabled{opacity:.5}",
       "refersTo": "workspace-button-primary"
     },
     {

@@ -539,7 +539,6 @@ function PortfolioBacktestPanel({
     );
   return (
     <div className="backtest-workspace">
-      <Stepper stage={busy ? 1 : result ? 2 : 0} />
       {(!backendOnline || loadError) && (
         <Alert variant="destructive">
           <AlertTitle>Backtest connection needs attention</AlertTitle>
@@ -575,6 +574,7 @@ function PortfolioBacktestPanel({
           </div>
           <Badge variant="outline">Daily · Long only</Badge>
         </div>
+        <Stepper stage={busy ? 1 : result ? 2 : 0} />
         {!universes.length ? (
           <p role="status">
             Create a <a href="#app/universes">stock universe</a> before running

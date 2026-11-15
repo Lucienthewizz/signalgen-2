@@ -58,10 +58,10 @@
   outline: none;
 }
 .elastic-slider__control {
-  padding: 6px 16px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--canvas);
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
 }
 .elastic-slider__control:has(input:focus-visible) {
   outline: 2px solid var(--green);

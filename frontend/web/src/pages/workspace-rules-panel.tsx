@@ -5,6 +5,8 @@ import type { AccountState } from "@/types";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpenCheck,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
   CopyPlus,
   ListChecks,
@@ -148,6 +150,42 @@ export function ServerRulesPanel({
   const editorTrigger = useRef<HTMLElement | null>(null);
   const previewTrigger = useRef<HTMLButtonElement>(null);
   const [ruleSearch, setRuleSearch] = useState("");
+  const [rulePage, setRulePage] = useState(0);
+  const [rulePageSize, setRulePageSize] = useState(5);
+  const rulesLayout = useRef<HTMLDivElement>(null);
+  const ruleEditor = useRef<HTMLDivElement>(null);
+  const ruleLibrary = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const editor = ruleEditor.current,
+      library = ruleLibrary.current,
+      layout = rulesLayout.current;
+    if (!editor || !library || !layout) return;
+    const measure = () => {
+      const height = Math.ceil(editor.getBoundingClientRect().height);
+      // A portalled editing dialog has no in-flow height; keep the create-form baseline.
+      if (height < 400) return;
+      layout.style.setProperty("--rule-editor-height", `${height}px`);
+      const chrome = [
+        ...library.querySelectorAll(
+          ":scope > .resource-library__header, :scope > .rule-library__filters, :scope > .rule-library__list-heading",
+        ),
+      ].reduce((sum, child) => sum + child.getBoundingClientRect().height, 2);
+      const footer =
+        library
+          .querySelector(".rule-library__pagination")
+          ?.getBoundingClientRect().height ?? 69;
+      const size = Math.max(1, Math.floor((height - chrome - footer) / 88));
+      setRulePageSize(size);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(editor);
+    for (const child of library.children)
+      if (!child.classList.contains("rule-library__groups"))
+        observer.observe(child);
+    measure();
+    return () => observer.disconnect();
+  }, [authenticated, editing, rules.length]);
+
   const [signalFilter, setSignalFilter] = useState<string[]>(["all"]);
   const [confirmation, setConfirmation] = useState<
     | { kind: "preset"; preset: (typeof rulePresets)[number] }
@@ -261,13 +299,21 @@ export function ServerRulesPanel({
       ),
     [rules, ruleSearch, signalFilter],
   );
-  const privateRules = filteredRules.filter(
-    (rule) => rule.owner_type === "user",
+  const orderedRules = [
+    ...filteredRules.filter((rule) => rule.owner_type === "user"),
+    ...filteredRules.filter((rule) => rule.owner_type === "system"),
+  ];
+  const rulePageCount = Math.max(
+    1,
+    Math.ceil(orderedRules.length / rulePageSize),
   );
-  const systemRules = useMemo(
-    () => filteredRules.filter((rule) => rule.owner_type === "system"),
-    [filteredRules],
+  const currentRulePage = Math.min(rulePage, rulePageCount - 1);
+  const pageRules = orderedRules.slice(
+    currentRulePage * rulePageSize,
+    (currentRulePage + 1) * rulePageSize,
   );
+  const privateRules = pageRules.filter((rule) => rule.owner_type === "user");
+  const systemRules = pageRules.filter((rule) => rule.owner_type === "system");
 
   function startNew() {
     setStartMode("blank");
@@ -1104,13 +1150,53 @@ export function ServerRulesPanel({
     </>
   );
   return (
-    <div className="rules-workspace">
-      <section className="rule-library" aria-labelledby="rule-library-title">
+    <div className="rules-workspace" ref={rulesLayout}>
+      <div className="pen-rule-editor" ref={ruleEditor}>
+        {editing ? (
+          <>
+            {!editorOpen && (
+              <section className="rule-editor-resume">
+                <div>
+                  <strong>{definition.name || editing.name}</strong>
+                  <p>
+                    Your editing draft is kept until you save or start a new
+                    rule.
+                  </p>
+                </div>
+                <Button variant="outline" onClick={() => setEditorOpen(true)}>
+                  Continue editing
+                </Button>
+                <Button variant="ghost" onClick={startNew}>
+                  New blank rule
+                </Button>
+              </section>
+            )}
+            <InfoDialog
+              open={editorOpen}
+              onOpenChange={(open) => {
+                if (!saving) setEditorOpen(open);
+              }}
+              title="Edit rules"
+              description="Update your criteria, then save the changes to your account."
+              returnFocus={editorTrigger}
+              wide
+            >
+              {editor}
+            </InfoDialog>
+          </>
+        ) : (
+          editor
+        )}
+      </div>
+      <section
+        className="rule-library"
+        ref={ruleLibrary}
+        aria-labelledby="rule-library-title"
+      >
         <header className="resource-library__header">
           <div>
             <h3 id="rule-library-title">Saved rules</h3>
             <ResourceQuota kind="custom_rules" revision={rules.length} />
-            <p>Edit a private rule or run it from the screener.</p>
           </div>
           <div>
             <Button
@@ -1136,16 +1222,20 @@ export function ServerRulesPanel({
             <Input
               id="saved-rule-search"
               value={ruleSearch}
-              onChange={(event) => setRuleSearch(event.target.value)}
+              onChange={(event) => {
+                setRuleSearch(event.target.value);
+                setRulePage(0);
+              }}
               placeholder="Search by rule name"
             />
           </Field>
           <ToggleGroup
             aria-label="Filter rules by signal"
             value={signalFilter}
-            onValueChange={(values) =>
-              setSignalFilter(values.length ? values : ["all"])
-            }
+            onValueChange={(values) => {
+              setSignalFilter(values.length ? values : ["all"]);
+              setRulePage(0);
+            }}
             variant="outline"
           >
             <ToggleGroupItem value="all" data-signal="all">
@@ -1205,7 +1295,7 @@ export function ServerRulesPanel({
                       <div>
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
                           onClick={(event) => {
                             editorTrigger.current = event.currentTarget;
                             edit(rule);
@@ -1214,7 +1304,7 @@ export function ServerRulesPanel({
                           aria-label={`Edit ${rule.name}`}
                           className="rule-library-action"
                         >
-                          <Pencil data-icon="inline-start" /> Edit rules
+                          <Pencil aria-hidden="true" />
                         </Button>
                         <Button
                           variant="destructive"
@@ -1259,44 +1349,37 @@ export function ServerRulesPanel({
             )}
           </div>
         )}
-      </section>
-      <div className="pen-rule-editor">
-        {editing ? (
-          <>
-            {!editorOpen && (
-              <section className="rule-editor-resume">
-                <div>
-                  <strong>{definition.name || editing.name}</strong>
-                  <p>
-                    Your editing draft is kept until you save or start a new
-                    rule.
-                  </p>
-                </div>
-                <Button variant="outline" onClick={() => setEditorOpen(true)}>
-                  Continue editing
-                </Button>
-                <Button variant="ghost" onClick={startNew}>
-                  New blank rule
-                </Button>
-              </section>
-            )}
-            <InfoDialog
-              open={editorOpen}
-              onOpenChange={(open) => {
-                if (!saving) setEditorOpen(open);
-              }}
-              title="Edit rules"
-              description="Update your criteria, then save the changes to your account."
-              returnFocus={editorTrigger}
-              wide
+        {filteredRules.length > 0 && (
+          <nav
+            className="rule-library__pagination"
+            aria-label="Saved rules pages"
+          >
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Previous saved rules page"
+              disabled={currentRulePage === 0}
+              onClick={() => setRulePage(currentRulePage - 1)}
             >
-              {editor}
-            </InfoDialog>
-          </>
-        ) : (
-          editor
+              <ChevronLeft />
+            </Button>
+            <span role="status">
+              Page {currentRulePage + 1} of {rulePageCount}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Next saved rules page"
+              disabled={currentRulePage + 1 >= rulePageCount}
+              onClick={() => setRulePage(currentRulePage + 1)}
+            >
+              <ChevronRight />
+            </Button>
+          </nav>
         )}
-      </div>
+      </section>
     </div>
   );
 }

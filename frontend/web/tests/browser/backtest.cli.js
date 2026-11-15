@@ -337,9 +337,9 @@ async (page) => {
     const shell = await slider.locator("..").evaluate(el => {
       const style = getComputedStyle(el), input = el.querySelector("input");
       const inner = input.getBoundingClientRect(), outer = el.getBoundingClientRect();
-      return {radius: parseFloat(style.borderRadius), inset: inner.x - outer.x, top: inner.y - outer.y};
+      return {background: style.backgroundColor, border: parseFloat(style.borderTopWidth), height: inner.height};
     });
-    if (shell.radius < 20 || shell.inset < 12 || shell.top < 5) throw Error("Slider shell is not rounded or inset");
+    if (shell.background!=="rgba(0, 0, 0, 0)" || shell.border!==0 || shell.height<44) throw Error("Slider must be plain with an accessible pointer target");
     const track = await slider.boundingBox();
     await page.mouse.move(track.x + track.width / 2, track.y + track.height / 2);
     await page.mouse.down();

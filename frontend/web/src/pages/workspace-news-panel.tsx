@@ -114,14 +114,11 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
   }, [revision]);
   return (
     <div className="workspace-news">
-      <section
-        className="news-feed"
-        aria-labelledby="market-news-title"
-        aria-busy={loading}
-      >
-        <header>
+      <div className="news-toolbar">
+        {" "}
+        <header className="news-toolbar__actions">
           <WindowDots />
-          <h3 id="market-news-title">
+          <h3 id="market-news-title" className="sr-only">
             <Newspaper aria-hidden="true" />
             Stock market news
           </h3>
@@ -176,6 +173,12 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
             headlines.
           </p>
         </div>
+      </div>
+      <section
+        className="news-feed"
+        aria-labelledby="market-news-title"
+        aria-busy={loading}
+      >
         {error && (
           <Alert variant="destructive">
             <AlertTitle>News could not be refreshed</AlertTitle>

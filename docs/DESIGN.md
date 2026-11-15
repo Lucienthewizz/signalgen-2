@@ -32,6 +32,8 @@ colors:
   workspace-muted: "#a0afa7"
   workspace-mint: "#6de5af"
   workspace-mint-bright: "#8debc3"
+  workspace-action: "#064c35"
+  workspace-action-ink: "#f1fbf6"
   workspace-accent-surface: "#203b2e"
 typography:
   display:
@@ -121,8 +123,8 @@ components:
     rounded: "{rounded.panel}"
     padding: "{spacing.panel}"
   workspace-button-primary:
-    backgroundColor: "{colors.workspace-mint}"
-    textColor: "{colors.workspace-canvas}"
+    backgroundColor: "{colors.workspace-action}"
+    textColor: "{colors.workspace-action-ink}"
     rounded: "{rounded.workspace-control}"
   workspace-panel:
     backgroundColor: "{colors.workspace-surface}"
@@ -249,7 +251,7 @@ Headings, navigation, buttons, and summaries use Rajdhani (600). Explanatory cop
 
 ### Layout
 
-The expanded desktop sidebar is 224px; the collapsed sidebar is 76px. At 860px and below it becomes the existing overlay drawer. Workspace gutters step from 32px to 20px, then 18px at 520px. Panels typically use 24px padding and gaps. Rules, dashboard, monitor, and news columns stack at 860px; the study guide stacks at 1180px. Preserve usable table scrolling and existing form behavior.
+The expanded desktop sidebar is 224px; the collapsed sidebar is 76px. At 860px and below it becomes the existing overlay drawer. Workspace gutters step from 32px to 20px, then 18px at 520px. Panels typically use 24px padding and gaps. Rules place the composer first and the saved-rule library on the right, stacking at 1100px. The library follows the composer height and paginates its compact 88px rows. Compact universe catalog and News columns stack at 1000px; Dashboard shortcuts and monitor columns stack at 860px. The study guide stacks at 1180px. Journal, Screener and Market Monitor tables wrap within their cards and become labelled records below a 760px container width. Preserve all fields and existing form behavior.
 
 ### Elevation & Depth
 
@@ -257,11 +259,11 @@ Resting workspace panels are flat, with tonal separation and one-pixel borders. 
 
 ### Shapes
 
-Workspace controls use 6px corners and panels use 10px corners. Preserve the supplied Signalgen mark, visible focus, status labels, and reduced-motion behavior.
+Workspace controls use 6px corners and panels use 10–12px corners. Dashboard resource cards use 12px corners and inset copy. Preserve the supplied Signalgen mark, visible focus, status labels, and reduced-motion behavior.
 
 ### Components
 
-Mint primary actions use dark ink in dark mode and white text on dark green in light mode. Active navigation combines mint text with a darker green surface. Inputs use a distinct control background and border. Tables use subdued headers, fine row dividers, and monospaced data. Account menus, dialogs, screening, studies, portfolio calculations, and API ownership retain their existing behavior.
+Primary actions use dark green with pale text. Mint remains reserved for readable accent text, selection and positive data. Active navigation combines mint text with a darker green surface. Inputs use a distinct control background and border. Tables use subdued headers, fine row dividers, and monospaced data. Account menus, dialogs, screening, studies, portfolio calculations, and API ownership retain their existing behavior.
 
 ### Do's and Don'ts
 

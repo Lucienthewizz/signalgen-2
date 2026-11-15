@@ -551,7 +551,7 @@ export function JournalPanel({
           </Button>
         </Empty>
       ) : items.length > 0 ? (
-        <div className="journal-ledger">
+        <div className="journal-ledger fit-data-table">
           <Table>
             <TableHeader>
               <TableRow>
@@ -579,31 +579,48 @@ export function JournalPanel({
                 const d = item.data;
                 return (
                   <TableRow key={item.id}>
-                    <TableCell>
+                    <TableCell data-label="Stock">
                       <strong>{d.symbol.replace(/\.JK$/, "")}</strong>
                     </TableCell>
-                    <TableCell className="journal-secondary-column">
+                    <TableCell
+                      data-label="Market"
+                      className="journal-secondary-column"
+                    >
                       {d.market} / {d.currency}
                     </TableCell>
-                    <TableCell className="journal-secondary-column">
+                    <TableCell
+                      data-label="Rule"
+                      className="journal-secondary-column"
+                    >
                       {d.rule_name}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Signal">
                       <Badge variant="outline" data-signal={d.signal_type}>
                         {d.signal_type ?? "Match"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="journal-secondary-column">
+                    <TableCell
+                      data-label="Interval"
+                      className="journal-secondary-column"
+                    >
                       {d.timeframe}
                     </TableCell>
-                    <TableCell className="journal-secondary-column">
+                    <TableCell
+                      data-label="Candle time (SGT)"
+                      className="journal-secondary-column"
+                    >
                       {time(d.candle_at)}
                     </TableCell>
-                    <TableCell>{price(d.price, d.currency)}</TableCell>
-                    <TableCell className="journal-secondary-column">
+                    <TableCell data-label="Screening price">
+                      {price(d.price, d.currency)}
+                    </TableCell>
+                    <TableCell
+                      data-label="Screened at (SGT)"
+                      className="journal-secondary-column"
+                    >
                       {time(d.screened_at)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Details">
                       <Button
                         size="sm"
                         variant="ghost"

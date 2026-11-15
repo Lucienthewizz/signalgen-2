@@ -1730,10 +1730,10 @@ function LatestScreenerPanel({
               of {run.rows.length} stocks shown
             </p>
             <div
-              className="screener-result-ledger"
+              className="screener-result-ledger fit-data-table"
               role="region"
               tabIndex={0}
-              aria-label="Screening results table, scroll horizontally on smaller screens"
+              aria-label="Screening results table"
             >
               <Table>
                 <TableHeader>
@@ -1752,10 +1752,13 @@ function LatestScreenerPanel({
                 <TableBody>
                   {displayedRows.map((row, index) => (
                     <TableRow key={row.decision.symbol}>
-                      <TableCell className="analysis-row-number">
+                      <TableCell
+                        data-label="No."
+                        className="analysis-row-number"
+                      >
                         {index + 1}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Stock">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1766,7 +1769,7 @@ function LatestScreenerPanel({
                           {row.decision.symbol.replace(".JK", "")}
                         </Button>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Decision">
                         <Badge
                           variant={
                             row.decision.matched
@@ -1807,7 +1810,7 @@ function LatestScreenerPanel({
                           )}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Open price">
                         {row.latestOpen != null &&
                         Number.isFinite(row.latestOpen)
                           ? formatStockPrice(
@@ -1816,15 +1819,19 @@ function LatestScreenerPanel({
                             )
                           : "—"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Close price">
                         {formatStockPrice(
                           row.latestClose,
                           run.manifest.currency,
                         )}
                       </TableCell>
-                      <TableCell>{row.features.rsi14.toFixed(2)}</TableCell>
-                      <TableCell>{row.features.ema20.toFixed(2)}</TableCell>
-                      <TableCell>
+                      <TableCell data-label="RSI14">
+                        {row.features.rsi14.toFixed(2)}
+                      </TableCell>
+                      <TableCell data-label="EMA20">
+                        {row.features.ema20.toFixed(2)}
+                      </TableCell>
+                      <TableCell data-label="Reason">
                         {decisionReasons(
                           row.decision.reason_codes,
                           evidenceRule?.definition?.logic,
@@ -1838,7 +1845,10 @@ function LatestScreenerPanel({
                           View details
                         </Button>
                       </TableCell>
-                      <TableCell className="analysis-select-cell">
+                      <TableCell
+                        data-label="Add to journal"
+                        className="analysis-select-cell"
+                      >
                         <input
                           type="checkbox"
                           aria-label={`Select ${row.decision.symbol.replace(/\.JK$/, "")} for journal`}

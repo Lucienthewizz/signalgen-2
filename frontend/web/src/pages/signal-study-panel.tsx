@@ -15,7 +15,14 @@ import {
   FieldSet,
   FieldLegend,
 } from "@/components/ui/field";
-import { SlidersHorizontal, Play, Square, RefreshCw } from "lucide-react";
+import {
+  SlidersHorizontal,
+  Play,
+  Square,
+  RefreshCw,
+  CheckCheck,
+  Info,
+} from "lucide-react";
 import { runSignalStudy, type StudyProgress } from "@/analysis/signal-study";
 import {
   clearStudyOwner,
@@ -576,7 +583,7 @@ export function SignalStudyPanel({
                       }
                     />
                   </Field>
-                  <Field>
+                  <Field className="study-horizon-field">
                     <FieldLabel htmlFor="study-horizon">
                       Trading candles after signal
                     </FieldLabel>
@@ -1181,26 +1188,39 @@ export function SignalStudyPanel({
         </section>
         {!progress && !busy && (
           <aside className="pen-study-guide" aria-label="Understand the study">
-            <h3>Understand the study</h3>
+            <header className="study-guide-heading">
+              <SlidersHorizontal aria-hidden="true" />
+              <h3>Understand the study</h3>
+            </header>
             <p>
               Each matched signal is an independent daily observation, measured
               from the signal candle’s close.
             </p>
             <ol>
               <li>
-                <strong>Configure</strong>
-                <span>Choose your rule, market, and period.</span>
+                <SlidersHorizontal aria-hidden="true" />
+                <div>
+                  <strong>Configure</strong>
+                  <span>Choose your rule, market, and period.</span>
+                </div>
               </li>
               <li>
-                <strong>Process</strong>
-                <span>Evaluate completed daily candles.</span>
+                <Play aria-hidden="true" />
+                <div>
+                  <strong>Process</strong>
+                  <span>Evaluate completed daily candles.</span>
+                </div>
               </li>
               <li>
-                <strong>Review</strong>
-                <span>Inspect outcomes for each signal.</span>
+                <CheckCheck aria-hidden="true" />
+                <div>
+                  <strong>Review</strong>
+                  <span>Inspect outcomes for each signal.</span>
+                </div>
               </li>
             </ol>
             <p className="pen-study-guide__note">
+              <Info aria-hidden="true" />
               This is not a cash portfolio or a record of executed trades.
             </p>
           </aside>

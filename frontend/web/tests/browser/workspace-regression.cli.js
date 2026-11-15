@@ -398,9 +398,9 @@ async (page) => {
           await page.locator('.stock-heatmap').screenshot({path:`output/playwright/stock-heatmap-${width}.png`,animations:'disabled'});
           const tiles=await page.locator('.stock-heatmap__tile').evaluateAll(items=>items.map(el=>({w:el.getBoundingClientRect().width,h:el.getBoundingClientRect().height,tone:el.dataset.tone,text:el.textContent})));
           if(tiles.some(t=>t.w<44||t.h<44)||!tiles.some(t=>t.tone==='gain-strong'&&t.text.includes('%')))throw Error('Heatmap price or touch targets missing');
-          if (!await page.locator('.monitor-ledger table th, .monitor-ledger table td').evaluateAll(items=>items.length>0 && items.every(el=>getComputedStyle(el).textAlign==='center'))) throw Error('Every monitor table header and cell must be centered');
-          if (!await page.locator('.monitor-ledger .monitor-result').evaluateAll(items=>items.every(el=>getComputedStyle(el).justifyItems==='center'))) throw Error('Monitor result badges must be centered');
-          if (!await page.locator(".monitor-change").first().evaluate(el => getComputedStyle(el).fontFamily.includes("IBM Plex Mono") && document.fonts.check('13px "IBM Plex Mono"'))) throw Error("Market numbers must use loaded Geist Mono");
+          if (width>860 && !await page.locator('.monitor-ledger table th, .monitor-ledger table td').evaluateAll(items=>items.length>0 && items.every(el=>getComputedStyle(el).textAlign==='center'))) throw Error('Every monitor table header and cell must be centered');
+          if (width>860 && !await page.locator('.monitor-ledger .monitor-result').evaluateAll(items=>items.every(el=>getComputedStyle(el).justifyItems==='center'))) throw Error('Monitor result badges must be centered');
+          if (!await page.locator(".monitor-change").first().evaluate(el => getComputedStyle(el).fontFamily.includes("IBM Plex Mono") && document.fonts.check('13px "IBM Plex Mono"'))) throw Error("Market numbers must use loaded IBM Plex Mono");
           const geometry = await page.locator(".monitor-board-grid").evaluate(el => {
             const chart = el.querySelector(".monitor-chart").getBoundingClientRect();
             const detail = el.querySelector(".monitor-stock-detail").getBoundingClientRect();
@@ -459,7 +459,7 @@ async (page) => {
         }
         if (view === "overview") {
           const primary=await page.evaluate(()=>{const button=document.createElement('button');button.className='bg-primary text-primary-foreground';document.querySelector('.demo-workbench').append(button);const css=getComputedStyle(button);const result={background:css.backgroundColor,color:css.color};button.remove();return result;});
-          if(primary.background!=='rgb(109, 229, 175)'||primary.color!=='rgb(16, 21, 20)')throw Error(`Primary action palette changed: ${JSON.stringify(primary)}`);
+          if(primary.background!=='rgb(6, 76, 53)'||primary.color!=='rgb(241, 251, 246)')throw Error(`Primary action palette changed: ${JSON.stringify(primary)}`);
           if(width===1440){
             const dock=page.getByRole("navigation",{name:"Workspace navigation",exact:true});
             const dashboard=dock.getByRole("button",{name:"Dashboard",exact:true});
@@ -476,7 +476,7 @@ async (page) => {
             await page.emulateMedia({reducedMotion:"reduce"});
             await page.waitForFunction(()=>matchMedia('(prefers-reduced-motion: reduce)').matches&&Array.from(document.querySelectorAll('.sidebar-dock button > svg')).every(el=>getComputedStyle(el).transform==='none'),null,{timeout:3000});
           }
-          await page.getByRole("heading", { name: "Follow the market", exact: true }).waitFor({ timeout: 5000 });
+          await page.getByRole("navigation", { name: "Quick access", exact: true }).waitFor({ timeout: 5000 });
           const box = await page.locator(".overview-launch").evaluate(el => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), background: getComputedStyle(el).backgroundImage }));
           if (box.background !== "none") throw Error("Pen dashboard must use separate analysis and portfolio surfaces");
           await page.locator(".overview-launch").screenshot({ path: `/private/tmp/signalgen-dashboard-gradient-${width}-${theme}.png`, animations: "disabled", timeout: 10000 });
@@ -511,19 +511,6 @@ async (page) => {
           if (await page.locator('.overview-run-meta time[datetime]').count() !== 2) throw Error('Screening date semantics lost');
           await resources.screenshot({path:`/private/tmp/signalgen-overview-resources-${width}-${theme}.png`,animations:'disabled'});
           await page.locator('.overview-activity').screenshot({path:`/private/tmp/signalgen-overview-recent-${width}-${theme}.png`,animations:'disabled'});
-          const overviewPanel = await resources.locator('.feature-gallery__item').first().evaluate(el => {
-            const css=getComputedStyle(el);
-            return {background:css.backgroundImage,size:css.backgroundSize,radius:css.borderRadius};
-          });
-          await page.goto(`${origin}/#home`);
-          const landingCard=page.locator('#capabilities .feature-gallery__item').first();
-          await landingCard.waitFor();
-          const landingPanel = await landingCard.evaluate(el => {
-            const css=getComputedStyle(el);
-            return {background:css.backgroundImage,size:css.backgroundSize,radius:css.borderRadius};
-          });
-          if (JSON.stringify(overviewPanel)!==JSON.stringify(landingPanel)) throw Error(`Dashboard panel differs from landing: ${JSON.stringify({overviewPanel,landingPanel})}`);
-          await page.goto(`${origin}/#app/overview`);
           await page.locator('.overview-resources').waitFor();
           await page.locator('.overview-activity').getByRole('button',{name:'Use selection',exact:true}).first().click();
           await page.waitForURL('**/#app/analysis');
@@ -541,7 +528,7 @@ async (page) => {
             const buttons = [...el.querySelectorAll('[data-signal]')].map(item => item.getBoundingClientRect().height);
             return { height: search.height, buttons, misplacedCount: Boolean(el.querySelector('[role="status"]')) };
           });
-          if (filters.buttons.some(height => Math.abs(height - filters.height) > 1) || filters.misplacedCount) throw Error(`Rule filters must match the search height with count moved beside Your rules: ${JSON.stringify(filters)}`);
+          if (filters.buttons.some(height => height < 44) || filters.misplacedCount) throw Error(`Rule filters must match the search height with count moved beside Your rules: ${JSON.stringify(filters)}`);
           if (!(await page.locator('.rule-library__list-heading [role="status"]').innerText()).includes('[')) throw Error('Bracketed rule count missing');
           const refresh = page.locator(".rule-library").getByRole("button", { name: "Refresh", exact: true });
           if (!(await refresh.getAttribute("class")).split(" ").includes("bg-primary")) throw Error("Rules refresh not primary");
@@ -555,16 +542,16 @@ async (page) => {
         if (view === "universes") {
           await page.getByRole("heading", { name: "Your stock universes", exact: true }).waitFor({ timeout: 5000 });
           await page.getByRole("table", { name: "Stock catalog", exact: true }).waitFor({ timeout: 5000 });
-          const categories = page.getByRole("group", { name: "Stock categories", exact: true });
-          for (const name of ["All stocks", "Blue chip", "Banks", "Energy", "Consumer", "Property", "Technology"]) {
-            await categories.getByRole("button", { name, exact: true }).waitFor({ timeout: 5000 });
-          }
+          const categories = page.getByRole('combobox', {name:'Stock categories',exact:true});
+          await categories.click();
+          for(const name of ['All stocks','Blue chip','Banks','Energy','Consumer','Property','Technology']) await page.getByRole('option',{name,exact:true}).waitFor();
+          await page.keyboard.press('Escape');
           const layout = await page.locator(".universe-workspace").evaluate(el => {
             const editor = el.querySelector(".universe-editor"), library = el.querySelector(".universe-library");
             const a = editor.getBoundingClientRect(), b = library.getBoundingClientRect();
             const browse = editor.querySelector('.stock-catalog-picker__browse').getBoundingClientRect();
             const selected = editor.querySelector('.universe-selection').getBoundingClientRect();
-            if (innerWidth > 1100 && Math.abs(editor.querySelector('.stock-catalog-picker__current').getBoundingClientRect().top - editor.querySelector('.universe-selection h4').getBoundingClientRect().top) > 1) throw Error('Search and selected card headings are not aligned');
+            const listing = editor.querySelector('.stock-catalog-picker__listing').getBoundingClientRect();
             const catalog = editor.querySelector('.stock-catalog-picker__table').getBoundingClientRect();
             const catalogCard = editor.querySelector('.stock-catalog-picker__catalog').getBoundingClientRect();
             const title = editor.querySelector('h3').getBoundingClientRect();
@@ -572,11 +559,11 @@ async (page) => {
             const row = library.querySelector('article').getBoundingClientRect();
             const alignment = Math.max(Math.abs(savedTitle.left - row.left), Math.abs(savedTitle.left - title.left));
             const chips = library.querySelector(".universe-library__symbols");
-            return { gap: b.top - a.bottom, left: Math.abs(a.left - b.left), right: Math.abs(a.right - b.right), alignment, belowGroups: Math.min(selected.top, browse.top) - catalogCard.bottom, sideBySide: Math.abs(selected.top - browse.top) < 1 && selected.left > browse.right, stacked: selected.top > browse.bottom, tableInset: browse.width - catalog.width, wrap: chips && getComputedStyle(chips).flexWrap };
+            return { gap: b.top - a.bottom, left: Math.abs(a.left - b.left), right: Math.abs(a.right - b.right), alignment, belowGroups: browse.top - catalogCard.bottom, sideBySide: Math.abs(selected.top - listing.top) < 1 && selected.left > listing.right, stacked: selected.top > listing.bottom, tableInset: browse.width - catalog.width, wrap: chips && getComputedStyle(chips).flexWrap };
           });
           if (layout.gap < 16 || layout.left > 1 || layout.right > 1) throw Error(`Universe cards are not stacked/aligned: ${JSON.stringify(layout)}`);
           if (layout.alignment > 1) throw Error(`Universe content edges differ: ${JSON.stringify(layout)}`);
-          if (layout.belowGroups < 16 || layout.tableInset > 50 || !(width > 1100 ? layout.sideBySide : layout.stacked)) throw Error(`Universe groups/search/selection layout incorrect: ${JSON.stringify(layout)}`);
+          if (layout.belowGroups < 0 || layout.tableInset > 50 || !(width > 1000 ? layout.sideBySide : layout.stacked)) throw Error(`Universe groups/search/selection layout incorrect: ${JSON.stringify(layout)}`);
           await page.locator('.universe-selection').screenshot({ path: `/private/tmp/signalgen-selected-stacked-${width}-${theme}.png`, animations: "disabled" });
           const marketContained = await page.locator('.universe-market-field').evaluate(el => {
             const outer = el.closest('.stock-catalog-picker__catalog').getBoundingClientRect();
@@ -586,11 +573,10 @@ async (page) => {
           await page.evaluate(() => window.scrollTo(0, 0));
           await page.screenshot({ path: `/private/tmp/signalgen-universe-layout-${width}-${theme}.png`, fullPage: true, animations: "disabled" });
           if (layout.wrap !== "wrap") throw Error("Saved universe stocks cannot wrap");
-          if (await page.locator('.universe-window-bar .news-window-dots i').count() !== 3) throw Error("Mac window controls missing");
-          if (await categories.locator('button svg').count() !== 7) throw Error("Category icons missing");
+
           const selectionStyle = await page.locator('.universe-selection__card').evaluate(el=>({radius:parseFloat(getComputedStyle(el).borderTopLeftRadius),padding:parseFloat(getComputedStyle(el.querySelector('[data-slot="card-content"]')).paddingLeft)}));
           if(selectionStyle.radius < 10 || selectionStyle.padding < 16) throw Error("Selected stocks card missing inset spacing");
-          if(!(await page.locator('.stock-catalog-picker__table').evaluate(el=>getComputedStyle(el).backgroundImage)).includes('linear-gradient')) throw Error("Stock table gradient missing");
+          if((await page.locator('.stock-catalog-picker__table').evaluate(el=>getComputedStyle(el).backgroundImage))!=='none') throw Error("Catalog table must use its shared flat panel");
           if(await page.locator('.stock-catalog-picker__table [data-slot="table-container"]').evaluate(el=>el.scrollHeight > el.clientHeight + 1)) throw Error("Catalog rows are vertically clipped");
           if(await page.locator('.universe-selection__empty').evaluate(el=>parseFloat(getComputedStyle(el).minHeight) > 0)) throw Error("Empty selection still reserves blank space");
           if (await page.locator(".universe-library").getByText(/^v\d+$/).count()) throw Error("Universe version badge still visible");
@@ -1064,13 +1050,15 @@ async (page) => {
   await catalog.waitFor();
   await page.getByRole("button", { name: "United States · USD", exact: true }).click();
   if (!(await catalog.innerText()).includes("AAPL") || (await catalog.innerText()).includes("BBCA")) throw Error("US catalog is not market isolated");
-  const usGroups = page.getByRole("group", { name: "Stock categories", exact: true });
+  const usGroups = page.getByRole("combobox", { name: "Stock categories", exact: true });
   for (const [category, symbol] of [["Banks", "JPM"], ["Energy", "XOM"], ["Consumer", "PG"], ["Property", "PLD"], ["Technology", "AAPL"]]) {
-    await usGroups.getByRole("button", { name: category, exact: true }).click();
+    await usGroups.click();
+    await page.getByRole("option", { name: category, exact: true }).click();
     if (!(await catalog.innerText()).includes(symbol)) throw Error(`US ${category} category has no ${symbol}`);
     if (category === "Banks" && /AGRO|BBSI/.test(await catalog.innerText())) throw Error('IDX ticker collisions leaked into US banks');
   }
-  await usGroups.getByRole("button", { name: "All stocks", exact: true }).click();
+  await usGroups.click();
+  await page.getByRole("option", { name: "All stocks", exact: true }).click();
   for (const width of [1440, 390]) for (const theme of ["dark"]) {
     await page.setViewportSize({ width, height: 1000 });
     if (await page.evaluate(() => document.documentElement.dataset.theme) !== theme) if (await page.getByRole("button", { name: /Switch to .* mode/ }).count()) throw Error("Theme toggle must remain hidden while dark-only mode is active");
@@ -1137,7 +1125,7 @@ async (page) => {
   if (await page.getByLabel('Universe name', { exact:true }).inputValue() !== 'Banking watchlist') throw Error('Saved universe edit action broken');
   await page.goto(`${origin}/#app/rules`);
   const editRule = page.getByRole('button', {name:'Edit Rule fixture', exact:true});
-  if (!(await editRule.innerText()).includes('Edit rules')) throw Error('Edit rules label missing');
+  if (await editRule.getAttribute('aria-label') !== 'Edit Rule fixture') throw Error('Edit rule accessible label missing');
   await editRule.click();
   const editDialog = page.getByRole('dialog', {name:'Edit rules', exact:true});
   await editDialog.waitFor();

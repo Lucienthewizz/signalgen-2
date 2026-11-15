@@ -2,6 +2,7 @@ import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Building2,
+  CircleAlert,
   Landmark,
   Fuel,
   ShoppingBag,
@@ -450,6 +451,9 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
   }, [runs]);
   const entries = entriesByTicker.get(selected) ?? [];
   const selectedSnapshot = snapshots.get(selected);
+  const missingSnapshotCount = activeStocks.filter(
+    (ticker) => !Number.isFinite(snapshots.get(ticker)?.latestClose),
+  ).length;
   const selectedChange = openCloseChange(
     selectedSnapshot?.latestOpen,
     selectedSnapshot?.latestClose,
@@ -550,6 +554,16 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           </Button>
         </div>
       </header>
+      {!loading && !preview && missingSnapshotCount > 0 && (
+        <p className="monitor-snapshot-notice" role="status">
+          <CircleAlert aria-hidden="true" />
+          <span>
+            {missingSnapshotCount} stocks have no price snapshot.{" "}
+            <a href="#app/analysis">Run the screener</a> to populate prices and
+            indicators.
+          </span>
+        </p>
+      )}
       {universeError && (
         <p role="alert">
           Stock universes could not be refreshed. Previously loaded data remains
@@ -562,7 +576,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           snapshots remain usable. Use Refresh data to retry.
         </p>
       )}
-      {loading ? (
+      {loading && (
         <section
           className="monitor-loading"
           role="status"
@@ -572,67 +586,6 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
           <Skeleton className="h-64 w-full" />
           <span>Loading your selected universe…</span>
         </section>
-      ) : (
-        (activeStocks.length > 0 || preview) && (
-          <StockHeatmap
-            preview={preview}
-            onScreen={screenUniverse}
-            screenLabel={
-              universe ? "Screen this universe" : "Create universe to screen"
-            }
-            stocks={
-              preview
-                ? [10, -10, 5, -5, 2, -2, 1, -1, 0, null].map(
-                    (change, index) => ({
-                      ticker: [
-                        "BBCA",
-                        "BBRI",
-                        "TLKM",
-                        "BMRI",
-                        "ASII",
-                        "ANTM",
-                        "INDF",
-                        "AADI",
-                        "PTBA",
-                        "ICBP",
-                      ][index],
-                      name: `Simulated stock ${index + 1}`,
-                      change,
-                      open: change === null ? undefined : 100,
-                      close: change === null ? undefined : 100 + change,
-                      timestamp: "Simulation · not market data",
-                      stale: false,
-                      icon: <Building2 aria-hidden="true" />,
-                    }),
-                  )
-                : activeStocks.map((ticker) => {
-                    const snapshot = snapshots.get(ticker);
-                    const age = snapshotAge(snapshot?.decision.timestamp, now);
-                    return {
-                      ticker,
-                      open: snapshot?.latestOpen ?? undefined,
-                      close: snapshot?.latestClose,
-                      name: stockName(ticker),
-                      change:
-                        age === "future"
-                          ? null
-                          : openCloseChange(
-                              snapshot?.latestOpen,
-                              snapshot?.latestClose,
-                            ),
-                      timestamp: snapshot
-                        ? `${date(snapshot.decision.timestamp)} SGT`
-                        : undefined,
-                      stale: age === "old",
-                      icon: <StockMark ticker={ticker} />,
-                    };
-                  })
-            }
-            selected={preview ? previewSelected : selected}
-            onSelect={preview ? setPreviewSelected : setSelected}
-            hidden={!showCards}
-          />
-        )
       )}
       <div className="monitor-live-content" hidden={loading || preview}>
         {!activeStocks.length && (
@@ -922,8 +875,70 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
             </div>
           </div>
         )}
+      </div>
+      {!loading && (activeStocks.length > 0 || preview) && (
+        <StockHeatmap
+          preview={preview}
+          onScreen={screenUniverse}
+          screenLabel={
+            universe ? "Screen this universe" : "Create universe to screen"
+          }
+          stocks={
+            preview
+              ? [10, -10, 5, -5, 2, -2, 1, -1, 0, null].map(
+                  (change, index) => ({
+                    ticker: [
+                      "BBCA",
+                      "BBRI",
+                      "TLKM",
+                      "BMRI",
+                      "ASII",
+                      "ANTM",
+                      "INDF",
+                      "AADI",
+                      "PTBA",
+                      "ICBP",
+                    ][index],
+                    name: `Simulated stock ${index + 1}`,
+                    change,
+                    open: change === null ? undefined : 100,
+                    close: change === null ? undefined : 100 + change,
+                    timestamp: "Simulation · not market data",
+                    stale: false,
+                    icon: <Building2 aria-hidden="true" />,
+                  }),
+                )
+              : activeStocks.map((ticker) => {
+                  const snapshot = snapshots.get(ticker);
+                  const age = snapshotAge(snapshot?.decision.timestamp, now);
+                  return {
+                    ticker,
+                    open: snapshot?.latestOpen ?? undefined,
+                    close: snapshot?.latestClose,
+                    name: stockName(ticker),
+                    change:
+                      age === "future"
+                        ? null
+                        : openCloseChange(
+                            snapshot?.latestOpen,
+                            snapshot?.latestClose,
+                          ),
+                    timestamp: snapshot
+                      ? `${date(snapshot.decision.timestamp)} SGT`
+                      : undefined,
+                    stale: age === "old",
+                    icon: <StockMark ticker={ticker} />,
+                  };
+                })
+          }
+          selected={preview ? previewSelected : selected}
+          onSelect={preview ? setPreviewSelected : setSelected}
+          hidden={!showCards}
+        />
+      )}
+      <div className="monitor-live-content" hidden={loading || preview}>
         <section
-          className="monitor-ledger"
+          className="monitor-ledger fit-data-table"
           ref={ledgerRef}
           tabIndex={-1}
           aria-label="Watchlist and screening results"

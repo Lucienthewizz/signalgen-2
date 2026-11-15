@@ -321,6 +321,7 @@ export function StockUniversesPanel({
         aria-labelledby="universe-editor-title"
       >
         <StockCatalogPicker
+          compact
           key={`${editing?.id ?? "new"}:${market}`}
           catalog={marketCatalog}
           selected={symbols}

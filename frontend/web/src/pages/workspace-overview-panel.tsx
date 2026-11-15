@@ -323,7 +323,6 @@ export function WorkspaceOverviewPanel({
       </div>
 
       <nav className="overview-shortcuts" aria-label="Quick access">
-        <h3>Follow the market</h3>
         <SpotlightCard onClick={() => go("realtime")}>
           <Activity aria-hidden="true" />
           <span>
