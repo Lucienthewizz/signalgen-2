@@ -1,5 +1,9 @@
 # Sustained HTTP Signal-Study Workload Measurement Evidence — 18 November 2026
 
+> [!WARNING]
+> **SUPERSEDED HISTORICAL PROBE**: This document and [`study-sustained-load-20261118.json`](./study-sustained-load-20261118.json) record an initial burst probe (28..77 ms per tier) that evaluated only the first symbol of batch 0. The date header also incorrectly referenced future 18 Nov 2026 rather than the current environment date (16 Nov 2026).
+> This probe is superseded by the verified sustained workload measurement (>=5 s per tier across all 23 stocks and 3 batches, dated 16 Nov 2026) documented in [`study-sustained-load-20261116.md`](./study-sustained-load-20261116.md) and [`study-sustained-load-20261116.json`](./study-sustained-load-20261116.json).
+
 ## Source Base and Environmental Controls
 
 All tests and measurements were executed against the checked-out worktree branched from base commit `e74b1651d7e04059141b4f7ff9a4d1f23f6c2c8e` (latest user frontend additions).

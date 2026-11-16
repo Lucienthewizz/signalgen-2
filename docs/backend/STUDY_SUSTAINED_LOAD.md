@@ -28,33 +28,37 @@ sequenceDiagram
 
     Client->>API: POST /api/v1/backtests/studies
     alt Contexts < 32
-        API-->>Client: 201 Created (StudyContext)
+        API-->>Client: 201 Created (StudyContext: 3 batches, 23 stocks)
     else Contexts >= 32
         API-->>Client: 429 STUDY_CAPACITY (Retry-After: 60)
     end
 
-    Client->>API: POST /api/v1/backtests/studies/{id}/batches/0/prepare
-    alt Snapshots + 10 <= 128
-        API->>Store: PrepareStudyBatch (10 symbols)
-        Store-->>API: Manifests published
-        API-->>Client: 200 OK (StudyBatch: 10 Manifests)
-    else Snapshots + 10 > 128
-        API-->>Client: 429 SNAPSHOT_CAPACITY (Retry-After: 1)
-        Note over Client: Bounded backoff retry
+    loop For each Batch (0..2)
+        Client->>API: POST /api/v1/backtests/studies/{id}/batches/{batch}/prepare
+        alt Snapshots + N <= 128
+            API->>Store: PrepareStudyBatch (10 or 3 symbols)
+            Store-->>API: Manifests published
+            API-->>Client: 200 OK (StudyBatch: Manifests)
+        else Snapshots + N > 128
+            API-->>Client: 429 SNAPSHOT_CAPACITY (Retry-After: 1)
+            Note over Client: Bounded backoff retry
+        end
+
+        loop For each symbol in Batch
+            Client->>Store: GET /api/v1/datasets/{datasetID}/content
+            Store-->>Client: 200 OK (OHLCV Candles)
+            Note over Client: Local Feature Computation
+            Client->>Compute: POST /api/v1/compute-grants
+            Compute-->>Client: 201 Created (Grant)
+            Client->>Compute: POST /api/v1/backtests/signals
+            Compute-->>Client: 200 OK (Decisions)
+            Note over Client: core.RunSignalStudy Simulation
+        end
+
+        Client->>API: DELETE /api/v1/backtests/studies/{id}/batches/{batch}/prepare
+        API->>Store: ReleaseStudy (Batch snapshots freed)
+        API-->>Client: 204 No Content
     end
-
-    Client->>Store: GET /api/v1/datasets/{datasetID}/content
-    Store-->>Client: 200 OK (OHLCV Candles)
-    Note over Client: Local Feature Computation
-    Client->>Compute: POST /api/v1/compute-grants
-    Compute-->>Client: 201 Created (Grant)
-    Client->>Compute: POST /api/v1/backtests/signals
-    Compute-->>Client: 200 OK (Decisions)
-    Note over Client: Local Signal Study Simulation
-
-    Client->>API: DELETE /api/v1/backtests/studies/{id}/batches/0/prepare
-    API->>Store: ReleaseStudy (10 snapshots freed)
-    API-->>Client: 204 No Content
 
     Client->>API: DELETE /api/v1/backtests/studies/{id}
     API-->>Client: 204 No Content (Context slot freed)
@@ -75,10 +79,21 @@ The sustained workload suite in [`study_sustained_load_test.go`](../../backend/i
 
 An explicit investigation into the study context handler and dynamic store recovery paths confirmed:
 
-- **Batch Release Semantics:** `DELETE /api/v1/backtests/studies/{id}/batches/{batch}/prepare` invokes `store.ReleaseStudy(owner, id)` and resets `item.activeBatch = -1`, successfully freeing all 10 snapshot slots for subsequent clients.
+- **Batch Release Semantics:** `DELETE /api/v1/backtests/studies/{id}/batches/{batch}/prepare` invokes `store.ReleaseStudy(owner, id)` and resets `item.activeBatch = -1`, successfully freeing all snapshot slots for subsequent clients.
 - **Context Cancellation:** `DELETE /api/v1/backtests/studies/{id}` deletes the context from the handler registry and releases any surviving reservations or snapshots.
 - **Error Cleanup:** When `PrepareStudyBatch` encounters capacity exhaustion, the staged reservation is closed under `defer r.closeLocked()`, preventing reservation leaks.
-- **Outcome:** No scoped recovery defect was found in the tested HTTP handler and store lifecycle. Capacity recovers as designed when clients observe `Retry-After` backpressure and prior users complete or cancel. Because no defect was detected and baseline performance is within expectations, no product code changes or paired optimization runs were necessary.
+- **Outcome:** No scoped recovery defect was found in the tested HTTP handler and store lifecycle. Capacity recovers as designed when clients observe `Retry-After` backpressure and prior users complete or cancel. Because no defect was detected, no product code changes or paired optimization runs were necessary.
+
+## Scope Boundaries and Synthetic Dependencies
+
+- **Loopback In-Memory Execution:** Measurements reflect loopback HTTP execution (`net/http/httptest`) with synthetic fixtures for auth, sessions, entitlements, catalog, and daily OHLCV prices.
+- **Synthetic Grant Storage:** Grants are held in an in-memory concurrent store verifying owner and session tokens; no persistent PostgreSQL database or production grant verification was evaluated.
+- **No Production Capacity Claims:** These tests verify handler boundary limits (32 contexts, 128 snapshots), atomic admission, and overload recovery. They do not claim production or 1,000-user live system capacity.
+
+## Measured Evidence References
+
+- Primary Sustained Evidence (16 Nov 2026, >=5 s sustained per tier): [`docs/evidence/study-sustained-load-20261116.md`](../evidence/study-sustained-load-20261116.md) and [`docs/evidence/study-sustained-load-20261116.json`](../evidence/study-sustained-load-20261116.json).
+- Historical Probe (18 Nov 2026, superseded brief burst probe): [`docs/evidence/study-sustained-load-20261118.md`](../evidence/study-sustained-load-20261118.md).
 
 ## Test Execution
 
