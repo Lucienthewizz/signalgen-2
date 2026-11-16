@@ -2,11 +2,11 @@
 
 ## Source Base and Environmental Controls
 
-All tests and measurements were executed against the checked-out worktree on branch `frontend/prof-api-sustained`, continuing from commit `58766cb23f539d9ece6583aad25744a1e5c52fd8`.
+All tests and measurements were executed against the checked-out worktree on branch `frontend/prof-api-sustained` at commit `d8a36cb3fdfae97085dd2ce8d83c41429182931a`.
 
 | Item | Value / Identity |
 | --- | --- |
-| Measurement Date | 16 November 2026 (UTC timestamp: `2026-11-16T04:35:51Z`) |
+| Measurement Date | 16 November 2026 (UTC timestamp: `2026-11-16T04:39:03Z`) |
 | Worktree Branch | `frontend/prof-api-sustained` |
 | Pinned Docker Image | `golang:1.27.2-bookworm` (`sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61`) |
 | Container Platform | `linux/arm64` via `--context orbstack` with `--pull=never` |
@@ -33,20 +33,20 @@ The measurement executed a continuous sustained closed-loop client workload for 
 
 | Metric | Concurrency 1 | Concurrency 10 | Concurrency 30 | Concurrency 40 |
 | --- | --- | --- | --- | --- |
-| **Target Attempts** | 206 | 279 | 409 | 464 |
-| **Initiated Attempts** | 206 | 279 | 409 | 464 |
-| **Completed Whole Studies** | 206 | 279 | 393 | 438 |
+| **Target Attempts** | 259 | 698 | 703 | 460 |
+| **Initiated Attempts** | 259 | 698 | 703 | 460 |
+| **Completed Whole Studies** | 259 | 698 | 687 | 434 |
 | **Capacity Rejected (429)** | 0 | 0 | 16 | 26 |
 | **Unexpected Failures** | 0 | 0 | 0 | 0 |
 | **Cancelled** | 0 | 0 | 0 | 0 |
 | **Peak Admitted Contexts** | 1 (limit 32) | 10 (limit 32) | 30 (limit 32) | 32 (limit 32) |
 | **Peak In-Flight Snapshots** | 10 (limit 128) | 100 (limit 128) | 126 (limit 128) | 126 (limit 128) |
-| **Warmup Duration** | 50.87 ms | 112.39 ms | 2,095.98 ms | 2,107.04 ms |
-| **Measured Sustained Duration** | 5,015.20 ms (5.02 s) | 5,071.23 ms (5.07 s) | 6,166.71 ms (6.17 s) | 6,156.73 ms (6.16 s) |
-| **Throughput (Completed Studies/s)** | 41.08 | 55.02 | 63.73 | 71.14 |
-| **Throughput (Total Attempts/s)** | 41.08 | 55.02 | 66.32 | 75.36 |
-| **Payload Body Sent** | 64.43 MiB | 87.27 MiB | 122.94 MiB | 137.01 MiB |
-| **Payload Body Received** | 65.00 MiB | 88.04 MiB | 124.04 MiB | 138.25 MiB |
+| **Warmup Duration** | 37.94 ms | 77.82 ms | 2,096.87 ms | 2,133.86 ms |
+| **Measured Sustained Duration** | 5,011.09 ms (5.01 s) | 5,039.86 ms (5.04 s) | 6,175.12 ms (6.18 s) | 6,219.06 ms (6.22 s) |
+| **Throughput (Completed Studies/s)** | 51.69 | 138.50 | 111.25 | 69.79 |
+| **Throughput (Total Attempts/s)** | 51.69 | 138.50 | 113.84 | 73.97 |
+| **Payload Body Sent** | 81.01 MiB | 218.34 MiB | 214.91 MiB | 135.76 MiB |
+| **Payload Body Received** | 81.73 MiB | 220.27 MiB | 216.83 MiB | 136.99 MiB |
 
 > [!NOTE]
 > Payload bytes reflect HTTP request and response message bodies only, excluding transport framing and HTTP headers.
@@ -56,25 +56,25 @@ The measurement executed a continuous sustained closed-loop client workload for 
 
 | Stage | Concurrency 1 | Concurrency 10 | Concurrency 30 | Concurrency 40 |
 | --- | --- | --- | --- | --- |
-| **Create Context** | 0.05 / 0.17 / 1.23 | 1.44 / 6.27 / 9.11 | 1.19 / 4.70 / 6.84 | 1.37 / 4.35 / 7.34 |
-| **Prepare Batch (10 symbols)** | 0.70 / 2.91 / 5.03 | 3.28 / 10.73 / 22.84 | 2.93 / 12.19 / 3,025.49 | 2.67 / 9.73 / 3,016.05 |
-| **Evaluate Stock (Single stock)** | 0.54 / 2.93 / 5.36 | 5.36 / 15.74 / 36.51 | 5.15 / 12.55 / 20.29 | 4.97 / 10.31 / 15.72 |
-| **Evaluate Batch (10 stocks)** | 6.72 / 14.45 / 18.85 | 46.25 / 111.05 / 224.03 | 48.64 / 89.55 / 140.69 | 44.12 / 78.73 / 106.11 |
-| **Release & Delete Context** | 0.02 / 0.26 / 1.08 | 1.30 / 5.39 / 11.54 | 1.26 / 4.63 / 7.76 | 1.28 / 4.24 / 6.85 |
-| **Attempt Latency (All attempts)** | 23.36 / 36.19 / 45.24 | 158.39 / 369.43 / 471.46 | 151.20 / 2,132.45 / 3,033.06 | 139.25 / 2,111.91 / 3,021.84 |
-| **Completed Whole Study Lifecycle** | 23.36 / 36.19 / 45.24 | 158.39 / 369.43 / 471.46 | 151.12 / 1,129.41 / 2,138.03 | 137.46 / 1,135.09 / 2,112.11 |
+| **Create Context** | 0.04 / 0.14 / 1.35 | 0.63 / 1.75 / 2.29 | 0.90 / 2.01 / 2.85 | 1.25 / 3.85 / 7.97 |
+| **Prepare Batch (10 symbols)** | 0.61 / 2.15 / 4.25 | 1.45 / 3.22 / 4.22 | 1.79 / 4.96 / 2,038.24 | 2.49 / 11.95 / 3,011.19 |
+| **Evaluate Stock (Single stock)** | 0.41 / 2.42 / 5.02 | 2.69 / 4.35 / 5.16 | 3.36 / 5.77 / 10.96 | 4.22 / 10.45 / 30.57 |
+| **Evaluate Batch (10 stocks)** | 5.28 / 11.48 / 14.68 | 25.84 / 31.29 / 33.88 | 31.58 / 41.20 / 152.16 | 37.64 / 88.25 / 315.81 |
+| **Release & Delete Context** | 0.02 / 0.11 / 1.72 | 0.66 / 1.76 / 2.40 | 0.86 / 2.48 / 4.23 | 1.02 / 3.89 / 9.53 |
+| **Attempt Latency (All attempts)** | 18.15 / 28.99 / 32.22 | 71.73 / 79.65 / 83.62 | 88.47 / 1,480.49 / 3,011.82 | 115.28 / 2,182.60 / 3,020.24 |
+| **Completed Whole Study Lifecycle** | 18.15 / 28.99 / 32.22 | 71.73 / 79.65 / 83.62 | 88.28 / 668.63 / 2,153.76 | 114.74 / 1,126.96 / 2,183.71 |
 
 ### Go Runtime Memory Consumption (Signed Dataless Underflow-Safe)
 
 | Metric | Concurrency 1 | Concurrency 10 | Concurrency 30 | Concurrency 40 |
 | --- | --- | --- | --- | --- |
-| **Heap Alloc Before** | 1.23 MiB | 1.64 MiB | 2.14 MiB | 2.46 MiB |
-| **Heap Alloc After** | 6.10 MiB | 12.51 MiB | 18.64 MiB | 10.35 MiB |
-| **Heap Alloc Delta (Signed)** | +4.87 MiB | +10.87 MiB | +16.49 MiB | +7.89 MiB |
-| **Cumulative Total Alloc** | 2,098.35 MiB | 2,867.95 MiB | 4,043.82 MiB | 4,502.92 MiB |
-| **Heap Mallocs Delta** | 15,341,107 | 20,755,384 | 29,257,878 | 32,595,062 |
-| **Heap Frees Delta** | 15,295,189 | 20,663,676 | 29,118,916 | 32,515,993 |
-| **GC Cycles Delta** | 859 | 545 | 529 | 557 |
+| **Heap Alloc Before** | 1.22 MiB | 1.60 MiB | 2.25 MiB | 2.37 MiB |
+| **Heap Alloc After** | 9.51 MiB | 12.61 MiB | 26.27 MiB | 17.70 MiB |
+| **Heap Alloc Delta (Signed)** | +8.29 MiB | +11.01 MiB | +24.02 MiB | +15.33 MiB |
+| **Cumulative Total Alloc** | 2,633.33 MiB | 7,163.88 MiB | 7,055.47 MiB | 4,461.33 MiB |
+| **Heap Mallocs Delta** | 19,290,227 | 51,959,454 | 51,111,950 | 32,305,497 |
+| **Heap Frees Delta** | 19,216,870 | 51,843,451 | 50,908,933 | 32,214,513 |
+| **GC Cycles Delta** | 977 | 964 | 764 | 550 |
 
 ## Deterministic Invariants and Overload Verification
 
