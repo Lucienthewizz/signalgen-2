@@ -96,6 +96,8 @@ class MockDatabase {
     this.name = name;
     this.version = version;
     this.stores = new Map();
+    this.txQueue = [];
+    this.runningTx = null;
     this.objectStoreNames = {
       contains: (n) => this.stores.has(n),
     };
@@ -110,7 +112,22 @@ class MockDatabase {
   }
   transaction(storeNames, mode = "readonly") {
     const names = Array.isArray(storeNames) ? storeNames : [storeNames];
-    return new MockTransaction(this, names, mode);
+    const tx = new MockTransaction(this, names, mode);
+    this.txQueue.push(tx);
+    this._drainQueue();
+    return tx;
+  }
+  _drainQueue() {
+    if (this.runningTx || this.txQueue.length === 0) return;
+    const next = this.txQueue.shift();
+    this.runningTx = next;
+    next._start();
+  }
+  _txDone(tx) {
+    if (this.runningTx === tx) {
+      this.runningTx = null;
+    }
+    this._drainQueue();
   }
   close() {}
 }
@@ -128,6 +145,7 @@ class MockTransaction {
     this.db = db;
     this.storeNames = storeNames;
     this.mode = mode;
+    this.started = false;
     this.active = true;
     this.aborted = false;
     this.error = null;
@@ -135,24 +153,49 @@ class MockTransaction {
     this.onerror = null;
     this.onabort = null;
     this.pendingOps = 0;
+    this.checkTimer = null;
+    this.queuedRequests = [];
     this.snapshots = new Map();
+  }
 
-    for (const name of storeNames) {
-      const store = db.stores.get(name);
+  _start() {
+    this.started = true;
+    for (const name of this.storeNames) {
+      const store = this.db.stores.get(name);
       if (store) {
         this.snapshots.set(name, new Map(store.records));
       }
     }
+    const q = this.queuedRequests.slice();
+    this.queuedRequests.length = 0;
+    for (const fn of q) {
+      setImmediate(fn);
+    }
+    this._scheduleCommit();
   }
 
-  _checkDone() {
-    if (!this.active || this.aborted) return;
-    if (this.pendingOps === 0) {
-      this.active = false;
-      setImmediate(() => {
-        if (!this.aborted && this.oncomplete) this.oncomplete();
-      });
+  _beginReq() {
+    this.pendingOps++;
+    if (this.checkTimer) {
+      clearImmediate(this.checkTimer);
+      this.checkTimer = null;
     }
+  }
+
+  _endReq() {
+    this.pendingOps--;
+    this._scheduleCommit();
+  }
+
+  _scheduleCommit() {
+    if (this.checkTimer) clearImmediate(this.checkTimer);
+    this.checkTimer = setImmediate(() => {
+      if (this.active && !this.aborted && this.pendingOps <= 0) {
+        this.active = false;
+        if (this.oncomplete) this.oncomplete();
+        this.db._txDone(this);
+      }
+    });
   }
 
   objectStore(name) {
@@ -165,6 +208,10 @@ class MockTransaction {
     if (this.aborted) return;
     this.aborted = true;
     this.active = false;
+    if (this.checkTimer) {
+      clearImmediate(this.checkTimer);
+      this.checkTimer = null;
+    }
     for (const [name, snapshot] of this.snapshots.entries()) {
       const store = this.db.stores.get(name);
       if (store) {
@@ -173,6 +220,7 @@ class MockTransaction {
     }
     setImmediate(() => {
       if (this.onabort) this.onabort();
+      this.db._txDone(this);
     });
   }
 }
@@ -183,102 +231,118 @@ class MockObjectStore {
     this.data = data;
   }
 
+  _enqueue(fn) {
+    this.tx._beginReq();
+    if (this.tx.started) {
+      setImmediate(fn);
+    } else {
+      this.tx.queuedRequests.push(fn);
+    }
+  }
+
   get(key) {
-    this.tx.pendingOps++;
     const req = {
       readyState: "pending",
       result: undefined,
       onsuccess: null,
       onerror: null,
     };
-    setImmediate(() => {
-      if (this.tx.aborted) return;
+    this._enqueue(() => {
+      if (this.tx.aborted) {
+        this.tx._endReq();
+        return;
+      }
       req.result = this.data.records.get(key);
       req.readyState = "done";
       if (req.onsuccess) req.onsuccess();
-      this.tx.pendingOps--;
-      this.tx._checkDone();
+      this.tx._endReq();
     });
     return req;
   }
 
   put(value, key) {
-    this.tx.pendingOps++;
     const actualKey = this.data.keyPath ? value[this.data.keyPath] : key;
     if (actualKey === undefined) throw Error("Key is undefined for put");
     const req = { readyState: "pending", onsuccess: null, onerror: null };
-    this.data.records.set(actualKey, JSON.parse(JSON.stringify(value)));
-    setImmediate(() => {
+    this._enqueue(() => {
+      if (this.tx.aborted) {
+        this.tx._endReq();
+        return;
+      }
+      this.data.records.set(actualKey, JSON.parse(JSON.stringify(value)));
       req.readyState = "done";
       if (req.onsuccess) req.onsuccess();
-      this.tx.pendingOps--;
-      this.tx._checkDone();
+      this.tx._endReq();
     });
     return req;
   }
 
   delete(key) {
-    this.tx.pendingOps++;
     const req = { readyState: "pending", onsuccess: null, onerror: null };
-    this.data.records.delete(key);
-    setImmediate(() => {
+    this._enqueue(() => {
+      if (this.tx.aborted) {
+        this.tx._endReq();
+        return;
+      }
+      this.data.records.delete(key);
       req.readyState = "done";
       if (req.onsuccess) req.onsuccess();
-      this.tx.pendingOps--;
-      this.tx._checkDone();
+      this.tx._endReq();
     });
     return req;
   }
 
   clear() {
-    this.tx.pendingOps++;
     const req = { readyState: "pending", onsuccess: null, onerror: null };
-    this.data.records.clear();
-    setImmediate(() => {
+    this._enqueue(() => {
+      if (this.tx.aborted) {
+        this.tx._endReq();
+        return;
+      }
+      this.data.records.clear();
       req.readyState = "done";
       if (req.onsuccess) req.onsuccess();
-      this.tx.pendingOps--;
-      this.tx._checkDone();
+      this.tx._endReq();
     });
     return req;
   }
 
   openCursor(range) {
-    this.tx.pendingOps++;
     const req = { readyState: "pending", result: null, onsuccess: null };
-    const sortedKeys = Array.from(this.data.records.keys())
-      .filter((k) => !range || range.includes(k))
-      .sort();
-    let idx = 0;
+    this._enqueue(() => {
+      const sortedKeys = Array.from(this.data.records.keys())
+        .filter((k) => !range || range.includes(k))
+        .sort();
+      let idx = 0;
 
-    const step = () => {
-      if (this.tx.aborted) {
-        this.tx.pendingOps--;
-        this.tx._checkDone();
-        return;
-      }
-      if (idx < sortedKeys.length) {
-        const k = sortedKeys[idx++];
-        req.result = {
-          key: k,
-          value: JSON.parse(JSON.stringify(this.data.records.get(k))),
-          delete: () => {
-            this.data.records.delete(k);
-          },
-          continue: () => {
-            setImmediate(step);
-          },
-        };
-      } else {
-        req.result = null;
-        this.tx.pendingOps--;
-        this.tx._checkDone();
-      }
-      req.readyState = "done";
-      if (req.onsuccess) req.onsuccess();
-    };
+      const step = () => {
+        if (this.tx.aborted) {
+          this.tx._endReq();
+          return;
+        }
+        if (idx < sortedKeys.length) {
+          const k = sortedKeys[idx++];
+          req.result = {
+            key: k,
+            value: JSON.parse(JSON.stringify(this.data.records.get(k))),
+            delete: () => {
+              this.data.records.delete(k);
+            },
+            continue: () => {
+              this.tx._beginReq();
+              setImmediate(step);
+            },
+          };
+        } else {
+          req.result = null;
+        }
+        req.readyState = "done";
+        if (req.onsuccess) req.onsuccess();
+        this.tx._endReq();
+      };
 
-    setImmediate(step);
+      step();
+    });
     return req;
   }
 }
@@ -357,7 +421,6 @@ test("study storage preserves exact outcomes, horizon steps, full numbers and st
   assert.equal(page.total, 9);
   assert.equal(page.rows.length, 9);
 
-  // Symbol ordering must be strictly AAPL (2), BBCA.JK (3), TLKM.JK (4)
   assert.equal(page.rows[0].symbol, "AAPL");
   assert.equal(page.rows[1].symbol, "AAPL");
   assert.equal(page.rows[2].symbol, "BBCA.JK");
@@ -365,7 +428,6 @@ test("study storage preserves exact outcomes, horizon steps, full numbers and st
   assert.equal(page.rows[4].symbol, "BBCA.JK");
   assert.equal(page.rows[5].symbol, "TLKM.JK");
 
-  // Outcome fields completeness & numbers precision
   const first = page.rows[0];
   assert.equal(first.reference_price, 150.5);
   assert.equal(first.outcomes.length, 2);
@@ -401,7 +463,6 @@ test("50-row pagination slices events accurately across multiple pages", async (
     await storage.storeStudySymbol(owner, run, sym, makeStudyResult(sym, 20), abort.signal);
   }
 
-  // Page 0: rows 0..49
   const p0 = await storage.studyEventPage(owner, run, 0, 50);
   assert.equal(p0.total, 120);
   assert.equal(p0.rows.length, 50);
@@ -412,7 +473,6 @@ test("50-row pagination slices events accurately across multiple pages", async (
   assert.equal(p0.rows[40].symbol, "SYM3");
   assert.equal(p0.rows[49].symbol, "SYM3");
 
-  // Page 1: rows 50..99
   const p1 = await storage.studyEventPage(owner, run, 1, 50);
   assert.equal(p1.total, 120);
   assert.equal(p1.rows.length, 50);
@@ -423,41 +483,81 @@ test("50-row pagination slices events accurately across multiple pages", async (
   assert.equal(p1.rows[30].symbol, "SYM5");
   assert.equal(p1.rows[49].symbol, "SYM5");
 
-  // Page 2: rows 100..119 (partial page of 20 rows)
   const p2 = await storage.studyEventPage(owner, run, 2, 50);
   assert.equal(p2.total, 120);
   assert.equal(p2.rows.length, 20);
   assert.equal(p2.rows[0].symbol, "SYM6");
   assert.equal(p2.rows[19].symbol, "SYM6");
 
-  // Page 3: beyond total
   const p3 = await storage.studyEventPage(owner, run, 3, 50);
   assert.equal(p3.total, 120);
   assert.equal(p3.rows.length, 0);
 });
 
-test("symbol overwrite updates counts, total and sizes accounting atomically", async () => {
+test("legacy run initialization: existing A(7) and B(9) without metadata then new C(5) retains all in pagination and CSV", async () => {
   const mock = new MockIDB();
   const storage = loadStorageModule(mock);
 
-  const owner = "owner-overwrite";
-  const run = "run-overwrite";
+  const owner = "legacy-owner";
+  const run = "legacy-run";
   const abort = new AbortController();
 
-  await storage.storeStudySymbol(owner, run, "STOCK1", makeStudyResult("STOCK1", 10), abort.signal);
-  await storage.storeStudySymbol(owner, run, "STOCK2", makeStudyResult("STOCK2", 15), abort.signal);
+  await storage.storeStudySymbol(owner, run, "A", makeStudyResult("A", 7), abort.signal);
+  await storage.storeStudySymbol(owner, run, "B", makeStudyResult("B", 9), abort.signal);
 
-  const before = await storage.studyEventPage(owner, run, 0, 50);
-  assert.equal(before.total, 25);
-  assert.equal(before.rows.length, 25);
+  const db = mock.databases.get("signalgen-study-temporary-1");
+  const sizesStore = db.stores.get("sizes");
+  sizesStore.records.delete(`meta:${owner}\0${run}\0`);
 
-  await storage.storeStudySymbol(owner, run, "STOCK1", makeStudyResult("STOCK1", 35), abort.signal);
+  const beforeNewSymbol = await storage.studyEventPage(owner, run, 0, 50);
+  assert.equal(beforeNewSymbol.total, 16);
+  assert.equal(beforeNewSymbol.rows.length, 16);
 
-  const after = await storage.studyEventPage(owner, run, 0, 100);
-  assert.equal(after.total, 50);
-  assert.equal(after.rows.length, 50);
-  assert.equal(after.rows.filter((r) => r.symbol === "STOCK1").length, 35);
-  assert.equal(after.rows.filter((r) => r.symbol === "STOCK2").length, 15);
+  await storage.storeStudySymbol(owner, run, "C", makeStudyResult("C", 5), abort.signal);
+
+  const afterNewSymbol = await storage.studyEventPage(owner, run, 0, 50);
+  assert.equal(afterNewSymbol.total, 21);
+  assert.equal(afterNewSymbol.rows.length, 21);
+
+  const symbolsFound = afterNewSymbol.rows.map((r) => r.symbol);
+  assert.equal(symbolsFound.filter((s) => s === "A").length, 7);
+  assert.equal(symbolsFound.filter((s) => s === "B").length, 9);
+  assert.equal(symbolsFound.filter((s) => s === "C").length, 5);
+
+  await storage.storeStudySymbol(owner, run, "A", makeStudyResult("A", 12), abort.signal);
+  const afterGreater = await storage.studyEventPage(owner, run, 0, 50);
+  assert.equal(afterGreater.total, 26);
+
+  await storage.storeStudySymbol(owner, run, "A", makeStudyResult("A", 3), abort.signal);
+  const afterLess = await storage.studyEventPage(owner, run, 0, 50);
+  assert.equal(afterLess.total, 17);
+
+  await storage.storeStudySymbol(owner, run, "A", makeStudyResult("A", 0), abort.signal);
+  const afterZero = await storage.studyEventPage(owner, run, 0, 50);
+  assert.equal(afterZero.total, 14);
+  assert.equal(afterZero.rows.filter((r) => r.symbol === "A").length, 0);
+  assert.equal(afterZero.rows.filter((r) => r.symbol === "B").length, 9);
+  assert.equal(afterZero.rows.filter((r) => r.symbol === "C").length, 5);
+});
+
+test("two concurrent writers on different symbols complete without data loss or corruption", async () => {
+  const mock = new MockIDB();
+  const storage = loadStorageModule(mock);
+
+  const owner = "concurrent-owner";
+  const run = "concurrent-run";
+  const abort = new AbortController();
+
+  await Promise.all([
+    storage.storeStudySymbol(owner, run, "CONC_1", makeStudyResult("CONC_1", 10), abort.signal),
+    storage.storeStudySymbol(owner, run, "CONC_2", makeStudyResult("CONC_2", 15), abort.signal),
+  ]);
+
+  const p = await storage.studyEventPage(owner, run, 0, 50);
+  assert.equal(p.total, 25);
+  assert.equal(p.rows.length, 25);
+  assert.equal(p.rows.filter((r) => r.symbol === "CONC_1").length, 10);
+  assert.equal(p.rows.filter((r) => r.symbol === "CONC_2").length, 15);
 });
 
 test("quota exceeded rolls back atomically without modifying existing records", async () => {
@@ -472,13 +572,10 @@ test("quota exceeded rolls back atomically without modifying existing records", 
   const initial = await storage.studyEventPage(owner, run, 0, 50);
   assert.equal(initial.total, 5);
 
-  // Exceed 128 MiB boundary by populating sizes directly to near-quota, then storing symbol that breaches it
   const db = mock.databases.get("signalgen-study-temporary-1");
   const sizesStore = db.stores.get("sizes");
-  // Set existing size to 127 MiB
   sizesStore.records.set(owner, 127 * 1024 * 1024);
 
-  // Symbol payload of ~2 MiB breaches 128 MiB
   const bigEvents = [];
   const chunk = "Y".repeat(2000);
   for (let i = 0; i < 1100; i++) {
@@ -513,7 +610,6 @@ test("quota exceeded rolls back atomically without modifying existing records", 
     /128\s*MiB/i,
   );
 
-  // Prior results are completely preserved
   const afterQuota = await storage.studyEventPage(owner, run, 0, 50);
   assert.equal(afterQuota.total, 5);
   assert.equal(afterQuota.rows.length, 5);
@@ -561,7 +657,6 @@ test("owner cleanup isolates users and removes only targeted owner data", async 
   assert.equal(aBefore.total, 12);
   assert.equal(bBefore.total, 18);
 
-  // Clear User A
   await storage.clearStudyOwner(userA);
 
   const aAfter = await storage.studyEventPage(userA, run, 0, 50);
@@ -571,32 +666,7 @@ test("owner cleanup isolates users and removes only targeted owner data", async 
   assert.equal(bAfter.total, 18);
   assert.equal(bAfter.rows.length, 18);
 
-  // Clear All
   await storage.clearAllStudyResults();
   const bFinal = await storage.studyEventPage(userB, run, 0, 50);
   assert.equal(bFinal.total, 0);
-});
-
-test("backward compatibility fallback handles unindexed legacy runs seamlessly", async () => {
-  const mock = new MockIDB();
-  const storage = loadStorageModule(mock);
-
-  const owner = "legacy-owner";
-  const run = "legacy-run";
-  const abort = new AbortController();
-
-  await storage.storeStudySymbol(owner, run, "LEGACY_A", makeStudyResult("LEGACY_A", 7), abort.signal);
-  await storage.storeStudySymbol(owner, run, "LEGACY_B", makeStudyResult("LEGACY_B", 9), abort.signal);
-
-  // Intentionally delete meta record to simulate pre-migration database
-  const db = mock.databases.get("signalgen-study-temporary-1");
-  const sizesStore = db.stores.get("sizes");
-  sizesStore.records.delete(`meta:${owner}\0${run}\0`);
-
-  // studyEventPage must seamlessly fall back to cursor scan
-  const fallbackResult = await storage.studyEventPage(owner, run, 0, 50);
-  assert.equal(fallbackResult.total, 16);
-  assert.equal(fallbackResult.rows.length, 16);
-  assert.equal(fallbackResult.rows[0].symbol, "LEGACY_A");
-  assert.equal(fallbackResult.rows[7].symbol, "LEGACY_B");
 });

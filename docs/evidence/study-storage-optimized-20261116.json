@@ -1,113 +1,563 @@
 {
   "label": "optimized",
-  "timestamp": "2026-11-16T04:05:51.915Z",
+  "timestamp": "2026-11-16T04:20:20.691Z",
   "benchmarkScenarios": [
     {
       "symbols": 10,
       "density": 2,
       "totalEvents": 20,
-      "storeMs": 18.1,
-      "p0Ms": 4.9,
-      "pMidMs": 4.8,
-      "pLateMs": 3.1,
-      "csvExportMs": 3,
-      "cleanMs": 8.3,
+      "samples": [
+        {
+          "storeMs": 3.9,
+          "p0Ms": 0.8,
+          "pMidMs": 0.7,
+          "pLateMs": 0.6,
+          "csvExportMs": 0.7,
+          "cleanMs": 1.1
+        },
+        {
+          "storeMs": 3.1,
+          "p0Ms": 0.7,
+          "pMidMs": 0.7,
+          "pLateMs": 0.6,
+          "csvExportMs": 0.5,
+          "cleanMs": 1
+        },
+        {
+          "storeMs": 2.9,
+          "p0Ms": 0.7,
+          "pMidMs": 1,
+          "pLateMs": 0.6,
+          "csvExportMs": 0.3,
+          "cleanMs": 0.9
+        }
+      ],
+      "storeMs": 3.1,
+      "storeRange": [
+        2.9,
+        3.9
+      ],
+      "p0Ms": 0.7,
+      "p0Range": [
+        0.7,
+        0.8
+      ],
+      "pMidMs": 0.7,
+      "pMidRange": [
+        0.7,
+        1
+      ],
+      "pLateMs": 0.6,
+      "pLateRange": [
+        0.6,
+        0.6
+      ],
+      "csvExportMs": 0.5,
+      "csvRange": [
+        0.3,
+        0.7
+      ],
+      "cleanMs": 1,
+      "cleanRange": [
+        0.9,
+        1.1
+      ],
       "verified": true
     },
     {
       "symbols": 10,
       "density": 10,
       "totalEvents": 100,
-      "storeMs": 20.4,
-      "p0Ms": 2.5,
-      "pMidMs": 2.3,
-      "pLateMs": 1.5,
-      "csvExportMs": 1.4,
-      "cleanMs": 7.6,
+      "samples": [
+        {
+          "storeMs": 3.1,
+          "p0Ms": 0.3,
+          "pMidMs": 0.6,
+          "pLateMs": 0.2,
+          "csvExportMs": 0.8,
+          "cleanMs": 1.2
+        },
+        {
+          "storeMs": 3.2,
+          "p0Ms": 0.5,
+          "pMidMs": 0.5,
+          "pLateMs": 0.4,
+          "csvExportMs": 0.9,
+          "cleanMs": 1.2
+        },
+        {
+          "storeMs": 3.7,
+          "p0Ms": 0.3,
+          "pMidMs": 0.3,
+          "pLateMs": 0.4,
+          "csvExportMs": 0.5,
+          "cleanMs": 1.3
+        }
+      ],
+      "storeMs": 3.2,
+      "storeRange": [
+        3.1,
+        3.7
+      ],
+      "p0Ms": 0.3,
+      "p0Range": [
+        0.3,
+        0.5
+      ],
+      "pMidMs": 0.5,
+      "pMidRange": [
+        0.3,
+        0.6
+      ],
+      "pLateMs": 0.4,
+      "pLateRange": [
+        0.2,
+        0.4
+      ],
+      "csvExportMs": 0.8,
+      "csvRange": [
+        0.5,
+        0.9
+      ],
+      "cleanMs": 1.2,
+      "cleanRange": [
+        1.2,
+        1.3
+      ],
       "verified": true
     },
     {
       "symbols": 10,
       "density": 30,
       "totalEvents": 300,
-      "storeMs": 15.2,
-      "p0Ms": 1.8,
-      "pMidMs": 1.6,
-      "pLateMs": 1.7,
-      "csvExportMs": 8.2,
-      "cleanMs": 17.4,
+      "samples": [
+        {
+          "storeMs": 4.1,
+          "p0Ms": 0.4,
+          "pMidMs": 0.4,
+          "pLateMs": 0.4,
+          "csvExportMs": 2.6,
+          "cleanMs": 1.3
+        },
+        {
+          "storeMs": 3.7,
+          "p0Ms": 0.6,
+          "pMidMs": 0.2,
+          "pLateMs": 0.6,
+          "csvExportMs": 1.3,
+          "cleanMs": 1.3
+        },
+        {
+          "storeMs": 4.8,
+          "p0Ms": 0.4,
+          "pMidMs": 0.3,
+          "pLateMs": 0.4,
+          "csvExportMs": 1.6,
+          "cleanMs": 1.1
+        }
+      ],
+      "storeMs": 4.1,
+      "storeRange": [
+        3.7,
+        4.8
+      ],
+      "p0Ms": 0.4,
+      "p0Range": [
+        0.4,
+        0.6
+      ],
+      "pMidMs": 0.3,
+      "pMidRange": [
+        0.2,
+        0.4
+      ],
+      "pLateMs": 0.4,
+      "pLateRange": [
+        0.4,
+        0.6
+      ],
+      "csvExportMs": 1.6,
+      "csvRange": [
+        1.3,
+        2.6
+      ],
+      "cleanMs": 1.3,
+      "cleanRange": [
+        1.1,
+        1.3
+      ],
       "verified": true
     },
     {
       "symbols": 100,
       "density": 2,
       "totalEvents": 200,
-      "storeMs": 150.4,
-      "p0Ms": 4.1,
-      "pMidMs": 2.6,
-      "pLateMs": 1.9,
-      "csvExportMs": 7.3,
-      "cleanMs": 28.3,
+      "samples": [
+        {
+          "storeMs": 31.8,
+          "p0Ms": 0.6,
+          "pMidMs": 0.5,
+          "pLateMs": 0.4,
+          "csvExportMs": 1.8,
+          "cleanMs": 8
+        },
+        {
+          "storeMs": 31.5,
+          "p0Ms": 0.8,
+          "pMidMs": 0.8,
+          "pLateMs": 0.7,
+          "csvExportMs": 1.8,
+          "cleanMs": 7.3
+        },
+        {
+          "storeMs": 32.2,
+          "p0Ms": 0.7,
+          "pMidMs": 0.9,
+          "pLateMs": 1.8,
+          "csvExportMs": 1.8,
+          "cleanMs": 8.7
+        }
+      ],
+      "storeMs": 31.8,
+      "storeRange": [
+        31.5,
+        32.2
+      ],
+      "p0Ms": 0.7,
+      "p0Range": [
+        0.6,
+        0.8
+      ],
+      "pMidMs": 0.8,
+      "pMidRange": [
+        0.5,
+        0.9
+      ],
+      "pLateMs": 0.7,
+      "pLateRange": [
+        0.4,
+        1.8
+      ],
+      "csvExportMs": 1.8,
+      "csvRange": [
+        1.8,
+        1.8
+      ],
+      "cleanMs": 8,
+      "cleanRange": [
+        7.3,
+        8.7
+      ],
       "verified": true
     },
     {
       "symbols": 100,
       "density": 10,
       "totalEvents": 1000,
-      "storeMs": 146.9,
-      "p0Ms": 1.2,
-      "pMidMs": 1.3,
-      "pLateMs": 1.1,
-      "csvExportMs": 34.7,
-      "cleanMs": 22.8,
+      "samples": [
+        {
+          "storeMs": 30.8,
+          "p0Ms": 0.4,
+          "pMidMs": 0.5,
+          "pLateMs": 0.4,
+          "csvExportMs": 5.9,
+          "cleanMs": 6.1
+        },
+        {
+          "storeMs": 30.6,
+          "p0Ms": 0.6,
+          "pMidMs": 0.4,
+          "pLateMs": 0.5,
+          "csvExportMs": 6.7,
+          "cleanMs": 7.8
+        },
+        {
+          "storeMs": 29.9,
+          "p0Ms": 0.5,
+          "pMidMs": 0.5,
+          "pLateMs": 0.6,
+          "csvExportMs": 6.9,
+          "cleanMs": 8.4
+        }
+      ],
+      "storeMs": 30.6,
+      "storeRange": [
+        29.9,
+        30.8
+      ],
+      "p0Ms": 0.5,
+      "p0Range": [
+        0.4,
+        0.6
+      ],
+      "pMidMs": 0.5,
+      "pMidRange": [
+        0.4,
+        0.5
+      ],
+      "pLateMs": 0.5,
+      "pLateRange": [
+        0.4,
+        0.6
+      ],
+      "csvExportMs": 6.7,
+      "csvRange": [
+        5.9,
+        6.9
+      ],
+      "cleanMs": 7.8,
+      "cleanRange": [
+        6.1,
+        8.4
+      ],
       "verified": true
     },
     {
       "symbols": 100,
       "density": 30,
       "totalEvents": 3000,
-      "storeMs": 208,
-      "p0Ms": 1.9,
-      "pMidMs": 2.8,
-      "pLateMs": 20.7,
-      "csvExportMs": 110.3,
-      "cleanMs": 45.6,
+      "samples": [
+        {
+          "storeMs": 35.6,
+          "p0Ms": 0.3,
+          "pMidMs": 0.4,
+          "pLateMs": 0.3,
+          "csvExportMs": 16.3,
+          "cleanMs": 7.8
+        },
+        {
+          "storeMs": 37.1,
+          "p0Ms": 0.4,
+          "pMidMs": 0.4,
+          "pLateMs": 0.4,
+          "csvExportMs": 17.6,
+          "cleanMs": 7.9
+        },
+        {
+          "storeMs": 34,
+          "p0Ms": 0.4,
+          "pMidMs": 0.4,
+          "pLateMs": 0.4,
+          "csvExportMs": 19.2,
+          "cleanMs": 8
+        }
+      ],
+      "storeMs": 35.6,
+      "storeRange": [
+        34,
+        37.1
+      ],
+      "p0Ms": 0.4,
+      "p0Range": [
+        0.3,
+        0.4
+      ],
+      "pMidMs": 0.4,
+      "pMidRange": [
+        0.4,
+        0.4
+      ],
+      "pLateMs": 0.4,
+      "pLateRange": [
+        0.3,
+        0.4
+      ],
+      "csvExportMs": 17.6,
+      "csvRange": [
+        16.3,
+        19.2
+      ],
+      "cleanMs": 7.9,
+      "cleanRange": [
+        7.8,
+        8
+      ],
       "verified": true
     },
     {
       "symbols": 500,
       "density": 2,
       "totalEvents": 1000,
-      "storeMs": 757.8,
-      "p0Ms": 2.3,
-      "pMidMs": 2.3,
-      "pLateMs": 1.6,
-      "csvExportMs": 41.5,
-      "cleanMs": 158.2,
+      "samples": [
+        {
+          "storeMs": 173.9,
+          "p0Ms": 1,
+          "pMidMs": 0.9,
+          "pLateMs": 1,
+          "csvExportMs": 18.9,
+          "cleanMs": 33.9
+        },
+        {
+          "storeMs": 171.7,
+          "p0Ms": 0.9,
+          "pMidMs": 0.6,
+          "pLateMs": 0.6,
+          "csvExportMs": 8.2,
+          "cleanMs": 33.3
+        },
+        {
+          "storeMs": 162,
+          "p0Ms": 0.8,
+          "pMidMs": 0.9,
+          "pLateMs": 0.9,
+          "csvExportMs": 10.3,
+          "cleanMs": 39.1
+        }
+      ],
+      "storeMs": 171.7,
+      "storeRange": [
+        162,
+        173.9
+      ],
+      "p0Ms": 0.9,
+      "p0Range": [
+        0.8,
+        1
+      ],
+      "pMidMs": 0.9,
+      "pMidRange": [
+        0.6,
+        0.9
+      ],
+      "pLateMs": 0.9,
+      "pLateRange": [
+        0.6,
+        1
+      ],
+      "csvExportMs": 10.3,
+      "csvRange": [
+        8.2,
+        18.9
+      ],
+      "cleanMs": 33.9,
+      "cleanRange": [
+        33.3,
+        39.1
+      ],
       "verified": true
     },
     {
       "symbols": 500,
       "density": 10,
       "totalEvents": 5000,
-      "storeMs": 834.4,
-      "p0Ms": 1.9,
-      "pMidMs": 1.8,
-      "pLateMs": 1.7,
-      "csvExportMs": 87.1,
-      "cleanMs": 167.2,
+      "samples": [
+        {
+          "storeMs": 163.5,
+          "p0Ms": 0.6,
+          "pMidMs": 0.7,
+          "pLateMs": 0.7,
+          "csvExportMs": 32.7,
+          "cleanMs": 33.2
+        },
+        {
+          "storeMs": 177.1,
+          "p0Ms": 0.5,
+          "pMidMs": 0.7,
+          "pLateMs": 0.5,
+          "csvExportMs": 30.5,
+          "cleanMs": 43.6
+        },
+        {
+          "storeMs": 173.3,
+          "p0Ms": 0.7,
+          "pMidMs": 0.6,
+          "pLateMs": 0.6,
+          "csvExportMs": 40.6,
+          "cleanMs": 34.6
+        }
+      ],
+      "storeMs": 173.3,
+      "storeRange": [
+        163.5,
+        177.1
+      ],
+      "p0Ms": 0.6,
+      "p0Range": [
+        0.5,
+        0.7
+      ],
+      "pMidMs": 0.7,
+      "pMidRange": [
+        0.6,
+        0.7
+      ],
+      "pLateMs": 0.6,
+      "pLateRange": [
+        0.5,
+        0.7
+      ],
+      "csvExportMs": 32.7,
+      "csvRange": [
+        30.5,
+        40.6
+      ],
+      "cleanMs": 34.6,
+      "cleanRange": [
+        33.2,
+        43.6
+      ],
       "verified": true
     },
     {
       "symbols": 500,
       "density": 30,
       "totalEvents": 15000,
-      "storeMs": 901.2,
+      "samples": [
+        {
+          "storeMs": 182,
+          "p0Ms": 0.4,
+          "pMidMs": 0.5,
+          "pLateMs": 0.5,
+          "csvExportMs": 90.1,
+          "cleanMs": 41.7
+        },
+        {
+          "storeMs": 339.6,
+          "p0Ms": 0.5,
+          "pMidMs": 0.4,
+          "pLateMs": 0.5,
+          "csvExportMs": 90.1,
+          "cleanMs": 38.8
+        },
+        {
+          "storeMs": 196.6,
+          "p0Ms": 0.5,
+          "pMidMs": 0.5,
+          "pLateMs": 0.4,
+          "csvExportMs": 98.5,
+          "cleanMs": 44.4
+        }
+      ],
+      "storeMs": 196.6,
+      "storeRange": [
+        182,
+        339.6
+      ],
       "p0Ms": 0.5,
-      "pMidMs": 0.7,
-      "pLateMs": 0.9,
-      "csvExportMs": 287.1,
-      "cleanMs": 144.8,
+      "p0Range": [
+        0.4,
+        0.5
+      ],
+      "pMidMs": 0.5,
+      "pMidRange": [
+        0.4,
+        0.5
+      ],
+      "pLateMs": 0.5,
+      "pLateRange": [
+        0.4,
+        0.5
+      ],
+      "csvExportMs": 90.1,
+      "csvRange": [
+        90.1,
+        98.5
+      ],
+      "cleanMs": 41.7,
+      "cleanRange": [
+        38.8,
+        44.4
+      ],
       "verified": true
     }
   ],
@@ -115,8 +565,17 @@
     "overwriteAccounting": true,
     "ownerIsolation": true,
     "cancellationRollback": true,
+    "legacyWriteRegression": true,
+    "concurrentWriters": true,
     "stableOrdering": true,
     "fullNumbersAndOutcomes": true,
-    "quotaRollback": true
+    "quotaRollback": true,
+    "exactCanonicalEquality": {
+      "totalEvents": 80,
+      "oracleSha256": "ae0f70165a02abd6c9bb2c30662a3477947f9008aa03848d9d5c6162fecae5fe",
+      "paginatedSha256": "ae0f70165a02abd6c9bb2c30662a3477947f9008aa03848d9d5c6162fecae5fe",
+      "csvSha256": "ae0f70165a02abd6c9bb2c30662a3477947f9008aa03848d9d5c6162fecae5fe",
+      "matches": true
+    }
   }
 }
