@@ -27,7 +27,7 @@
     {
       "id": "R2",
       "classification": "confirmed coverage gap",
-      "status": "candidate behavior risk; not confirmed defect"
+      "status": "same-page different-symbol native calls covered; cross-page/worker and same-symbol schedules need validation"
     },
     {
       "id": "R3",

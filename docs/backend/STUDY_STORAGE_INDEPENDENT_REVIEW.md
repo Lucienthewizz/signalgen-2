@@ -23,16 +23,16 @@ The baseline JSON contains one value per metric, while the optimized JSON contai
 
 **Minimal fix:** record, for each run, the exact source SHA-256, benchmark-file SHA-256, `package-lock.json` SHA-256, commit SHA, image digest/platform, command line, fixture parameters, and all raw samples. Run baseline and candidate in fresh contexts with a documented randomized or alternating order.
 
-### R2 — “Concurrent writers” does not test separate connections or same-symbol races
+### R2 — “Concurrent writers” does not test cross-page/worker or same-symbol races
 
 **Classification:** confirmed coverage gap; candidate behavior risk, not a confirmed defect.
-**Trigger:** `study-storage-benchmark.mjs:330-430` calls both stores from one page and one module, and `study-storage.test.cjs:543-560` uses a mock whose transaction queue serializes operations. Neither test opens two browser contexts/connections. Both tests use different symbols only.
+**Trigger:** `signal-study-storage.ts:81-92,102-110` calls `indexedDB.open()` for every `storeStudySymbol()` invocation, so the benchmark's `Promise.all` at `study-storage-benchmark.mjs:480-505` does exercise two native database connections from the same page and origin. It uses different symbols only. The focused unit test at `study-storage.test.cjs:543-560` uses a mock whose transaction queue serializes operations.
 
-The implementation’s IndexedDB readwrite transactions should serialize at the database level, but that behavior is not established by these tests. Same-symbol concurrent overwrite is also untested, so final event count, bytes, and `RunMeta` replacement are not independently demonstrated under that schedule.
+The same-page native result is useful evidence for different-symbol writes, but it does not cover two pages or workers sharing the same origin, nor same-symbol concurrent overwrite. The implementation’s IndexedDB readwrite transactions should serialize at the database level, but same-symbol final event count, bytes, and `RunMeta` replacement are not independently demonstrated under that schedule.
 
-**Consequence:** the report may say “same-page concurrent calls passed,” but not “concurrent writers across connections passed” or “no same-symbol lost update.”
+**Consequence:** the report may say “same-page, different-symbol native calls passed,” but not “cross-page/worker concurrency passed” or “no same-symbol lost update.”
 
-**Minimal fix:** add a native browser probe with two pages or workers, each opening its own connection. Cover different-symbol and same-symbol writes, then assert exact rows, total, owner byte ledger, and metadata after both promises settle. Keep the mock test as a fast unit check, not as native concurrency proof.
+**Minimal fix:** add a native browser probe with two pages in the **same browser context and same origin**, or two same-origin workers, each opening its own connection. Two isolated browser contexts would have separate storage and cannot prove this race. Cover different-symbol and same-symbol writes, then assert exact rows, total, owner byte ledger, and metadata after both promises settle. Keep the mock test as a fast unit check.
 
 ### R3 — Requested readonly-failure and write/cleanup tradeoff evidence is incomplete
 
