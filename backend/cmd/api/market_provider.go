@@ -16,7 +16,11 @@ func configuredMarketProvider(mode, archiveDirectory, yahooBaseURL string) (mark
 	case "yahoo":
 		return marketdata.NewYahooFinance(yahooBaseURL, nil)
 	case "idx_store":
-		return collection.NewStoreProvider(archiveDirectory)
+		live, err := marketdata.NewYahooFinance(yahooBaseURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		return collection.NewRoutedStoreProvider(archiveDirectory, live)
 	case "idx_archive":
 		return collection.NewArchiveProvider(archiveDirectory)
 	default:

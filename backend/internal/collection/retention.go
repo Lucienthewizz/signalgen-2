@@ -96,6 +96,9 @@ func Prune(ctx context.Context, directory string, options RetentionOptions) (Ret
 		if err = ctx.Err(); err != nil {
 			return out, err
 		}
+		if entry := current.entries[instrument.ProviderSymbol]; entry.Status != "success" {
+			continue
+		}
 		if _, err = readSnapshot(current.directory, instrument, current.from, current.to); err != nil {
 			return out, fmt.Errorf("current publication is invalid; retain rollback archives: %w", err)
 		}

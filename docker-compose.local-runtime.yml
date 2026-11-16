@@ -73,7 +73,7 @@ services:
     image: ${SIGNALGEN_LOCAL_IMAGE:?Set the verified local image ID}
     pull_policy: never
     entrypoint: [signalgen-collect-idx]
-    command: [-schedule, -incremental, -catalog, /catalog/idx.csv, -out, /var/lib/signalgen/idx-store, -schedule-every, 24h, -schedule-retry, 1h, -run-timeout, 2h]
+    command: [-schedule, -incremental, -allow-partial, -catalog, /catalog/idx.csv, -out, /var/lib/signalgen/idx-store, -schedule-every, 24h, -schedule-retry, 1h, -run-timeout, 2h]
     restart: unless-stopped
     healthcheck:
       disable: true

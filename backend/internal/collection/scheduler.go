@@ -14,6 +14,7 @@ type ScheduleOptions struct {
 	Keep                                           int
 	RetirementGrace                                time.Duration
 	RetentionDryRun                                bool
+	AllowPartial                                   bool
 }
 
 type ScheduledResult struct {
@@ -81,7 +82,7 @@ func runScheduler(ctx context.Context, o ScheduleOptions, provider HistoryProvid
 		runCtx, cancel := context.WithTimeout(ctx, o.RunTimeout)
 		catalog, e := ReadCatalog(o.CatalogPath, o.SourceURL, result.StartedAt)
 		if e == nil {
-			result.Report, e = Sync(runCtx, catalog, provider, Options{Directory: o.Directory, From: result.From, To: result.To, Interval: o.InstrumentDelay}, 7, nil)
+			result.Report, e = Sync(runCtx, catalog, provider, Options{Directory: o.Directory, From: result.From, To: result.To, Interval: o.InstrumentDelay, AllowPartial: o.AllowPartial}, 7, nil)
 			if e == nil {
 				_, e = Prune(runCtx, o.Directory, RetentionOptions{Keep: o.Keep, MinAge: o.RetirementGrace, DryRun: o.RetentionDryRun})
 			}

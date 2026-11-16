@@ -13,10 +13,13 @@ calendar or proof that every provider row is final.
 
 The scheduler reuses existing `Sync`: seven-day incremental correction overlap,
 immutable generations, same-catalog/same-window idempotency and retention only
-after successful publication. A failed/partial run keeps the previous published
-generation. A visible catalog-content update is picked up on a later run. Same-day unchanged
-input does not redownload provider history; corrections are refreshed when the
-next generation is collected.
+after successful publication. This local profile explicitly enables
+`-allow-partial`: a generation is published only when it has at least one
+validated history, while every failed or pending catalog entry remains visible
+and unavailable. A failed run with no successful histories keeps the previous
+published generation. A visible catalog-content update is picked up on a later
+run. Same-day unchanged input does not redownload provider history; corrections
+are refreshed when the next generation is collected.
 
 ## Explicit local Docker setup
 
@@ -85,6 +88,9 @@ and stop the loop. No systemd unit or host scheduler is installed or activated.
 
 Scheduled mode rejects fixed `-as-of`/`-from`, nonzero `-limit`, validate/prune-only
 and refresh/retry-failed flags. It retries failures automatically through Sync.
+The local compose profile opts into partial publication explicitly; this does not
+change the CLI default, which remains strict and retains the previous
+publication when any catalog entry fails.
 Timing flags without `-schedule` are rejected rather than silently ignored.
 Manual one-shot, validate-only, incremental and prune behavior otherwise remains
 unchanged. An execution taking an hour shifts the next success check by that
