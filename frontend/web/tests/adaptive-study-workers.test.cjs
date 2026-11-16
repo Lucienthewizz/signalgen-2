@@ -101,7 +101,7 @@ test("policy uses hardware, memory, catalog, candles, and operands", () => {
   const work = {
     catalogSize: 40,
     batchSize: 10,
-    candleCount: 6000,
+    candleCount: 12000,
     requiredOperands: 2,
   };
   assert.equal(policy.getAdaptiveStudyWorkerPolicy(work).maxWorkers, 1);
@@ -138,7 +138,7 @@ test("policy uses hardware, memory, catalog, candles, and operands", () => {
     policy.getAdaptiveStudyWorkerPolicy({
       ...work,
       hardwareConcurrency: 8,
-      candleCount: 1500,
+      candleCount: 12000,
       requiredOperands: 1,
     }).maxWorkers,
     2,

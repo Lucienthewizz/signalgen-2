@@ -38,8 +38,9 @@
   },
   "result_assertions": [
     "23/23 completed",
-    "CSV export and IndexedDB assertions passed",
-    "retry/stop/quota lifecycle assertions passed"
+    "CSV export was exercised and its expected line count checked",
+    "IndexedDB quota rollback and before/after totals were checked",
+    "exact canonical event/summary/CSV parity is recorded in the repeated benchmark evidence"
   ],
   "limitations": [
     "synthetic API fixtures",

@@ -38,7 +38,7 @@ export function getAdaptiveStudyWorkerPolicy(
     input.catalogSize >= 20 &&
     input.batchSize >= 4 &&
     input.requiredOperands >= 1 &&
-    input.candleCount * input.requiredOperands >= 1500;
+    input.candleCount * input.requiredOperands >= 10000;
   if (!heavy) {
     return {
       maxWorkers: 1,
@@ -46,7 +46,7 @@ export function getAdaptiveStudyWorkerPolicy(
     };
   }
   let maxWorkers = Math.min(4, Math.max(2, cores - 1));
-  if (input.requiredOperands === 1 && input.candleCount < 5000)
+  if (input.requiredOperands === 1 && input.candleCount < 20000)
     maxWorkers = Math.min(maxWorkers, 2);
   if (memory != null && memory < 8) maxWorkers = Math.min(maxWorkers, 2);
   if (input.candleCount >= 5000 && input.requiredOperands >= 2)

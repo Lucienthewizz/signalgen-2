@@ -22,11 +22,24 @@ separate measurement. Performance claims must compare alternating baseline and
 adaptive runs in the same bounded environment.
 
 The native browser fixture exercises the real application worker, current-source
-Go/WASM, and IndexedDB with synthetic API routes. In the recorded pair,
-`?workers=4` created four workers and reached three concurrent feature jobs;
-`?workers=1` reached one concurrent feature job. Both completed all 23 symbols,
-and the fixture assertions covered CSV export, IndexedDB equality, retry/stop,
-and quota rollback. The compact evidence is in
-`docs/evidence/adaptive-study-workers-browser.json`; its timings are one
-alternating pair in an offline Playwright container, not a production capacity
-or five-minute guarantee.
+Go/WASM, and IndexedDB with synthetic API routes. It captures every stored
+compact event tuple and every downloaded CSV line, normalizing only run timing,
+request identity, and worker statistics; adaptive and baseline hashes must match.
+It also mutates one stored value and requires the canonical hash to change, so a
+missing-value comparison cannot pass. The artifacts and hashes are in
+`docs/evidence/adaptive-study-workers-canonical.json`.
+
+The bounded repeated benchmark uses two alternating pairs for 250 candles and
+three operands, plus two pairs for 1,250 candles and five operands. The 250-candle
+case stays at one worker under the `10,000` candle-operand admission threshold.
+The heavy case reaches three outstanding feature jobs with four hinted logical
+CPUs, but this controlled run did not demonstrate a speedup: adaptive feature
+medians and end-to-end elapsed time were higher than the single-worker baseline.
+That is expected evidence for keeping admission conservative, not a capacity
+claim. `peakLive` and `terminated` are recorded after completion/navigation;
+`peakActive` means outstanding scheduled feature jobs and demonstrates overlap,
+not simultaneous CPU execution. The actual container limit was two CPUs,
+separate from the mocked `navigator.hardwareConcurrency` hint. Full repeated
+measurements, startup samples, source/WASM hashes, and limitations are in
+`docs/evidence/adaptive-study-workers-benchmark.json`; there is no five-minute
+guarantee.
