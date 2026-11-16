@@ -1,5 +1,6 @@
 import { api, session, ApiError } from "@/api/client";
 import { SignalStudyEngine } from "./signal-study-engine";
+import { getAdaptiveStudyWorkerPolicy } from "./adaptive-study-policy";
 import { storeStudySymbol } from "./signal-study-storage";
 import {
   STUDY_POLICY,
@@ -390,6 +391,32 @@ export async function runSignalStudy(
           .filter((f) => !seen.has(f.symbol))
           .map((f) => ({ ...f, batch: batchIndex })),
       );
+      const policy = getAdaptiveStudyWorkerPolicy({
+        catalogSize: context.total,
+        batchSize: batch.stocks.length,
+        candleCount: batch.manifests.reduce(
+          (sum, manifest) => sum + manifest.candle_count,
+          0,
+        ),
+        requiredOperands: Math.max(
+          0,
+          ...batch.manifests.map(
+            (manifest) => manifest.required_operands?.length ?? 0,
+          ),
+        ),
+        hardwareConcurrency:
+          typeof navigator === "undefined"
+            ? undefined
+            : navigator.hardwareConcurrency,
+        deviceMemory:
+          typeof navigator === "undefined"
+            ? undefined
+            : "deviceMemory" in navigator
+              ? (navigator as Navigator & { deviceMemory?: number })
+                  .deviceMemory
+              : undefined,
+      });
+      engine.setMaxWorkers(policy.maxWorkers);
       try {
         // Content and grants do not depend on WASM output, so fetch them for
         // the whole batch up front (at most PREFETCH_LIMIT requests at once).
@@ -406,19 +433,23 @@ export async function runSignalStudy(
             return { data, grant };
           },
         );
-        for (const { manifest, result: ready } of prefetched) {
+        const featureResults = await Promise.all(
+          prefetched.map(async ({ manifest, result: ready }) => {
+            const { data, grant } = await ready;
+            const features = await timed("features_ms", () =>
+              engine.features(
+                data.series,
+                manifest.required_operands ?? [],
+                signal,
+              ),
+            );
+            return { manifest, data, grant, features };
+          }),
+        );
+        for (const { manifest, data, grant, features } of featureResults) {
           const symbol = manifest.symbols[0];
           check(signal, revision);
-          const { data, grant } = await ready;
-          check(signal, revision);
           progress.traffic.decoded_candle_bytes += manifest.decoded_bytes;
-          const features = await timed("features_ms", () =>
-            engine.features(
-              data.series,
-              manifest.required_operands ?? [],
-              signal,
-            ),
-          );
           check(signal, revision);
           if (
             features.length !== 1 ||
