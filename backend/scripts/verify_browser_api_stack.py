@@ -123,9 +123,22 @@ def extract_dist_archive(raw_bytes, dest_dir, max_file_size=16 * 1024 * 1024, ma
 
 def inspect_image(ref):
     value = json.loads(call(["docker", "image", "inspect", ref]))[0]
-    if value["Id"] != ref or value["Architecture"] != "arm64" or value["Config"].get("OnBuild"):
+    expected_entrypoint = ["docker-entrypoint.sh"] if ref == PG else None
+    config = value.get("Config") or {}
+    if (
+        value["Id"] != ref
+        or value.get("Os") != "linux"
+        or value.get("Architecture") != "arm64"
+        or config.get("OnBuild") not in (None, [])
+        or config.get("Entrypoint") not in (None, expected_entrypoint)
+    ):
         raise ValueError("Pinned image identity/platform/hooks changed: " + ref)
     return value
+
+
+def is_test_only_backend_path(relative):
+    path = Path(relative)
+    return path.name.endswith("_test.go") or "tests" in path.parts
 
 
 def bounded(name, image, mounts=(), network="none", user="10001:10001", memory="1g", scratch=256):
@@ -315,7 +328,11 @@ def run():
         if path.is_symlink() or not path.is_file() or path.stat().st_size > 16 * 1024 * 1024:
             raise ValueError("Unsafe source input: " + relative)
         data = path.read_bytes()
-        if not relative.startswith("backend/scripts/") and data != call(["git", "show", BASE + ":" + relative]):
+        if (
+            not relative.startswith("backend/scripts/")
+            and not is_test_only_backend_path(relative)
+            and data != call(["git", "show", BASE + ":" + relative])
+        ):
             raise ValueError("Protected source changed: " + relative)
         total += len(data)
         if total > 64 * 1024 * 1024:

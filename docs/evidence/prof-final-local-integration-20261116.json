@@ -1,0 +1,40 @@
+{
+  "kind": "professor_guided_local_integration",
+  "schema_version": 1,
+  "integration_date": "2026-11-16",
+  "branch": "frontend/prof-local-final-integration",
+  "base_commit": "38aba17a86f011e6659e4de010ad3b987055a3a7",
+  "merged_tips": {
+    "storage": "9105aae92a03bfe4e9adf342b94372d14853d216",
+    "api_sustained_load": "f8add3295df32d59b54e1c8760f0a7a0d5825770",
+    "browser_real_api": "95a9beb520c54f436235a87fbbdffa1466ff0f4a",
+    "storage_final_review": "7661ccb3c2a7a2a9d5355355ec3ed2246f0b157b",
+    "storage_independent_review": "38f136e9ec411ac17e684f3d7544fd1796fc5ae3",
+    "api_independent_review": "c30a8d61f584e568817322ce1b71ddaa45eb2942"
+  },
+  "review_provenance": {
+    "storage_final_review_filename_date": "2026-11-18",
+    "storage_final_review_runtime_date": "2026-11-16",
+    "note": "The filename date is preserved from the Copilot final review; it is not a new runtime measurement."
+  },
+  "changes": [
+    "storage benchmark preflight validates image hooks, dependency identity, source allowlist and hashes",
+    "storage benchmark uses explicit env-i, unique owned container, host deadline and exact cleanup",
+    "browser API product identity guard excludes reviewed test-only Go paths while retaining compiled-source protection"
+  ],
+  "checks": {
+    "storage_preflight_unit": "passed: 4 tests",
+    "browser_api_preflight_unit": "passed: 14 tests",
+    "merged_browser_to_real_api": "passed: bounded phases 1-7; real Go API, PostgreSQL, WASM and IndexedDB; no API route fulfill",
+    "shell_and_python_syntax": "passed",
+    "git_diff_check": "passed"
+  },
+  "claims_not_made": [
+    "current operator IDX catalog coverage",
+    "live Yahoo five-year coverage or host activation",
+    "premium specifications, licensing, cost, production topology",
+    "1000-user production proof",
+    "internal Chromium sandbox enabled",
+    "new performance measurement from historical paired evidence"
+  ]
+}

@@ -30,6 +30,7 @@ from verify_browser_api_stack import (
     verify_approved_build_inputs,
     extract_approved_package,
     find_base_node_modules,
+    is_test_only_backend_path,
 )
 
 
@@ -112,6 +113,7 @@ class BrowserApiStackPreflightTests(unittest.TestCase):
     def test_image_inspection_validates_identity_platform_hooks(self):
         valid = json.dumps([{
             "Id": PLAYWRIGHT,
+            "Os": "linux",
             "Architecture": "arm64",
             "Config": {}
         }]).encode()
@@ -121,6 +123,7 @@ class BrowserApiStackPreflightTests(unittest.TestCase):
 
         invalid_arch = json.dumps([{
             "Id": PLAYWRIGHT,
+            "Os": "linux",
             "Architecture": "amd64",
             "Config": {}
         }]).encode()
@@ -130,12 +133,28 @@ class BrowserApiStackPreflightTests(unittest.TestCase):
 
         with_onbuild = json.dumps([{
             "Id": PLAYWRIGHT,
+            "Os": "linux",
             "Architecture": "arm64",
             "Config": {"OnBuild": ["RUN something"]}
         }]).encode()
         with patch("verify_browser_api_stack.call", return_value=with_onbuild):
             with self.assertRaisesRegex(ValueError, "Pinned image identity/platform/hooks changed"):
                 inspect_image(PLAYWRIGHT)
+
+        with_entrypoint = json.dumps([{
+            "Id": PLAYWRIGHT,
+            "Os": "linux",
+            "Architecture": "arm64",
+            "Config": {"Entrypoint": ["/unexpected"]},
+        }]).encode()
+        with patch("verify_browser_api_stack.call", return_value=with_entrypoint):
+            with self.assertRaisesRegex(ValueError, "Pinned image identity/platform/hooks changed"):
+                inspect_image(PLAYWRIGHT)
+
+    def test_test_only_backend_paths_are_not_product_inputs(self):
+        self.assertTrue(is_test_only_backend_path("backend/internal/api/tests/study_sustained_load_test.go"))
+        self.assertTrue(is_test_only_backend_path("backend/core/cache_test.go"))
+        self.assertFalse(is_test_only_backend_path("backend/core/cache.go"))
 
     def test_unpack_archive_security_guards(self):
         for name, kind, size in [

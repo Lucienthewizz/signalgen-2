@@ -50,3 +50,30 @@ experiments; they are not all implementation defects. No cloud mutation,
 production deployment, live scheduler activation or actual catalog download occurred
 in this integration. The original-production-recipe and Linux-tooling limits are
 explicit in the [earlier product record](../evidence/prof-local-docker-integration-20261112.md) and [preceding scoped record](../evidence/prof-api-review-integration-20261113.md) and [scheduler record](../evidence/prof-scheduler-integration-20261113.md).
+
+## 16 November local integration update
+
+The storage, sustained-load API, and browser real-API review tips are merged
+with their original history and evidence dates preserved. The storage benchmark
+runner now validates pinned image identity/platform/entrypoint/`OnBuild` hooks,
+dependency lock identity, and allowlisted source files; it uses an explicit
+`env -i` target environment, a unique owned container, bounded host/container
+deadlines, and exact cleanup. The browser API guard compares compiled product
+inputs against the packaged API base while explicitly excluding reviewed
+test-only Go paths, so new tests do not look like changed production source.
+
+The following remain external or unverified and are not implementation-complete
+claims:
+
+- No current operator IDX catalog is available. The older 2 November audit
+  recorded 962 entries: 530 valid, 19 failed, and 413 pending.
+- Live Yahoo five-year coverage, host activation, premium specifications,
+  licensing, cost, production topology, and 1,000-user proof remain outside
+  bounded offline integration.
+- The browser study discloses internal Chromium sandbox disabled; OS/container
+  controls are enforced. It must not be described as Chromium sandbox enabled.
+- Historical paired performance evidence is reused only after source, artifact,
+  and product-byte identity checks; no new speed measurement is claimed.
+
+No SQLite migration, SP provider invention, product redesign, new dependency, or
+live-provider execution was introduced.
