@@ -38,10 +38,7 @@ async (page) => {
     const panel=await page.locator(".auth-panel").boundingBox();
     const story=await page.locator(".auth-story").boundingBox();
     const card=await page.locator(".auth-card").boundingBox();
-    const art=await page.locator(".auth-story__art").evaluate(img=>({natural:img.naturalWidth,complete:img.complete}));
-    // Artwork panel left, form right; the form stays first in DOM for keyboard order.
-    if(!panel||!story||!card||story.x>=panel.x||Math.abs(panel.width-story.width)>1||card.width<440)throw Error("Auth layout is not an equal split with artwork left and the form right");
-    if(!art.complete||art.natural<600)throw Error("Auth artwork did not load");
+    if(!panel||!story||!card||panel.x>=story.x||Math.abs(panel.width-story.width)>1||card.width<=480)throw Error("Auth form is not a wider card on the left of an equal split");
   }
   await page.setViewportSize({width:1440,height:1000});
   await reset();await page.getByRole("link",{name:"Register",exact:true}).first().click();

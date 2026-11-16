@@ -498,57 +498,42 @@ export function AuthPage({
       </section>
       {view !== "forgot-password" && (
         <section className="auth-story">
-          <div className="auth-story__frame">
-            <img
-              className="auth-story__art"
-              src="/auth/explorer.jpg"
-              alt=""
-              aria-hidden="true"
-              width={880}
-              height={1216}
-              decoding="async"
-              fetchPriority="high"
-            />
-            <div className="auth-story__scrim" aria-hidden="true" />
-            <div className="auth-story__content">
-              <div className="auth-story__brandbar">
-                <a href="#home" aria-label="Back to Signalgen">
-                  <Brand />
-                </a>
+          <a href="#home" aria-label="Back to Signalgen">
+            <Brand />
+          </a>
+          <div className="auth-story__content">
+            <h1>
+              Read the market.
+              <br />
+              <span>Verify the signal.</span>
+            </h1>
+            <p>
+              Build rules, test hypotheses, and understand the evidence behind
+              every IDX signal.
+            </p>
+            <div className="auth-proof">
+              <div>
+                <ShieldCheck />
+                <span>
+                  <b>Private by account</b>
+                  <small>Your strategies remain isolated by account</small>
+                </span>
               </div>
-              <h1>
-                Read the market.
-                <br />
-                <span>Verify the signal.</span>
-              </h1>
-              <p>
-                Build rules, test hypotheses, and understand the evidence behind
-                every IDX signal.
-              </p>
-              <div className="auth-proof">
-                <div>
-                  <ShieldCheck />
-                  <span>
-                    <b>Private by account</b>
-                    <small>Your strategies remain isolated by account</small>
-                  </span>
-                </div>
-                <div>
-                  <KeyRound />
-                  <span>
-                    <b>Backend authorization</b>
-                    <small>Sessions are verified by Supabase</small>
-                  </span>
-                </div>
+              <div>
+                <KeyRound />
+                <span>
+                  <b>Backend authorization</b>
+                  <small>Sessions are verified by Supabase</small>
+                </span>
               </div>
             </div>
-            <footer>
-              <span
-                className={`status-dot ${backendOnline ? "is-online" : ""}`}
-              />{" "}
-              Backend {backendOnline ? "verified" : "not connected"}
-            </footer>
           </div>
+          <footer>
+            <span
+              className={`status-dot ${backendOnline ? "is-online" : ""}`}
+            />{" "}
+            Backend {backendOnline ? "verified" : "not connected"}
+          </footer>
         </section>
       )}
     </main>

@@ -1,6 +1,6 @@
 # Signalgen Web
 
-## Unsafe write recovery and auth artwork (16 November 2026)
+## Unsafe write recovery (16 November 2026)
 
 A transaction write is now treated as three distinct outcomes instead of two.
 While the request runs, the whole form sits in a disabled `fieldset`, a polite
@@ -22,11 +22,8 @@ A failed rule/selection read no longer renders **Create a rule first**. The
 console announces **Selections are temporarily unavailable** with **Reload
 selections**, and the dialog keeps the same recovery action.
 
-Auth keeps one equal split, but the artwork panel now sits on the left with the
-generated explorer image (green texture, dark scrim, headline and proof at the
-bottom) and the form on the right. The form stays first in DOM order so
-keyboard and screen-reader users reach the task immediately; the artwork is
-hidden below 1020px and marked decorative.
+Auth keeps its existing split layout and styling; the artwork panel explored on
+the design canvas was reverted and is not part of this change.
 
 Checks: `npm test` (272 assertions), `npm run typecheck`, `npm run build`,
 `npm run test:recovery`, `npm run test:auth`, `npm run test:journal-explorer`.
