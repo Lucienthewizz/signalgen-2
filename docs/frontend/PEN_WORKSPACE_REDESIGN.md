@@ -65,3 +65,11 @@ The legacy forest palette is removed from `workspace-forest.css`, which retains 
 `node scripts/test-workspace-theme.mjs` checks all eight routes at 1440px, 1218px and 390px, rendered text contrast, white backgrounds, bright-green buttons, decorative gradients, primary states, and portalled dialogs/calendars with synthetic account/API fixtures. These checks do not establish live backend or external TradingView availability.
 
 Final verification passed: production build, 264 unit tests, performance budgets, full workspace/public/account browser regression, 25-rule layout/pagination regression, and the eight-route theme/contrast/state check. The dark-only screenshot pass also confirmed the existing fonts and no page overflow at 1440px, 1218px and 390px. All browser checks used synthetic account/API fixtures.
+
+## Latest annotation refinements
+
+The latest annotations override Rules ordering again: composer first, saved library on the right. Shared heading/navigation/action typography uses self-hosted Saira SemiBold; IBM Plex Mono data and Inter prose remain. The installed Saira asset and its license are copied locally without dependency changes.
+
+Dashboard continuation now shows the actual last rule, universe/interval, SGT time, match count and a last-selection action; its portfolio totals use the compact neutral hierarchy from the reference. News uses compact search disclosure and stock filter controls, article links, a flat presentation card and a keyboard-operable presentation list; playback remains click-to-load. The original Carousel remains available in its default mode. Rule action icons/filter labels are smaller while their hit targets remain usable, and footer actions have their own row. Universe-backed monitor tables omit the empty removal column; manual watchlist removal remains available.
+
+Verification for this follow-up: production build, 264 unit tests, performance budgets, full browser regression, targeted annotation layout/search/video checks, eight-route theme/contrast checks, and the portfolio transaction/dashboard/presentation suite passed with synthetic API/account data.

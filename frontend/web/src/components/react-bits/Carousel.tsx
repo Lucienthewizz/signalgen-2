@@ -10,7 +10,9 @@ export default function Carousel({
   items,
   selected,
   onSelect,
+  presentation = "carousel",
 }: {
+  presentation?: "carousel" | "list";
   items: Video[];
   selected: string;
   onSelect: (video: Video) => void;
@@ -55,6 +57,23 @@ export default function Carousel({
     if (direction < 0) api?.scrollPrev(jump);
     else api?.scrollNext(jump);
   };
+  if (presentation === "list")
+    return (
+      <nav className="video-presentation-list" aria-label="More presentations">
+        {items
+          .filter((video) => video.id !== selected)
+          .map((video) => (
+            <button
+              key={video.id}
+              type="button"
+              onClick={() => onSelect(video)}
+            >
+              <Play aria-hidden="true" />
+              <span>{video.title}</span>
+            </button>
+          ))}
+      </nav>
+    );
   return (
     <section
       className="video-carousel"

@@ -335,8 +335,8 @@ async (page) => {
         await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
         await page.evaluate(() => Promise.all([
           document.fonts.load('14px "Inter Variable"'),
-          document.fonts.load('600 28px "Rajdhani"'),
-          document.fonts.load('600 14px "Rajdhani"'),
+          document.fonts.load('600 28px "Saira"'),
+          document.fonts.load('600 14px "Saira"'),
           document.fonts.load('13px "IBM Plex Mono"'),
         ]));
         if (errors.length) throw Error(`Route ${view}: ${errors.join('; ')}`);
@@ -344,9 +344,9 @@ async (page) => {
           body: getComputedStyle(document.body).fontFamily,
           nav: getComputedStyle(document.querySelector(".nav-group button")).fontFamily,
           heading: getComputedStyle(document.querySelector(".workspace h1, .workspace h2")).fontFamily,
-          loaded: document.fonts.check('14px "Inter Variable"') && document.fonts.check('600 14px "Rajdhani"') && document.fonts.check('600 28px "Rajdhani"'),
+          loaded: document.fonts.check('14px "Inter Variable"') && document.fonts.check('600 14px "Saira"') && document.fonts.check('600 28px "Saira"'),
         }));
-        if (!typography.body.includes("Inter Variable") || !typography.nav.includes("Rajdhani") || !typography.heading.includes("Rajdhani") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
+        if (!typography.body.includes("Inter Variable") || !typography.nav.includes("Saira") || !typography.heading.includes("Saira") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
         const close = page.getByRole("button", { name: "Close menu", includeHidden: true });
         const bounds = await close.count() ? await close.boundingBox() : null;
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });

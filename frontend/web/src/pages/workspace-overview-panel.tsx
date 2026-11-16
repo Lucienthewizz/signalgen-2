@@ -263,7 +263,7 @@ export function WorkspaceOverviewPanel({
                 ? "Available account data appears as it loads."
                 : ready
                   ? latest
-                    ? "Use your last selection or adjust it before screening."
+                    ? null
                     : "Choose a rule and stock universe, then review the results and evidence."
                   : !account
                     ? "Try reloading your workspace. A connection problem does not change your plan."
@@ -276,11 +276,22 @@ export function WorkspaceOverviewPanel({
                 className="overview-last-screen"
                 aria-label="Latest screening summary"
               >
+                <div className="overview-run-heading">
+                  <strong>{latest.rule}</strong>
+                  <time dateTime={latest.recordedAt}>
+                    Last run ·{" "}
+                    {new Date(latest.recordedAt).toLocaleString("en-GB", {
+                      timeZone: SINGAPORE_TIME_ZONE,
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                </div>
                 <p>
-                  Last screen · {latest.run.manifest.market} ·{" "}
-                  {new Date(latest.recordedAt).toLocaleString("en-GB", {
-                    timeZone: SINGAPORE_TIME_ZONE,
-                  })}
+                  {latest.context?.universeName ?? latest.run.manifest.market} /{" "}
+                  {latest.run.manifest.timeframe} candles
                 </p>
                 <ul>
                   {(["buy", "sell", "cooldown"] as const).map((status) => (
@@ -299,25 +310,36 @@ export function WorkspaceOverviewPanel({
               </div>
             )}
           </div>
-          <Button
-            size="lg"
-            className="workspace-glass-action overview-open-screener"
-            disabled={preparing}
-            onClick={() =>
-              !account
-                ? setReload((value) => value + 1)
-                : ready
-                  ? continueScreen()
-                  : go(setup.view)
-            }
-          >
-            <SearchCheck data-icon="inline-start" />
-            {preparing
-              ? "Loading analysis options…"
-              : !account
-                ? "Reload workspace"
-                : setup.label}
-          </Button>
+          <footer className="overview-next-footer">
+            {latest && (
+              <span>
+                {latest.run.rows.filter((row) => row.decision.matched).length}{" "}
+                of {latest.run.rows.length} stocks matched your rule
+              </span>
+            )}
+            <Button
+              size="lg"
+              variant={latest ? "outline" : "default"}
+              className="workspace-glass-action overview-open-screener"
+              disabled={preparing}
+              onClick={() =>
+                !account
+                  ? setReload((value) => value + 1)
+                  : ready
+                    ? continueScreen(latest)
+                    : go(setup.view)
+              }
+            >
+              <SearchCheck data-icon="inline-start" />
+              {preparing
+                ? "Loading analysis options…"
+                : !account
+                  ? "Reload workspace"
+                  : latest
+                    ? "Use last selection"
+                    : setup.label}
+            </Button>
+          </footer>
         </section>
         {userId && <PortfolioOverview key={userId} userId={userId} />}
       </div>

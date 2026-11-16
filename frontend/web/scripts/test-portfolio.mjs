@@ -414,78 +414,30 @@ try {
     throw Error("Video loaded before interaction");
   await page.locator(".news-video__poster").click();
   await page.locator(".news-video iframe").waitFor();
-  const carousel = page.getByRole("region", {
-    name: "Market videos",
+  const presentations = page.getByRole("navigation", {
+    name: "More presentations",
     exact: true,
   });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    const choices = carousel.locator(".video-carousel__slide button");
-    await choices.nth(1).focus();
+    const choice = presentations.getByRole("button").first();
+    const title = await choice.innerText();
+    await choice.focus();
     await page.keyboard.press("Enter");
-    if ((await choices.nth(1).getAttribute("aria-pressed")) !== "true")
-      throw Error("Keyboard video selection failed");
     if (await page.locator(".news-video iframe").count())
-      throw Error("Selecting another video autoplayed it");
+      throw Error("Selecting a presentation autoplayed it");
     if (
-      !(await page
-        .locator(".news-video__poster")
-        .getAttribute("aria-label")
-        .then((x) => x.includes("Timah")))
+      !(
+        await page.locator(".news-video__poster").getAttribute("aria-label")
+      ).includes(title)
     )
-      throw Error("Selected video poster did not change");
+      throw Error("Keyboard selection did not update the presentation");
     if (
       await page.evaluate(
         () => document.documentElement.scrollWidth > innerWidth + 1,
       )
     )
-      throw Error("Video carousel overflows page");
-    await page.screenshot({
-      path: `/tmp/signalgen-news-carousel-${width}.png`,
-      fullPage: true,
-    });
-    if (width === 390) {
-      await choices.first().focus();
-      const track = carousel.locator(".video-carousel__track");
-      const before = await track.evaluate(
-        (el) => getComputedStyle(el).transform,
-      );
-      const viewport = await carousel
-        .locator(".video-carousel__viewport")
-        .boundingBox();
-      await page.mouse.move(
-        viewport.x + viewport.width - 20,
-        viewport.y + viewport.height / 2,
-      );
-      await page.mouse.down();
-      await page.mouse.move(viewport.x + 20, viewport.y + viewport.height / 2, {
-        steps: 12,
-      });
-      await page.mouse.up();
-      await page.waitForTimeout(350);
-      if (
-        before ===
-        (await track.evaluate((el) => getComputedStyle(el).transform))
-      )
-        throw Error("Carousel drag did not move thumbnails");
-      await choices.first().focus();
-      const next = carousel.getByRole("button", {
-        name: "Next videos",
-        exact: true,
-      });
-      if (await next.isDisabled())
-        throw Error("Mobile carousel cannot advance");
-      for (let i = 0; i < 3 && !(await next.isDisabled()); i++) {
-        await next.click();
-      }
-      const box = await choices.last().boundingBox();
-      if (!box || box.x > width)
-        throw Error("Next videos did not reveal the last thumbnail");
-      await choices.last().focus();
-      await page.keyboard.press("Enter");
-      if ((await choices.last().getAttribute("aria-pressed")) !== "true")
-        throw Error("Last video selection failed");
-    }
+      throw Error("Presentation list overflows page");
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
 
@@ -523,7 +475,7 @@ try {
     throw Error("Portfolio leaked between accounts");
   if (errors.length) throw Error(errors.join("\n"));
   console.log(
-    "PASS: read-only 3-trade preview, keyboard chart selection, aligned cards at 1440/1218px, mobile/light layout, zero preview writes; spotlight, video carousel keyboard/drag/lazy playback; BUY/SELL, fees, SGT, monthly CSV, reload/edit/dashboard/account isolation. Synthetic API only.",
+    "PASS: read-only 3-trade preview, keyboard chart selection, aligned cards at 1440/1218px, mobile/light layout, zero preview writes; spotlight, presentation list keyboard selection/lazy playback; BUY/SELL, fees, SGT, monthly CSV, reload/edit/dashboard/account isolation. Synthetic API only.",
   );
 } catch (error) {
   console.error(error);

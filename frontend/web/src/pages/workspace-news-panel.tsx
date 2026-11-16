@@ -2,7 +2,14 @@ import Carousel from "@/components/react-bits/Carousel";
 import AnimatedList from "@/components/react-bits/AnimatedList";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Newspaper, Play, RefreshCw, Video } from "lucide-react";
+import {
+  ExternalLink,
+  Newspaper,
+  Play,
+  RefreshCw,
+  Video,
+  Search,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -115,13 +122,15 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
   return (
     <div className="workspace-news">
       <div className="news-toolbar">
-        {" "}
         <header className="news-toolbar__actions">
           <WindowDots />
           <h3 id="market-news-title" className="sr-only">
             <Newspaper aria-hidden="true" />
             Stock market news
           </h3>
+          <span className="news-article-count" role="status">
+            {visibleArticles.length} articles
+          </span>
           <Button
             variant="outline"
             disabled={loading}
@@ -133,16 +142,21 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
         </header>
         <div className="news-filters">
           <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="news-search">Search news</FieldLabel>
-              <Input
-                id="news-search"
-                type="search"
-                placeholder="Search headlines or company names"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </Field>
+            <details className="news-search-disclosure">
+              <summary>
+                <Search aria-hidden="true" /> Search news
+              </summary>
+              <Field>
+                <FieldLabel htmlFor="news-search">Search news</FieldLabel>
+                <Input
+                  id="news-search"
+                  type="search"
+                  placeholder="Search headlines or company names"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </Field>
+            </details>
             <Field>
               <FieldLabel htmlFor="news-stock">Watchlist stock</FieldLabel>
               <Select
@@ -167,11 +181,6 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
               </Select>
             </Field>
           </FieldGroup>
-          <p role="status">
-            {visibleArticles.length} articles
-            {ticker !== "all" ? ` about ${ticker}` : ""}. Filters match article
-            headlines.
-          </p>
         </div>
       </div>
       <section
@@ -204,8 +213,10 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                   )}
                 </div>
                 <a href={article.url} target="_blank" rel="noreferrer">
-                  {article.title}
-                  <ExternalLink aria-hidden="true" />
+                  <span>{article.title}</span>
+                  <span className="news-read-link">
+                    Read on {article.source} <ExternalLink aria-hidden="true" />
+                  </span>
                 </a>
               </li>
             ))}
@@ -247,7 +258,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
           <WindowDots />
           <h3 id="idx-video-title">
             <Video aria-hidden="true" />
-            Video
+            Public expose
           </h3>
           <span aria-hidden="true" />
         </header>
@@ -269,23 +280,29 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                 onClick={() => setPlaying(true)}
                 aria-label={`Play ${selected.title}`}
               >
-                <img
-                  key={selected.id}
-                  src={`https://i.ytimg.com/vi/${selected.id}/hqdefault.jpg`}
-                  alt=""
-                  onError={(event) => {
-                    event.currentTarget.hidden = true;
-                  }}
-                  loading="lazy"
-                />
+                <span className="presentation-label">
+                  <Video aria-hidden="true" /> Company presentation
+                </span>
                 <Play aria-hidden="true" />
                 <span>{selected.title}</span>
-                <span>Play video</span>
+                <span className="presentation-caption">
+                  Public Expose · IDX
+                </span>
               </button>
             )}
           </div>
+          <a
+            className="presentation-external"
+            href={`https://www.youtube.com/watch?v=${selected.id}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <ExternalLink aria-hidden="true" /> Watch on YouTube
+          </a>
           <div className="news-video__choices">
+            <h4>More presentations</h4>
             <Carousel
+              presentation="list"
               items={IDX_VIDEOS}
               selected={selected.id}
               onSelect={(video) => {
@@ -293,14 +310,6 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                 setPlaying(false);
               }}
             />
-            <a
-              href={`https://www.youtube.com/watch?v=${selected.id}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Watch on YouTube
-              <ExternalLink aria-hidden="true" />
-            </a>
           </div>
         </div>
       </section>

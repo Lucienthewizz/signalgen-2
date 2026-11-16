@@ -1016,7 +1016,7 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
               <col style={{ width: "10%" }} />
               <col style={{ width: "17%" }} />
               <col style={{ width: "15%" }} />
-              <col style={{ width: "5%" }} />
+              {!universe && <col style={{ width: "5%" }} />}
             </colgroup>
             <TableHeader>
               <TableRow>
@@ -1032,9 +1032,11 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                 <TableHead>EMA 20</TableHead>
                 <TableHead>Rule result</TableHead>
                 <TableHead>Data time</TableHead>
-                <TableHead>
-                  <span className="sr-only">Remove stock</span>
-                </TableHead>
+                {!universe && (
+                  <TableHead>
+                    <span className="sr-only">Remove stock</span>
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1188,8 +1190,8 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                         <Badge variant="destructive">Check data time</Badge>
                       )}
                     </TableCell>
-                    <TableCell>
-                      {!universe && (
+                    {!universe && (
+                      <TableCell data-label="Remove stock">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1198,14 +1200,14 @@ export function MarketMonitorPanel({ userId }: { userId?: string }) {
                         >
                           <X />
                         </Button>
-                      )}
-                    </TableCell>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
               {!activeStocks.length && (
                 <TableRow>
-                  <TableCell colSpan={9}>
+                  <TableCell colSpan={universe ? 8 : 9}>
                     {universe
                       ? "Add stocks to this universe to start monitoring."
                       : "Add a stock ticker to start monitoring."}

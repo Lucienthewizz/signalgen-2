@@ -31,7 +31,7 @@ try {
   await page.goto(origin+'/#app/rules');
   const library=page.locator('.rule-library'), editor=page.locator('.pen-rule-editor');
   await library.getByRole('button',{name:'Next saved rules page',exact:true}).waitFor();
-  await page.waitForFunction(()=>{const e=document.querySelector('.pen-rule-editor').getBoundingClientRect(),l=document.querySelector('.rule-library').getBoundingClientRect();return e.left>l.right&&Math.abs(l.height-e.height)<2;});
+  await page.waitForFunction(()=>{const e=document.querySelector('.pen-rule-editor').getBoundingClientRect(),l=document.querySelector('.rule-library').getBoundingClientRect();return l.left>e.right&&Math.abs(l.height-e.height)<2;});
   const seen=new Set(); let turns=0;
   while(true){
     for(const name of await library.locator('article strong').allTextContents()) seen.add(name);
@@ -116,6 +116,26 @@ try {
       await page.screenshot({path:'/tmp/signalgen-layout-detail/'+view+'-'+width+'.png',fullPage:true,animations:'disabled'});
     }
   }
+  await page.setViewportSize({width:1218,height:1000});
+  await page.goto(origin+'/#app/rules');
+  const saveButtons=await page.locator('.rule-composer__save-actions button').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().top));
+  if(Math.max(...saveButtons)-Math.min(...saveButtons)>2)throw Error('Rule footer actions wrap at desktop width');
+  const navFont=await page.locator('.nav-group button').first().evaluate(el=>getComputedStyle(el).fontFamily);
+  if(!navFont.includes('Saira'))throw Error('Techno navigation font missing');
+  await page.goto(origin+'/#app/news');
+  await page.locator('.news-search-disclosure summary').click();
+  await page.getByLabel('Search news',{exact:true}).fill('no matching fixture xyz');
+  await page.getByText('No matching headlines',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Reset filters',exact:true}).click();
+  await page.locator('.news-search-disclosure summary').click();
+  const compactToolbar=await page.locator('.news-toolbar').evaluate(el=>el.getBoundingClientRect().height);
+  if(compactToolbar>90)throw Error('News toolbar is not compact: '+compactToolbar);
+  const presentation=page.getByRole('navigation',{name:'More presentations',exact:true});
+  await presentation.getByRole('button').first().focus();await page.keyboard.press('Enter');
+  if(await page.locator('.news-video iframe').count())throw Error('Presentation selection must not autoplay');
+  await page.locator('.news-video__poster').click();await page.locator('.news-video iframe').waitFor();
+  await page.goto(origin+'/#app/realtime');
+  if(await page.locator('.monitor-ledger thead').getByText('Remove stock',{exact:true}).count())throw Error('Empty removal column remains for selected universe');
   if(errors.length)throw Error(errors.join('\\n'));
   console.log('PASS: 25-rule pagination/search/filter/edit, matched editor height, rounded dashboard cards, balanced shortcuts, full-width keyboard slider, compact 32-stock catalog paging/empty state, News toolbar/columns, plain sliders, contained stepper, unclipped brand, dropdown categories, fitted/stacked data tables and chart-first monitor; 1218/390px, synthetic API/account only.');
 }`;

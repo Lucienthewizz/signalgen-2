@@ -33,7 +33,7 @@ try {
    await page.goto(origin+'/#app/'+view);
    await page.locator('.pen-workbench').waitFor();
    await page.locator('.route-loading').waitFor({state:'hidden'});
-   await page.evaluate(async()=>{await document.fonts.ready; await document.fonts.load('600 16px "Rajdhani"'); await document.fonts.load('400 13px "IBM Plex Mono"'); await document.fonts.load('400 13px "Inter Variable"');await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
+   await page.evaluate(async()=>{await document.fonts.ready; await document.fonts.load('600 16px "Saira"'); await document.fonts.load('400 13px "IBM Plex Mono"'); await document.fonts.load('400 13px "Inter Variable"');await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
    for(const theme of ['dark']) {
     await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
     const check=await page.locator('.pen-workbench').evaluate(el=>({font:getComputedStyle(el).fontFamily,canvas:getComputedStyle(el).getPropertyValue('--canvas').trim(),overflow:document.documentElement.scrollWidth>innerWidth+1}));

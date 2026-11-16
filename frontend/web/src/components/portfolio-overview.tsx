@@ -83,7 +83,7 @@ export function PortfolioOverview({ userId }: { userId: string }) {
         </div>
       )}
       {result?.owner === userId && (
-        <p>
+        <p className="overview-portfolio-updated">
           Updated{" "}
           <time dateTime={result.updatedAt}>
             {new Intl.DateTimeFormat("en-GB", {
@@ -96,7 +96,7 @@ export function PortfolioOverview({ userId }: { userId: string }) {
           {error ? " · The last refresh failed." : ""}
         </p>
       )}
-      <a href="#app/journal">Open portfolio in journal</a>
+      <a href="#app/journal">View portfolio</a>
     </section>
   );
 }

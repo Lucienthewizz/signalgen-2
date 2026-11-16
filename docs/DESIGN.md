@@ -67,7 +67,7 @@ typography:
     fontWeight: 670
     lineHeight: 1
   workspace-heading:
-    fontFamily: '"Rajdhani", ui-sans-serif, sans-serif'
+    fontFamily: '"Saira", ui-sans-serif, sans-serif'
     fontSize: "28px"
     fontWeight: 600
     lineHeight: 1.3
@@ -77,7 +77,7 @@ typography:
     fontSize: "13px"
     lineHeight: 1.55
   workspace-navigation:
-    fontFamily: '"Rajdhani", ui-sans-serif, sans-serif'
+    fontFamily: '"Saira", ui-sans-serif, sans-serif'
     fontSize: "15px"
     fontWeight: 600
   workspace-data:
@@ -247,11 +247,11 @@ Use the prefixed workspace tokens above for dark mode: charcoal canvas, progress
 
 ### Typography
 
-Headings, navigation, buttons, and summaries use Rajdhani (600). Explanatory copy and form text use Inter Variable. Tables and financial values use IBM Plex Mono (400/600) with tabular figures. Page headings are 28px on desktop and 25px at 520px and below; table values use 13px. The font files are local assets. These roles supersede Manrope only within the workspace.
+Headings, navigation, buttons, and summaries use Saira (600). Explanatory copy and form text use Inter Variable. Tables and financial values use IBM Plex Mono (400/600) with tabular figures. Page headings are 28px on desktop and 25px at 520px and below; table values use 13px. The font files are local assets. These roles supersede Manrope only within the workspace.
 
 ### Layout
 
-The expanded desktop sidebar is 224px; the collapsed sidebar is 76px. At 860px and below it becomes the existing overlay drawer. Workspace gutters step from 32px to 20px, then 18px at 520px. Panels typically use 24px padding and gaps. Rules place the saved-rule library on the left and the composer on the right, stacking at 1100px. The library follows the composer height and paginates its compact 88px rows. Compact universe catalog and News columns stack at 1000px; Dashboard shortcuts and monitor columns stack at 860px. The study guide stacks at 1180px. Journal, Screener and Market Monitor tables wrap within their cards and become labelled records below a 760px container width. Preserve all fields and existing form behavior.
+The expanded desktop sidebar is 224px; the collapsed sidebar is 76px. At 860px and below it becomes the existing overlay drawer. Workspace gutters step from 32px to 20px, then 18px at 520px. Panels typically use 24px padding and gaps. Rules place the composer on the left and the saved-rule library on the right, stacking at 1100px. The library follows the composer height and paginates its compact 88px rows. Compact universe catalog and News columns stack at 1000px; Dashboard shortcuts and monitor columns stack at 860px. The study guide stacks at 1180px. Journal, Screener and Market Monitor tables wrap within their cards and become labelled records below a 760px container width. Preserve all fields and existing form behavior.
 
 ### Elevation & Depth
 
@@ -268,7 +268,7 @@ Primary actions use dark green with pale text. Mint remains reserved for readabl
 ### Do's and Don'ts
 
 - **Do** apply this identity only to the eight authorized workspace routes.
-- **Do** keep Rajdhani for headings/actions, IBM Plex Mono for data, and Inter for prose.
+- **Do** keep Saira for headings/actions, IBM Plex Mono for data, and Inter for prose.
 - **Do** retain keyboard focus, responsive navigation, semantic states, and reduced-motion support.
 - **Don't** extend this redesign to landing/auth or replace financial and account logic to match a visual reference.
 - **Don't** treat synthetic preview data as evidence of a live backend or market feed.
