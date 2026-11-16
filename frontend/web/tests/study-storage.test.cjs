@@ -670,3 +670,28 @@ test("owner cleanup isolates users and removes only targeted owner data", async 
   const bFinal = await storage.studyEventPage(userB, run, 0, 50);
   assert.equal(bFinal.total, 0);
 });
+
+test("readonly transaction abort rejects rather than returning silently empty results", async () => {
+  const mock = new MockIDB();
+  const storage = loadStorageModule(mock);
+  const owner = "owner-ro-fail";
+  const run = "run-ro-fail";
+  const abort = new AbortController();
+
+  await storage.storeStudySymbol(owner, run, "VALID1", makeStudyResult("VALID1", 5), abort.signal);
+
+  const db = mock.databases.get("signalgen-study-temporary-1");
+  const origTx = db.transaction.bind(db);
+  db.transaction = function (storeNames, mode) {
+    const tx = origTx(storeNames, mode);
+    if (mode === "readonly") {
+      setImmediate(() => tx.abort());
+    }
+    return tx;
+  };
+
+  await assert.rejects(
+    storage.studyEventPage(owner, run, 0, 50),
+    (err) => err?.message === "Could not read study results.",
+  );
+});

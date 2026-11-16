@@ -1,73 +1,99 @@
-=== STUDY STORAGE MEASUREMENT EVIDENCE ===
-Date: 2026-11-16T04:20:23.000Z
+=== STUDY STORAGE PAIRED MEASUREMENT EVIDENCE ===
+Date: 2026-11-16T04:40:31.459Z
 Workspace: /Users/lucienyudistirapurnawarman/orca/workspaces/signalgen-2/prof-study-storage
 Branch: frontend/prof-study-storage
-Base SHA: e74b1651d7e04059141b4f7ff9a4d1f23f6c2c8e
 
---- DOCKER CONTAINER SPECIFICATION ---
+--- PROVENANCE & ARTIFACT SHA-256 IDENTIFIERS ---
+Candidate Commit: df92fc14a4637cca153b55a884731c1d0804a2b8
+Baseline Commit:  e74b1651d7e04059141b4f7ff9a4d1f23f6c2c8e
+
+Candidate Source (frontend/web/src/analysis/signal-study-storage.ts):
+  43f81fd8f588db1b069caff664d88ffb9182601bbca848b313754e578300d2fb
+Baseline Source (frontend/web/tests/fixtures/signal-study-storage.baseline.ts):
+  02d767b09aaf7d52c2eeb61ac886c8b51c53fa426a221691861463c3f7fef78c
+Benchmark Runner (frontend/web/tests/browser/study-storage-benchmark.mjs):
+  c1983732916833f6647d5008a5cc747a59a01f047e87886e60958476b7c609b6
+Unit Test Suite (frontend/web/tests/study-storage.test.cjs):
+  553a1a9e34e56eb6ddf56e9fef038b7dd1082c3c9ca338274198ffabebcb7e83
+Package Lockfile (frontend/web/package-lock.json):
+  c27cd5cbed7490dbd4d92c4e558bdf5dac976e0013ecd49a80627aca21117063
+
+--- DOCKER CONTAINER SPECIFICATION & CONTROLS ---
 Image ID: sha256:f609973e8fd93f38a5ddfd706a65805294247dae8d81b2541c0afe2787746197
 Image Tag: mcr.microsoft.com/playwright@sha256:f609973e8fd93f38a5ddfd706a65805294247dae8d81b2541c0afe2787746197
 Architecture: linux/arm64
 Docker flags: --rm --pull=never --network none --user 1001:1001 --security-opt=no-new-privileges:true --cap-drop=ALL --cpus 2 --memory 2g --pids-limit 100
 Volume mounts:
   - Read-only node_modules: /work/node_modules:ro
-  - Read-only staging directory (allowlisted source & benchmark files only; no .env or untracked workspace files): /work/app:ro
+  - Read-only staging directory (allowlisted source, baseline fixture, runner, lockfile only; no .env or untracked workspace files): /work/app:ro
 Environment: NODE_PATH=/work/node_modules
 Browser: Headless Chromium 1248 (official Playwright Linux ARM64 build)
 Browser Sandboxing: Enabled (native Linux sandbox running under non-root pwuser 1001:1001, no --no-sandbox)
 Database: Native IndexedDB signalgen-study-temporary-1 v2
+Benchmark Methodology: Alternating paired runs (1 unrecorded warmup each, then 3 paired alternating iterations: B-C, C-B, B-C) executing against fresh databases in identical fixture and runner.
 
---- BENCHMARK RUN COMPARISON (HEAD TO HEAD: 1 WARMUP + 3 PAIRED ITERATIONS) ---
+NOTE ON SUPERSEDED EVIDENCE:
+Prior single-sample baseline and candidate-only benchmark numbers reported earlier on 2026-11-16 are superseded by the complete paired alternating measurements below.
+
+--- PAIRED BENCHMARK COMPARISON (MEDIANS AND RANGES ACROSS 3 ALTERNATING RUNS) ---
+
 Scenario 1: 10 symbols, 2 ev/sym (20 events)
-  Baseline:  Store 4.2ms, P0 1.0ms, PMid 0.5ms, PLate 0.4ms, CSV 0.5ms, Clean 1.1ms
-  Optimized: Store 3.1ms (range [2.9, 3.9]), P0 0.7ms (range [0.7, 0.8]), PMid 0.7ms, PLate 0.6ms, CSV 0.5ms (range [0.3, 0.7]), Clean 1.0ms
+  Baseline:  Store 2.9ms [2.7, 3.0], P0 0.7ms [0.7, 0.7], PMid 0.4ms [0.4, 0.5], PLate 0.5ms [0.4, 0.5], CSV 0.5ms [0.4, 0.5], Clean 1.0ms [0.7, 1.0]
+  Candidate: Store 3.3ms [2.6, 12.0], P0 0.4ms [0.4, 0.6], PMid 0.3ms [0.3, 0.5], PLate 0.3ms [0.3, 0.4], CSV 0.5ms [0.3, 1.1], Clean 1.0ms [0.9, 1.1]
+  Speedup / Delta: CSV 1.0x, P0 1.75x, PMid 1.33x, PLate 1.67x, Store Delta +0.4ms, Clean Delta +0.0ms
 
 Scenario 2: 10 symbols, 10 ev/sym (100 events)
-  Baseline:  Store 2.5ms, P0 0.3ms, PMid 0.5ms, PLate 0.5ms, CSV 1.1ms, Clean 1.6ms
-  Optimized: Store 3.2ms (range [3.1, 3.7]), P0 0.3ms (range [0.3, 0.5]), PMid 0.5ms, PLate 0.4ms, CSV 0.8ms (range [0.5, 0.9]), Clean 1.2ms
+  Baseline:  Store 3.0ms [2.5, 3.1], P0 0.5ms [0.5, 0.5], PMid 0.4ms [0.4, 0.5], PLate 0.4ms [0.4, 0.4], CSV 0.4ms [0.3, 0.7], Clean 1.0ms [0.6, 1.3]
+  Candidate: Store 3.3ms [3.1, 3.5], P0 0.4ms [0.4, 0.5], PMid 0.5ms [0.4, 0.5], PLate 0.6ms [0.5, 0.7], CSV 0.6ms [0.4, 0.7], Clean 1.1ms [0.9, 1.7]
+  Speedup / Delta: CSV 0.67x, P0 1.25x, PMid 0.80x, PLate 0.67x, Store Delta +0.3ms, Clean Delta +0.1ms
 
 Scenario 3: 10 symbols, 30 ev/sym (300 events)
-  Baseline:  Store 4.1ms, P0 0.8ms, PMid 0.7ms, PLate 0.5ms, CSV 1.5ms, Clean 0.9ms
-  Optimized: Store 4.1ms (range [3.7, 4.8]), P0 0.4ms (range [0.4, 0.6]), PMid 0.3ms, PLate 0.4ms, CSV 1.6ms (range [1.3, 2.6]), Clean 1.3ms
+  Baseline:  Store 3.1ms [3.0, 3.2], P0 0.7ms [0.6, 0.7], PMid 0.5ms [0.4, 0.5], PLate 0.6ms [0.5, 0.6], CSV 1.4ms [1.4, 1.7], Clean 0.9ms [0.9, 1.0]
+  Candidate: Store 3.9ms [3.9, 3.9], P0 0.4ms [0.4, 0.5], PMid 0.4ms [0.4, 0.5], PLate 0.4ms [0.3, 0.4], CSV 1.6ms [1.3, 2.0], Clean 1.0ms [0.8, 1.0]
+  Speedup / Delta: CSV 0.87x, P0 1.75x, PMid 1.25x, PLate 1.50x, Store Delta +0.8ms, Clean Delta +0.1ms
 
 Scenario 4: 100 symbols, 2 ev/sym (200 events)
-  Baseline:  Store 31.6ms, P0 1.5ms, PMid 1.2ms, PLate 0.9ms, CSV 2.3ms, Clean 6.9ms
-  Optimized: Store 31.8ms (range [31.5, 32.2]), P0 0.7ms (range [0.6, 0.8]), PMid 0.8ms, PLate 0.7ms, CSV 1.8ms (range [1.8, 1.8]), Clean 8.0ms
+  Baseline:  Store 28.6ms [27.2, 29.2], P0 1.9ms [1.9, 2.0], PMid 1.4ms [1.3, 1.5], PLate 1.3ms [1.1, 1.4], CSV 2.4ms [2.0, 2.5], Clean 7.7ms [6.7, 8.4]
+  Candidate: Store 33.0ms [32.8, 34.6], P0 1.2ms [1.1, 1.3], PMid 0.8ms [0.7, 0.8], PLate 0.6ms [0.6, 0.6], CSV 2.3ms [1.7, 4.3], Clean 8.4ms [8.4, 12.3]
+  Speedup / Delta: CSV 1.04x, P0 1.58x, PMid 1.75x, PLate 2.17x, Store Delta +4.4ms, Clean Delta +0.7ms
 
 Scenario 5: 100 symbols, 10 ev/sym (1000 events)
-  Baseline:  Store 31.6ms, P0 1.5ms, PMid 2.0ms, PLate 1.5ms, CSV 22.0ms, Clean 10.9ms
-  Optimized: Store 30.6ms (range [29.9, 30.8]), P0 0.5ms (range [0.4, 0.6]), PMid 0.5ms, PLate 0.5ms, CSV 6.7ms (range [5.9, 6.9]), Clean 7.8ms
-  Speedup: CSV Export 3.3x, Page 0 3.0x, Mid Page 4.0x, Late Page 3.0x
+  Baseline:  Store 57.4ms [34.8, 110.6], P0 2.1ms [1.9, 3.5], PMid 2.5ms [1.9, 3.1], PLate 1.9ms [1.8, 2.0], CSV 19.9ms [17.3, 40.8], Clean 9.6ms [8.1, 9.9]
+  Candidate: Store 35.2ms [33.8, 40.7], P0 0.6ms [0.6, 0.7], PMid 0.5ms [0.5, 0.6], PLate 0.5ms [0.4, 0.6], CSV 7.3ms [6.3, 7.9], Clean 8.8ms [7.8, 9.0]
+  Speedup / Delta: CSV 2.73x, P0 3.50x, PMid 5.00x, PLate 3.80x, Store Delta -22.2ms, Clean Delta -0.8ms
 
 Scenario 6: 100 symbols, 30 ev/sym (3000 events)
-  Baseline:  Store 29.3ms, P0 3.6ms, PMid 3.6ms, PLate 3.4ms, CSV 89.8ms, Clean 14.2ms
-  Optimized: Store 35.6ms (range [34.0, 37.1]), P0 0.4ms (range [0.3, 0.4]), PMid 0.4ms, PLate 0.4ms, CSV 17.6ms (range [16.3, 19.2]), Clean 7.9ms
-  Speedup: CSV Export 5.1x, Page 0 9.0x, Mid Page 9.0x, Late Page 8.5x
+  Baseline:  Store 36.8ms [36.0, 37.1], P0 2.9ms [2.8, 3.1], PMid 2.7ms [2.6, 2.8], PLate 2.6ms [2.4, 2.7], CSV 79.3ms [78.8, 84.5], Clean 9.3ms [7.7, 10.3]
+  Candidate: Store 47.8ms [45.1, 72.2], P0 0.5ms [0.5, 0.5], PMid 0.5ms [0.5, 0.5], PLate 0.6ms [0.5, 0.6], CSV 21.4ms [20.6, 22.6], Clean 9.2ms [8.4, 9.4]
+  Speedup / Delta: CSV 3.71x, P0 5.80x, PMid 5.40x, PLate 4.33x, Store Delta +11.0ms, Clean Delta -0.1ms
 
 Scenario 7: 500 symbols, 2 ev/sym (1000 events)
-  Baseline:  Store 185.0ms, P0 5.7ms, PMid 5.4ms, PLate 4.9ms, CSV 47.8ms, Clean 29.8ms
-  Optimized: Store 171.7ms (range [162.0, 173.9]), P0 0.9ms (range [0.8, 1.0]), PMid 0.9ms, PLate 0.9ms, CSV 10.3ms (range [8.2, 18.9]), Clean 33.9ms
-  Speedup: CSV Export 4.6x, Page 0 6.3x, Mid Page 6.0x, Late Page 5.4x
+  Baseline:  Store 144.8ms [144.8, 144.9], P0 4.7ms [4.3, 5.0], PMid 3.6ms [3.4, 4.0], PLate 3.4ms [3.2, 3.6], CSV 35.3ms [34.3, 43.0], Clean 41.3ms [33.4, 42.2]
+  Candidate: Store 175.5ms [175.1, 177.8], P0 1.0ms [0.9, 1.0], PMid 1.1ms [1.0, 1.2], PLate 0.9ms [0.8, 0.9], CSV 12.4ms [10.5, 19.3], Clean 43.6ms [35.5, 50.3]
+  Speedup / Delta: CSV 2.85x, P0 4.70x, PMid 3.27x, PLate 3.78x, Store Delta +30.7ms, Clean Delta +2.3ms
 
 Scenario 8: 500 symbols, 10 ev/sym (5000 events)
-  Baseline:  Store 197.4ms, P0 6.1ms, PMid 8.8ms, PLate 5.6ms, CSV 338.6ms, Clean 42.9ms
-  Optimized: Store 173.3ms (range [163.5, 177.1]), P0 0.6ms (range [0.5, 0.7]), PMid 0.7ms, PLate 0.6ms, CSV 32.7ms (range [30.5, 40.6]), Clean 34.6ms
-  Speedup: CSV Export 10.4x, Page 0 10.2x, Mid Page 12.6x, Late Page 9.3x
+  Baseline:  Store 163.5ms [157.1, 168.0], P0 6.0ms [5.9, 6.2], PMid 6.7ms [6.1, 7.0], PLate 5.5ms [5.4, 5.8], CSV 270.3ms [258.0, 294.4], Clean 43.8ms [41.8, 45.2]
+  Candidate: Store 204.1ms [187.1, 300.0], P0 0.7ms [0.6, 0.8], PMid 0.5ms [0.5, 0.6], PLate 0.6ms [0.6, 0.6], CSV 34.8ms [30.7, 43.6], Clean 45.0ms [37.7, 56.5]
+  Speedup / Delta: CSV 7.77x, P0 8.57x, PMid 13.40x, PLate 9.17x, Store Delta +40.6ms, Clean Delta +1.2ms
 
 Scenario 9: 500 symbols, 30 ev/sym (15000 events)
-  Baseline:  Store 191.7ms, P0 12.5ms, PMid 12.4ms, PLate 15.7ms, CSV 1524.0ms, Clean 35.5ms
-  Optimized: Store 196.6ms (range [182.0, 339.6]), P0 0.5ms (range [0.4, 0.5]), PMid 0.5ms, PLate 0.5ms, CSV 90.1ms (range [90.1, 98.5]), Clean 41.7ms
-  Speedup: CSV Export 16.9x (1524ms -> 90.1ms), Page 0 25.0x (12.5ms -> 0.5ms), Mid Page 24.8x, Late Page 31.4x
+  Baseline:  Store 188.8ms [172.4, 277.3], P0 13.0ms [12.6, 13.1], PMid 10.1ms [10.0, 10.4], PLate 9.6ms [9.4, 10.1], CSV 1569.9ms [1497.7, 1696.6], Clean 39.0ms [32.8, 41.5]
+  Candidate: Store 191.6ms [191.2, 222.4], P0 0.5ms [0.4, 0.5], PMid 0.5ms [0.4, 0.5], PLate 0.4ms [0.4, 0.5], CSV 101.6ms [88.3, 101.9], Clean 40.1ms [37.2, 44.5]
+  Speedup / Delta: CSV 15.45x (1569.9ms -> 101.6ms), P0 26.0x (13.0ms -> 0.5ms), PMid 20.2x, PLate 24.0x, Store Delta +2.8ms, Clean Delta +1.1ms
 
 --- CORRECTNESS SUITE VERIFICATION ---
 overwriteAccounting: PASS
 ownerIsolation: PASS
 cancellationRollback: PASS (pre-flight and mid-transaction rollback verified)
 legacyWriteRegression: PASS (pre-existing symbols retained when new symbol added or existing overwritten)
-concurrentWriters: PASS (concurrent stores on different symbols serialized without race conditions)
+singlePageConcurrentWriters: PASS (concurrent stores on separate connections serialized cleanly)
+twoPageSharedDbConcurrentDifferentSymbols: PASS (R2: two pages in same context and origin writing different symbols verify all 25 rows, sorted metadata, and byte ledger)
+twoPageSharedDbConcurrentSameSymbolOverwrite: PASS (R2: two pages in same context concurrently overwriting same symbol verify exactly 1 winning metadata entry, consistent row counts, and byte ledger)
+nativeReadonlyAbortErrorRejection: PASS (R3: forced readonly transaction abort cleanly rejects studyEventPage with error rather than returning empty rows)
 stableOrdering: PASS
 fullNumbersAndOutcomes: PASS
-quotaRollback: PASS (128 MiB boundary verified with atomic rollback)
+quotaRollback: PASS (exact 128 MiB boundary verified with atomic rollback)
 exactCanonicalEquality: PASS
   totalEvents: 80
   oracleSha256:    ae0f70165a02abd6c9bb2c30662a3477947f9008aa03848d9d5c6162fecae5fe
@@ -77,6 +103,6 @@ exactCanonicalEquality: PASS
 
 --- UNIT TEST AND TYPECHECK VERIFICATION ---
 TypeScript typecheck: PASS (tsc -b, 0 errors)
-Unit tests: PASS (7/7 focused storage tests passed in MockIDB)
+Unit tests: PASS (8/8 focused storage tests passed in MockIDB, including readonly abort rejection)
 Prettier check: PASS (All matched files use Prettier code style)
-Vite build: PASS (Built clean)
+Vite build: PASS (Built clean in 3.12s)
