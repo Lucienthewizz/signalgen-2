@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Toast } from "@base-ui/react/toast";
-import { CircleCheck, CircleAlert, X } from "lucide-react";
+import { CircleAlert, CircleCheck, Info, X } from "lucide-react";
 
 // Shared Base UI manager: notifications survive route changes, not page reloads.
 export const toast = Toast.createToastManager();
@@ -46,6 +46,8 @@ function ToastList() {
       <Toast.Content className="notification-toast__content">
         {item.type === "error" ? (
           <CircleAlert aria-hidden="true" />
+        ) : item.type === "info" ? (
+          <Info aria-hidden="true" />
         ) : (
           <CircleCheck aria-hidden="true" />
         )}

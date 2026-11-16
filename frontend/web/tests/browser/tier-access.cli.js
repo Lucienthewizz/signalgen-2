@@ -185,7 +185,12 @@ async (page) => {
   await page.getByRole("button",{name:"View Analyst details",exact:true}).waitFor();
   await page.getByRole("button",{name:"View Analyst details",exact:true}).click();
   await page.getByRole("dialog").waitFor();
-  await page.getByRole("dialog").getByText(/Online upgrades are coming soon/).waitFor();
+  await page.getByRole("dialog").getByText(/Pay for one month at a time/).waitFor();
+  if(process.env.VITE_MIDTRANS_CLIENT_KEY){
+    await page.getByRole("dialog").getByRole("button",{name:/^(Pay for Analyst|Extend by one month)$/}).waitFor();
+    for(const width of [1440,390]){await page.setViewportSize({width,height:900});await page.getByRole("dialog").screenshot({path:`output/playwright/mvp-tier-pay-dialog-${width}.png`});}
+    await page.setViewportSize({width:1440,height:1000});
+  }
   await page.getByRole("dialog").getByRole("button",{name:"Close",exact:true}).click();
   for(const width of [1440,390,320])for(const theme of ["dark","light"]){
     await page.setViewportSize({width,height:1000});

@@ -2034,6 +2034,83 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/payments/checkout:
+    post:
+      tags: [Payments]
+      operationId: createPaymentCheckout
+      summary: Create a Midtrans Snap checkout for one month of a paid plan
+      description: The price comes from the server. Access changes only after Midtrans confirms the payment.
+      security:
+        - supabaseBearer: []
+          appSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false, required: [plan_code], properties: {plan_code: {type: string, enum: [analyst, pro]}}}
+      responses:
+        "201":
+          description: Pending order and Snap token.
+          content:
+            application/json:
+              schema: {type: object, required: [order, snap_token, redirect_url], properties: {order: {type: object, required: [order_id, plan_code, amount, currency, status, created_at], properties: {order_id: {type: string}, plan_code: {type: string, enum: [analyst, pro]}, amount: {type: integer}, currency: {type: string, enum: [IDR]}, status: {type: string, enum: [pending, paid, failed, expired]}, paid_at: {type: string, format: date-time}, created_at: {type: string, format: date-time}}}, snap_token: {type: string}, redirect_url: {type: string}}}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          description: Midtrans did not create the checkout.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Payments are not configured on this server.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/payments/orders/{id}:
+    get:
+      tags: [Payments]
+      operationId: getPaymentOrder
+      summary: Read the owner's order; a pending order is re-checked with Midtrans
+      security:
+        - supabaseBearer: []
+          appSession: []
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Current order status.
+          content:
+            application/json:
+              schema: {type: object, required: [order], properties: {order: {type: object, required: [order_id, plan_code, amount, currency, status, created_at], properties: {order_id: {type: string}, plan_code: {type: string, enum: [analyst, pro]}, amount: {type: integer}, currency: {type: string, enum: [IDR]}, status: {type: string, enum: [pending, paid, failed, expired]}, paid_at: {type: string, format: date-time}, created_at: {type: string, format: date-time}}}}}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/payments/midtrans/notification:
+    post:
+      tags: [Payments]
+      operationId: midtransNotification
+      summary: Midtrans HTTP notification (server to server)
+      description: Requires a valid signature_key. The status is re-read from the Midtrans API before an order is marked paid.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [order_id, status_code, gross_amount, signature_key], properties: {order_id: {type: string}, status_code: {type: string}, gross_amount: {type: string}, signature_key: {type: string}}}
+      responses:
+        "200":
+          description: Notification applied, ignored (unknown order) or rejected (amount mismatch).
+        "403":
+          description: Invalid signature.
+        "500":
+          description: Not applied; Midtrans retries.
   /api/v1/operator/subscriptions:
     post:
       tags: [Operator]

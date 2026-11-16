@@ -200,6 +200,16 @@ export type ResourceUsage = {
   used: { custom_rules: number; stock_universes: number };
 };
 
+export type PaymentOrder = {
+  order_id: string;
+  plan_code: SubscriptionPlan["code"];
+  amount: number;
+  currency: "IDR";
+  status: "pending" | "paid" | "failed" | "expired";
+  paid_at?: string;
+  created_at: string;
+};
+
 export type Subscription = {
   id: string;
   user_id?: string;

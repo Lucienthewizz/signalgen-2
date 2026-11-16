@@ -81,7 +81,7 @@ export function Pricing() {
                 <span className="pricing-plan__billing-note">
                   {plan.code === "free"
                     ? "No payment required"
-                    : "Online upgrade coming soon"}
+                    : "Monthly · pay online, no auto-renewal"}
                 </span>
                 <ul>
                   <li>

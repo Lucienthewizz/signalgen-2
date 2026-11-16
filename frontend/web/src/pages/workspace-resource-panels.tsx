@@ -3,6 +3,7 @@ import type { AccountState } from "@/types";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ResourceQuota } from "@/components/resource-quota";
 import { InfoDialog } from "@/components/ui/info-dialog";
+import { midtransConfigured, payWithSnap } from "@/lib/midtrans";
 import { StockCatalogPicker } from "@/components/stock-catalog-picker";
 import { universeSelectionLimit } from "@/lib/stock-catalog";
 import { marketLabels, stockMarket, symbolMarket } from "@/lib/stock-market";
@@ -11,6 +12,7 @@ import {
   BadgeCheck,
   Boxes,
   CalendarClock,
+  CreditCard,
   ChartNoAxesCombined,
   ChevronDown,
   Check,
@@ -640,6 +642,7 @@ export function SubscriptionPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
+  const [paying, setPaying] = useState<SubscriptionPlan["code"] | null>(null);
   const access = subscription ? subscriptionState(subscription) : null;
   const currentPlanCode =
     authenticated && (effective || subscription)
@@ -648,6 +651,76 @@ export function SubscriptionPanel({
       : undefined;
   const active = useRef(false);
   const loadVersion = useRef(0);
+
+  // The backend re-reads Midtrans for a pending order, so polling also works
+  // when the payment notification is delayed or cannot reach this server.
+  async function waitForPayment(orderId: string) {
+    let order = (await api.paymentOrder(orderId)).order;
+    for (let tries = 0; order.status === "pending" && tries < 15; tries++) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (!active.current) break;
+      order = (await api.paymentOrder(orderId)).order;
+    }
+    return order;
+  }
+
+  async function buy(plan: SubscriptionPlan) {
+    if (paying) return;
+    setPaying(plan.code);
+    try {
+      const checkout = await api.checkoutPlan(plan.code);
+      const outcome = await payWithSnap(checkout.snap_token);
+      if (outcome === "closed" || outcome === "error") {
+        toast.add({
+          type: outcome === "error" ? "error" : "info",
+          title:
+            outcome === "error" ? "Payment failed" : "Payment not finished",
+          description:
+            outcome === "error"
+              ? "Midtrans could not complete the payment. Try again or choose another method."
+              : "Your plan has not changed. Choose the plan again when you are ready to pay.",
+          timeout: 6000,
+        });
+        return;
+      }
+      const order = await waitForPayment(checkout.order.order_id);
+      if (order.status === "paid") {
+        setSelectedPlan(null);
+        toast.add({
+          type: "success",
+          title: `${plan.name} is active`,
+          description: "Payment received. Your new limits apply now.",
+          timeout: 6000,
+        });
+        dispatchEvent(new Event("signalgen:subscription"));
+      } else if (order.status === "pending") {
+        toast.add({
+          type: "info",
+          title: "Waiting for payment",
+          description:
+            "Finish the payment with the instructions from Midtrans. Your plan updates automatically once it is confirmed.",
+          timeout: 10000,
+        });
+      } else {
+        toast.add({
+          type: "error",
+          title: "Payment not completed",
+          description: "Your plan has not changed. You can try again.",
+          timeout: 8000,
+        });
+      }
+    } catch (caught) {
+      toast.add({
+        type: "error",
+        title: "Payment could not start",
+        description: readableError(caught, "Try again in a moment."),
+        priority: "high",
+        timeout: 8000,
+      });
+    } finally {
+      if (active.current) setPaying(null);
+    }
+  }
 
   async function load(refresh = false, includePlans = false) {
     const version = ++loadVersion.current;
@@ -909,7 +982,7 @@ export function SubscriptionPanel({
                   Started {formatDate(subscription.current_period_start)} ·{" "}
                   {subscription.source === "manual"
                     ? "Activated by an operator. No automatic payments."
-                    : "Payments are managed by the provider."}
+                    : "Paid online via Midtrans. Nothing renews automatically; pay again to extend."}
                 </p>
                 <p>
                   The access above comes from your plan. Additional operator
@@ -975,7 +1048,7 @@ export function SubscriptionPanel({
           if (!open) setSelectedPlan(null);
         }}
         title={`${selectedPlan?.name ?? ""} plan details`}
-        description="Paid plans are activated by an operator. Online upgrades are coming soon."
+        description="Pay for one month at a time with QRIS, bank transfer, e-wallet or card. Access starts as soon as the payment is confirmed."
       >
         <p>
           <strong>{selectedPlan?.name}</strong>
@@ -986,12 +1059,37 @@ export function SubscriptionPanel({
             <> · Up to {selectedPlan.screening.max_symbols} stocks per screen</>
           )}
         </p>
-        <Button
-          nativeButton={false}
-          render={<a href={authenticated ? "#app/overview" : "#register"} />}
-        >
-          {authenticated ? "Continue to dashboard" : "Start with Free"}
-        </Button>
+        {authenticated && selectedPlan && midtransConfigured ? (
+          <Button
+            disabled={paying !== null || !backendOnline}
+            onClick={() => void buy(selectedPlan)}
+          >
+            {paying === selectedPlan.code ? (
+              <LoaderCircle className="animate-spin" data-icon="inline-start" />
+            ) : (
+              <CreditCard data-icon="inline-start" />
+            )}
+            {paying === selectedPlan.code
+              ? "Opening payment…"
+              : currentPlanCode === selectedPlan.code
+                ? "Extend by one month"
+                : `Pay for ${selectedPlan.name}`}
+          </Button>
+        ) : (
+          <>
+            {authenticated && (
+              <p>Online payment is not set up on this server yet.</p>
+            )}
+            <Button
+              nativeButton={false}
+              render={
+                <a href={authenticated ? "#app/overview" : "#register"} />
+              }
+            >
+              {authenticated ? "Continue to dashboard" : "Start with Free"}
+            </Button>
+          </>
+        )}
       </InfoDialog>
       <section className="plan-ledger" aria-labelledby="plan-heading">
         <header>

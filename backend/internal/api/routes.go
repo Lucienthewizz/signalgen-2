@@ -12,6 +12,7 @@ import (
 	journalapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/journal"
 	newsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/news"
 	operatorapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/operator"
+	paymentsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/payments"
 	portfolioapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/portfolio"
 	recordsapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/records"
 	rulesapi "github.com/Lucienthewizz/signalgen-2/backend/internal/api/rules"
@@ -87,6 +88,10 @@ func (server *Server) routes(config serverConfig) http.Handler {
 	router.Handle(http.MethodGet, "/health", systemHandler.Health)
 	router.Handle(http.MethodGet, "/api/news", newsapi.NewHandler().ServeHTTP)
 	router.Handle(http.MethodGet, "/api/v1/subscription/usage", subscriptionsHandler.ResourceUsage)
+	paymentsHandler := &paymentsapi.Handler{Context: server.Context, Payments: config.payments}
+	router.Handle(http.MethodPost, "/api/v1/payments/checkout", paymentsHandler.Checkout)
+	router.Handle(http.MethodGet, "/api/v1/payments/orders/:id", paymentsHandler.Order)
+	router.Handle(http.MethodPost, "/api/v1/payments/midtrans/notification", paymentsHandler.MidtransNotification)
 	router.Handle(http.MethodGet, "/ready", systemHandler.Ready(config.readinessChecks))
 	router.Handle(http.MethodGet, "/api/v1/capabilities", systemHandler.Capabilities)
 

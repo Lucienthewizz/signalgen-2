@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/account"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/payments"
 	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/portfolio"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/records"
@@ -16,6 +17,7 @@ import (
 
 type serverConfig struct {
 	portfolioStore    portfolio.Store
+	payments          *payments.Service
 	recordStore       records.Store
 	workspaceStore    workspace.Store
 	profileStore      account.ProfileRepository
@@ -255,6 +257,17 @@ func WithCORSOrigins(origins []string) ServerOption {
 			config.allowedOrigins[origin] = struct{}{}
 			config.originPatterns = append(config.originPatterns, origin)
 		}
+		return nil
+	}
+}
+
+// WithPayments enables Midtrans checkout and its notification endpoint.
+func WithPayments(service *payments.Service) ServerOption {
+	return func(config *serverConfig) error {
+		if !service.Enabled() {
+			return fmt.Errorf("payments service needs a gateway and a store")
+		}
+		config.payments = service
 		return nil
 	}
 }

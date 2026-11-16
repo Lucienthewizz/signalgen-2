@@ -1048,6 +1048,20 @@ export const api = {
     }),
   resourceUsage: () =>
     request<import("@/types").ResourceUsage>("/api/v1/subscription/usage"),
+  checkoutPlan: (planCode: SubscriptionPlan["code"]) =>
+    request<{
+      order: import("@/types").PaymentOrder;
+      snap_token: string;
+      redirect_url: string;
+    }>("/api/v1/payments/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan_code: planCode }),
+    }),
+  paymentOrder: (orderId: string, signal?: AbortSignal) =>
+    request<{ order: import("@/types").PaymentOrder }>(
+      `/api/v1/payments/orders/${encodeURIComponent(orderId)}`,
+      { signal },
+    ),
   cancelSubscription: (atPeriodEnd: boolean, reason: string) =>
     request<{ subscription: Subscription }>("/api/v1/subscription/cancel", {
       method: "POST",

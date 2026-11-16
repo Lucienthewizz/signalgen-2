@@ -19,6 +19,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/marketdata"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/payments"
 	platformdb "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/database"
 	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/platform/observability"
@@ -117,8 +118,15 @@ func main() {
 	traffic := platformhttp.NewTrafficObserver(operationalLogger)
 	screeningMetrics := observability.NewScreenerObserver(operationalLogger)
 	portfolioStore := &portfolio.PostgresStore{DB: database}
-	handler, err := apihttp.NewServer(
-		identity, sessions, accessStore, datasets, computeStore,
+	// Midtrans checkout is enabled only when a Server Key is configured.
+	readinessChecks := []apihttp.ReadinessChecker{platformdb.PostgresReadiness{Pool: database}, platformdb.RuntimePrivileges{Pool: database}, datasets, portfolioStore}
+	var paymentOptions []apihttp.ServerOption
+	if gateway := payments.NewMidtrans(os.Getenv("MIDTRANS_SERVER_KEY"), os.Getenv("MIDTRANS_IS_PRODUCTION") == "true"); gateway != nil {
+		paymentStore := &payments.PostgresStore{DB: database}
+		paymentOptions = append(paymentOptions, apihttp.WithPayments(&payments.Service{Gateway: gateway, Store: paymentStore}))
+		readinessChecks = append(readinessChecks, paymentStore)
+	}
+	serverOptions := append([]apihttp.ServerOption{
 		apihttp.WithAuthService(identity),
 		apihttp.WithTrafficObserver(traffic),
 		apihttp.WithScreeningObserver(screeningMetrics),
@@ -135,8 +143,9 @@ func main() {
 		apihttp.WithPortfolioStore(portfolioStore),
 		apihttp.WithRateLimiter(mutationLimiter),
 		apihttp.WithCORSOrigins(allowedOrigins),
-		apihttp.WithReadinessChecks(platformdb.PostgresReadiness{Pool: database}, platformdb.RuntimePrivileges{Pool: database}, datasets, portfolioStore),
-	)
+		apihttp.WithReadinessChecks(readinessChecks...),
+	}, paymentOptions...)
+	handler, err := apihttp.NewServer(identity, sessions, accessStore, datasets, computeStore, serverOptions...)
 	if err != nil {
 		log.Fatal(err)
 	}
