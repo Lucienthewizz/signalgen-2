@@ -5,7 +5,9 @@ Base commit: `e74b1651d7e04059141b4f7ff9a4d1f23f6c2c8e`.
 Reviewed commit: `df92fc14a4637cca153b55a884731c1d0804a2b8`.  
 Affected file: `frontend/web/src/analysis/signal-study-storage.ts`.  
 Test & benchmark files: `frontend/web/tests/study-storage.test.cjs`, `frontend/web/tests/browser/study-storage-benchmark.mjs`, `frontend/web/tests/fixtures/signal-study-storage.baseline.ts`.  
-Runner script: `frontend/web/tests/browser/run-isolated-benchmark.sh`.  
+Runner script: `frontend/web/tests/browser/run-isolated-benchmark.sh`.
+
+Runner update (2026-11-16, closes final-review F1): the script now takes the dependency tree from `BENCH_NODE_MODULES` instead of a host path, checks that it contains `.package-lock.json` and logs its SHA-256, runs on an explicit `--context` (default `orbstack`) and `--platform linux/arm64`, checks the image platform before running, and adds a read-only root, a bounded `/tmp`, a file-size ulimit and a wall-clock timeout. Output goes to a temp file first, so a failed run does not overwrite the evidence. A rerun with the updated script (output kept outside the repo) passed every correctness check. At 15,000 events, CSV export went from 1284.8 ms to 75.5 ms and store from 138.5 ms to 174.7 ms. The checked-in paired JSON is still the recorded run.  
 Evidence records: `docs/evidence/study-storage-paired-20261116.json`, `docs/evidence/study-storage-measurement-20261116.txt`.
 
 ## Context and Problem Statement
