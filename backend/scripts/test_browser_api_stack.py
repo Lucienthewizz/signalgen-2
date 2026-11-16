@@ -20,11 +20,13 @@ from verify_browser_api_stack import (
     PG,
     PLAYWRIGHT,
     DOCKER,
+    ROOT,
     bounded,
     bounded_playwright,
     cleanup_containers,
     inspect_image,
     unpack,
+    extract_dist_archive,
     verify_approved_build_inputs,
     extract_approved_package,
     find_base_node_modules,
@@ -264,6 +266,229 @@ class BrowserApiStackPreflightTests(unittest.TestCase):
             extract_approved_package(archive_good, dest)
             self.assertTrue((dest / "bin/run").is_file())
             self.assertEqual((dest / "bin/run").read_bytes(), b"hello")
+
+    def test_extract_dist_archive_security_bounds(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+
+            # Symlink rejected
+            out = io.BytesIO()
+            with tarfile.open(fileobj=out, mode="w") as tar:
+                ti = tarfile.TarInfo("link")
+                ti.type = tarfile.SYMTYPE
+                tar.fileobj.write(ti.tobuf())
+            with self.assertRaisesRegex(ValueError, "Forbidden member type"):
+                extract_dist_archive(out.getvalue(), tmp / "dest1")
+
+            # Traversal rejected
+            out = io.BytesIO()
+            with tarfile.open(fileobj=out, mode="w") as tar:
+                ti = tarfile.TarInfo("../escape")
+                ti.size = 3
+                tar.addfile(ti, io.BytesIO(b"abc"))
+            with self.assertRaisesRegex(ValueError, "Traversal path"):
+                extract_dist_archive(out.getvalue(), tmp / "dest2")
+
+            # Duplicate entry rejected
+            out = io.BytesIO()
+            with tarfile.open(fileobj=out, mode="w") as tar:
+                ti1 = tarfile.TarInfo("file.txt")
+                ti1.size = 3
+                tar.addfile(ti1, io.BytesIO(b"abc"))
+                ti2 = tarfile.TarInfo("file.txt")
+                ti2.size = 3
+                tar.addfile(ti2, io.BytesIO(b"def"))
+            with self.assertRaisesRegex(ValueError, "Duplicate entry"):
+                extract_dist_archive(out.getvalue(), tmp / "dest3")
+
+            # Oversized member rejected
+            out = io.BytesIO()
+            with tarfile.open(fileobj=out, mode="w") as tar:
+                ti = tarfile.TarInfo("big.bin")
+                ti.size = 17 * 1024 * 1024
+                tar.fileobj.write(ti.tobuf())
+            with self.assertRaisesRegex(ValueError, "Oversized member"):
+                extract_dist_archive(out.getvalue(), tmp / "dest4")
+
+            # Valid extraction
+            out = io.BytesIO()
+            with tarfile.open(fileobj=out, mode="w") as tar:
+                ti_dir = tarfile.TarInfo("assets")
+                ti_dir.type = tarfile.DIRTYPE
+                tar.addfile(ti_dir)
+                ti_file = tarfile.TarInfo("assets/index.js")
+                ti_file.size = 4
+                tar.addfile(ti_file, io.BytesIO(b"test"))
+            dest_valid = tmp / "dest_valid"
+            extract_dist_archive(out.getvalue(), dest_valid)
+            self.assertTrue((dest_valid / "assets/index.js").is_file())
+            self.assertEqual((dest_valid / "assets/index.js").read_bytes(), b"test")
+
+    def test_verify_wasm_boundary_script_fixtures(self):
+        script_path = ROOT / "backend/scripts/verify_wasm_boundary.sh"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+
+            # 1. Valid positive fixture
+            pos_wasm = tmp / "valid.wasm"
+            pos_content = (
+                b"\x00asm\x01\x00\x00\x00"
+                b"signalgenComputeFeatures"
+                b"signalgenRunBacktest"
+                b"signalgenComputeBacktestFeatures"
+                b"signalgenBacktestCapabilities"
+                b"signalgenRunSignalStudy"
+            )
+            pos_wasm.write_bytes(pos_content)
+            res = subprocess.run(["bash", str(script_path), str(pos_wasm)], capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0)
+            self.assertIn("WASM boundary markers verified", res.stdout)
+
+            # 2. Missing required marker fixture
+            missing_wasm = tmp / "missing.wasm"
+            missing_content = (
+                b"\x00asm\x01\x00\x00\x00"
+                b"signalgenRunBacktest"
+                b"signalgenComputeBacktestFeatures"
+                b"signalgenBacktestCapabilities"
+                b"signalgenRunSignalStudy"
+            )
+            missing_wasm.write_bytes(missing_content)
+            res = subprocess.run(["bash", str(script_path), str(missing_wasm)], capture_output=True, text=True)
+            self.assertEqual(res.returncode, 1)
+            self.assertIn("missing signalgenComputeFeatures export marker", res.stderr)
+
+            # 3. Forbidden marker fixture (RULE_MATCHED)
+            forbidden_wasm = tmp / "forbidden.wasm"
+            forbidden_content = pos_content + b"RULE_MATCHED"
+            forbidden_wasm.write_bytes(forbidden_content)
+            res = subprocess.run(["bash", str(script_path), str(forbidden_wasm)], capture_output=True, text=True)
+            self.assertEqual(res.returncode, 1)
+            self.assertIn("forbidden decision marker found in WASM", res.stderr)
+
+    def test_csv_canonical_equality_comparator_unit_probe(self):
+        scenario_path = ROOT / "frontend/web/tests/browser/real-api-study.scenario.js"
+        node_script = f"""
+import {{ verifyCsvCanonicalEquality }} from "file://{scenario_path}";
+
+function generateValidDataset() {{
+    const header = '"symbol","signal_time","direction","reference_close","horizon","basis","status","price","return_pct","currency","policy","catalog_hash"';
+    const lines = [header];
+    const expectedRows = [];
+    const catalogHash = "a1b2c3d4e5f67890123456789012345678901234567890123456789012345678";
+    const bases = ["open", "high", "close", "open", "high", "close", "open", "high", "close", "barrier"];
+    const horizons = [1, 1, 1, 2, 2, 2, 3, 3, 3, 3];
+
+    for (let e = 0; e < 48; e++) {{
+        const sym = `BBCA_${{e}}`;
+        const time = `2026-11-16T10:${{String(e).padStart(2, "0")}}:00Z`;
+        const dir = e % 2 === 0 ? "BUY" : "SELL";
+        const refClose = 10000 + e * 10;
+        for (let o = 0; o < 10; o++) {{
+            const h = horizons[o];
+            const b = bases[o];
+            const st = o === 9 ? "time_exit" : "evaluated";
+            const price = refClose + (o + 1) * 25;
+            const ret = Number(((price - refClose) / refClose * 100).toFixed(4));
+            lines.push(`"${{sym}}","${{time}}","${{dir}}",${{refClose}},${{h}},"${{b}}","${{st}}",${{price}},${{ret}},"IDR","SL-first","${{catalogHash}}"`);
+            expectedRows.push({{
+                symbol: sym,
+                signal_time: time,
+                direction: dir,
+                reference_close: refClose,
+                horizon: h,
+                basis: b,
+                status: st,
+                price: price,
+                return_pct: ret,
+                currency: "IDR",
+                policy: "SL-first",
+            }});
+        }}
+    }}
+    return {{ csvText: lines.join("\\n"), expectedRows, catalogHash }};
+}}
+
+// 1. Valid dataset verification
+const {{ csvText, expectedRows, catalogHash }} = generateValidDataset();
+const res = verifyCsvCanonicalEquality(csvText, expectedRows, {{ currency: "IDR", policy: "SL-first" }});
+if (!res.valid || res.totalRows !== 480 || res.eventsCount !== 48 || res.catalogHash !== catalogHash) {{
+    throw new Error("Valid dataset failed verification");
+}}
+
+// 2. Negative mutation: price mismatch on row 5
+{{
+    const mutated = expectedRows.map((r, i) => i === 5 ? {{ ...r, price: r.price + 100 }} : r);
+    let threw = false;
+    try {{
+        verifyCsvCanonicalEquality(csvText, mutated, {{ currency: "IDR", policy: "SL-first" }});
+    }} catch (e) {{
+        threw = true;
+        if (!e.message.includes("price mismatch")) throw new Error("Unexpected error message: " + e.message);
+    }}
+    if (!threw) throw new Error("Price mutation should have failed");
+}}
+
+// 3. Negative mutation: return_pct mismatch on row 10
+{{
+    const mutated = expectedRows.map((r, i) => i === 10 ? {{ ...r, return_pct: r.return_pct + 1.5 }} : r);
+    let threw = false;
+    try {{
+        verifyCsvCanonicalEquality(csvText, mutated, {{ currency: "IDR", policy: "SL-first" }});
+    }} catch (e) {{
+        threw = true;
+        if (!e.message.includes("return_pct mismatch")) throw new Error("Unexpected error message: " + e.message);
+    }}
+    if (!threw) throw new Error("Return_pct mutation should have failed");
+}}
+
+// 4. Negative mutation: status mismatch on row 15
+{{
+    const mutated = expectedRows.map((r, i) => i === 15 ? {{ ...r, status: "stop_loss" }} : r);
+    let threw = false;
+    try {{
+        verifyCsvCanonicalEquality(csvText, mutated, {{ currency: "IDR", policy: "SL-first" }});
+    }} catch (e) {{
+        threw = true;
+        if (!e.message.includes("status mismatch")) throw new Error("Unexpected error message: " + e.message);
+    }}
+    if (!threw) throw new Error("Status mutation should have failed");
+}}
+
+// 5. Negative mutation: duplicate outcome row in CSV
+{{
+    const lines = csvText.split("\\n");
+    lines[2] = lines[1]; // duplicate row 1 onto row 2
+    const expDup = [...expectedRows];
+    expDup[1] = {{ ...expDup[0] }}; // duplicate in expected as well so row check passes and duplicate detector triggers
+    let threw = false;
+    try {{
+        verifyCsvCanonicalEquality(lines.join("\\n"), expDup, {{ currency: "IDR", policy: "SL-first" }});
+    }} catch (e) {{
+        threw = true;
+        if (!e.message.includes("Duplicate outcome row detected")) throw new Error("Unexpected error message: " + e.message);
+    }}
+    if (!threw) throw new Error("Duplicate outcome mutation should have failed");
+}}
+
+// 6. Negative mutation: row count mismatch
+{{
+    const lines = csvText.split("\\n").slice(0, 400); // truncate
+    let threw = false;
+    try {{
+        verifyCsvCanonicalEquality(lines.join("\\n"), expectedRows, {{ currency: "IDR", policy: "SL-first" }});
+    }} catch (e) {{
+        threw = true;
+        if (!e.message.includes("CSV line count mismatch")) throw new Error("Unexpected error message: " + e.message);
+    }}
+    if (!threw) throw new Error("Row count mismatch mutation should have failed");
+}}
+
+console.log("ALL_CSV_UNIT_PROBES_PASSED");
+"""
+        proc = subprocess.run(["node", "--input-type=module", "-e", node_script],
+                              capture_output=True, text=True, check=True)
+        self.assertIn("ALL_CSV_UNIT_PROBES_PASSED", proc.stdout)
 
 
 if __name__ == "__main__":

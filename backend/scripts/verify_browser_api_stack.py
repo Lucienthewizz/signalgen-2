@@ -69,8 +69,8 @@ def unpack(raw, allowed=None):
         raise ValueError("Oversized artifact archive")
     with tarfile.open(fileobj=io.BytesIO(raw)) as archive:
         for member in archive:
-            name = member.name.lstrip("./")
-            if not name or (member.isdir() and member.name in {".", "./"}):
+            name = member.name[2:] if member.name.startswith("./") else member.name
+            if not name or (member.isdir() and name in {".", "/"}):
                 continue
             path = Path(name)
             if (path.is_absolute() or ".." in path.parts or not member.isfile() or
@@ -81,6 +81,44 @@ def unpack(raw, allowed=None):
     if allowed is not None and set(result) != set(allowed):
         raise ValueError(f"Missing named artifact: expected {allowed}, got {set(result)}")
     return result
+
+
+def extract_dist_archive(raw_bytes, dest_dir, max_file_size=16 * 1024 * 1024, max_cumulative=64 * 1024 * 1024, max_files=1000):
+    """Safely extract dist tar archive under strict bounds (regular files and dirs only, reject symlinks/hardlinks, traversal, duplicates, oversize)."""
+    if len(raw_bytes) > max_cumulative:
+        raise ValueError("Oversized dist archive bytes")
+    dest_dir = Path(dest_dir)
+    total_size = 0
+    extracted = set()
+    with tarfile.open(fileobj=io.BytesIO(raw_bytes)) as archive:
+        for member in archive:
+            name = member.name[2:] if member.name.startswith("./") else member.name
+            if not name or (member.isdir() and name in {".", "/"}):
+                continue
+            path = Path(name)
+            if path.is_absolute() or ".." in path.parts:
+                raise ValueError("Traversal path in dist archive: " + member.name)
+            if not (member.isfile() or member.isdir()):
+                raise ValueError("Forbidden member type in dist archive (symlink/device/fifo): " + member.name)
+            if name in extracted:
+                raise ValueError("Duplicate entry in dist archive: " + name)
+            if len(extracted) >= max_files:
+                raise ValueError("Too many files in dist archive")
+            extracted.add(name)
+            if member.isfile():
+                if member.size < 0 or member.size > max_file_size:
+                    raise ValueError(f"Oversized member in dist archive: {name} ({member.size} bytes)")
+                total_size += member.size
+                if total_size > max_cumulative:
+                    raise ValueError("Cumulative dist archive size limit exceeded")
+                target = dest_dir / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with archive.extractfile(member) as f_in, open(target, "wb") as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+                target.chmod(0o644)
+            elif member.isdir():
+                target = dest_dir / name
+                target.mkdir(parents=True, exist_ok=True)
 
 
 def inspect_image(ref):
@@ -352,16 +390,34 @@ tar -C /scratch/out -cf - localstack schematest main.go main_test.go signalgen_c
             extract_dest.mkdir(parents=True, exist_ok=True)
             extract_approved_package(pkg["archive"], extract_dest)
 
-        # Clean tracked frontend source snapshot
+        # Clean tracked frontend source snapshot with strict boundary validation
         web_source = scratch / "web_source"
         web_source.mkdir(parents=True, exist_ok=True)
         tracked_web = call(["git", "ls-files", "frontend/web"]).decode().splitlines()
+        web_hashes = {}
+        total_web_size = 0
         for rel in tracked_web:
             src = ROOT / rel
+            if not src.is_file() or src.is_symlink():
+                raise ValueError("Unsafe or non-regular frontend file: " + rel)
             sub = rel[len("frontend/web/"):]
+            sub_path = Path(sub)
+            if sub_path.is_absolute() or ".." in sub_path.parts:
+                raise ValueError("Unsafe frontend relative path: " + sub)
+            data = src.read_bytes()
+            if len(data) > 16 * 1024 * 1024:
+                raise ValueError(f"Oversized frontend source file: {rel} ({len(data)} bytes)")
+            total_web_size += len(data)
+            if total_web_size > 64 * 1024 * 1024:
+                raise ValueError("Cumulative frontend source size exceeded 64MB limit")
+            web_hashes[rel] = {
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "bytes": len(data),
+            }
             dst = web_source / sub
             dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(src, dst)
+            dst.write_bytes(data)
+            dst.chmod(0o644)
 
         # Place fresh matching WASM runtime assets in public/wasm
         wasm_public = web_source / "public/wasm"
@@ -389,18 +445,7 @@ tar -C /scratch/dist -cf - .'
         dist_tar = execute(pw_build_cmd + ["/bin/sh", "-ec", fe_build_script], 260)
         dist_dir = scratch / "dist"
         dist_dir.mkdir(parents=True, exist_ok=True)
-        with tarfile.open(fileobj=io.BytesIO(dist_tar)) as archive:
-            for member in archive:
-                path = Path(member.name)
-                if path.is_absolute() or ".." in path.parts:
-                    raise ValueError("Unsafe member in dist tar: " + member.name)
-                if member.isdir():
-                    (dist_dir / member.name).mkdir(parents=True, exist_ok=True)
-                elif member.isfile():
-                    target = dist_dir / member.name
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    with archive.extractfile(member) as f_in, open(target, "wb") as f_out:
-                        shutil.copyfileobj(f_in, f_out)
+        extract_dist_archive(dist_tar, dist_dir)
 
         # Verify essential dist outputs
         if not (dist_dir / "index.html").is_file() or not (dist_dir / "wasm/signalgen_core.wasm").is_file():
@@ -411,7 +456,20 @@ tar -C /scratch/dist -cf - .'
             for f in sorted(files):
                 full_p = Path(root_p) / f
                 rel_p = str(full_p.relative_to(dist_dir))
-                dist_hashes[rel_p] = hashlib.sha256(full_p.read_bytes()).hexdigest()
+                file_bytes = full_p.read_bytes()
+                dist_hashes[rel_p] = {
+                    "sha256": hashlib.sha256(file_bytes).hexdigest(),
+                    "bytes": len(file_bytes),
+                }
+
+        # Verify exact hash equality between compiled Go WASM outputs and dist/ assets
+        for w_asset in ["signalgen_core.wasm", "wasm_exec.js", "signalgen_core.manifest.json"]:
+            dist_key = f"wasm/{w_asset}"
+            if dist_key not in dist_hashes:
+                raise ValueError(f"Missing {dist_key} in built frontend dist")
+            built_hash = hashlib.sha256(artifacts[w_asset]).hexdigest()
+            if dist_hashes[dist_key]["sha256"] != built_hash:
+                raise ValueError(f"Hash mismatch between Go built {w_asset} and dist/{dist_key}")
 
         print("PHASE 3: Synthetic 23-stock published archive", file=sys.stderr)
         fixture = unpack(execute(bounded(prefix + "-archive", API, [(tools, "/tools")]) +
@@ -484,11 +542,30 @@ exec postgres -D /scratch/pgdata -h 127.0.0.1 -k /scratch -c shared_buffers=32MB
                 time.sleep(0.2)
 
         print("PHASE 6: Browser journey execution in official Playwright container (no host /output mount)", file=sys.stderr)
-        tests_dir = ROOT / "frontend/web/tests"
+        # Use readonly allowlisted copies of actual runner/scenario rather than whole ROOT/frontend/web/tests mount
+        test_scratch = scratch / "tests"
+        test_browser = test_scratch / "browser"
+        test_browser.mkdir(parents=True, exist_ok=True)
+        runner_hashes = {}
+        for test_file in ["real-api-study.runner.mjs", "real-api-study.scenario.js"]:
+            src = ROOT / "frontend/web/tests/browser" / test_file
+            if not src.is_file() or src.is_symlink():
+                raise ValueError("Invalid test runner file: " + test_file)
+            test_data = src.read_bytes()
+            if len(test_data) > 16 * 1024 * 1024:
+                raise ValueError("Oversized test runner file: " + test_file)
+            runner_hashes[test_file] = {
+                "sha256": hashlib.sha256(test_data).hexdigest(),
+                "bytes": len(test_data),
+            }
+            dst = test_browser / test_file
+            dst.write_bytes(test_data)
+            dst.chmod(0o444)
+
         pw_mounts = [
             (str(deps_dir), "/node_modules", True),
             (str(dist_dir), "/dist", True),
-            (str(tests_dir), "/tests", True),
+            (str(test_scratch), "/tests", True),
         ]
         pw_cmd = bounded_playwright(
             prefix + "-browser", PLAYWRIGHT, pw_mounts, network=network, user="1001:1001", memory="2g", scratch=512, shm=256
@@ -517,6 +594,25 @@ tar -C /scratch/output -cf - browser-real-api-result.json browser-real-api-deskt
         browser_artifacts = unpack(raw_output, allowed_artifacts)
         browser_report = json.loads(browser_artifacts["browser-real-api-result.json"].decode("utf-8"))
 
+        # Verify browser-loaded WASM response bytes against dist manifest
+        loaded_wasm = browser_report.get("reports", {}).get("loaded_wasm_assets") or browser_report.get("loaded_wasm_assets", {})
+        for w_asset in ["signalgen_core.wasm", "wasm_exec.js", "signalgen_core.manifest.json"]:
+            if w_asset not in loaded_wasm:
+                raise ValueError(f"Browser did not observe response for /wasm/{w_asset}")
+            loaded_info = loaded_wasm[w_asset]
+            dist_key = f"wasm/{w_asset}"
+            if loaded_info["sha256"] != dist_hashes[dist_key]["sha256"]:
+                raise ValueError(f"Browser loaded {w_asset} SHA-256 mismatch against dist: {loaded_info['sha256']} vs {dist_hashes[dist_key]['sha256']}")
+            if loaded_info["bytes"] != dist_hashes[dist_key]["bytes"]:
+                raise ValueError(f"Browser loaded {w_asset} byte count mismatch against dist: {loaded_info['bytes']} vs {dist_hashes[dist_key]['bytes']}")
+
+        # Verify truthful sandbox reporting
+        b_info = browser_report.get("browser_info", {})
+        if b_info.get("chromium_internal_sandbox") is not False:
+            raise ValueError(f"Expected chromium_internal_sandbox to be False, got {b_info.get('chromium_internal_sandbox')}")
+        if b_info.get("os_container_isolation_enforced") is not True:
+            raise ValueError(f"Expected os_container_isolation_enforced to be True, got {b_info.get('os_container_isolation_enforced')}")
+
         evidence_dir = ROOT / "docs/evidence"
         evidence_dir.mkdir(parents=True, exist_ok=True)
 
@@ -526,6 +622,9 @@ tar -C /scratch/output -cf - browser-real-api-result.json browser-real-api-deskt
                 dest_png = evidence_dir / name
                 dest_png.write_bytes(data)
                 copied_screenshots.append(str(dest_png.relative_to(ROOT)))
+
+        head_commit = call(["git", "rev-parse", "HEAD"]).decode().strip()
+        git_dirty = bool(call(["git", "status", "--porcelain", "frontend/web"]).decode().strip())
 
         evidence = {
             "date": "2026-11-16",
@@ -561,12 +660,29 @@ tar -C /scratch/output -cf - browser-real-api-result.json browser-real-api-deskt
             "bootstrap": seed.strip(),
             "browser_report": browser_report,
             "screenshots": copied_screenshots,
-            "dist_source": {
-                "path": "scratch/dist (offline container build)",
+            "frontend_source_manifest": {
+                "head_commit": head_commit,
+                "dirty": git_dirty,
+                "total_tracked_files": len(web_hashes),
+                "files": web_hashes,
+            },
+            "test_runner_manifest": {
+                "files": runner_hashes,
+            },
+            "dependencies_manifest": {
+                "lockfile_sha256": hashlib.sha256(lockfile_path.read_bytes()).hexdigest(),
+                "playwright_version": "1.64.1",
+                "approved_packages": approved_packages,
+            },
+            "dist_manifest": {
                 "total_files": len(dist_hashes),
-                "wasm_sha256": dist_hashes.get("wasm/signalgen_core.wasm"),
-                "index_sha256": dist_hashes.get("index.html"),
-                "manifest_sha256": dist_hashes.get("wasm/signalgen_core.manifest.json"),
+                "files": dist_hashes,
+            },
+            "wasm_runtime_identity": {
+                "signalgen_core_wasm": dist_hashes.get("wasm/signalgen_core.wasm"),
+                "wasm_exec_js": dist_hashes.get("wasm/wasm_exec.js"),
+                "signalgen_core_manifest_json": dist_hashes.get("wasm/signalgen_core.manifest.json"),
+                "browser_loaded_verified": True,
             },
             "verified_boundaries": {
                 "mock_upstream_idp_only": True,

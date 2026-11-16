@@ -56,16 +56,36 @@ All containers share the disposable PostgreSQL container's `network-none` loopba
    - Clicked "Start signal study".
    - The Go API created the study context (`POST /api/v1/backtests/studies`), served dataset series, created compute grants (`POST /api/v1/compute-grants`), and evaluated candidate features (`POST /api/v1/backtests/signals`).
    - Web Worker loaded `signalgen_core.wasm` and computed outcomes using `RunSignalStudy`.
-   - Populated Target reached rate displayed: `0.00% · 0/48 evaluated · 0 incomplete` (no "Unavailable" warning).
+   - Exact Target-hit statistics verified: `0.00% · 0/48 evaluated · 0 incomplete` (exact 0/48 denominator, 0 incomplete, 0.00%).
    - Results were stored in native IndexedDB (`signalgen-study-temporary-1`) under owner 0's partition across 23 symbol records and 48 signals.
    - Signal details table displayed all 48 evaluated rows.
-   - Clicked "Export signal details CSV", successfully downloading `signal-study-events.csv` with 481 canonical lines (1 header + 480 outcome rows across 3 steps × 3 bases [open, high, close] + 1 swing for 48 signals). Canonical equality against IndexedDB records was verified.
+   - Clicked "Export signal details CSV", successfully downloading `signal-study-events.csv` with 481 canonical lines (1 header + 480 outcome rows across 3 steps × 3 bases [open, high, close] + 1 swing for 48 signals).
+   - Exact full CSV parsed rows comparison verified cell-by-cell against deterministic IndexedDB expanded tuple projection (symbol, signal_time, direction, reference_close, horizon, basis, status, price, return_pct, currency `IDR`, policy `signal-close-independent-1`, catalog_hash consistency, duplicate coverage, and order).
+   - Browser observed response bytes for `/wasm/signalgen_core.wasm`, `/wasm/wasm_exec.js`, and `/wasm/signalgen_core.manifest.json` with exact SHA-256 and byte counts verified against dist outputs and Go build artifacts without API mocking.
 
 6. **Capacity Control & Recovery**:
    - A concurrent study context creation correctly returned HTTP 429 `STUDY_CAPACITY`.
    - Calling `DELETE /api/v1/backtests/studies/:id` released the handle (HTTP 204).
    - Subsequent retry study context creation immediately returned HTTP 201 without stale locks or orphaned resources.
    - Cleanup deleted the retry study context (HTTP 204) and confirmed deletion with HTTP 404.
+
+## Integrity, Manifests & Sandbox State
+
+- **Chromium Sandbox Truthful Reporting**:
+  `chromium.launch({ headless: true })` runs inside an unprivileged container with `chromium_internal_sandbox: false` and `os_container_isolation_enforced: true`. Playwright's default headless mode inside unprivileged user namespaces does not enable Chromium's internal zygote sandbox (which requires nested user namespaces or SUID sandbox helpers); strict OS-level container isolation is enforced instead (`cap-drop ALL`, `no-new-privileges`, readonly rootfs, private `/dev/shm` 256MB, non-root user `1001:1001`). No privileges were broadened or false sandbox strings invented.
+- **Frontend Source & Built Asset Manifests**:
+  Structured metadata in [browser-real-api-20261116.json](browser-real-api-20261116.json) records:
+  - Exact tracked frontend source file hashes (all 133 tracked web files), HEAD commit, and dirty state.
+  - Test runner hashes for allowlisted test runner and scenario files.
+  - Dependencies identity: lockfile SHA-256 (`c27cd5cbed7490dbd4d92c4e558bdf5dac976e0013ecd49a80627aca21117063`), Playwright version `1.64.1`, and 4 SRI-verified Linux packages (`esbuild`, `rollup`, `@tailwindcss/oxide`, `lightningcss`).
+  - Dist asset manifest: all 103 files in `dist/` with exact SHA-256 and byte counts.
+  - WASM runtime identity: Go compiler outputs, `dist/` assets, and browser-loaded network response bytes match identically (`af366a24c478003595dc5d47e126544d74d32412bcc6486632d40bc679b57c51`).
+- **Bounded Input Validation & Strict Tar Extraction**:
+  - Web source files validated before copy: regular files only, no symlinks, safe relative paths, per-file size <= 16MB, cumulative <= 64MB.
+  - Allowlisted test files: only `real-api-study.runner.mjs` and `real-api-study.scenario.js` mounted to `/tests`.
+  - Dist tar extractor enforces bounded strict regular file extraction, rejecting symlinks, hardlinks, directory traversal, duplicate members, and oversize archives.
+  - WASM boundary script verified with positive, missing required marker, and forbidden marker fixture tests.
+  - CSV canonical equality comparator verified with negative mutation unit probes (price, return_pct, status, duplication, and row count mismatch).
 
 ## Visual Evidence
 

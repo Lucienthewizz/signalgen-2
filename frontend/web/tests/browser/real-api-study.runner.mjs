@@ -160,7 +160,8 @@ async function main() {
       browserInfo: {
         version: browserVersion,
         hasShm: Boolean(shmStat),
-        sandbox: "standard-unprivileged-user-namespaces",
+        chromium_internal_sandbox: false,
+        os_container_isolation_enforced: true,
       },
     });
 

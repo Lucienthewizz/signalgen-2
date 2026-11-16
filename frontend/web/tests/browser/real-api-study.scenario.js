@@ -2,6 +2,121 @@
 // Upstream IDP and prices are synthetic fixtures; all product API decisions and WASM evaluations are real.
 // No API route mocking or route fulfillment.
 
+import crypto from "node:crypto";
+
+export function parseCsvLine(line) {
+  const cleaned = line.replace(/^\uFEFF/, "");
+  const cells = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < cleaned.length; i++) {
+    const c = cleaned[i];
+    if (c === '"') {
+      if (inQuotes && cleaned[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (c === ',' && !inQuotes) {
+      cells.push(current);
+      current = "";
+    } else {
+      current += c;
+    }
+  }
+  cells.push(current);
+  return cells;
+}
+
+export function verifyCsvCanonicalEquality(csvText, expectedRows, options = {}) {
+  const lines = csvText.trim().split(/\r?\n/);
+  if (lines.length !== expectedRows.length + 1) {
+    throw new Error(`CSV line count mismatch: expected ${expectedRows.length + 1}, got ${lines.length}`);
+  }
+
+  const expectedHeader = '"symbol","signal_time","direction","reference_close","horizon","basis","status","price","return_pct","currency","policy","catalog_hash"';
+  if (lines[0] !== expectedHeader) {
+    throw new Error(`CSV header mismatch: expected ${expectedHeader}, got ${lines[0]}`);
+  }
+
+  const seenRowKeys = new Set();
+  let firstCatalogHash = null;
+
+  for (let i = 0; i < expectedRows.length; i++) {
+    const rawLine = lines[i + 1];
+    const exp = expectedRows[i];
+    const cells = parseCsvLine(rawLine);
+    if (cells.length !== 12) {
+      throw new Error(`Row ${i + 1}: expected 12 cells, got ${cells.length}`);
+    }
+
+    const [symbol, signalTime, direction, refClose, horizon, basis, status, price, returnPct, currency, policy, catalogHash] = cells;
+
+    if (symbol !== exp.symbol) {
+      throw new Error(`Row ${i + 1} symbol mismatch: expected ${exp.symbol}, got ${symbol}`);
+    }
+    if (signalTime !== exp.signal_time) {
+      throw new Error(`Row ${i + 1} signal_time mismatch: expected ${exp.signal_time}, got ${signalTime}`);
+    }
+    if (direction !== exp.direction) {
+      throw new Error(`Row ${i + 1} direction mismatch: expected ${exp.direction}, got ${direction}`);
+    }
+    if (Number(refClose) !== Number(exp.reference_close)) {
+      throw new Error(`Row ${i + 1} reference_close mismatch: expected ${exp.reference_close}, got ${refClose}`);
+    }
+    if (Number(horizon) !== Number(exp.horizon)) {
+      throw new Error(`Row ${i + 1} horizon mismatch: expected ${exp.horizon}, got ${horizon}`);
+    }
+    if (basis !== exp.basis) {
+      throw new Error(`Row ${i + 1} basis mismatch: expected ${exp.basis}, got ${basis}`);
+    }
+    if (status !== exp.status) {
+      throw new Error(`Row ${i + 1} status mismatch: expected ${exp.status}, got ${status}`);
+    }
+    if (exp.price === null || exp.price === undefined) {
+      if (price !== "") throw new Error(`Row ${i + 1} price expected empty, got ${price}`);
+    } else if (Math.abs(Number(price) - Number(exp.price)) > 1e-4) {
+      throw new Error(`Row ${i + 1} price mismatch: expected ${exp.price}, got ${price}`);
+    }
+    if (exp.return_pct === null || exp.return_pct === undefined) {
+      if (returnPct !== "") throw new Error(`Row ${i + 1} return_pct expected empty, got ${returnPct}`);
+    } else if (Math.abs(Number(returnPct) - Number(exp.return_pct)) > 1e-4) {
+      throw new Error(`Row ${i + 1} return_pct mismatch: expected ${exp.return_pct}, got ${returnPct}`);
+    }
+    if (currency !== (options.currency || "IDR")) {
+      throw new Error(`Row ${i + 1} currency mismatch: expected ${options.currency || "IDR"}, got ${currency}`);
+    }
+    if (policy !== (options.policy || "SL-first")) {
+      throw new Error(`Row ${i + 1} policy mismatch: expected ${options.policy || "SL-first"}, got ${policy}`);
+    }
+    if (!catalogHash || catalogHash.length < 16) {
+      throw new Error(`Row ${i + 1} catalog_hash invalid: got ${catalogHash}`);
+    }
+    if (options.catalogHashPrefix && !catalogHash.startsWith(options.catalogHashPrefix)) {
+      throw new Error(`Row ${i + 1} catalog_hash prefix mismatch: expected ${options.catalogHashPrefix}, got ${catalogHash}`);
+    }
+    if (firstCatalogHash === null) {
+      firstCatalogHash = catalogHash;
+    } else if (catalogHash !== firstCatalogHash) {
+      throw new Error(`Row ${i + 1} catalog_hash inconsistent: expected ${firstCatalogHash}, got ${catalogHash}`);
+    }
+
+    const rowKey = `${symbol}|${signalTime}|${horizon}|${basis}|${status}`;
+    if (seenRowKeys.has(rowKey)) {
+      throw new Error(`Duplicate outcome row detected: ${rowKey}`);
+    }
+    seenRowKeys.add(rowKey);
+  }
+
+  return {
+    valid: true,
+    totalRows: expectedRows.length,
+    eventsCount: expectedRows.length / 10,
+    catalogHash: firstCatalogHash,
+  };
+}
+
 export async function runScenario({ page, baseURL, apiOrigin, screenshotDir = "output", browserInfo = {} }) {
   const reports = {};
   const requestLog = [];
@@ -44,6 +159,26 @@ export async function runScenario({ page, baseURL, apiOrigin, screenshotDir = "o
         method: req.method(),
       });
     }
+  });
+
+  // Track browser-loaded WASM/runtime asset responses (no API fulfillment or route interception)
+  const loadedAssets = {};
+  page.on("response", async (res) => {
+    try {
+      const url = new URL(res.url());
+      if (url.pathname.startsWith("/wasm/")) {
+        const name = url.pathname.slice("/wasm/".length);
+        if (["signalgen_core.wasm", "wasm_exec.js", "signalgen_core.manifest.json"].includes(name)) {
+          const body = await res.body();
+          const hash = crypto.createHash("sha256").update(body).digest("hex");
+          loadedAssets[name] = {
+            bytes: body.length,
+            sha256: hash,
+            status: res.status(),
+          };
+        }
+      }
+    } catch {}
   });
 
   // 1. Establish Real Saved Rule & Pre-verify Owner Isolation via Actual Go API
@@ -381,7 +516,7 @@ export async function runScenario({ page, baseURL, apiOrigin, screenshotDir = "o
   });
   assertUi(studyRowCount === 48, `Expected 48 evaluated signal rows in UI table, got ${studyRowCount}`);
 
-  // Verify Target-Hit statistics: must be populated and NOT contain "Unavailable"
+  // Verify Target-Hit statistics: exact 0/48 evaluated denominator, 0 incomplete, 0.00%
   const targetStats = await page.evaluate(() => {
     const el = document.querySelector('[aria-label="Target-hit statistics"]');
     return el?.textContent?.trim() || "";
@@ -389,6 +524,19 @@ export async function runScenario({ page, baseURL, apiOrigin, screenshotDir = "o
   assertUi(Boolean(targetStats), "Target-hit statistics element present");
   assertUi(!targetStats.includes("Unavailable"), `Target-hit stats must not be Unavailable, got: ${targetStats}`);
   assertUi(targetStats.includes("Target reached rate:"), `Target-hit stats label verified: ${targetStats}`);
+  assertUi(targetStats.includes("0/48 evaluated"), `Target-hit exact denominator verified: ${targetStats}`);
+  assertUi(targetStats.includes("0 incomplete"), `Target-hit exact incomplete count verified: ${targetStats}`);
+  assertUi(targetStats.includes("0.00%"), `Target-hit exact percentage verified: ${targetStats}`);
+
+  // Read catalog_hash prefix from the UI status text
+  const catalogHashPrefix = await page.evaluate(() => {
+    const ps = Array.from(document.querySelectorAll(".signal-study-panel p"));
+    for (const p of ps) {
+      const match = p.textContent?.match(/Catalog\s+([a-f0-9]{10,})/i);
+      if (match) return match[1];
+    }
+    return null;
+  });
 
   // Read real IndexedDB ledger/rows directly from signalgen-study-temporary-1
   const idbData = await page.evaluate(async () => {
@@ -440,6 +588,46 @@ export async function runScenario({ page, baseURL, apiOrigin, screenshotDir = "o
     "IndexedDB keys enforce owner prefix partitioning",
   );
 
+  // Build expected projection from IndexedDB compact events
+  const bases = ["open", "high", "close", "low", "barrier"];
+  const statuses = ["evaluated", "incomplete", "time_exit", "stop_loss", "take_profit", "screened"];
+  const expandOutcome = (o) => ({
+    basis: bases[o[0]],
+    step: o[1],
+    status: statuses[o[2]],
+    price: o[3],
+    return_pct: o[4],
+    timestamp: o[5],
+  });
+
+  const expectedRows = [];
+  for (const record of idbData.records) {
+    for (const event of record.events) {
+      const sym = record.symbol;
+      const timestamp = event[0];
+      const sigType = event[1];
+      const refPrice = event[2];
+      const outcomes = event[3].map(expandOutcome);
+      const swing = expandOutcome(event[4]);
+      for (const o of [...outcomes, swing]) {
+        expectedRows.push({
+          symbol: sym,
+          signal_time: timestamp,
+          direction: sigType,
+          reference_close: refPrice,
+          horizon: o.step,
+          basis: o.basis,
+          status: o.status,
+          price: o.price,
+          return_pct: o.return_pct,
+          currency: "IDR",
+          policy: "signal-close-independent-1",
+        });
+      }
+    }
+  }
+  assertUi(expectedRows.length === 480, `Expected 480 projected outcome rows from IndexedDB, got ${expectedRows.length}`);
+
   // Verify CSV export functionality & canonical equality against IndexedDB oracle
   const downloadPromise = page.waitForEvent("download", { timeout: 15000 });
   const exportBtn = page.getByRole("button", { name: "Export signal details CSV", exact: true });
@@ -452,26 +640,31 @@ export async function runScenario({ page, baseURL, apiOrigin, screenshotDir = "o
   for await (const chunk of await csvFile.createReadStream()) {
     csvText += chunk.toString("utf8");
   }
-  const csvLines = csvText.trim().split(/\r?\n/);
-  // Expected schema: 1 header line + 480 outcome rows (48 signals * 10 outcomes [3 steps * 3 bases (open, high, close) + 1 swing]) = 481 lines
-  assertUi(csvLines.length === 481, `Expected 481 canonical CSV lines (1 header + 480 outcomes), got ${csvLines.length}`);
-  const expectedHeader = '"symbol","signal_time","direction","reference_close","horizon","basis","status","price","return_pct","currency","policy","catalog_hash"';
-  assertUi(csvLines[0] === expectedHeader, `CSV header line matches canonical schema: ${csvLines[0]}`);
 
-  // Verify all symbols and timestamps in IndexedDB appear in the CSV export
-  const csvSymbols = new Set(csvLines.slice(1).map((l) => l.split(",")[0].replace(/"/g, "")));
-  for (const record of idbData.records) {
-    if (record.eventCount > 0) {
-      assertUi(csvSymbols.has(record.symbol), `Symbol ${record.symbol} from IndexedDB present in CSV`);
-    }
-  }
+  // Exact full CSV parsed rows comparison
+  const csvComparison = verifyCsvCanonicalEquality(csvText, expectedRows, {
+    currency: "IDR",
+    policy: "signal-close-independent-1",
+    catalogHashPrefix: catalogHashPrefix || undefined,
+  });
+  assertUi(csvComparison.valid, "Full CSV canonical row-by-row equality verified against IndexedDB oracle");
+  assertUi(csvComparison.totalRows === 480, `Expected 480 outcome rows in CSV comparison, got ${csvComparison.totalRows}`);
+  assertUi(Boolean(csvComparison.catalogHash), `Verified non-empty catalog hash in CSV: ${csvComparison.catalogHash}`);
 
+  // Verify browser loaded WASM assets and their hashes
+  assertUi(Boolean(loadedAssets["signalgen_core.wasm"]), "signalgen_core.wasm was loaded by the browser");
+  assertUi(Boolean(loadedAssets["wasm_exec.js"]), "wasm_exec.js was loaded by the browser");
+  assertUi(Boolean(loadedAssets["signalgen_core.manifest.json"]), "signalgen_core.manifest.json was loaded by the browser");
+
+  reports.loaded_wasm_assets = loadedAssets;
   reports.evaluation_and_wasm = {
     method: "target",
     tp_pct: 5,
     signals_evaluated: studyRowCount,
     csv_filename: csvFile.suggestedFilename(),
-    csv_rows: csvLines.length,
+    csv_rows: expectedRows.length + 1,
+    csv_outcomes_compared: csvComparison.totalRows,
+    catalog_hash: csvComparison.catalogHash,
     stats_text: targetStats,
     indexeddb: {
       database: "signalgen-study-temporary-1",
