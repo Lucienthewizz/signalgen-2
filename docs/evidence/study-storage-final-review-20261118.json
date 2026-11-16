@@ -1,0 +1,49 @@
+{
+  "review": "study-storage-final",
+  "reviewedCommit": "834f3c62e2f9c3e3a1282d21d36fb320ea8a4c03",
+  "productSource": "frontend/web/src/analysis/signal-study-storage.ts",
+  "candidateImplementationCommit": "df92fc14a4637cca153b55a884731c1d0804a2b8",
+  "baselineCommit": "e74b1651d7e04059141b4f7ff9a4d1f23f6c2c8e",
+  "hashes": {
+    "candidateSourceSha256": "43f81fd8f588db1b069caff664d88ffb9182601bbca848b313754e578300d2fb",
+    "baselineFixtureSha256": "02d767b09aaf7d52c2eeb61ac886c8b51c53fa426a221691861463c3f7fef78c",
+    "pairedEvidenceSha256": "bcdc76e3d6d9de452724f004315d8737f01a84ae5a13cb58922aef99dabb31ec",
+    "measurementLogSha256": "469800e660bda604b4b32304b200323454548a3a7505d66fb325cfa02725ca64",
+    "runnerSha256": "10cf6301dc511d37188735c47aecadaff152169642bd1f6ff0003b615643c46b"
+  },
+  "sourceChecks": {
+    "productSourceUnchangedFromCandidate": true,
+    "baselineFixtureMatchesBaselineSource": true,
+    "pairedEvidenceHasThreeSamplesPerSourcePerScenario": true,
+    "warmupAndOrderRecorded": "one warmup; B-C, C-B, B-C",
+    "oracle": {
+      "totalEvents": 80,
+      "sha256": "ae0f70165a02abd6c9bb2c30662a3477947f9008aa03848d9d5c6162fecae5fe",
+      "paginatedMatches": true,
+      "csvMatches": true
+    }
+  },
+  "recordedNativeChecks": {
+    "twoPageSameContextSameOriginDifferentSymbols": true,
+    "twoPageSameContextSameOriginSameSymbolOverwrite": true,
+    "readonlyAbortRejection": true,
+    "quotaRollback": true,
+    "cancellationRollback": true,
+    "legacyWriteRegression": true,
+    "ownerIsolation": true,
+    "exactCanonicalEquality": true
+  },
+  "assessment": {
+    "r1": "closed_for_recorded_evidence",
+    "r2": "closed_for_exercised_schedules",
+    "r3": "closed_for_recorded_cases",
+    "confirmedFinding": "F1 runner omits required Docker context/platform inspection and resource controls and hard-codes dependency path",
+    "functionalDefectConfirmed": false
+  },
+  "limitations": [
+    "No full benchmark rerun in this review",
+    "No worker or cross-browser-context race coverage",
+    "Same-symbol winner is nondeterministic and payload winner is not selected",
+    "Native Chromium synthetic results do not prove production or all-device performance"
+  ]
+}
