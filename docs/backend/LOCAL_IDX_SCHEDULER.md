@@ -34,7 +34,7 @@ Set these variables in a clean operator shell; never copy personal environment
 files into the image or repository:
 
 ```sh
-export SIGNALGEN_LOCAL_IMAGE='sha256:9135b73273b75c6cb11431f539e4264bf31c70ed5dc345c47cd52c5317510b3c'
+export SIGNALGEN_LOCAL_IMAGE='sha256:ae53e95a19711d59ebe8f7efd0ce68d85c6347702bd2d2c7498f70ab21afad7a'
 export SIGNALGEN_LOCAL_IDX_STORE=/absolute/private/idx-store
 export SIGNALGEN_LOCAL_IDX_CATALOG=/absolute/operator/catalog.csv
 export SIGNALGEN_LOCAL_API_ENV_FILE=/absolute/explicit/api-env-file

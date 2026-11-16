@@ -1,0 +1,42 @@
+{
+  "schema": "idx-archive-activation-evidence-2",
+  "source_commit": "15c27e18e9d326529516f1b33884220da8e574aa",
+  "runtime_image": "sha256:ae53e95a19711d59ebe8f7efd0ce68d85c6347702bd2d2c7498f70ab21afad7a",
+  "rollback_image": "sha256:d4a008edc07e48837b4784a5e1be1f806bd4b8bc522f6704412719c6506f6d02",
+  "catalog": {
+    "source": "project://signalgen.stock_catalog",
+    "symbols": 962,
+    "private": true
+  },
+  "archive": {
+    "published_success": 882,
+    "visible_failed": 80,
+    "visible_pending": 0,
+    "coverage_mode": "explicit_partial",
+    "raw_data_private": true
+  },
+  "api": {
+    "service": "signalgen-2-go-api-1",
+    "market_data_mode": "idx_store",
+    "archive_mount": "read_only",
+    "health": "ok",
+    "ready": "ready",
+    "cutover": true
+  },
+  "scheduler": {
+    "service": "signalgen-2-idx-scheduler",
+    "state": "running",
+    "restart_policy": "unless-stopped",
+    "catalog_mount": "read_only",
+    "store_mount": "read_write",
+    "delay": "1s",
+    "run_timeout": "2h",
+    "next_update": "after_current_run_plus_24h"
+  },
+  "verification": {
+    "focused_race": "passed",
+    "focused_vet": "passed",
+    "packaged_runtime_smoke": "passed",
+    "authenticated_scan": false
+  }
+}
