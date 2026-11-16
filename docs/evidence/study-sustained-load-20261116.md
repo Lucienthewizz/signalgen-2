@@ -2,11 +2,11 @@
 
 ## Source Base and Environmental Controls
 
-All tests and measurements were executed against the checked-out worktree on branch `frontend/prof-api-sustained` at commit `d8a36cb3fdfae97085dd2ce8d83c41429182931a`.
+All tests and measurements were executed against the checked-out worktree on branch `frontend/prof-api-sustained` at commit `49c2a7805be2c93462e3dad05113defb70d51c66`.
 
 | Item | Value / Identity |
 | --- | --- |
-| Measurement Date | 16 November 2026 (UTC timestamp: `2026-11-16T04:39:03Z`) |
+| Measurement Date | 16 November 2026 (UTC timestamp: `2026-11-16T04:51:47Z`) |
 | Worktree Branch | `frontend/prof-api-sustained` |
 | Pinned Docker Image | `golang:1.27.2-bookworm` (`sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61`) |
 | Container Platform | `linux/arm64` via `--context orbstack` with `--pull=never` |
@@ -33,20 +33,20 @@ The measurement executed a continuous sustained closed-loop client workload for 
 
 | Metric | Concurrency 1 | Concurrency 10 | Concurrency 30 | Concurrency 40 |
 | --- | --- | --- | --- | --- |
-| **Target Attempts** | 259 | 698 | 703 | 460 |
-| **Initiated Attempts** | 259 | 698 | 703 | 460 |
-| **Completed Whole Studies** | 259 | 698 | 687 | 434 |
-| **Capacity Rejected (429)** | 0 | 0 | 16 | 26 |
+| **Target Attempts** | 222 | 703 | 657 | 570 |
+| **Initiated Attempts** | 222 | 703 | 657 | 570 |
+| **Completed Whole Studies** | 222 | 703 | 643 | 542 |
+| **Capacity Rejected (429)** | 0 | 0 | 14 | 28 |
 | **Unexpected Failures** | 0 | 0 | 0 | 0 |
 | **Cancelled** | 0 | 0 | 0 | 0 |
 | **Peak Admitted Contexts** | 1 (limit 32) | 10 (limit 32) | 30 (limit 32) | 32 (limit 32) |
 | **Peak In-Flight Snapshots** | 10 (limit 128) | 100 (limit 128) | 126 (limit 128) | 126 (limit 128) |
-| **Warmup Duration** | 37.94 ms | 77.82 ms | 2,096.87 ms | 2,133.86 ms |
-| **Measured Sustained Duration** | 5,011.09 ms (5.01 s) | 5,039.86 ms (5.04 s) | 6,175.12 ms (6.18 s) | 6,219.06 ms (6.22 s) |
-| **Throughput (Completed Studies/s)** | 51.69 | 138.50 | 111.25 | 69.79 |
-| **Throughput (Total Attempts/s)** | 51.69 | 138.50 | 113.84 | 73.97 |
-| **Payload Body Sent** | 81.01 MiB | 218.34 MiB | 214.91 MiB | 135.76 MiB |
-| **Payload Body Received** | 81.73 MiB | 220.27 MiB | 216.83 MiB | 136.99 MiB |
+| **Warmup Duration** | 35.15 ms | 84.44 ms | 2,113.24 ms | 2,124.11 ms |
+| **Measured Sustained Duration** | 5,004.99 ms (5.00 s) | 5,026.83 ms (5.03 s) | 6,084.22 ms (6.08 s) | 7,078.41 ms (7.08 s) |
+| **Throughput (Completed Studies/s)** | 44.36 | 139.85 | 105.68 | 76.57 |
+| **Throughput (Total Attempts/s)** | 44.36 | 139.85 | 107.98 | 80.53 |
+| **Payload Body Sent** | 69.44 MiB | 219.91 MiB | 201.15 MiB | 169.55 MiB |
+| **Payload Body Received** | 70.06 MiB | 221.85 MiB | 202.94 MiB | 171.07 MiB |
 
 > [!NOTE]
 > Payload bytes reflect HTTP request and response message bodies only, excluding transport framing and HTTP headers.
@@ -56,25 +56,27 @@ The measurement executed a continuous sustained closed-loop client workload for 
 
 | Stage | Concurrency 1 | Concurrency 10 | Concurrency 30 | Concurrency 40 |
 | --- | --- | --- | --- | --- |
-| **Create Context** | 0.04 / 0.14 / 1.35 | 0.63 / 1.75 / 2.29 | 0.90 / 2.01 / 2.85 | 1.25 / 3.85 / 7.97 |
-| **Prepare Batch (10 symbols)** | 0.61 / 2.15 / 4.25 | 1.45 / 3.22 / 4.22 | 1.79 / 4.96 / 2,038.24 | 2.49 / 11.95 / 3,011.19 |
-| **Evaluate Stock (Single stock)** | 0.41 / 2.42 / 5.02 | 2.69 / 4.35 / 5.16 | 3.36 / 5.77 / 10.96 | 4.22 / 10.45 / 30.57 |
-| **Evaluate Batch (10 stocks)** | 5.28 / 11.48 / 14.68 | 25.84 / 31.29 / 33.88 | 31.58 / 41.20 / 152.16 | 37.64 / 88.25 / 315.81 |
-| **Release & Delete Context** | 0.02 / 0.11 / 1.72 | 0.66 / 1.76 / 2.40 | 0.86 / 2.48 / 4.23 | 1.02 / 3.89 / 9.53 |
-| **Attempt Latency (All attempts)** | 18.15 / 28.99 / 32.22 | 71.73 / 79.65 / 83.62 | 88.47 / 1,480.49 / 3,011.82 | 115.28 / 2,182.60 / 3,020.24 |
-| **Completed Whole Study Lifecycle** | 18.15 / 28.99 / 32.22 | 71.73 / 79.65 / 83.62 | 88.28 / 668.63 / 2,153.76 | 114.74 / 1,126.96 / 2,183.71 |
+| **Create Context** | 0.04 / 0.14 / 0.82 | 0.61 / 1.76 / 2.37 | 0.90 / 2.76 / 4.41 | 1.09 / 3.15 / 5.08 |
+| **Prepare Batch (10 symbols)** | 0.61 / 2.05 / 4.41 | 1.43 / 3.09 / 4.31 | 1.91 / 5.32 / 2,008.71 | 2.26 / 7.00 / 3,012.58 |
+| **Evaluate Stock (Single stock)** | 0.44 / 2.45 / 5.25 | 2.68 / 4.29 / 5.16 | 3.47 / 6.62 / 10.36 | 4.02 / 8.52 / 11.43 |
+| **Evaluate Batch (10 stocks)** | 5.61 / 11.53 / 15.53 | 25.47 / 31.30 / 33.75 | 31.92 / 54.95 / 72.52 | 35.10 / 64.69 / 79.03 |
+| **Release & Delete Context** | 0.02 / 0.10 / 1.10 | 0.65 / 1.72 / 2.43 | 0.88 / 2.41 / 3.96 | 1.00 / 3.19 / 5.06 |
+| **Attempt Latency (All attempts)** | 19.34 / 29.50 / 33.72 | 71.19 / 79.77 / 86.92 | 90.19 / 1,112.46 / 3,013.98 | 112.89 / 2,191.62 / 3,020.06 |
+| **Rejected Admission Latency** | — | — | — | 2.82 / 2.99 / 2.99 |
+| **Rejected Batch Latency** | — | — | 3,013.65 / 3,015.59 / 3,015.59 | 3,019.33 / 3,059.21 / 3,063.62 |
+| **Completed Whole Study Lifecycle** | 19.34 / 29.50 / 33.72 | 71.19 / 79.77 / 86.92 | 89.88 / 175.75 / 2,080.49 | 110.89 / 198.48 / 2,192.17 |
 
 ### Go Runtime Memory Consumption (Signed Dataless Underflow-Safe)
 
 | Metric | Concurrency 1 | Concurrency 10 | Concurrency 30 | Concurrency 40 |
 | --- | --- | --- | --- | --- |
-| **Heap Alloc Before** | 1.22 MiB | 1.60 MiB | 2.25 MiB | 2.37 MiB |
-| **Heap Alloc After** | 9.51 MiB | 12.61 MiB | 26.27 MiB | 17.70 MiB |
-| **Heap Alloc Delta (Signed)** | +8.29 MiB | +11.01 MiB | +24.02 MiB | +15.33 MiB |
-| **Cumulative Total Alloc** | 2,633.33 MiB | 7,163.88 MiB | 7,055.47 MiB | 4,461.33 MiB |
-| **Heap Mallocs Delta** | 19,290,227 | 51,959,454 | 51,111,950 | 32,305,497 |
-| **Heap Frees Delta** | 19,216,870 | 51,843,451 | 50,908,933 | 32,214,513 |
-| **GC Cycles Delta** | 977 | 964 | 764 | 550 |
+| **Heap Alloc Before** | 1.04 MiB | 1.60 MiB | 2.39 MiB | 2.57 MiB |
+| **Heap Alloc After** | 7.42 MiB | 21.92 MiB | 22.67 MiB | 22.82 MiB |
+| **Heap Alloc Delta (Signed)** | +6.38 MiB | +20.32 MiB | +20.28 MiB | +20.25 MiB |
+| **Cumulative Total Alloc** | 2,256.76 MiB | 7,219.58 MiB | 6,608.52 MiB | 5,573.66 MiB |
+| **Heap Mallocs Delta** | 16,535,014 | 52,334,999 | 47,832,519 | 40,338,554 |
+| **Heap Frees Delta** | 16,470,862 | 52,157,604 | 47,661,737 | 40,163,609 |
+| **GC Cycles Delta** | 838 | 964 | 721 | 626 |
 
 ## Deterministic Invariants and Overload Verification
 
@@ -89,6 +91,8 @@ The measurement executed a continuous sustained closed-loop client workload for 
    - 12 batches were simultaneously prepared (120 snapshots held, and batch 13 was rejected with HTTP 429 `SNAPSHOT_CAPACITY`, `Retry-After: 1`).
    - All 32 contexts were deleted with HTTP 204.
    - Store active snapshots returned to 0.
+5. **Mid-Lifecycle Fault Cleanup & Capacity Recovery (R1):** Table-driven fault injection across 5 mid-lifecycle failure stages (`prepare_500`, `content_500`, `grant_500`, `signals_500`, and `batch_release_500`) confirmed that every mid-lifecycle error terminates with `outcomeFailed`, preserves the underlying error, triggers deferred context deletion, leaves 0 active context leaks and 0 active snapshot leaks in `monitoredDynamicStore`, and fully passes subsequent fresh capacity reservation without degradation (`assertFullCapacityAndZeroLeaks`).
+6. **Rejected Latency Separation (R2):** Explicit latency tracking separates immediate admission rejections (HTTP 429 `STUDY_CAPACITY`, ~2.82 ms p50) from batch snapshot capacity exhaustion (HTTP 429 `SNAPSHOT_CAPACITY`, ~3,019 ms p50 following client closed-loop backoff retry exhaustion).
 
 ## Synthetic Fixture Disclosures and Test Scope Boundaries
 

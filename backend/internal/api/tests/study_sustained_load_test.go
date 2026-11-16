@@ -1159,7 +1159,7 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 		RejectedBatchP95Ms        float64 `json:"rejected_batch_p95_ms,omitempty"`
 		RejectedBatchP99Ms        float64 `json:"rejected_batch_p99_ms,omitempty"`
 		CompletedLifecycleP50Ms   float64 `json:"completed_lifecycle_p50_ms"`
-		CompletedLifecycleP95Ms   float64 `json:"completed_lifecycle_p50_ms"`
+		CompletedLifecycleP95Ms   float64 `json:"completed_lifecycle_p95_ms"`
 		CompletedLifecycleP99Ms   float64 `json:"completed_lifecycle_p99_ms"`
 		MemAllocBeforeBytes       uint64  `json:"mem_alloc_before_bytes"`
 		MemAllocAfterBytes        uint64  `json:"mem_alloc_after_bytes"`
