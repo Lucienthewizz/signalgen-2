@@ -51,6 +51,11 @@ async (page) => {
       for(const failure of ["persistent","timeout"]) {
         mode=failure; reads=0;
         await page.reload();
+        // The failure is announced in the console; its details open on demand.
+        await page.locator(".screener-error-summary").waitFor();
+        if(!await page.getByText("Selections are temporarily unavailable",{exact:true}).isVisible())throw Error("Resource failure is not announced beside the selection task");
+        if(await page.getByText("Create a rule first",{exact:true}).isVisible())throw Error("A failed read is presented as an empty rule catalogue");
+        await page.getByRole("button",{name:"View error",exact:true}).click();
         await page.getByRole("heading",{name:failure === "timeout" ? "Request timed out" : "Service temporarily unavailable",exact:true}).waitFor();
         if(reads !== 2) throw Error(`Retry loop detected: ${reads}`);
         if(!await page.evaluate(()=>sessionStorage.getItem("signalgen.access-token") === "synthetic-not-real")) throw Error("Outage cleared the identity");

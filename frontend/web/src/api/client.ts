@@ -659,6 +659,11 @@ export const api = {
       "/api/v1/portfolio/transactions",
       { signal },
     ),
+  portfolioTransaction: (id: string, signal?: AbortSignal) =>
+    request<import("@/lib/portfolio").PortfolioTransaction>(
+      `/api/v1/portfolio/transactions/${encodeURIComponent(id)}`,
+      { signal },
+    ),
   savePortfolioTransaction: (
     id: string,
     version: number,

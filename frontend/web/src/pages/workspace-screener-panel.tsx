@@ -180,6 +180,7 @@ function LatestScreenerPanel({
   const [ruleId, setRuleId] = useState("");
   const [universeId, setUniverseId] = useState("");
   const [loadingResources, setLoadingResources] = useState(true);
+  const [resourceError, setResourceError] = useState(false);
   const [state, setState] = useState<RunState>("idle");
   const [stage, setStage] = useState("Ready to screen");
   const [progress, setProgress] = useState(0);
@@ -301,6 +302,7 @@ function LatestScreenerPanel({
       );
       setRules(availableRules);
       setUniverses(universeResponse.items);
+      setResourceError(false);
       const saved = readScreenerPreferences(accountResponse.user.id);
       setRuleId((current) =>
         availableRules.some((item) => item.id === (current || saved.ruleId))
@@ -335,6 +337,7 @@ function LatestScreenerPanel({
           ? caught
           : { message: "Screener resources could not be loaded." },
       );
+      setResourceError(true);
       setFailure(
         feedback.action === "retry"
           ? { ...feedback, action: "resources" }
@@ -361,6 +364,9 @@ function LatestScreenerPanel({
     if (resourceIdentity.current !== userId) {
       resourceIdentity.current = userId;
       setAccount(null);
+      setResourceError(false);
+      setRules([]);
+      setUniverses([]);
       setRun(null);
       setRunContext(null);
       setHistoricalRun(null);
@@ -737,6 +743,28 @@ function LatestScreenerPanel({
                 render={<a href="#app/subscription" />}
               >
                 View access
+              </Button>
+            </EmptyContent>
+          </Empty>
+        ) : resourceError && (!rules.length || !universes.length) ? (
+          <Empty className="screener-prerequisites">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <CircleAlert />
+              </EmptyMedia>
+              <EmptyTitle>Selections are temporarily unavailable</EmptyTitle>
+              <EmptyDescription>
+                Your rules and stock selections could not be loaded. This is not
+                an empty workspace. Reload selections before screening.
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button
+                variant="outline"
+                disabled={loadingResources}
+                onClick={() => void loadResources()}
+              >
+                <RefreshCw data-icon="inline-start" /> Reload selections
               </Button>
             </EmptyContent>
           </Empty>

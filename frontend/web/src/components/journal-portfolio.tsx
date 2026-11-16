@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Dialog } from "@base-ui/react/dialog";
-import { api, session } from "@/api/client";
+import { api, ApiError, session } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -17,6 +17,7 @@ import { DateInput } from "@/components/date-input";
 import { JournalPnlChart } from "@/components/journal-pnl-chart";
 import {
   portfolioClosedTrades,
+  confirmsPortfolioWrite,
   type PortfolioData,
   type PortfolioSummary,
   type PortfolioTransaction,
@@ -72,7 +73,13 @@ export function JournalPortfolio({
   const [ledger, setLedger] = useState(false);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [uncertain, setUncertain] = useState<PortfolioTransaction | null>(null);
+  const [retrySame, setRetrySame] = useState(false);
+  const [savedConflict, setSavedConflict] =
+    useState<PortfolioTransaction | null>(null);
   const [notice, setNotice] = useState("");
+  const saveErrorRef = useRef<HTMLParagraphElement>(null);
+  const formLocked = busy || Boolean(uncertain);
   const operation = useRef<AbortController | null>(null);
   const identity = useRef(userId);
   identity.current = userId;
@@ -141,11 +148,19 @@ export function JournalPortfolio({
     setEdit(null);
     setNotice("");
     setBusy(false);
+    setUncertain(null);
+    setRetrySame(false);
+    setSavedConflict(null);
+    setSaveError("");
     setBook("");
     return () => operation.current?.abort();
   }, [userId]);
   useEffect(() => {
     if (draft) {
+      if (operation.current || uncertain) {
+        setOpen(true);
+        return;
+      }
       setForm({
         ...blank(),
         symbol: draft.symbol,
@@ -162,7 +177,15 @@ export function JournalPortfolio({
       setOpen(true);
     }
   }, [draft]);
+  useEffect(() => {
+    if (saveError && !busy) saveErrorRef.current?.focus();
+  }, [saveError, busy]);
   function create() {
+    if (operation.current) return;
+    if (uncertain) {
+      setOpen(true);
+      return;
+    }
     setForm(blank());
     setEdit(null);
     saveId.current = crypto.randomUUID();
@@ -172,10 +195,19 @@ export function JournalPortfolio({
   function close() {
     if (busy) return;
     setOpen(false);
-    onClearDraft();
+    if (!uncertain) onClearDraft();
   }
-  async function save(e: FormEvent) {
-    e.preventDefault();
+  function confirmSaved() {
+    setUncertain(null);
+    setRetrySame(false);
+    setSavedConflict(null);
+    setSaveError("");
+    setOpen(false);
+    onClearDraft();
+    setNotice("Transaction saved.");
+    setReload((v) => v + 1);
+  }
+  async function writeTransaction(tx: PortfolioTransaction) {
     if (operation.current) return;
     const controller = new AbortController(),
       owner = userId,
@@ -188,34 +220,132 @@ export function JournalPortfolio({
       session.getIdentityRevision() === revision &&
       !controller.signal.aborted;
     try {
-      const executed_at = new Date(form.executed_at + "+08:00").toISOString();
-      await api.savePortfolioTransaction(
-        saveId.current,
-        edit?.version ?? 0,
-        {
-          ...form,
-          symbol:
-            form.market === "IDX" &&
-            !form.symbol.trim().toUpperCase().endsWith(".JK")
-              ? form.symbol.trim().toUpperCase() + ".JK"
-              : form.symbol.trim().toUpperCase(),
-          executed_at,
-        },
+      const saved = await api.savePortfolioTransaction(
+        tx.id,
+        tx.version,
+        tx.data,
         controller.signal,
       );
       if (!active()) return;
-      setOpen(false);
-      onClearDraft();
-      setNotice("Transaction saved.");
-      setReload((v) => v + 1);
+      if (!confirmsPortfolioWrite(tx, saved))
+        throw Error("The response did not confirm the submitted transaction.");
+      confirmSaved();
     } catch (e) {
-      if (active()) setSaveError(errorText(e));
+      if (!active()) return;
+      if (
+        uncertain ||
+        !(e instanceof ApiError) ||
+        e.status === 0 ||
+        e.status >= 500 ||
+        e.status === 408 ||
+        e.code === "VERSION_CONFLICT"
+      ) {
+        setUncertain(tx);
+        setRetrySame(false);
+        setSaveError(
+          "Confirmation was not received. This transaction may already be saved. Check transactions before trying again.",
+        );
+      } else setSaveError(errorText(e));
     } finally {
       if (active()) setBusy(false);
       if (operation.current === controller) operation.current = null;
     }
   }
-  function startEdit(tx: PortfolioTransaction) {
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (operation.current || uncertain) return;
+    try {
+      const symbol = form.symbol.trim().toUpperCase();
+      await writeTransaction({
+        id: saveId.current,
+        version: edit?.version ?? 0,
+        data: {
+          ...form,
+          book: form.book.trim(),
+          symbol:
+            form.market === "IDX" && !symbol.endsWith(".JK")
+              ? symbol + ".JK"
+              : symbol,
+          executed_at: new Date(form.executed_at + "+08:00").toISOString(),
+        },
+      });
+    } catch (e) {
+      setSaveError(errorText(e));
+    }
+  }
+  async function checkSaved() {
+    if (!uncertain || operation.current) return;
+    const tx = uncertain,
+      controller = new AbortController(),
+      owner = userId,
+      revision = session.getIdentityRevision();
+    operation.current = controller;
+    setBusy(true);
+    setRetrySame(false);
+    setSavedConflict(null);
+    setSaveError("");
+    const active = () =>
+      identity.current === owner &&
+      session.getIdentityRevision() === revision &&
+      !controller.signal.aborted;
+    try {
+      const saved = await api.portfolioTransaction(tx.id, controller.signal);
+      if (!active()) return;
+      if (
+        !saved?.data ||
+        saved.id !== tx.id ||
+        !Number.isInteger(saved.version) ||
+        saved.version < 1 ||
+        Object.keys(tx.data).some(
+          (key) => typeof saved.data[key as keyof Form] !== "string",
+        )
+      )
+        throw Error("The saved record could not be verified.");
+      if (confirmsPortfolioWrite(tx, saved)) confirmSaved();
+      else if (saved.version === tx.version && tx.version > 0) {
+        setRetrySame(true);
+        setSaveError(
+          "The record still has its earlier version. You can retry the same submitted change without creating another record.",
+        );
+      } else {
+        setSavedConflict(saved);
+        setSaveError(
+          "A different saved version exists. Your draft is preserved. Use the saved version to review it before editing again.",
+        );
+      }
+    } catch (e) {
+      if (!active()) return;
+      if (e instanceof ApiError && e.status === 404) {
+        if (tx.version === 0) {
+          setRetrySame(true);
+          setSaveError(
+            "No matching record was found yet. Retry keeps the same transaction ID and submitted details; it does not create a second draft.",
+          );
+        } else {
+          setUncertain(null);
+          setSaveError(
+            "The original record is no longer available. Close this form and review Transactions before creating a new record.",
+          );
+        }
+      } else
+        setSaveError(
+          "The save could not be verified. Your draft is preserved. Check transactions again when the service is available.",
+        );
+    } finally {
+      if (active()) setBusy(false);
+      if (operation.current === controller) operation.current = null;
+    }
+  }
+  function startEdit(tx: PortfolioTransaction, useSavedVersion = false) {
+    if (operation.current) return;
+    if (uncertain && !useSavedVersion) {
+      setLedger(false);
+      setOpen(true);
+      return;
+    }
+    setUncertain(null);
+    setRetrySame(false);
+    setSavedConflict(null);
     setForm({
       ...tx.data,
       executed_at: new Date(Date.parse(tx.data.executed_at) + 8 * 3600000)
@@ -246,10 +376,12 @@ export function JournalPortfolio({
     value: string,
     options: [string, string][],
     change: (v: string) => void,
+    disabled = false,
   ) => (
     <Select
       items={options.map(([value, label]) => ({ value, label }))}
       value={value}
+      disabled={disabled}
       onValueChange={(v) => change(v ?? "")}
     >
       <SelectTrigger aria-label={label}>
@@ -278,7 +410,7 @@ export function JournalPortfolio({
           <p>Recorded transactions · realized P&amp;L after fees</p>
         </div>
         <Button ref={trigger} size="sm" variant="outline" onClick={create}>
-          Record transaction
+          {uncertain ? "Review pending transaction" : "Record transaction"}
         </Button>
       </header>
       <div className="journal-portfolio__filters">
@@ -352,7 +484,15 @@ export function JournalPortfolio({
           Refresh portfolio
         </Button>
       </footer>
-      {notice && <p role="status">{notice}</p>}
+      <p role="status" aria-atomic="true">
+        {notice}
+      </p>
+      {uncertain && !open && (
+        <p role="status">
+          An unconfirmed transaction draft is preserved. Review it before
+          recording another trade.
+        </p>
+      )}
       <Dialog.Root
         open={open}
         onOpenChange={(value) => {
@@ -374,119 +514,175 @@ export function JournalPortfolio({
                 point. SELL requires recorded holdings in the same portfolio.
               </Dialog.Description>
               <form onSubmit={save}>
-                <FieldGroup className="portfolio-form">
-                  <Field>
-                    <FieldLabel>Market</FieldLabel>
-                    {choose(
-                      "Transaction market",
-                      form.market,
-                      [
-                        ["IDX", "IDX · IDR"],
-                        ["US", "US · USD"],
-                      ],
-                      (v) =>
-                        setForm((f) => ({
-                          ...f,
-                          market: v as "IDX" | "US",
-                          currency: v === "IDX" ? "IDR" : "USD",
-                          quantity: v === "IDX" ? "100" : "1",
-                        })),
+                <p
+                  role="status"
+                  aria-atomic="true"
+                  className="portfolio-save-status"
+                >
+                  {busy
+                    ? uncertain
+                      ? "Checking transaction status…"
+                      : "Saving transaction. Submitted details are locked."
+                    : uncertain
+                      ? "Submitted details are locked until the save is checked."
+                      : ""}
+                </p>
+                <fieldset
+                  disabled={formLocked}
+                  className="min-w-0 border-0 p-0"
+                >
+                  <FieldGroup className="portfolio-form">
+                    <Field>
+                      <FieldLabel>Market</FieldLabel>
+                      {choose(
+                        "Transaction market",
+                        form.market,
+                        [
+                          ["IDX", "IDX · IDR"],
+                          ["US", "US · USD"],
+                        ],
+                        (v) =>
+                          setForm((f) => ({
+                            ...f,
+                            market: v as "IDX" | "US",
+                            currency: v === "IDX" ? "IDR" : "USD",
+                            quantity: v === "IDX" ? "100" : "1",
+                          })),
+                      )}
+                    </Field>
+                    {field("symbol", "Stock symbol", "text", { maxLength: 20 })}
+                    <Field>
+                      <FieldLabel>Transaction side</FieldLabel>
+                      {choose(
+                        "Transaction side",
+                        form.side,
+                        [
+                          ["BUY", "BUY · add shares"],
+                          ["SELL", "SELL · close shares"],
+                        ],
+                        (v) =>
+                          setForm((f) => ({ ...f, side: v as "BUY" | "SELL" })),
+                      )}
+                    </Field>
+                    {field(
+                      "quantity",
+                      form.market === "IDX" ? "Shares (100 per lot)" : "Shares",
+                      "number",
+                      {
+                        min: form.market === "IDX" ? 100 : 0.000001,
+                        step: form.market === "IDX" ? 100 : 0.000001,
+                        max: 100000000,
+                      },
                     )}
-                  </Field>
-                  {field("symbol", "Stock symbol", "text", { maxLength: 20 })}
-                  <Field>
-                    <FieldLabel>Transaction side</FieldLabel>
-                    {choose(
-                      "Transaction side",
-                      form.side,
-                      [
-                        ["BUY", "BUY · add shares"],
-                        ["SELL", "SELL · close shares"],
-                      ],
-                      (v) =>
-                        setForm((f) => ({ ...f, side: v as "BUY" | "SELL" })),
+                    {field(
+                      "price",
+                      `Executed price (${form.currency})`,
+                      "number",
+                      { min: 0.000001, step: 0.000001, max: 1000000000 },
                     )}
-                  </Field>
-                  {field(
-                    "quantity",
-                    form.market === "IDX" ? "Shares (100 per lot)" : "Shares",
-                    "number",
-                    {
-                      min: form.market === "IDX" ? 100 : 0.000001,
-                      step: form.market === "IDX" ? 100 : 0.000001,
-                      max: 100000000,
-                    },
-                  )}
-                  {field(
-                    "price",
-                    `Executed price (${form.currency})`,
-                    "number",
-                    { min: 0.000001, step: 0.000001, max: 1000000000 },
-                  )}
-                  {field("fee", `Fee (${form.currency})`, "number", {
-                    min: 0,
-                    step: 0.000001,
-                  })}
-                  <Field>
-                    <FieldLabel htmlFor="portfolio-date">
-                      Execution date (SGT)
-                    </FieldLabel>
-                    <DateInput
-                      id="portfolio-date"
-                      value={form.executed_at.slice(0, 10)}
-                      onValueChange={(value) =>
-                        setForm((f) => ({
-                          ...f,
-                          executed_at: value + f.executed_at.slice(10),
-                        }))
-                      }
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="portfolio-time">
-                      Execution time (SGT)
-                    </FieldLabel>
-                    <Input
-                      id="portfolio-time"
-                      type="time"
-                      step="1"
-                      required
-                      value={form.executed_at.slice(11, 19)}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          executed_at:
-                            f.executed_at.slice(0, 11) + e.target.value,
-                        }))
-                      }
-                    />
-                  </Field>
-                  {field("book", "Portfolio name", "text", { maxLength: 80 })}
-                  <Field>
-                    <FieldLabel htmlFor="portfolio-note">Trade note</FieldLabel>
-                    <Input
-                      id="portfolio-note"
-                      value={form.note}
-                      maxLength={2000}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, note: e.target.value }))
-                      }
-                    />
-                  </Field>
-                </FieldGroup>
-                {saveError && <p role="alert">{saveError}</p>}
+                    {field("fee", `Fee (${form.currency})`, "number", {
+                      min: 0,
+                      step: 0.000001,
+                    })}
+                    <Field>
+                      <FieldLabel htmlFor="portfolio-date">
+                        Execution date (SGT)
+                      </FieldLabel>
+                      <DateInput
+                        id="portfolio-date"
+                        value={form.executed_at.slice(0, 10)}
+                        onValueChange={(value) =>
+                          setForm((f) => ({
+                            ...f,
+                            executed_at: value + f.executed_at.slice(10),
+                          }))
+                        }
+                        required
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="portfolio-time">
+                        Execution time (SGT)
+                      </FieldLabel>
+                      <Input
+                        id="portfolio-time"
+                        type="time"
+                        step="1"
+                        required
+                        value={form.executed_at.slice(11, 19)}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            executed_at:
+                              f.executed_at.slice(0, 11) + e.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
+                    {field("book", "Portfolio name", "text", { maxLength: 80 })}
+                    <Field>
+                      <FieldLabel htmlFor="portfolio-note">
+                        Trade note
+                      </FieldLabel>
+                      <Input
+                        id="portfolio-note"
+                        value={form.note}
+                        maxLength={2000}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, note: e.target.value }))
+                        }
+                      />
+                    </Field>
+                  </FieldGroup>
+                </fieldset>
+                {saveError && (
+                  <p role="alert" ref={saveErrorRef} tabIndex={-1}>
+                    {saveError}
+                  </p>
+                )}
                 <div className="portfolio-dialog__actions">
-                  <Button type="submit" disabled={busy}>
-                    {busy ? "Saving…" : "Save transaction"}
-                  </Button>
+                  {uncertain ? (
+                    <>
+                      <Button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void checkSaved()}
+                      >
+                        {busy ? "Checking…" : "Check transactions"}
+                      </Button>
+                      {retrySame && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => void writeTransaction(uncertain)}
+                        >
+                          Retry same transaction
+                        </Button>
+                      )}
+                      {savedConflict && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => startEdit(savedConflict, true)}
+                        >
+                          Use saved version
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <Button type="submit" disabled={busy}>
+                      {busy ? "Saving…" : "Save transaction"}
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     disabled={busy}
                     onClick={close}
                   >
-                    Cancel
+                    {uncertain ? "Keep draft" : "Cancel"}
                   </Button>
                 </div>
               </form>

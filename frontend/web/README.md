@@ -1,5 +1,40 @@
 # Signalgen Web
 
+## Unsafe write recovery and auth artwork (16 November 2026)
+
+A transaction write is now treated as three distinct outcomes instead of two.
+While the request runs, the whole form sits in a disabled `fieldset`, a polite
+status names the pending save, and repeated clicks issue one PUT. If the
+connection drops or the server returns 5xx/408, the submitted values stay
+frozen and the dialog offers **Check transactions** before any new write: it
+reads the same UUID through the existing record endpoint and confirms only an
+identical payload at a higher version (`confirmsPortfolioWrite`). A 404 or an
+unchanged draft offers **Retry same transaction**, which reuses that UUID; a
+different saved version offers **Use saved version** instead of overwriting.
+Retrying an unchanged draft against the server's own idempotent create path is
+safe because the payload and ID are identical.
+
+A confirmed write stays confirmed when the portfolio read that follows fails:
+the notice reads **Transaction saved.** while the portfolio shows
+**Portfolio unavailable** and **Refresh portfolio**, which retries reads only.
+
+A failed rule/selection read no longer renders **Create a rule first**. The
+console announces **Selections are temporarily unavailable** with **Reload
+selections**, and the dialog keeps the same recovery action.
+
+Auth keeps one equal split, but the artwork panel now sits on the left with the
+generated explorer image (green texture, dark scrim, headline and proof at the
+bottom) and the form on the right. The form stays first in DOM order so
+keyboard and screen-reader users reach the task immediately; the artwork is
+hidden below 1020px and marked decorative.
+
+Checks: `npm test` (272 assertions), `npm run typecheck`, `npm run build`,
+`npm run test:recovery`, `npm run test:auth`, `npm run test:journal-explorer`.
+The recovery and auth suites use synthetic accounts and intercepted APIs; the
+recovery fixture now opens its own error dialog instead of expecting one to
+appear. Browser probes for this change live beside the design document, not in
+this repository.
+
 ## Interactive journal chart (30 October 2026)
 
 - Each closed trade is a separate cumulative P&L point, including same-day

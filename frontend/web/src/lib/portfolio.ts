@@ -36,6 +36,37 @@ export type PortfolioSummary = {
     realized_pnl: string;
   }[];
 };
+export function confirmsPortfolioWrite(
+  expected: PortfolioTransaction,
+  saved: PortfolioTransaction,
+): boolean {
+  const decimalKey = (value: string) => {
+    if (typeof value !== "string" || !/^\d+(?:\.\d{1,6})?$/.test(value))
+      return null;
+    const [whole, part = ""] = value.split(".");
+    return `${whole.replace(/^0+(?=\d)/, "")}.${part.replace(/0+$/, "")}`;
+  };
+  const timeKey = (value: string) => {
+    if (!Number.isFinite(Date.parse(value))) return null;
+    const fraction = value.match(/\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/)?.[1] ?? "";
+    return `${Date.parse(value)}:${fraction.padEnd(6, "0").slice(3)}`;
+  };
+  return (
+    saved.id === expected.id &&
+    Number.isInteger(saved.version) &&
+    saved.version > expected.version &&
+    (["quantity", "price", "fee"] as const).every((key) => {
+      const value = decimalKey(expected.data[key]);
+      return value !== null && decimalKey(saved.data[key]) === value;
+    }) &&
+    timeKey(expected.data.executed_at) !== null &&
+    timeKey(saved.data.executed_at) === timeKey(expected.data.executed_at) &&
+    (["symbol", "market", "currency", "side", "book", "note"] as const).every(
+      (key) => saved.data[key] === expected.data[key],
+    )
+  );
+}
+
 type Fraction = { n: bigint; d: bigint };
 const gcd = (a: bigint, b: bigint): bigint => {
   a = a < 0n ? -a : a;
