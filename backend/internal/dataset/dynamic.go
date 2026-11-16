@@ -24,6 +24,8 @@ type dynamicEntry struct {
 	manifest   Manifest
 	content    []byte
 	expiresAt  time.Time
+	// Study snapshot calls counted against MaxStudyDatasetUses.
+	grantUses, signalUses int
 }
 
 // SnapshotLimits bound private datasets without evicting active handles. Full

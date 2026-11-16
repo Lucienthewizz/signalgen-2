@@ -56,7 +56,12 @@ type StudyContext struct {
 	operands          []string
 	busy              bool
 	activeBatch       int
+	prepares          map[int]int
 }
+
+// maxStudyBatchPrepares allows the first preparation of a batch plus retries.
+const maxStudyBatchPrepares = 5
+
 type StudyHandler struct {
 	*shared.Context
 	Purpose string
@@ -76,7 +81,11 @@ func (h *StudyHandler) purpose() string {
 	}
 	return "backtest"
 }
-func (h *StudyHandler) authorize(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+
+// authorize checks session and access. Only study creation uses the per-minute
+// limiter; batch preparation is bounded per batch by maxStudyBatchPrepares, so
+// a whole-catalog study is not throttled by its own batch count.
+func (h *StudyHandler) authorize(w http.ResponseWriter, r *http.Request, rateLimited bool) (string, string, bool) {
 	p, s, _, ok := h.RequireAppSession(w, r)
 	if !ok {
 		return "", "", false
@@ -89,7 +98,7 @@ func (h *StudyHandler) authorize(w http.ResponseWriter, r *http.Request) (string
 		shared.WriteAccessError(w, r, err)
 		return "", "", false
 	}
-	if !h.AllowRate(w, r, "backtests:study", p.ID) {
+	if rateLimited && !h.AllowRate(w, r, "backtests:study", p.ID) {
 		return "", "", false
 	}
 	if _, ok := h.Datasets.(studyDatasets); !ok {
@@ -108,7 +117,7 @@ func (h *StudyHandler) definition(ctx context.Context, owner, id string) (core.R
 	return r.Definition, r.DefinitionHash, e
 }
 func (h *StudyHandler) Create(w http.ResponseWriter, r *http.Request) {
-	owner, sid, ok := h.authorize(w, r)
+	owner, sid, ok := h.authorize(w, r, true)
 	if !ok {
 		return
 	}
@@ -214,7 +223,7 @@ type StudyFailure struct {
 }
 
 func (h *StudyHandler) Batch(w http.ResponseWriter, r *http.Request) {
-	owner, sid, ok := h.authorize(w, r)
+	owner, sid, ok := h.authorize(w, r, false)
 	if !ok {
 		return
 	}
@@ -246,6 +255,14 @@ func (h *StudyHandler) Batch(w http.ResponseWriter, r *http.Request) {
 		item.activeBatch = -1
 		h.mu.Unlock()
 		w.WriteHeader(204)
+		return
+	}
+	if item.prepares == nil {
+		item.prepares = map[int]int{}
+	}
+	if item.prepares[index] >= maxStudyBatchPrepares {
+		h.mu.Unlock()
+		shared.WriteError(w, r, 409, "STUDY_RETRY_LIMIT", "This batch was retried too many times. Start a new study.")
 		return
 	}
 	batch := item.instruments[index*10 : min((index+1)*10, item.Total)]
@@ -308,6 +325,10 @@ func (h *StudyHandler) Batch(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	// Count only successful preparations; capacity refusals stay retryable.
+	h.mu.Lock()
+	item.prepares[index]++
+	h.mu.Unlock()
 	for i, s := range batch {
 		out.Stocks = append(out.Stocks, s.Symbol)
 		if failures[i] != nil {
@@ -334,7 +355,7 @@ func (h *StudyHandler) Batch(w http.ResponseWriter, r *http.Request) {
 	shared.WriteJSON(w, 200, out)
 }
 func (h *StudyHandler) Cancel(w http.ResponseWriter, r *http.Request) {
-	owner, sid, ok := h.authorize(w, r)
+	owner, sid, ok := h.authorize(w, r, false)
 	if !ok {
 		return
 	}

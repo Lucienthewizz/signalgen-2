@@ -78,3 +78,11 @@ test('market screening processes all 23 stocks without backtest access or outcom
  assert.equal(p.horizons.length,0);assert.equal(h.calls.events[0].outcomes.length,0);
  assert.equal(h.calls.events[0].swing.status,'screened');
 });
+test('batch prefetch runs at most four jobs and keeps item order',async()=>{
+ const {prefetchBatch}=load('analysis/signal-study.ts');
+ let running=0,peak=0;const started=[];
+ const jobs=prefetchBatch([0,1,2,3,4,5,6,7,8,9],async n=>{started.push(n);running++;peak=Math.max(peak,running);await new Promise(r=>setTimeout(r,(10-n)*2));running--;if(n===6)throw Error('boom');return n*10});
+ const out=[];for(const {manifest,result} of jobs){try{out.push([manifest,await result])}catch(e){out.push([manifest,e.message])}}
+ assert.equal(peak,4);assert.equal(started.length,10);
+ assert.deepEqual(out,[[0,0],[1,10],[2,20],[3,30],[4,40],[5,50],[6,'boom'],[7,70],[8,80],[9,90]]);
+});

@@ -23,9 +23,6 @@ func (server *Handler) signals(writer http.ResponseWriter, request *http.Request
 	if !ok {
 		return
 	}
-	if !server.AllowRate(writer, request, "backtests:signals", principal.ID) {
-		return
-	}
 	var input backtest.SignalInput
 	if err := platformhttp.DecodeJSONLimit(request, &input, 8<<20); err != nil {
 		if errors.Is(err, shared.ErrJSONBodyTooLarge) {
@@ -33,6 +30,15 @@ func (server *Handler) signals(writer http.ResponseWriter, request *http.Request
 		} else {
 			shared.WriteJSONInputError(writer, request, err, "Invalid backtest features.")
 		}
+		return
+	}
+	// A verified grant for a live study snapshot uses the per-symbol study
+	// quota; anything else, including an invalid grant, uses the rate limit.
+	datasetID := ""
+	if grant, err := server.Compute.Verify(request.Context(), principal.ID, appSession.ID, input.ComputeGrantID); err == nil {
+		datasetID = grant.DatasetID
+	}
+	if !server.AllowStudyOrRate(writer, request, "backtests:signals", principal.ID, datasetID, dataset.StudyUseSignals) {
 		return
 	}
 	service := backtest.Service{Features: server.Access, Datasets: server.Datasets, Compute: server.Compute, Rules: server.Rules}

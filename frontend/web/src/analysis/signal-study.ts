@@ -50,6 +50,34 @@ export type StudyProgress = {
 
 // Retry only explicit admission refusals, never uncertain writes or permission
 // errors. A long catalog must respect the server's rate limit, not flood it.
+const PREFETCH_LIMIT = 4;
+
+// Starts job for every item with at most `limit` running at once. Results keep
+// item order; a rejected result is observed so it cannot become unhandled.
+export function prefetchBatch<I, T>(
+  items: I[],
+  job: (item: I) => Promise<T>,
+  limit = PREFETCH_LIMIT,
+): { manifest: I; result: Promise<T> }[] {
+  let running = 0;
+  const queue: (() => void)[] = [];
+  // A finished job hands its slot straight to the next waiter.
+  const slot = async () => {
+    if (running < limit) running++;
+    else await new Promise<void>((go) => queue.push(go));
+  };
+  const free = () => {
+    const next = queue.shift();
+    if (next) next();
+    else running--;
+  };
+  return items.map((manifest) => {
+    const result = slot().then(() => job(manifest).finally(free));
+    result.catch(() => {});
+    return { manifest, result };
+  });
+}
+
 export async function studyRateLimited<T>(
   job: () => Promise<T>,
   signal: AbortSignal,
@@ -363,13 +391,25 @@ export async function runSignalStudy(
           .map((f) => ({ ...f, batch: batchIndex })),
       );
       try {
-        for (const manifest of batch.manifests) {
+        // Content and grants do not depend on WASM output, so fetch them for
+        // the whole batch up front (at most PREFETCH_LIMIT requests at once).
+        // Each stock still waits only for its own result, in batch order.
+        const prefetched = prefetchBatch(
+          batch.manifests.filter((m) => !seen.has(m.symbols[0])),
+          async (manifest) => {
+            const data = await timed("transfer_ms", () =>
+              verifiedContent(manifest, context, signal),
+            );
+            const grant = await timed("grant_ms", () =>
+              admitted(() => api.createStudyGrant(manifest, context, signal)),
+            );
+            return { data, grant };
+          },
+        );
+        for (const { manifest, result: ready } of prefetched) {
           const symbol = manifest.symbols[0];
-          if (seen.has(symbol)) continue;
           check(signal, revision);
-          const data = await timed("transfer_ms", () =>
-            verifiedContent(manifest, context, signal),
-          );
+          const { data, grant } = await ready;
           check(signal, revision);
           progress.traffic.decoded_candle_bytes += manifest.decoded_bytes;
           const features = await timed("features_ms", () =>
@@ -391,10 +431,6 @@ export async function runSignalStudy(
             throw Error(
               "Study feature history/version is incompatible. Update backend and WASM together.",
             );
-          const grant = await timed("grant_ms", () =>
-            admitted(() => api.createStudyGrant(manifest, context, signal)),
-          );
-          check(signal, revision);
           progress.traffic.candidate_json_bytes += new TextEncoder().encode(
             JSON.stringify(features[0].candidates),
           ).length;
