@@ -151,41 +151,7 @@ export function ServerRulesPanel({
   const previewTrigger = useRef<HTMLButtonElement>(null);
   const [ruleSearch, setRuleSearch] = useState("");
   const [rulePage, setRulePage] = useState(0);
-  const [rulePageSize, setRulePageSize] = useState(5);
-  const rulesLayout = useRef<HTMLDivElement>(null);
-  const ruleEditor = useRef<HTMLDivElement>(null);
-  const ruleLibrary = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const editor = ruleEditor.current,
-      library = ruleLibrary.current,
-      layout = rulesLayout.current;
-    if (!editor || !library || !layout) return;
-    const measure = () => {
-      const height = Math.ceil(editor.getBoundingClientRect().height);
-      // A portalled editing dialog has no in-flow height; keep the create-form baseline.
-      if (height < 400) return;
-      layout.style.setProperty("--rule-editor-height", `${height}px`);
-      const chrome = [
-        ...library.querySelectorAll(
-          ":scope > .resource-library__header, :scope > .rule-library__filters, :scope > .rule-library__list-heading",
-        ),
-      ].reduce((sum, child) => sum + child.getBoundingClientRect().height, 2);
-      const footer =
-        library
-          .querySelector(".rule-library__pagination")
-          ?.getBoundingClientRect().height ?? 69;
-      const size = Math.max(1, Math.floor((height - chrome - footer) / 88));
-      setRulePageSize(size);
-    };
-    const observer = new ResizeObserver(measure);
-    observer.observe(editor);
-    for (const child of library.children)
-      if (!child.classList.contains("rule-library__groups"))
-        observer.observe(child);
-    measure();
-    return () => observer.disconnect();
-  }, [authenticated, editing, rules.length]);
-
+  const rulePageSize = 5;
   const [signalFilter, setSignalFilter] = useState<string[]>(["all"]);
   const [confirmation, setConfirmation] = useState<
     | { kind: "preset"; preset: (typeof rulePresets)[number] }
@@ -1150,8 +1116,8 @@ export function ServerRulesPanel({
     </>
   );
   return (
-    <div className="rules-workspace" ref={rulesLayout}>
-      <div className="pen-rule-editor" ref={ruleEditor}>
+    <div className="rules-workspace">
+      <div className="pen-rule-editor">
         {editing ? (
           <>
             {!editorOpen && (
@@ -1188,11 +1154,7 @@ export function ServerRulesPanel({
           editor
         )}
       </div>
-      <section
-        className="rule-library"
-        ref={ruleLibrary}
-        aria-labelledby="rule-library-title"
-      >
+      <section className="rule-library" aria-labelledby="rule-library-title">
         <header className="resource-library__header">
           <div>
             <h3 id="rule-library-title">Saved rules</h3>

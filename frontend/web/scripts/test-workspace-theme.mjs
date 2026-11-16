@@ -68,6 +68,8 @@ try {
   await page.setViewportSize({width:1218,height:1000});
   await page.goto(origin+'/#app/analysis');
   const primary=page.getByRole('button',{name:'Start screening',exact:true});await primary.waitFor();
+  await page.waitForFunction(()=>Array.from(document.querySelectorAll('button')).some(button=>button.textContent.trim()==='Start screening'&&!button.disabled));
+  await page.waitForTimeout(250);
   const colors=async()=>primary.evaluate(el=>{const s=getComputedStyle(el);return {bg:s.backgroundColor,fg:s.color,border:s.borderTopColor,outline:s.outlineColor,offset:s.outlineOffset,icons:Array.from(el.querySelectorAll('svg')).map(icon=>getComputedStyle(icon).color),focused:el.matches(':focus-visible'),active:document.activeElement===el};});
   const normal=await colors();if(normal.bg!=='rgb(13, 57, 38)'||normal.fg!=='rgb(241, 248, 243)'||normal.border!=='rgb(34, 88, 61)'||normal.icons.some(c=>c!==normal.fg))throw Error('Primary normal '+JSON.stringify(normal));
   await primary.hover();await page.waitForTimeout(250);

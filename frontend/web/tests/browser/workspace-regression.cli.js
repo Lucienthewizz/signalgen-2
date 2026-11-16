@@ -334,19 +334,19 @@ async (page) => {
         await page.locator(".demo-workbench").waitFor({ timeout: 10000 });
         await page.locator(".route-loading").waitFor({ state: "hidden", timeout: 10000 });
         await page.evaluate(() => Promise.all([
-          document.fonts.load('14px "Inter Variable"'),
-          document.fonts.load('600 28px "Saira"'),
-          document.fonts.load('600 14px "Saira"'),
-          document.fonts.load('13px "IBM Plex Mono"'),
+          document.fonts.load('14px "Saira Variable"'),
+          document.fonts.load('600 28px "Saira Condensed"'),
+          document.fonts.load('600 16px "Saira Condensed"'),
+          document.fonts.load('13px "Geist Mono Variable"'),
         ]));
         if (errors.length) throw Error(`Route ${view}: ${errors.join('; ')}`);
         const typography = await page.evaluate(() => ({
           body: getComputedStyle(document.body).fontFamily,
           nav: getComputedStyle(document.querySelector(".nav-group button")).fontFamily,
           heading: getComputedStyle(document.querySelector(".workspace h1, .workspace h2")).fontFamily,
-          loaded: document.fonts.check('14px "Inter Variable"') && document.fonts.check('600 14px "Saira"') && document.fonts.check('600 28px "Saira"'),
+          loaded: document.fonts.check('14px "Saira Variable"') && document.fonts.check('600 16px "Saira Condensed"') && document.fonts.check('600 28px "Saira Condensed"'),
         }));
-        if (!typography.body.includes("Inter Variable") || !typography.nav.includes("Saira") || !typography.heading.includes("Saira") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
+        if (!typography.body.includes("Saira Variable") || !typography.nav.includes("Saira Condensed") || !typography.heading.includes("Saira Condensed") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
         const close = page.getByRole("button", { name: "Close menu", includeHidden: true });
         const bounds = await close.count() ? await close.boundingBox() : null;
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
@@ -400,7 +400,7 @@ async (page) => {
           if(tiles.some(t=>t.w<44||t.h<44)||!tiles.some(t=>t.tone==='gain-strong'&&t.text.includes('%')))throw Error('Heatmap price or touch targets missing');
           if (width>860 && !await page.locator('.monitor-ledger table th, .monitor-ledger table td').evaluateAll(items=>items.length>0 && items.every(el=>getComputedStyle(el).textAlign==='center'))) throw Error('Every monitor table header and cell must be centered');
           if (width>860 && !await page.locator('.monitor-ledger .monitor-result').evaluateAll(items=>items.every(el=>getComputedStyle(el).justifyItems==='center'))) throw Error('Monitor result badges must be centered');
-          if (!await page.locator(".monitor-change").first().evaluate(el => getComputedStyle(el).fontFamily.includes("IBM Plex Mono") && document.fonts.check('13px "IBM Plex Mono"'))) throw Error("Market numbers must use loaded IBM Plex Mono");
+          if (!await page.locator(".monitor-change").first().evaluate(el => getComputedStyle(el).fontFamily.includes("Geist Mono Variable") && document.fonts.check('13px "Geist Mono Variable"'))) throw Error("Market numbers must use loaded Geist Mono Variable");
           const geometry = await page.locator(".monitor-board-grid").evaluate(el => {
             const chart = el.querySelector(".monitor-chart").getBoundingClientRect();
             const detail = el.querySelector(".monitor-stock-detail").getBoundingClientRect();

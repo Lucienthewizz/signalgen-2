@@ -1127,7 +1127,7 @@ html[data-typography="workspace"]
 .pen-workbench .rule-library {
   display: flex;
   flex-direction: column;
-  height: var(--rule-editor-height, auto);
+  height: auto;
   min-height: 0;
   max-height: none;
   overflow: hidden;
@@ -2510,4 +2510,88 @@ html[data-typography="workspace"]:has(.pen-workbench) {
   .pen-workbench .overview-run-heading time {
     position: static;
   }
+}
+
+/* Separate compact navigation from the quieter content typography. */
+html[data-typography="workspace"]:has(.pen-workbench) {
+  --font-navigation: "Inter Variable", ui-sans-serif, sans-serif;
+  --font-sidebar: "Saira Condensed", ui-sans-serif, sans-serif;
+}
+html[data-typography="workspace"]
+  .pen-workbench
+  .sidebar
+  :is(.nav-group > span, .nav-group button) {
+  font-family: var(--font-sidebar);
+  font-weight: 600;
+  letter-spacing: 0.015em;
+}
+.pen-workbench .sidebar .nav-group button {
+  font-size: 16px;
+}
+.pen-workbench .rule-library__filters [data-signal] {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.demo-workbench.pen-workbench .workspace-news > .news-video {
+  padding-left: 24px;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+}
+@media (max-width: 1000px) {
+  .demo-workbench.pen-workbench .workspace-news > .news-video {
+    padding-left: 0;
+    padding-top: 24px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+.pen-workbench .news-video > header {
+  display: flex;
+  justify-content: flex-start;
+}
+.pen-workbench .news-video > header h3 {
+  flex: 1;
+  min-width: 0;
+}
+.pen-workbench .rule-composer__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+}
+.pen-workbench .rule-composer__header .resource-title-lockup {
+  min-width: 0;
+}
+@media (max-width: 600px) {
+  .pen-workbench .rule-composer__header {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Restore the typography roles from the pre-Pen Signalgen baseline. */
+html[data-typography="workspace"]:has(.pen-workbench) {
+  --font-sans: "Saira Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-navigation: "Saira Condensed", var(--font-sans);
+  --font-sidebar: "Saira Condensed", var(--font-sans);
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+}
+html[data-typography="workspace"] .pen-workbench .sidebar .nav-group button {
+  font-weight: 500;
+}
+.pen-workbench .rule-library {
+  height: auto;
+  align-self: start;
+}
+.pen-workbench .rule-library__groups {
+  flex: 0 0 auto;
+  overflow: visible;
+  align-content: start;
+}
+.pen-workbench .rule-library__groups > div {
+  align-self: start;
+}
+.pen-workbench .rule-library__pagination {
+  margin-top: 0;
 }

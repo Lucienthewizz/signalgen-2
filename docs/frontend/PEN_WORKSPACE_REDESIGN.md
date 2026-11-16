@@ -73,3 +73,13 @@ The latest annotations override Rules ordering again: composer first, saved libr
 Dashboard continuation now shows the actual last rule, universe/interval, SGT time, match count and a last-selection action; its portfolio totals use the compact neutral hierarchy from the reference. News uses compact search disclosure and stock filter controls, article links, a flat presentation card and a keyboard-operable presentation list; playback remains click-to-load. The original Carousel remains available in its default mode. Rule action icons/filter labels are smaller while their hit targets remain usable, and footer actions have their own row. Universe-backed monitor tables omit the empty removal column; manual watchlist removal remains available.
 
 Verification for this follow-up: production build, 264 unit tests, performance budgets, full browser regression, targeted annotation layout/search/video checks, eight-route theme/contrast checks, and the portfolio transaction/dashboard/presentation suite passed with synthetic API/account data.
+
+## Typography and News separation follow-up
+
+The latest image request separates navigation from content typography: self-hosted Saira Condensed 600 approximates the reference navbar's narrow lettering, while Inter Variable handles content headings/actions and prose. IBM Plex Mono remains for tables and financial data. This is a visual approximation, not a claim to identify the source site's exact fonts. Signal filter labels use 10px Inter with their existing touch targets. News and Public Expose have a vertical separator with 24px inset on desktop, changing to a horizontal separator when stacked.
+
+## Restore original fonts and independent saved library
+
+The latest user correction supersedes the typography experiments above. Font roles were checked against `frontend/pre-pen-redesign-20261115`: Saira Variable body/form text, Saira Condensed headings/actions/navigation and Geist Mono Variable data. These fonts are already installed; no new dependency is required.
+
+The saved-rule library no longer observes or measures the condition editor. It renders five rules per page with content-sized groups and pagination, aligned at the top. Adding conditions cannot stretch the library or introduce space between private and system rules. The layout regression adds three conditions and checks the library height/top remain unchanged before exercising all 25 fixture rules. The earlier small filters and responsive News/video separator remain.

@@ -33,11 +33,11 @@ try {
    await page.goto(origin+'/#app/'+view);
    await page.locator('.pen-workbench').waitFor();
    await page.locator('.route-loading').waitFor({state:'hidden'});
-   await page.evaluate(async()=>{await document.fonts.ready; await document.fonts.load('600 16px "Saira"'); await document.fonts.load('400 13px "IBM Plex Mono"'); await document.fonts.load('400 13px "Inter Variable"');await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
+   await page.evaluate(async()=>{await document.fonts.ready; await document.fonts.load('600 16px "Saira Condensed"'); await document.fonts.load('400 13px "Geist Mono Variable"'); await document.fonts.load('400 13px "Saira Variable"');await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
    for(const theme of ['dark']) {
     await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
     const check=await page.locator('.pen-workbench').evaluate(el=>({font:getComputedStyle(el).fontFamily,canvas:getComputedStyle(el).getPropertyValue('--canvas').trim(),overflow:document.documentElement.scrollWidth>innerWidth+1}));
-    if(!check.font.includes('Inter Variable'))throw Error('Pen font not applied '+JSON.stringify({view,width,check}));
+    if(!check.font.includes('Saira Variable'))throw Error('Pen font not applied '+JSON.stringify({view,width,check}));
     if(theme==='dark'&&check.canvas!=='#090a0a')throw Error('Pen canvas token not applied '+view);
     if(check.overflow)throw Error('Page overflow '+view+' '+width+' '+theme);
     await page.screenshot({path:'/tmp/signalgen-pen-qa/'+view+'-'+width+'-'+theme+'.png',fullPage:true,animations:'disabled'});

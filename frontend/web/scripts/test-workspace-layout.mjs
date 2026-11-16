@@ -31,7 +31,14 @@ try {
   await page.goto(origin+'/#app/rules');
   const library=page.locator('.rule-library'), editor=page.locator('.pen-rule-editor');
   await library.getByRole('button',{name:'Next saved rules page',exact:true}).waitFor();
-  await page.waitForFunction(()=>{const e=document.querySelector('.pen-rule-editor').getBoundingClientRect(),l=document.querySelector('.rule-library').getBoundingClientRect();return l.left>e.right&&Math.abs(l.height-e.height)<2;});
+  await page.waitForFunction(()=>{const e=document.querySelector('.pen-rule-editor').getBoundingClientRect(),l=document.querySelector('.rule-library').getBoundingClientRect();return l.left>e.right&&l.height>0;});
+  await page.evaluate(()=>document.fonts.ready);
+  const initialLibrary = await library.evaluate(el=>({height:el.getBoundingClientRect().height,y:el.getBoundingClientRect().top+scrollY}));
+  await page.getByRole('button',{name:/Add the first condition/}).click();
+  await page.getByRole('button',{name:'Add condition',exact:true}).click();
+  await page.getByRole('button',{name:'Add condition',exact:true}).click();
+  const expandedLibrary = await library.evaluate(el=>({height:el.getBoundingClientRect().height,y:el.getBoundingClientRect().top+scrollY}));
+  if(Math.abs(initialLibrary.height-expandedLibrary.height)>2||Math.abs(initialLibrary.y-expandedLibrary.y)>2)throw Error('Saved rules resized or moved with condition editor '+JSON.stringify({initialLibrary,expandedLibrary}));
   const seen=new Set(); let turns=0;
   while(true){
     for(const name of await library.locator('article strong').allTextContents()) seen.add(name);
@@ -121,8 +128,12 @@ try {
   const saveButtons=await page.locator('.rule-composer__save-actions button').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().top));
   if(Math.max(...saveButtons)-Math.min(...saveButtons)>2)throw Error('Rule footer actions wrap at desktop width');
   const navFont=await page.locator('.nav-group button').first().evaluate(el=>getComputedStyle(el).fontFamily);
-  if(!navFont.includes('Saira'))throw Error('Techno navigation font missing');
+  if(!navFont.includes('Saira Condensed'))throw Error('Techno navigation font missing');
+  const filterType=await page.locator('.rule-library__filters [data-signal]').evaluateAll(nodes=>nodes.map(n=>parseFloat(getComputedStyle(n).fontSize)));
+  if(filterType.some(size=>size>10.5))throw Error('Rule signal filter type is too large');
   await page.goto(origin+'/#app/news');
+  const separator=await page.locator('.news-video').evaluate(el=>({border:getComputedStyle(el).borderLeftWidth,padding:getComputedStyle(el).paddingLeft}));
+  if(separator.border!=='1px'||parseFloat(separator.padding)<24)throw Error('News/video separator missing');
   await page.locator('.news-search-disclosure summary').click();
   await page.getByLabel('Search news',{exact:true}).fill('no matching fixture xyz');
   await page.getByText('No matching headlines',{exact:true}).waitFor();
@@ -137,7 +148,7 @@ try {
   await page.goto(origin+'/#app/realtime');
   if(await page.locator('.monitor-ledger thead').getByText('Remove stock',{exact:true}).count())throw Error('Empty removal column remains for selected universe');
   if(errors.length)throw Error(errors.join('\\n'));
-  console.log('PASS: 25-rule pagination/search/filter/edit, matched editor height, rounded dashboard cards, balanced shortcuts, full-width keyboard slider, compact 32-stock catalog paging/empty state, News toolbar/columns, plain sliders, contained stepper, unclipped brand, dropdown categories, fitted/stacked data tables and chart-first monitor; 1218/390px, synthetic API/account only.');
+  console.log('PASS: 25-rule pagination/search/filter/edit, independent library height, rounded dashboard cards, balanced shortcuts, full-width keyboard slider, compact 32-stock catalog paging/empty state, News toolbar/columns, plain sliders, contained stepper, unclipped brand, dropdown categories, fitted/stacked data tables and chart-first monitor; 1218/390px, synthetic API/account only.');
 }`;
   await eval("(" + scenario + ")")(page);
 } finally {
