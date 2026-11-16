@@ -1,0 +1,454 @@
+{
+  "tested_commit": "c050f876e3c25409fa7e25d38d4363a162a025ae",
+  "execution_exit_code": 0,
+  "fixture": "synthetic API, real browser Worker/WASM/IndexedDB",
+  "container_cpus": 2,
+  "container_memory_gib": 3,
+  "raw_evidence_directory": "/private/tmp/signalgen-adaptive-speed-recheck-20261116",
+  "case_order": [
+    "small-adaptive-1",
+    "small-baseline-1",
+    "small-adaptive-2",
+    "small-baseline-2",
+    "heavy-adaptive-1",
+    "heavy-baseline-1",
+    "heavy-adaptive-2",
+    "heavy-baseline-2"
+  ],
+  "cases": [
+    {
+      "name": "small-baseline-1",
+      "raw_sha256": "ace91fd18d79c6f3160638039ca7d134493d10224cb80b0176191057ad59eed0",
+      "canonical_sha256": "c8b3b4a5ed86a4c3ef23fdcacb7d8add426c46225d8fef261114062d35a77713",
+      "reports": [
+        {
+          "width": 1440,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 2295.802375,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 7.399999976158142
+        },
+        {
+          "width": 1440,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 4349.478684,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 6.699999988079071
+        },
+        {
+          "width": 390,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 1683.5486520000013,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 3.600000023841858
+        },
+        {
+          "width": 390,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 2784.6818939999976,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 6.600000023841858
+        }
+      ],
+      "worker_stats_last_run": {
+        "created": 2,
+        "active": 0,
+        "peakActive": 1,
+        "submitted": 10,
+        "completed": 10,
+        "terminated": 2,
+        "live": 0,
+        "peakLive": 1
+      }
+    },
+    {
+      "name": "small-baseline-2",
+      "raw_sha256": "2ca04cdce7ee8a3284f452c1c04f3a86408c9621a7bc75f2885ba7a0dc51d42c",
+      "canonical_sha256": "c8b3b4a5ed86a4c3ef23fdcacb7d8add426c46225d8fef261114062d35a77713",
+      "reports": [
+        {
+          "width": 1440,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 1784.8676889999997,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 7.100000023841858
+        },
+        {
+          "width": 1440,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 5237.286258,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 9.5
+        },
+        {
+          "width": 390,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 1829.143962000002,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 5
+        },
+        {
+          "width": 390,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 2991.659931000002,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 7.300000011920929
+        }
+      ],
+      "worker_stats_last_run": {
+        "created": 2,
+        "active": 0,
+        "peakActive": 1,
+        "submitted": 10,
+        "completed": 10,
+        "terminated": 2,
+        "live": 0,
+        "peakLive": 1
+      }
+    },
+    {
+      "name": "small-adaptive-1",
+      "raw_sha256": "eece5dc3bee3d558dc84fd5c9fb11ada11192de7ae2e64cbbff8857db64e9bee",
+      "canonical_sha256": "c8b3b4a5ed86a4c3ef23fdcacb7d8add426c46225d8fef261114062d35a77713",
+      "reports": [
+        {
+          "width": 1440,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 2470.3839739999994,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 7.299999952316284
+        },
+        {
+          "width": 1440,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 4376.190482,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 7.099999964237213
+        },
+        {
+          "width": 390,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 1672.6594899999982,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 5.599999964237213
+        },
+        {
+          "width": 390,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 3046.068783999999,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 6.599999964237213
+        }
+      ],
+      "worker_stats_last_run": {
+        "created": 2,
+        "active": 0,
+        "peakActive": 1,
+        "submitted": 10,
+        "completed": 10,
+        "terminated": 2,
+        "live": 0,
+        "peakLive": 1
+      }
+    },
+    {
+      "name": "small-adaptive-2",
+      "raw_sha256": "4a9a16c6cdc4ba1735cd20d1000c94de4ec7d610b6cd06689abf37d68deb4a74",
+      "canonical_sha256": "c8b3b4a5ed86a4c3ef23fdcacb7d8add426c46225d8fef261114062d35a77713",
+      "reports": [
+        {
+          "width": 1440,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 1678.0514110000004,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 6.799999952316284
+        },
+        {
+          "width": 1440,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 5000.676338000001,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 9.5
+        },
+        {
+          "width": 390,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 1752.5925739999984,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 5.899999976158142
+        },
+        {
+          "width": 390,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 3556.191147999998,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 6.299999952316284
+        }
+      ],
+      "worker_stats_last_run": {
+        "created": 2,
+        "active": 0,
+        "peakActive": 1,
+        "submitted": 10,
+        "completed": 10,
+        "terminated": 2,
+        "live": 0,
+        "peakLive": 1
+      }
+    },
+    {
+      "name": "heavy-baseline-1",
+      "raw_sha256": "2171e162f6305515e56241e39cfed5c051a2a39437b9f8c935c140256e5c4a0f",
+      "canonical_sha256": "c8b3b4a5ed86a4c3ef23fdcacb7d8add426c46225d8fef261114062d35a77713",
+      "reports": [
+        {
+          "width": 1440,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 3309.480372,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 17.899999976158142
+        },
+        {
+          "width": 1440,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 5690.940871000001,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 71.20000004768372
+        },
+        {
+          "width": 390,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 2771.2046630000004,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 16.400000035762787
+        },
+        {
+          "width": 390,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 3608.293973,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 20.30000001192093
+        }
+      ],
+      "worker_stats_last_run": {
+        "created": 2,
+        "active": 0,
+        "peakActive": 1,
+        "submitted": 10,
+        "completed": 10,
+        "terminated": 2,
+        "live": 0,
+        "peakLive": 1
+      }
+    },
+    {
+      "name": "heavy-baseline-2",
+      "raw_sha256": "369e3a5785c723b8a599081ef48b97a6322b42a9ba80ad51ef87ec4caa777f3d",
+      "canonical_sha256": "c8b3b4a5ed86a4c3ef23fdcacb7d8add426c46225d8fef261114062d35a77713",
+      "reports": [
+        {
+          "width": 1440,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 3413.179312,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 53
+        },
+        {
+          "width": 1440,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 5613.131968,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 24.400000035762787
+        },
+        {
+          "width": 390,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 1790.1864840000017,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 15.300000011920929
+        },
+        {
+          "width": 390,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 2990.268561000001,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 20.5
+        }
+      ],
+      "worker_stats_last_run": {
+        "created": 2,
+        "active": 0,
+        "peakActive": 1,
+        "submitted": 10,
+        "completed": 10,
+        "terminated": 2,
+        "live": 0,
+        "peakLive": 1
+      }
+    },
+    {
+      "name": "heavy-adaptive-1",
+      "raw_sha256": "af3f7f81e1b64ad0504d3c7c90e6208e0ba0e40f294b545dfdabbc87b6f5b5f7",
+      "canonical_sha256": "c8b3b4a5ed86a4c3ef23fdcacb7d8add426c46225d8fef261114062d35a77713",
+      "reports": [
+        {
+          "width": 1440,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 3403.916591,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 18.19999998807907
+        },
+        {
+          "width": 1440,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 6409.730172000001,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 104.39999997615814
+        },
+        {
+          "width": 390,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 2804.409940999998,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 55.90000003576279
+        },
+        {
+          "width": 390,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 3517.874233999999,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 89.09999996423721
+        }
+      ],
+      "worker_stats_last_run": {
+        "created": 4,
+        "active": 0,
+        "peakActive": 3,
+        "submitted": 10,
+        "completed": 10,
+        "terminated": 4,
+        "live": 0,
+        "peakLive": 3
+      }
+    },
+    {
+      "name": "heavy-adaptive-2",
+      "raw_sha256": "d68a389efb918e72faf84304e0cb449fd248886257ae88c3de6852005be7607c",
+      "canonical_sha256": "c8b3b4a5ed86a4c3ef23fdcacb7d8add426c46225d8fef261114062d35a77713",
+      "reports": [
+        {
+          "width": 1440,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 3393.6142959999997,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 17.5
+        },
+        {
+          "width": 1440,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 5329.601535999998,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 92.10000002384186
+        },
+        {
+          "width": 390,
+          "forcedTheme": "dark",
+          "run_elapsed_ms": 2783.315424000002,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 63.69999998807907
+        },
+        {
+          "width": 390,
+          "forcedTheme": "light",
+          "run_elapsed_ms": 3553.4984890000014,
+          "completed": 23,
+          "failed": 0,
+          "feature_p50_ms": 84.29999995231628
+        }
+      ],
+      "worker_stats_last_run": {
+        "created": 4,
+        "active": 0,
+        "peakActive": 3,
+        "submitted": 10,
+        "completed": 10,
+        "terminated": 4,
+        "live": 0,
+        "peakLive": 3
+      }
+    }
+  ],
+  "summary": {
+    "small": {
+      "symbols": 23,
+      "candles_per_symbol": 250,
+      "operands": 3,
+      "baseline": {
+        "observations": 8,
+        "elapsed_median_ms": 2540.242134499999,
+        "median_of_feature_p50_ms": 6.9000000059604645
+      },
+      "adaptive": {
+        "observations": 8,
+        "elapsed_median_ms": 2758.2263789999993,
+        "median_of_feature_p50_ms": 6.699999958276749
+      },
+      "adaptive_elapsed_change_percent": 8.58123883308104
+    },
+    "heavy": {
+      "symbols": 23,
+      "candles_per_symbol": 1250,
+      "operands": 5,
+      "baseline": {
+        "observations": 8,
+        "elapsed_median_ms": 3361.329842,
+        "median_of_feature_p50_ms": 20.400000005960464
+      },
+      "adaptive": {
+        "observations": 8,
+        "elapsed_median_ms": 3460.8954124999996,
+        "median_of_feature_p50_ms": 73.99999997019768
+      },
+      "adaptive_elapsed_change_percent": 2.962088672641472
+    }
+  },
+  "canonical_comparisons": "All four in-container baseline/adaptive comparators passed; event/summary/CSV equality and mutation probes passed.",
+  "limitations": [
+    "Two fresh-container pairs per workload, four viewport/theme observations per case; not eight independent machines.",
+    "Small workload uses one worker in both modes; elapsed difference is run variability, not a pool overhead estimate.",
+    "Two actual allocated CPUs, mocked navigator hints 1 versus 4; no physical-device result.",
+    "Elapsed includes synthetic service/React/storage stages and retry, not live Yahoo downloads.",
+    "No peak RAM measurement, full IDX measurement, statistical significance or five-minute guarantee."
+  ]
+}
