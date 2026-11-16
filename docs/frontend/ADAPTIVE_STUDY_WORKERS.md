@@ -43,3 +43,22 @@ separate from the mocked `navigator.hardwareConcurrency` hint. Full repeated
 measurements, startup samples, source/WASM hashes, and limitations are in
 `docs/evidence/adaptive-study-workers-benchmark.json`; there is no five-minute
 guarantee.
+
+To reproduce the browser evidence, build current-source WASM with the approved
+offline Go procedure, then set `DEPS_DIR` to the prepared read-only dependency
+tree and `WASM_DIR` to the three generated artifacts and run:
+
+```sh
+DEPS_DIR=/path/to/node_modules \
+WASM_DIR=/path/to/wasm-artifacts \
+EVIDENCE_DIR=/tmp/signalgen-adaptive-evidence \
+sh docs/evidence/adaptive-study-workers-reproduce.sh
+```
+
+The retained runner uses Playwright image
+`sha256:f609973e8fd93f38a5ddfd706a65805294247dae8d81b2541c0afe2787746197`,
+`--network none`, read-only source/dependencies/WASM, non-root UID 1000,
+two CPUs, 3 GiB RAM, 512 PIDs, 200 MiB file size, a loopback-only Vite
+server, and fresh containers for each alternating case. It runs the exact
+small/heavy order recorded in the benchmark JSON and invokes the canonical
+parity comparator, including the mutation-probe checks.

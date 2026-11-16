@@ -3,7 +3,7 @@
   "policy_source_sha256": "c8e5389c8c9c576668ccb6c2a2db037cc5c2204e31e296cb0e19786c7e805a88",
   "browser_fixture_sha256": "9a1e66b18f1eab5be3f555b7626b96247ff7c47bc97ca71d1caa3fb68b3cf13f",
   "worker_test_sha256": "329b61c78cfffc0b31e34ed82ee0489f02aa174705e0dfdd224b893ce8319c37",
-  "canonical_comparator_sha256": "7c77d5d0bbd1131040e60c7a509df444f2a4d0b1bea7d84f6630465ca4ed23d6",
+  "canonical_comparator_sha256": "f64bf7a00644fd9723ed74a40ad4d3d50ebb8db239fdc46a3161e80d607806b3",
   "container_cpus": 2,
   "wasm_sha256": "af366a24c478003595dc5d47e126544d74d32412bcc6486632d40bc679b57c51",
   "runtime_sha256": "0c949f4996f9a89698e4b5c586de32249c3b69b7baadb64d220073cc04acba14",

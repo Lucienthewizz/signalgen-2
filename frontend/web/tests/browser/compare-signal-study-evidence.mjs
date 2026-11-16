@@ -3,7 +3,9 @@ import fs from "node:fs";
 
 const [adaptivePath, baselinePath] = process.argv.slice(2);
 if (!adaptivePath || !baselinePath)
-  throw Error("usage: node compare-signal-study-evidence.mjs adaptive.json baseline.json");
+  throw Error(
+    "usage: node compare-signal-study-evidence.mjs adaptive.json baseline.json",
+  );
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const adaptive = read(adaptivePath);
