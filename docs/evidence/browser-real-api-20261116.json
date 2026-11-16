@@ -1,0 +1,91 @@
+{
+  "date": "2026-11-16",
+  "branch": "frontend/prof-browser-real-api",
+  "status": "pass",
+  "source_base": "baf888ac34e7afaa7d8495e4adfc40a4ddc23a9a",
+  "images": {
+    "api": "sha256:d4a008edc07e48837b4784a5e1be1f806bd4b8bc522f6704412719c6506f6d02",
+    "postgres": "sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1",
+    "toolchain": "sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+    "playwright": "sha256:f609973e8fd93f38a5ddfd706a65805294247dae8d81b2541c0afe2787746197"
+  },
+  "isolation": {
+    "network": "none",
+    "namespace": "shared loopback container namespace owned by disposable PG",
+    "published_ports": "none",
+    "docker_socket_mounted": false,
+    "ambient_credentials": false,
+    "root_filesystem": "readonly",
+    "privilege_escalation": "no-new-privileges",
+    "capabilities": "cap-drop ALL",
+    "playwright_user": "1001:1001 (pwuser)",
+    "api_user": "10001:10001",
+    "pg_user": "999:999",
+    "shared_memory": "private bounded /dev/shm 256MB tmpfs (no ipc=host)"
+  },
+  "schema_check": "schema test passed: 14 migrations, 3 policy checks",
+  "bootstrap": "PASS disposable DB seeded: two dummy owners, server-owned Pro subscriptions, 23 synthetic catalog rows",
+  "browser_report": {
+    "status": "pass",
+    "reports": {
+      "saved_rule": {
+        "id": "rule_3960f39a0249a367900d75e0",
+        "hash": "sha256:042fad7ed869c3f7ecb215af2d090b173a133aed5925a457842734af33171678"
+      },
+      "api_owner_isolation": "verified: 404 foreign rule, 403 session mismatch",
+      "ui_login": "pass: real session established",
+      "historical_screening": {
+        "stocks": 23,
+        "batches": 3,
+        "matched_stocks": 12,
+        "unmatched_stocks": 11,
+        "signals_count": 48,
+        "auto_outcomes": false,
+        "boundary": "screened-only, no auto outcomes"
+      },
+      "evaluation_and_wasm": {
+        "method": "target",
+        "tp_pct": 5,
+        "signals_evaluated": 48,
+        "csv_filename": "signal-study-events.csv",
+        "csv_rows": 481,
+        "stats_text": "Target reached rate: Unavailable \u00b7 reload the updated engine and rerun this study",
+        "wasm_and_indexeddb": "pass"
+      },
+      "recovery_and_capacity": "verified: 429 STUDY_CAPACITY, release and recreation"
+    },
+    "screenshots": [
+      "/output/browser-real-api-desktop-dark-screening.png",
+      "/output/browser-real-api-mobile-dark-screening.png",
+      "/output/browser-real-api-desktop-light-backtest.png",
+      "/output/browser-real-api-mobile-light-backtest.png"
+    ],
+    "requestLogCount": 182
+  },
+  "screenshots": [
+    "docs/evidence/browser-real-api-mobile-dark-screening.png",
+    "docs/evidence/browser-real-api-desktop-dark-screening.png",
+    "docs/evidence/browser-real-api-mobile-light-backtest.png",
+    "docs/evidence/browser-real-api-desktop-light-backtest.png"
+  ],
+  "dist_source": {
+    "path": "/Users/lucienyudistirapurnawarman/Documents/Kuliah/signalgen-2/signalgen-2/frontend/web/dist",
+    "total_files": 103,
+    "wasm_sha256": "f4ef8296a624fe73ef87675417760cea9677879dbb0f71ff679886c76c670ff6",
+    "index_sha256": "2d4f131a1b36f83ed0c6ec9884587d6cc2c245cb6c1dc3e97958e609b88b4259"
+  },
+  "verified_boundaries": {
+    "mock_upstream_idp_only": true,
+    "mock_prices_only": true,
+    "real_go_api": true,
+    "real_postgresql": true,
+    "real_wasm_computation": true,
+    "real_indexeddb_storage": true,
+    "no_api_route_fulfil": true,
+    "owner_isolation_verified": true,
+    "screening_no_auto_outcomes": true,
+    "evaluation_private_scoring": true,
+    "csv_export_verified": true,
+    "recovery_and_capacity_verified": true
+  }
+}
