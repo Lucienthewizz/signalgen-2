@@ -584,11 +584,17 @@ export function SignalStudyPanel({
                     />
                   </Field>
                   <Field className="study-horizon-field">
-                    <FieldLabel htmlFor="study-horizon">
-                      Trading candles after signal
-                    </FieldLabel>
+                    <div className="study-horizon-label">
+                      <FieldLabel htmlFor="study-horizon">
+                        Trading candles after signal
+                      </FieldLabel>
+                      <span id="study-horizon-help">
+                        (1–100 completed daily candles, not calendar days)
+                      </span>
+                    </div>
                     <Input
                       id="study-horizon"
+                      aria-describedby="study-horizon-help"
                       required
                       type="number"
                       min={1}
@@ -608,9 +614,6 @@ export function SignalStudyPanel({
                         setConfig({ ...config, n_steps: value })
                       }
                     />
-                    <FieldDescription>
-                      1–100 completed daily candles, not calendar days.
-                    </FieldDescription>
                   </Field>
                 </FieldGroup>
               </FieldSet>
