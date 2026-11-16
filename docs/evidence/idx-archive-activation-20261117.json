@@ -26,11 +26,18 @@
   "scheduler": {
     "service": "signalgen-2-idx-scheduler",
     "state": "running",
+    "healthcheck": "disabled_not_applicable",
     "restart_policy": "unless-stopped",
     "catalog_mount": "read_only",
     "store_mount": "read_write",
     "delay": "1s",
     "run_timeout": "2h",
+    "resumed_after_graceful_restart": true,
+    "current_generation_progress": {
+      "success": 95,
+      "failed": 8,
+      "pending": 859
+    },
     "next_update": "after_current_run_plus_24h"
   },
   "verification": {

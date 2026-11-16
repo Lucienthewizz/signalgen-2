@@ -55,6 +55,10 @@ mounted. Restart this service after an atomic catalog replacement; catalog
 auto-download/rediscovery is not included. The API keeps its read-only published-store mount. API env
 configuration is still explicit because the standalone compose file also defines
 the API; no authenticated API is needed to run this collector job.
+If starting the packaged collector directly with `docker run`, pass
+`--no-healthcheck`: this process serves no HTTP endpoint, so an inherited API
+healthcheck would report a false failure. Compose disables that check for the
+`idx-scheduler` profile.
 
 The scheduler service has `restart: unless-stopped`, a read-only root, non-root
 UID/GID 10001, a read-only catalog bind, a separate writable store bind, dropped
