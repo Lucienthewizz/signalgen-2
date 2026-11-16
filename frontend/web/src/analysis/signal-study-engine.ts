@@ -240,8 +240,14 @@ export class SignalStudyEngine {
     const bytes = SignalStudyEngine.normalizeInt(
       payloadBytes,
       0,
-      this.maxQueuedPayloadBytesLimit,
+      Number.MAX_SAFE_INTEGER,
     );
+    if (bytes > this.maxQueuedPayloadBytesLimit)
+      return Promise.reject(
+        Error(
+          `Study worker payload exceeds ${this.maxQueuedPayloadBytesLimit}-byte budget.`,
+        ),
+      );
     if (
       this.queue.length + this.activeJobs >= this.maxQueuedJobs ||
       (this.queuedPayloadBytesValue > 0 &&

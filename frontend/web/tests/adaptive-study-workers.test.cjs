@@ -3,21 +3,21 @@ const fs = require("node:fs");
 const Module = require("node:module");
 const path = require("node:path");
 const test = require("node:test");
-
-const ESBUILD =
-  process.env.SIGNALGEN_DEPS ||
-  "/private/tmp/signalgen-coordinator-frontend-o6v9sw1u/deps";
+const ts = require("typescript");
 
 function loadTypeScript(file) {
-  const { transformSync } = require(path.join(ESBUILD, "esbuild"));
-  const source = fs.readFileSync(file, "utf8");
-  const code = transformSync(source, {
-    format: "cjs",
-    loader: "ts",
-    platform: "node",
-    target: "es2022",
-    sourcemap: false,
-  }).code;
+  let source = fs.readFileSync(file, "utf8");
+  if (file.endsWith("signal-study-engine.ts"))
+    source = source.replace(
+      'new URL("../workers/signal-study.worker.ts", import.meta.url)',
+      'new URL("../workers/signal-study.worker.ts", "file:///signal-study-engine.ts")',
+    );
+  const code = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
   const loaded = new Module(file, module);
   loaded.filename = file;
   loaded.paths = Module._nodeModulePaths(path.dirname(file));
@@ -188,7 +188,10 @@ test("payload and queue budgets reject excess work without deadlock", async () =
     /queue budget/,
   );
   await first;
-  await engine.features([], [], controller.signal, 120);
+  await assert.rejects(
+    engine.features([], [], controller.signal, 120),
+    /exceeds 100-byte budget/,
+  );
   engine.dispose();
 });
 
