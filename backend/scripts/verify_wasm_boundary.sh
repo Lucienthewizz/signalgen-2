@@ -7,20 +7,28 @@ if [[ -z "$artifact" || ! -f "$artifact" ]]; then
   exit 2
 fi
 
-if ! rg -a -q "signalgenComputeFeatures" "$artifact"; then
+search_bin() {
+  if command -v rg >/dev/null 2>&1; then
+    rg -a -q "$1" "$2"
+  else
+    grep -a -q "$1" "$2"
+  fi
+}
+
+if ! search_bin "signalgenComputeFeatures" "$artifact"; then
   echo "missing signalgenComputeFeatures export marker" >&2
   exit 1
 fi
 
 for required in signalgenRunBacktest signalgenComputeBacktestFeatures signalgenBacktestCapabilities signalgenRunSignalStudy; do
-  if ! rg -a -q "$required" "$artifact"; then
+  if ! search_bin "$required" "$artifact"; then
     echo "missing backtest export marker: $required" >&2
     exit 1
   fi
 done
 
 for forbidden in signalgenRunSignals "Default Scalping" RULE_MATCHED; do
-  if rg -a -q "$forbidden" "$artifact"; then
+  if search_bin "$forbidden" "$artifact"; then
     echo "forbidden decision marker found in WASM: $forbidden" >&2
     exit 1
   fi
