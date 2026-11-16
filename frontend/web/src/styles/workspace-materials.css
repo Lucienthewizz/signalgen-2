@@ -677,6 +677,21 @@
   color: #cfdad2;
   font-size: 11px;
 }
+@media (max-width: 1100px) {
+  .auth-story h1 {
+    font-size: clamp(30px, 3.6vw, 38px);
+  }
+  .auth-story .auth-proof {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .auth-story .auth-proof > div + div {
+    border-left: 0;
+    border-top: 1px solid rgba(122, 245, 189, 0.24);
+  }
+  .auth-story .auth-proof > div {
+    padding: 14px 16px;
+  }
+}
 @media (prefers-reduced-transparency: reduce) {
   .auth-story .auth-proof {
     background: #061710;
