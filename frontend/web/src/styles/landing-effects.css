@@ -67,6 +67,12 @@ html[data-theme="light"] .landing-background--hero::after {
 
 .landing-shell .market-hero__copy h2 {
   font-weight: 800;
+  line-height: 1.1;
+}
+.landing-shell .market-hero__copy .shiny-text {
+  /* Give background-clipped glyphs room for descenders and edge strokes. */
+  padding: 0.06em 0.05em 0.16em;
+  margin: -0.06em -0.05em -0.16em;
 }
 .landing-shell .landing-stage--features {
   padding-top: 0;
