@@ -25,12 +25,12 @@ function harness({failure,quota,version=false,purpose="backtest"}={}){
    }return {index:batch,stocks,manifests,failures};
   },getDatasetContentText:async id=>contents.get(id),createStudyGrant:async manifest=>({id:manifest.symbols[0]}),backtestSignals:async(id,candidates)=>({policy_version:types.STUDY_POLICY,entries:[{symbol:id,timestamp:candidates[0].timestamp,signal_type:'BUY'}]}),releaseStudyBatch:async(_,batch)=>calls.release.push(batch)};
  class Engine {
-  constructor(){calls.workers++}dispose(){calls.disposed++}
+  constructor(){calls.workers++}setMaxWorkers(){}dispose(){calls.disposed++}
   async initialize(){return {schema_version:types.STUDY_SCHEMA,policy_version:types.STUDY_POLICY}}
   async features(series){calls.features.push(series[0].symbol);return [{engine_version:version?'old':context.engine_version,feature_schema_version:'screener-features-1',candidates:series[0].candles.slice(19).map(c=>({symbol:series[0].symbol,timestamp:c.timestamp,features:{}}))}]}
   async study(request){calls.studies++;const metrics={signals:1,evaluated:1,missing:0,wins:1,losses:0,flats:0,sum_return_pct:5,mean_return_pct:5,win_rate:100};return {schema_version:types.STUDY_SCHEMA,policy_version:types.STUDY_POLICY,events:[],horizons:[{step:1,basis:'close',...metrics}],swing:metrics,by_symbol:[{key:request.series[0].symbol,...metrics}],by_day:[{key:'2026-01-20',...metrics}]}}
  }
- const {runSignalStudy}=load('analysis/signal-study.ts',{'@/api/client':{api,session,ApiError},'./signal-study-engine':{SignalStudyEngine:Engine},'./signal-study-types':types,'./signal-study-storage':{storeStudySymbol:async(_owner,_id,symbol,result)=>{if(quota===symbol)throw new DOMException('Temporary storage quota reached','QuotaExceededError');calls.save.push(symbol);calls.events.push(...result.events)}}});
+ const {runSignalStudy}=load('analysis/signal-study.ts',{'@/api/client':{api,session,ApiError},'./signal-study-engine':{SignalStudyEngine:Engine},'./adaptive-study-policy':{getAdaptiveStudyWorkerPolicy:()=>({maxWorkers:1})},'./signal-study-types':types,'./signal-study-storage':{storeStudySymbol:async(_owner,_id,symbol,result)=>{if(quota===symbol)throw new DOMException('Temporary storage quota reached','QuotaExceededError');calls.save.push(symbol);calls.events.push(...result.events)}}});
  return {runSignalStudy,calls,config,fix:()=>broken=undefined,changeIdentity:()=>revision++};
 }
 test('23 frozen stocks use three sequential batches and one reused worker; failed ticker retry never duplicates counts',async()=>{

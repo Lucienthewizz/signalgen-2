@@ -37,8 +37,8 @@ export function getAdaptiveStudyWorkerPolicy(
   const heavy =
     input.catalogSize >= 20 &&
     input.batchSize >= 4 &&
-    input.candleCount >= 1500 &&
-    input.requiredOperands >= 1;
+    input.requiredOperands >= 1 &&
+    input.candleCount * input.requiredOperands >= 1500;
   if (!heavy) {
     return {
       maxWorkers: 1,
@@ -46,6 +46,8 @@ export function getAdaptiveStudyWorkerPolicy(
     };
   }
   let maxWorkers = Math.min(4, Math.max(2, cores - 1));
+  if (input.requiredOperands === 1 && input.candleCount < 5000)
+    maxWorkers = Math.min(maxWorkers, 2);
   if (memory != null && memory < 8) maxWorkers = Math.min(maxWorkers, 2);
   if (input.candleCount >= 5000 && input.requiredOperands >= 2)
     reasons.push("large candle and indicator workload");

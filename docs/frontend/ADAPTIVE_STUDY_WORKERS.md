@@ -8,11 +8,13 @@ guarantee; missing or low-device hints keep the single-worker baseline. An
 optional `navigator.deviceMemory` hint caps small-memory devices at two workers.
 
 Feature jobs for a prefetched batch are queued through the pool, while private
-server scoring and result commits remain deterministic and in batch order. The
-existing content/grant `PREFETCH_LIMIT` and backend capacity limits are
-unchanged. The pool is disposed on completion, abort, timeout, worker failure,
-or retry identity changes, so queued and active jobs cannot leak into a later
-run.
+server scoring, WASM outcome studies, storage, and result commits remain
+deterministic and in batch order. This first pool therefore claims overlap for
+feature computation only; outcome calls remain serial to preserve the existing
+per-symbol commit and retry semantics. The existing content/grant
+`PREFETCH_LIMIT` and backend capacity limits are unchanged. The pool is disposed
+on completion, abort, timeout, worker failure, or retry identity changes, so
+queued and active jobs cannot leak into a later run.
 
 The policy is conservative and does not prove a browser RAM budget. WASM heaps,
 structured-clone copies, browser scheduling, and device memory telemetry need
