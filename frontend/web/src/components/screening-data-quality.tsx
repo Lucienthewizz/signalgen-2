@@ -3,6 +3,15 @@ import { ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InfoDialog } from "@/components/ui/info-dialog";
+import { groupScreeningDataNotes } from "@/lib/screening-data-notes";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { candleRange, marketTimezone } from "@/lib/data-freshness";
 import type { DatasetManifest } from "@/types";
 
@@ -14,6 +23,7 @@ export function ScreeningDataQuality({
   timestamps: string[];
 }) {
   const warnings = [...new Set(manifest.quality.warnings)];
+  const notes = groupScreeningDataNotes(warnings, manifest.symbols);
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   return (
@@ -93,13 +103,43 @@ export function ScreeningDataQuality({
           </p>
           <div className="screening-data-quality__notes">
             <h4>Data notes</h4>
-            {warnings.length > 0 ? (
-              <ul>
-                {warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
+            {notes.general.length > 0 && (
+              <ul className="screening-data-quality__general">
+                {notes.general.map((note) => (
+                  <li key={note}>{note}</li>
                 ))}
               </ul>
-            ) : (
+            )}
+            {notes.stocks.length > 0 && (
+              <div className="screening-data-quality__stocks">
+                {notes.stocks.map((stock) => (
+                  <section
+                    className="screening-data-quality__stock"
+                    key={stock.symbol}
+                    aria-label={`${stock.symbol} data notes`}
+                  >
+                    <h5>{stock.symbol}</h5>
+                    <Table aria-label={`${stock.symbol} data quality`}>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead scope="col">Data</TableHead>
+                          <TableHead scope="col">Reported value</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {stock.fields.map((field, index) => (
+                          <TableRow key={`${field.label}-${index}`}>
+                            <TableHead scope="row">{field.label}</TableHead>
+                            <TableCell>{field.value}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </section>
+                ))}
+              </div>
+            )}
+            {warnings.length === 0 && (
               <p>The provider reported no data warnings for this snapshot.</p>
             )}
             <p>

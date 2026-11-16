@@ -82,6 +82,8 @@ try {
   await primary.evaluate(el=>el.disabled=true);await page.waitForTimeout(250);
   const disabled=await colors();if(disabled.bg!=='rgb(20, 22, 22)'||disabled.fg!=='rgb(120, 129, 123)')throw Error('Primary disabled '+JSON.stringify(disabled));
   await page.goto(origin+'/#app/rules');
+  await page.getByRole('button',{name:'Actions for Rule fixture',exact:true}).focus();
+  await page.keyboard.press('ArrowLeft');
   await page.getByRole('button',{name:'Edit Rule fixture',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Edit rules',exact:true});await dialog.waitFor();
   const popup=await dialog.evaluate(el=>({bg:getComputedStyle(el).backgroundColor,fg:getComputedStyle(el).color}));

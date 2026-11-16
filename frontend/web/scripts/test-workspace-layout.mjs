@@ -53,6 +53,8 @@ try {
   await library.getByRole('button',{name:'SELL',exact:true}).click();
   await library.getByText('No matching rules',{exact:true}).waitFor();
   await library.getByRole('button',{name:'All signals',exact:true}).click();
+  await library.getByRole('button',{name:'Actions for Fixture 24',exact:true}).focus();
+  await page.keyboard.press('ArrowLeft');
   await library.getByRole('button',{name:'Edit Fixture 24',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Edit rules',exact:true});await dialog.waitFor();
   if(await dialog.getByLabel('Rule name',{exact:true}).inputValue()!=='Fixture 24')throw Error('Paginated edit opened wrong rule');

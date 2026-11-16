@@ -45,6 +45,15 @@
         ],
         "createdAt": "2026-11-16T09:12:58.266Z",
         "reason": "Agent: historical font aliases remain superseded by original workspace font roles documented in docs/DESIGN.md"
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "files": [
+          "frontend/web/src/styles/pen-workspace.css"
+        ],
+        "createdAt": "2026-11-16T09:46:34.817Z",
+        "reason": "Agent: historical font alias is superseded by the original Saira workspace fonts requested by the user; this task preserves typography"
       }
     ]
   }

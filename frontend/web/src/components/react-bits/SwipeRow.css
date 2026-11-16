@@ -1,0 +1,110 @@
+.swipe-row {
+  position: relative;
+  height: var(--sr-h, 88px);
+  min-width: 0;
+  color: var(--text);
+}
+.swipe-row__clip {
+  width: 100%;
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--sr-r, 10px);
+  background: var(--surface);
+}
+.swipe-row__rail {
+  z-index: 0;
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  background: var(--surface-2);
+}
+.swipe-row__action {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.swipe-row__action[data-destructive] {
+  background: var(--danger-surface);
+  color: var(--danger);
+}
+.swipe-row__action:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+.swipe-row__action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.swipe-row__action svg {
+  width: 16px;
+  height: 16px;
+}
+.swipe-row__surface {
+  z-index: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 14px 16px;
+  background: var(--surface);
+  touch-action: pan-y;
+  user-select: none;
+}
+.swipe-row[data-dragging] .swipe-row__surface {
+  z-index: 1;
+  cursor: grabbing;
+}
+.swipe-row[data-disabled] .swipe-row__surface {
+  z-index: 1;
+  opacity: 0.55;
+}
+.swipe-row__toggle,
+.swipe-row__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.swipe-row__toggle:focus-visible {
+  inset-block-end: 8px;
+  right: 8px;
+  width: auto;
+  height: 32px;
+  padding: 4px 8px;
+  clip-path: none;
+  overflow: visible;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.swipe-row__action:focus-visible,
+.swipe-row__toggle:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -3px;
+}

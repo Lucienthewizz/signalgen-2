@@ -12,6 +12,7 @@ export default function AnimatedList({
   className?: string;
 }) {
   const root = useRef<HTMLElement | null>(null);
+  const revealed = useRef(new WeakSet<Element>());
   useEffect(() => {
     if (
       !root.current ||
@@ -21,7 +22,9 @@ export default function AnimatedList({
     const observer = new IntersectionObserver(
       (entries) =>
         entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
+          if (!entry.isIntersecting || revealed.current.has(entry.target))
+            return;
+          revealed.current.add(entry.target);
           entry.target.animate(
             [
               { opacity: 0.6, transform: "translateY(8px)" },
@@ -33,7 +36,9 @@ export default function AnimatedList({
         }),
       { threshold: 0.1 },
     );
-    Array.from(root.current.children).forEach((node) => observer.observe(node));
+    Array.from(root.current.children).forEach((node) => {
+      if (!revealed.current.has(node)) observer.observe(node);
+    });
     return () => observer.disconnect();
   }, [children]);
   return (

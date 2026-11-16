@@ -699,6 +699,7 @@ async (page) => {
   await page.screenshot({ path: "/private/tmp/signalgen-account.png", animations: "disabled", timeout: 10000 });
   await page.goto(`${origin}/#app/universes`);
   await page.getByRole("button", { name: "Edit Bank pilihan", exact: true }).click({ timeout: 5000 });
+  await page.waitForFunction(()=>document.querySelectorAll(".universe-selection__stocks li").length===2);
   if(await page.locator('.universe-selection__stocks li').count() !== 2) throw Error("Selected stock cards missing");
   const stockCard = await page.locator('.universe-selection__stocks li').first().evaluate(el=>({radius:parseFloat(getComputedStyle(el).borderTopLeftRadius),padding:parseFloat(getComputedStyle(el).paddingLeft)}));
   if(stockCard.radius < 8 || stockCard.padding < 12) throw Error("Selected stock item card spacing missing");
@@ -922,7 +923,7 @@ async (page) => {
   await signalFilters.getByRole("button", { name: "SELL", exact: true }).click();
   await library.getByText("No matching rules", { exact: true }).waitFor();
   await signalFilters.getByRole("button", { name: "BUY", exact: true }).click();
-  await library.getByRole("button", { name: "Edit Rule fixture", exact: true }).waitFor();
+  await library.getByRole("button", { name: "Actions for Rule fixture", exact: true }).waitFor();
   await signalFilters.getByRole("button", { name: "All signals", exact: true }).click();
   await page.getByLabel("Search saved rules", { exact: true }).fill("");
   const previewButton = page.getByRole("button", { name: "Preview criteria", exact: true });
@@ -1036,12 +1037,16 @@ async (page) => {
   await page.getByRole("button",{name:"Save rule",exact:true}).click();
   await page.waitForFunction(() => document.querySelector('#rule-name')?.value === '');
   if (ruleWrite.definition.conditions[0].left !== "EMA37_PREV_3" || ruleWrite.definition.conditions[0].right !== "MACD_SIGNAL") throw Error("Claudio period/history was lost in the saved rule");
+  await page.getByRole('button',{name:'Actions for Rule fixture',exact:true}).focus();
+  await page.keyboard.press('ArrowLeft');
   await page.getByRole("button", { name: "Delete Rule fixture", exact: true }).click();
   const deleteRuleDialog = page.getByRole("alertdialog", { name: "Delete this rule?" });
   await deleteRuleDialog.waitFor();
   if (!(await deleteRuleDialog.innerText()).includes("Rule fixture") || ruleDeletes !== 0) throw Error("Rule deletion lacks protected confirmation");
   await deleteRuleDialog.getByRole("button", { name: "Cancel", exact: true }).click();
   if (ruleDeletes !== 0) throw Error("Cancel deleted the saved rule");
+  await page.getByRole('button',{name:'Actions for Rule fixture',exact:true}).focus();
+  await page.keyboard.press('ArrowLeft');
   await page.getByRole("button", { name: "Delete Rule fixture", exact: true }).click();
   await deleteRuleDialog.getByRole("button", { name: "Delete rule", exact: true }).click();
   await page.waitForResponse(response => response.url().endsWith('/api/v1/rules') && response.request().method() === 'GET');
@@ -1126,6 +1131,8 @@ async (page) => {
   await page.getByRole('button', { name:'Edit Banking watchlist', exact:true }).click();
   if (await page.getByLabel('Universe name', { exact:true }).inputValue() !== 'Banking watchlist') throw Error('Saved universe edit action broken');
   await page.goto(`${origin}/#app/rules`);
+  await page.getByRole('button',{name:'Actions for Rule fixture',exact:true}).focus();
+  await page.keyboard.press('ArrowLeft');
   const editRule = page.getByRole('button', {name:'Edit Rule fixture', exact:true});
   if (await editRule.getAttribute('aria-label') !== 'Edit Rule fixture') throw Error('Edit rule accessible label missing');
   await editRule.click();
