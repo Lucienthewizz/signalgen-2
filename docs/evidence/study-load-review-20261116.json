@@ -1,0 +1,39 @@
+{
+  "reviewedCommit": "cd49dd66fe22ecaced90a02c35c5399069eed93a",
+  "testedSourceCommit": "d8a36cb3fdfae97085dd2ce8d83c41429182931a",
+  "baselineCommit": "e74b1651d7e04059141b4f7ff9a4d1f23f6c2c8e",
+  "sourceUnchangedBetweenTestAndReview": true,
+  "sourceSha256": {
+    "backend/internal/api/tests/study_sustained_load_test.go": "869131e241484cabbc4e38215a580da7ad1fbef4b85c3bf3d1076b45169c0aaa",
+    "backend/scripts/run_study_sustained_load.sh": "3c5d38dc76f770357b8114930ab1e73f9f77efa7aa2ab3e54d75d577314151e2",
+    "backend/scripts/study_load_runner_helpers.py": "29c591f2bef696d2ce0662031d9aef00757e8fba1194b6451314997d51f7046f",
+    "backend/scripts/test_run_study_sustained_load.py": "b803f9d3ee5b9bf45c9d0417cbf43e0c251a0f6d259473ce05643a7eba0974c3",
+    "docs/backend/STUDY_SUSTAINED_LOAD.md": "33abecad1de717e237f655d061f874bea517bc0583721d94a1efc582f73c297c",
+    "docs/evidence/study-sustained-load-20261116.json": "e4fca19e0bf70d84466ee09a0b3b8f74e19d10aab57b2aad2b8b88621dc757b8",
+    "docs/evidence/study-sustained-load-20261116.md": "01e0d07bc8f1a306241bf64217b1f89bd22799625ed3a8be134843d75657a777",
+    "docs/evidence/study-sustained-load-20261118.json": "d30bcdd82805a14fca32a096b5bd8cfd747c4c677fb15a897ff76ce7aa926f56",
+    "docs/evidence/study-sustained-load-20261118.md": "0d7bf7bd1200f5958e8c8a2a9d6810ee9e4e540a13c600fbcdeb8d17d98b3b7c"
+  },
+  "checks": {
+    "headMatchesReviewedCommit": true,
+    "testedSourceCommitRecordedByEvidence": true,
+    "scopedSourceUnchangedBetweenCommits": true,
+    "primaryEvidenceSchema": 3,
+    "primaryEvidenceRunCount": 4,
+    "allPrimaryMeasuredDurationsAtLeastMs": 5000,
+    "approvedContainerPythonAndShellSyntax": "pass",
+    "runtimeReexecutedByThisReview": false
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "classification": "confirmed coverage gap",
+      "status": "mid-lifecycle failure cleanup needs runtime validation; no confirmed defect"
+    },
+    {
+      "id": "R2",
+      "classification": "confirmed measurement gap",
+      "status": "rejected-attempt latency is not a separate reported series"
+    }
+  ]
+}
