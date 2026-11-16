@@ -1,0 +1,1240 @@
+{
+  "label": "paired-benchmark",
+  "provenance": {
+    "candidateCommitSha": "df92fc14a4637cca153b55a884731c1d0804a2b8",
+    "baselineCommitSha": "e74b1651d7e04059141b4f7ff9a4d1f23f6c2c8e",
+    "candidateSourceSha256": "43f81fd8f588db1b069caff664d88ffb9182601bbca848b313754e578300d2fb",
+    "baselineSourceSha256": "02d767b09aaf7d52c2eeb61ac886c8b51c53fa426a221691861463c3f7fef78c",
+    "runnerSha256": "c1983732916833f6647d5008a5cc747a59a01f047e87886e60958476b7c609b6",
+    "lockfileSha256": "c27cd5cbed7490dbd4d92c4e558bdf5dac976e0013ecd49a80627aca21117063",
+    "containerImageDigest": "sha256:f609973e8fd93f38a5ddfd706a65805294247dae8d81b2541c0afe2787746197",
+    "containerImageTag": "mcr.microsoft.com/playwright@sha256:f609973e8fd93f38a5ddfd706a65805294247dae8d81b2541c0afe2787746197",
+    "platform": "linux/arm64",
+    "isolationControls": {
+      "network": "offline loopback namespace (--network none)",
+      "user": "pwuser (uid 1001, gid 1001)",
+      "securityOpt": "no-new-privileges:true",
+      "capDrop": "ALL",
+      "cpus": 2,
+      "memory": "2g",
+      "pidsLimit": 100,
+      "mounts": [
+        "Read-only node_modules (/work/node_modules:ro)",
+        "Read-only allowlisted staging snapshot (/work/app:ro)"
+      ],
+      "browserSandboxing": "Native Chromium Linux sandbox enabled (no --no-sandbox)"
+    },
+    "command": "docker run --rm --pull=never --network none --user 1001:1001 --security-opt=no-new-privileges:true --cap-drop=ALL --cpus 2 --memory 2g --pids-limit 100 -v <real-node_modules>:/work/node_modules:ro -v /tmp/storage-bench-stage:/work/app:ro -e NODE_PATH=/work/node_modules -w /work sha256:f609973e8fd93f38a5ddfd706a65805294247dae8d81b2541c0afe2787746197 node /work/app/tests/browser/study-storage-benchmark.mjs",
+    "timestamp": "2026-11-16T04:40:31.459Z"
+  },
+  "scenarios": [
+    {
+      "symbols": 10,
+      "density": 2,
+      "totalEvents": 20,
+      "baselineSamples": [
+        {
+          "storeMs": 2.9,
+          "p0Ms": 0.5,
+          "pMidMs": 0.3,
+          "pLateMs": 0.3,
+          "csvExportMs": 0.4,
+          "cleanMs": 0.7
+        },
+        {
+          "storeMs": 3,
+          "p0Ms": 0.7,
+          "pMidMs": 0.5,
+          "pLateMs": 0.5,
+          "csvExportMs": 0.5,
+          "cleanMs": 1
+        },
+        {
+          "storeMs": 2.7,
+          "p0Ms": 0.7,
+          "pMidMs": 0.4,
+          "pLateMs": 0.5,
+          "csvExportMs": 0.5,
+          "cleanMs": 1
+        }
+      ],
+      "candidateSamples": [
+        {
+          "storeMs": 2.6,
+          "p0Ms": 0.4,
+          "pMidMs": 0.3,
+          "pLateMs": 0.3,
+          "csvExportMs": 0.3,
+          "cleanMs": 0.9
+        },
+        {
+          "storeMs": 12,
+          "p0Ms": 0.3,
+          "pMidMs": 0.4,
+          "pLateMs": 0.3,
+          "csvExportMs": 1.1,
+          "cleanMs": 1
+        },
+        {
+          "storeMs": 3.3,
+          "p0Ms": 0.5,
+          "pMidMs": 0.3,
+          "pLateMs": 0.5,
+          "csvExportMs": 0.5,
+          "cleanMs": 1.1
+        }
+      ],
+      "baseline": {
+        "storeMs": 2.9,
+        "storeRange": [
+          2.7,
+          3
+        ],
+        "p0Ms": 0.7,
+        "p0Range": [
+          0.5,
+          0.7
+        ],
+        "pMidMs": 0.4,
+        "pMidRange": [
+          0.3,
+          0.5
+        ],
+        "pLateMs": 0.5,
+        "pLateRange": [
+          0.3,
+          0.5
+        ],
+        "csvExportMs": 0.5,
+        "csvRange": [
+          0.4,
+          0.5
+        ],
+        "cleanMs": 1,
+        "cleanRange": [
+          0.7,
+          1
+        ],
+        "verified": true
+      },
+      "candidate": {
+        "storeMs": 3.3,
+        "storeRange": [
+          2.6,
+          12
+        ],
+        "p0Ms": 0.4,
+        "p0Range": [
+          0.3,
+          0.5
+        ],
+        "pMidMs": 0.3,
+        "pMidRange": [
+          0.3,
+          0.4
+        ],
+        "pLateMs": 0.3,
+        "pLateRange": [
+          0.3,
+          0.5
+        ],
+        "csvExportMs": 0.5,
+        "csvRange": [
+          0.3,
+          1.1
+        ],
+        "cleanMs": 1,
+        "cleanRange": [
+          0.9,
+          1.1
+        ],
+        "verified": true
+      },
+      "speedup": {
+        "csvExport": 1,
+        "p0": 1.75,
+        "pMid": 1.33,
+        "pLate": 1.67,
+        "storeDeltaMs": 0.4,
+        "cleanDeltaMs": 0
+      },
+      "verified": true
+    },
+    {
+      "symbols": 10,
+      "density": 10,
+      "totalEvents": 100,
+      "baselineSamples": [
+        {
+          "storeMs": 2.5,
+          "p0Ms": 0.3,
+          "pMidMs": 0.4,
+          "pLateMs": 0.4,
+          "csvExportMs": 0.3,
+          "cleanMs": 0.6
+        },
+        {
+          "storeMs": 3.1,
+          "p0Ms": 0.6,
+          "pMidMs": 0.4,
+          "pLateMs": 0.6,
+          "csvExportMs": 0.4,
+          "cleanMs": 1
+        },
+        {
+          "storeMs": 3,
+          "p0Ms": 0.5,
+          "pMidMs": 0.6,
+          "pLateMs": 0.4,
+          "csvExportMs": 0.7,
+          "cleanMs": 1.3
+        }
+      ],
+      "candidateSamples": [
+        {
+          "storeMs": 3.1,
+          "p0Ms": 0.4,
+          "pMidMs": 0.5,
+          "pLateMs": 0.6,
+          "csvExportMs": 0.7,
+          "cleanMs": 1.1
+        },
+        {
+          "storeMs": 3.5,
+          "p0Ms": 0.5,
+          "pMidMs": 0.4,
+          "pLateMs": 0.3,
+          "csvExportMs": 0.4,
+          "cleanMs": 0.9
+        },
+        {
+          "storeMs": 3.3,
+          "p0Ms": 0.4,
+          "pMidMs": 0.9,
+          "pLateMs": 0.6,
+          "csvExportMs": 0.6,
+          "cleanMs": 1.7
+        }
+      ],
+      "baseline": {
+        "storeMs": 3,
+        "storeRange": [
+          2.5,
+          3.1
+        ],
+        "p0Ms": 0.5,
+        "p0Range": [
+          0.3,
+          0.6
+        ],
+        "pMidMs": 0.4,
+        "pMidRange": [
+          0.4,
+          0.6
+        ],
+        "pLateMs": 0.4,
+        "pLateRange": [
+          0.4,
+          0.6
+        ],
+        "csvExportMs": 0.4,
+        "csvRange": [
+          0.3,
+          0.7
+        ],
+        "cleanMs": 1,
+        "cleanRange": [
+          0.6,
+          1.3
+        ],
+        "verified": true
+      },
+      "candidate": {
+        "storeMs": 3.3,
+        "storeRange": [
+          3.1,
+          3.5
+        ],
+        "p0Ms": 0.4,
+        "p0Range": [
+          0.4,
+          0.5
+        ],
+        "pMidMs": 0.5,
+        "pMidRange": [
+          0.4,
+          0.9
+        ],
+        "pLateMs": 0.6,
+        "pLateRange": [
+          0.3,
+          0.6
+        ],
+        "csvExportMs": 0.6,
+        "csvRange": [
+          0.4,
+          0.7
+        ],
+        "cleanMs": 1.1,
+        "cleanRange": [
+          0.9,
+          1.7
+        ],
+        "verified": true
+      },
+      "speedup": {
+        "csvExport": 0.67,
+        "p0": 1.25,
+        "pMid": 0.8,
+        "pLate": 0.67,
+        "storeDeltaMs": 0.3,
+        "cleanDeltaMs": 0.1
+      },
+      "verified": true
+    },
+    {
+      "symbols": 10,
+      "density": 30,
+      "totalEvents": 300,
+      "baselineSamples": [
+        {
+          "storeMs": 3.2,
+          "p0Ms": 0.7,
+          "pMidMs": 0.5,
+          "pLateMs": 0.6,
+          "csvExportMs": 1.7,
+          "cleanMs": 1
+        },
+        {
+          "storeMs": 3.1,
+          "p0Ms": 0.5,
+          "pMidMs": 0.5,
+          "pLateMs": 0.6,
+          "csvExportMs": 1.4,
+          "cleanMs": 0.9
+        },
+        {
+          "storeMs": 3,
+          "p0Ms": 1.1,
+          "pMidMs": 0.7,
+          "pLateMs": 0.6,
+          "csvExportMs": 1.4,
+          "cleanMs": 0.9
+        }
+      ],
+      "candidateSamples": [
+        {
+          "storeMs": 3.9,
+          "p0Ms": 0.5,
+          "pMidMs": 0.4,
+          "pLateMs": 0.4,
+          "csvExportMs": 2,
+          "cleanMs": 1
+        },
+        {
+          "storeMs": 3.9,
+          "p0Ms": 0.3,
+          "pMidMs": 0.3,
+          "pLateMs": 0.2,
+          "csvExportMs": 1.3,
+          "cleanMs": 0.8
+        },
+        {
+          "storeMs": 3.9,
+          "p0Ms": 0.4,
+          "pMidMs": 0.4,
+          "pLateMs": 0.4,
+          "csvExportMs": 1.6,
+          "cleanMs": 1
+        }
+      ],
+      "baseline": {
+        "storeMs": 3.1,
+        "storeRange": [
+          3,
+          3.2
+        ],
+        "p0Ms": 0.7,
+        "p0Range": [
+          0.5,
+          1.1
+        ],
+        "pMidMs": 0.5,
+        "pMidRange": [
+          0.5,
+          0.7
+        ],
+        "pLateMs": 0.6,
+        "pLateRange": [
+          0.6,
+          0.6
+        ],
+        "csvExportMs": 1.4,
+        "csvRange": [
+          1.4,
+          1.7
+        ],
+        "cleanMs": 0.9,
+        "cleanRange": [
+          0.9,
+          1
+        ],
+        "verified": true
+      },
+      "candidate": {
+        "storeMs": 3.9,
+        "storeRange": [
+          3.9,
+          3.9
+        ],
+        "p0Ms": 0.4,
+        "p0Range": [
+          0.3,
+          0.5
+        ],
+        "pMidMs": 0.4,
+        "pMidRange": [
+          0.3,
+          0.4
+        ],
+        "pLateMs": 0.4,
+        "pLateRange": [
+          0.2,
+          0.4
+        ],
+        "csvExportMs": 1.6,
+        "csvRange": [
+          1.3,
+          2
+        ],
+        "cleanMs": 1,
+        "cleanRange": [
+          0.8,
+          1
+        ],
+        "verified": true
+      },
+      "speedup": {
+        "csvExport": 0.87,
+        "p0": 1.75,
+        "pMid": 1.25,
+        "pLate": 1.5,
+        "storeDeltaMs": 0.8,
+        "cleanDeltaMs": 0.1
+      },
+      "verified": true
+    },
+    {
+      "symbols": 100,
+      "density": 2,
+      "totalEvents": 200,
+      "baselineSamples": [
+        {
+          "storeMs": 29.2,
+          "p0Ms": 2,
+          "pMidMs": 1.4,
+          "pLateMs": 1.3,
+          "csvExportMs": 2,
+          "cleanMs": 7.7
+        },
+        {
+          "storeMs": 27.2,
+          "p0Ms": 1.9,
+          "pMidMs": 1.2,
+          "pLateMs": 1.2,
+          "csvExportMs": 2.4,
+          "cleanMs": 8.4
+        },
+        {
+          "storeMs": 28.6,
+          "p0Ms": 1.4,
+          "pMidMs": 1.4,
+          "pLateMs": 1.3,
+          "csvExportMs": 2.5,
+          "cleanMs": 6.7
+        }
+      ],
+      "candidateSamples": [
+        {
+          "storeMs": 33,
+          "p0Ms": 1.2,
+          "pMidMs": 1,
+          "pLateMs": 0.7,
+          "csvExportMs": 4.3,
+          "cleanMs": 12.3
+        },
+        {
+          "storeMs": 34.6,
+          "p0Ms": 1.4,
+          "pMidMs": 0.8,
+          "pLateMs": 0.6,
+          "csvExportMs": 2.3,
+          "cleanMs": 8.4
+        },
+        {
+          "storeMs": 32.8,
+          "p0Ms": 0.7,
+          "pMidMs": 0.7,
+          "pLateMs": 0.5,
+          "csvExportMs": 1.7,
+          "cleanMs": 8.4
+        }
+      ],
+      "baseline": {
+        "storeMs": 28.6,
+        "storeRange": [
+          27.2,
+          29.2
+        ],
+        "p0Ms": 1.9,
+        "p0Range": [
+          1.4,
+          2
+        ],
+        "pMidMs": 1.4,
+        "pMidRange": [
+          1.2,
+          1.4
+        ],
+        "pLateMs": 1.3,
+        "pLateRange": [
+          1.2,
+          1.3
+        ],
+        "csvExportMs": 2.4,
+        "csvRange": [
+          2,
+          2.5
+        ],
+        "cleanMs": 7.7,
+        "cleanRange": [
+          6.7,
+          8.4
+        ],
+        "verified": true
+      },
+      "candidate": {
+        "storeMs": 33,
+        "storeRange": [
+          32.8,
+          34.6
+        ],
+        "p0Ms": 1.2,
+        "p0Range": [
+          0.7,
+          1.4
+        ],
+        "pMidMs": 0.8,
+        "pMidRange": [
+          0.7,
+          1
+        ],
+        "pLateMs": 0.6,
+        "pLateRange": [
+          0.5,
+          0.7
+        ],
+        "csvExportMs": 2.3,
+        "csvRange": [
+          1.7,
+          4.3
+        ],
+        "cleanMs": 8.4,
+        "cleanRange": [
+          8.4,
+          12.3
+        ],
+        "verified": true
+      },
+      "speedup": {
+        "csvExport": 1.04,
+        "p0": 1.58,
+        "pMid": 1.75,
+        "pLate": 2.17,
+        "storeDeltaMs": 4.4,
+        "cleanDeltaMs": 0.7
+      },
+      "verified": true
+    },
+    {
+      "symbols": 100,
+      "density": 10,
+      "totalEvents": 1000,
+      "baselineSamples": [
+        {
+          "storeMs": 57.4,
+          "p0Ms": 2.2,
+          "pMidMs": 2.5,
+          "pLateMs": 1.9,
+          "csvExportMs": 17.3,
+          "cleanMs": 8.1
+        },
+        {
+          "storeMs": 110.6,
+          "p0Ms": 2.1,
+          "pMidMs": 4,
+          "pLateMs": 1.9,
+          "csvExportMs": 19.9,
+          "cleanMs": 9.6
+        },
+        {
+          "storeMs": 34.8,
+          "p0Ms": 1.7,
+          "pMidMs": 1.6,
+          "pLateMs": 2.3,
+          "csvExportMs": 40.8,
+          "cleanMs": 9.9
+        }
+      ],
+      "candidateSamples": [
+        {
+          "storeMs": 33.8,
+          "p0Ms": 0.8,
+          "pMidMs": 0.4,
+          "pLateMs": 0.5,
+          "csvExportMs": 7.3,
+          "cleanMs": 8.8
+        },
+        {
+          "storeMs": 35.2,
+          "p0Ms": 0.6,
+          "pMidMs": 0.7,
+          "pLateMs": 0.6,
+          "csvExportMs": 7.9,
+          "cleanMs": 9
+        },
+        {
+          "storeMs": 40.7,
+          "p0Ms": 0.6,
+          "pMidMs": 0.5,
+          "pLateMs": 0.4,
+          "csvExportMs": 6.3,
+          "cleanMs": 7.8
+        }
+      ],
+      "baseline": {
+        "storeMs": 57.4,
+        "storeRange": [
+          34.8,
+          110.6
+        ],
+        "p0Ms": 2.1,
+        "p0Range": [
+          1.7,
+          2.2
+        ],
+        "pMidMs": 2.5,
+        "pMidRange": [
+          1.6,
+          4
+        ],
+        "pLateMs": 1.9,
+        "pLateRange": [
+          1.9,
+          2.3
+        ],
+        "csvExportMs": 19.9,
+        "csvRange": [
+          17.3,
+          40.8
+        ],
+        "cleanMs": 9.6,
+        "cleanRange": [
+          8.1,
+          9.9
+        ],
+        "verified": true
+      },
+      "candidate": {
+        "storeMs": 35.2,
+        "storeRange": [
+          33.8,
+          40.7
+        ],
+        "p0Ms": 0.6,
+        "p0Range": [
+          0.6,
+          0.8
+        ],
+        "pMidMs": 0.5,
+        "pMidRange": [
+          0.4,
+          0.7
+        ],
+        "pLateMs": 0.5,
+        "pLateRange": [
+          0.4,
+          0.6
+        ],
+        "csvExportMs": 7.3,
+        "csvRange": [
+          6.3,
+          7.9
+        ],
+        "cleanMs": 8.8,
+        "cleanRange": [
+          7.8,
+          9
+        ],
+        "verified": true
+      },
+      "speedup": {
+        "csvExport": 2.73,
+        "p0": 3.5,
+        "pMid": 5,
+        "pLate": 3.8,
+        "storeDeltaMs": -22.2,
+        "cleanDeltaMs": -0.8
+      },
+      "verified": true
+    },
+    {
+      "symbols": 100,
+      "density": 30,
+      "totalEvents": 3000,
+      "baselineSamples": [
+        {
+          "storeMs": 37.1,
+          "p0Ms": 2.4,
+          "pMidMs": 2.4,
+          "pLateMs": 4.6,
+          "csvExportMs": 79.3,
+          "cleanMs": 10.3
+        },
+        {
+          "storeMs": 36,
+          "p0Ms": 4.8,
+          "pMidMs": 3.7,
+          "pLateMs": 2.6,
+          "csvExportMs": 84.5,
+          "cleanMs": 9.3
+        },
+        {
+          "storeMs": 36.8,
+          "p0Ms": 2.9,
+          "pMidMs": 2.7,
+          "pLateMs": 2.6,
+          "csvExportMs": 78.8,
+          "cleanMs": 7.7
+        }
+      ],
+      "candidateSamples": [
+        {
+          "storeMs": 47.8,
+          "p0Ms": 0.5,
+          "pMidMs": 0.5,
+          "pLateMs": 0.6,
+          "csvExportMs": 21.4,
+          "cleanMs": 9.4
+        },
+        {
+          "storeMs": 45.1,
+          "p0Ms": 0.6,
+          "pMidMs": 0.5,
+          "pLateMs": 0.4,
+          "csvExportMs": 22.6,
+          "cleanMs": 8.4
+        },
+        {
+          "storeMs": 72.2,
+          "p0Ms": 0.4,
+          "pMidMs": 0.5,
+          "pLateMs": 0.6,
+          "csvExportMs": 20.6,
+          "cleanMs": 9.2
+        }
+      ],
+      "baseline": {
+        "storeMs": 36.8,
+        "storeRange": [
+          36,
+          37.1
+        ],
+        "p0Ms": 2.9,
+        "p0Range": [
+          2.4,
+          4.8
+        ],
+        "pMidMs": 2.7,
+        "pMidRange": [
+          2.4,
+          3.7
+        ],
+        "pLateMs": 2.6,
+        "pLateRange": [
+          2.6,
+          4.6
+        ],
+        "csvExportMs": 79.3,
+        "csvRange": [
+          78.8,
+          84.5
+        ],
+        "cleanMs": 9.3,
+        "cleanRange": [
+          7.7,
+          10.3
+        ],
+        "verified": true
+      },
+      "candidate": {
+        "storeMs": 47.8,
+        "storeRange": [
+          45.1,
+          72.2
+        ],
+        "p0Ms": 0.5,
+        "p0Range": [
+          0.4,
+          0.6
+        ],
+        "pMidMs": 0.5,
+        "pMidRange": [
+          0.5,
+          0.5
+        ],
+        "pLateMs": 0.6,
+        "pLateRange": [
+          0.4,
+          0.6
+        ],
+        "csvExportMs": 21.4,
+        "csvRange": [
+          20.6,
+          22.6
+        ],
+        "cleanMs": 9.2,
+        "cleanRange": [
+          8.4,
+          9.4
+        ],
+        "verified": true
+      },
+      "speedup": {
+        "csvExport": 3.71,
+        "p0": 5.8,
+        "pMid": 5.4,
+        "pLate": 4.33,
+        "storeDeltaMs": 11,
+        "cleanDeltaMs": -0.1
+      },
+      "verified": true
+    },
+    {
+      "symbols": 500,
+      "density": 2,
+      "totalEvents": 1000,
+      "baselineSamples": [
+        {
+          "storeMs": 144.8,
+          "p0Ms": 6.9,
+          "pMidMs": 3.7,
+          "pLateMs": 3.7,
+          "csvExportMs": 43,
+          "cleanMs": 33.4
+        },
+        {
+          "storeMs": 144.8,
+          "p0Ms": 4.7,
+          "pMidMs": 3.6,
+          "pLateMs": 3.4,
+          "csvExportMs": 35.3,
+          "cleanMs": 41.3
+        },
+        {
+          "storeMs": 144.9,
+          "p0Ms": 4.5,
+          "pMidMs": 3,
+          "pLateMs": 3.1,
+          "csvExportMs": 34.3,
+          "cleanMs": 42.2
+        }
+      ],
+      "candidateSamples": [
+        {
+          "storeMs": 175.5,
+          "p0Ms": 1.2,
+          "pMidMs": 1.1,
+          "pLateMs": 0.8,
+          "csvExportMs": 12.4,
+          "cleanMs": 35.5
+        },
+        {
+          "storeMs": 175.1,
+          "p0Ms": 1,
+          "pMidMs": 0.9,
+          "pLateMs": 1.1,
+          "csvExportMs": 19.3,
+          "cleanMs": 50.3
+        },
+        {
+          "storeMs": 177.8,
+          "p0Ms": 0.8,
+          "pMidMs": 1.3,
+          "pLateMs": 0.9,
+          "csvExportMs": 10.5,
+          "cleanMs": 43.6
+        }
+      ],
+      "baseline": {
+        "storeMs": 144.8,
+        "storeRange": [
+          144.8,
+          144.9
+        ],
+        "p0Ms": 4.7,
+        "p0Range": [
+          4.5,
+          6.9
+        ],
+        "pMidMs": 3.6,
+        "pMidRange": [
+          3,
+          3.7
+        ],
+        "pLateMs": 3.4,
+        "pLateRange": [
+          3.1,
+          3.7
+        ],
+        "csvExportMs": 35.3,
+        "csvRange": [
+          34.3,
+          43
+        ],
+        "cleanMs": 41.3,
+        "cleanRange": [
+          33.4,
+          42.2
+        ],
+        "verified": true
+      },
+      "candidate": {
+        "storeMs": 175.5,
+        "storeRange": [
+          175.1,
+          177.8
+        ],
+        "p0Ms": 1,
+        "p0Range": [
+          0.8,
+          1.2
+        ],
+        "pMidMs": 1.1,
+        "pMidRange": [
+          0.9,
+          1.3
+        ],
+        "pLateMs": 0.9,
+        "pLateRange": [
+          0.8,
+          1.1
+        ],
+        "csvExportMs": 12.4,
+        "csvRange": [
+          10.5,
+          19.3
+        ],
+        "cleanMs": 43.6,
+        "cleanRange": [
+          35.5,
+          50.3
+        ],
+        "verified": true
+      },
+      "speedup": {
+        "csvExport": 2.85,
+        "p0": 4.7,
+        "pMid": 3.27,
+        "pLate": 3.78,
+        "storeDeltaMs": 30.7,
+        "cleanDeltaMs": 2.3
+      },
+      "verified": true
+    },
+    {
+      "symbols": 500,
+      "density": 10,
+      "totalEvents": 5000,
+      "baselineSamples": [
+        {
+          "storeMs": 157.1,
+          "p0Ms": 8,
+          "pMidMs": 5.4,
+          "pLateMs": 5.2,
+          "csvExportMs": 294.4,
+          "cleanMs": 43.8
+        },
+        {
+          "storeMs": 163.5,
+          "p0Ms": 6,
+          "pMidMs": 6.7,
+          "pLateMs": 5.5,
+          "csvExportMs": 270.3,
+          "cleanMs": 45.2
+        },
+        {
+          "storeMs": 168,
+          "p0Ms": 5.6,
+          "pMidMs": 7.4,
+          "pLateMs": 9,
+          "csvExportMs": 258,
+          "cleanMs": 41.8
+        }
+      ],
+      "candidateSamples": [
+        {
+          "storeMs": 204.1,
+          "p0Ms": 0.7,
+          "pMidMs": 0.6,
+          "pLateMs": 0.6,
+          "csvExportMs": 30.7,
+          "cleanMs": 37.7
+        },
+        {
+          "storeMs": 187.1,
+          "p0Ms": 0.6,
+          "pMidMs": 0.5,
+          "pLateMs": 0.4,
+          "csvExportMs": 43.6,
+          "cleanMs": 45
+        },
+        {
+          "storeMs": 300,
+          "p0Ms": 0.7,
+          "pMidMs": 0.4,
+          "pLateMs": 0.6,
+          "csvExportMs": 34.8,
+          "cleanMs": 56.5
+        }
+      ],
+      "baseline": {
+        "storeMs": 163.5,
+        "storeRange": [
+          157.1,
+          168
+        ],
+        "p0Ms": 6,
+        "p0Range": [
+          5.6,
+          8
+        ],
+        "pMidMs": 6.7,
+        "pMidRange": [
+          5.4,
+          7.4
+        ],
+        "pLateMs": 5.5,
+        "pLateRange": [
+          5.2,
+          9
+        ],
+        "csvExportMs": 270.3,
+        "csvRange": [
+          258,
+          294.4
+        ],
+        "cleanMs": 43.8,
+        "cleanRange": [
+          41.8,
+          45.2
+        ],
+        "verified": true
+      },
+      "candidate": {
+        "storeMs": 204.1,
+        "storeRange": [
+          187.1,
+          300
+        ],
+        "p0Ms": 0.7,
+        "p0Range": [
+          0.6,
+          0.7
+        ],
+        "pMidMs": 0.5,
+        "pMidRange": [
+          0.4,
+          0.6
+        ],
+        "pLateMs": 0.6,
+        "pLateRange": [
+          0.4,
+          0.6
+        ],
+        "csvExportMs": 34.8,
+        "csvRange": [
+          30.7,
+          43.6
+        ],
+        "cleanMs": 45,
+        "cleanRange": [
+          37.7,
+          56.5
+        ],
+        "verified": true
+      },
+      "speedup": {
+        "csvExport": 7.77,
+        "p0": 8.57,
+        "pMid": 13.4,
+        "pLate": 9.17,
+        "storeDeltaMs": 40.6,
+        "cleanDeltaMs": 1.2
+      },
+      "verified": true
+    },
+    {
+      "symbols": 500,
+      "density": 30,
+      "totalEvents": 15000,
+      "baselineSamples": [
+        {
+          "storeMs": 172.4,
+          "p0Ms": 9.4,
+          "pMidMs": 9,
+          "pLateMs": 8.7,
+          "csvExportMs": 1569.9,
+          "cleanMs": 39
+        },
+        {
+          "storeMs": 277.3,
+          "p0Ms": 13.6,
+          "pMidMs": 10.1,
+          "pLateMs": 9.6,
+          "csvExportMs": 1497.7,
+          "cleanMs": 41.5
+        },
+        {
+          "storeMs": 188.8,
+          "p0Ms": 13,
+          "pMidMs": 10.9,
+          "pLateMs": 11.4,
+          "csvExportMs": 1696.6,
+          "cleanMs": 32.8
+        }
+      ],
+      "candidateSamples": [
+        {
+          "storeMs": 191.6,
+          "p0Ms": 0.5,
+          "pMidMs": 0.4,
+          "pLateMs": 0.5,
+          "csvExportMs": 88.3,
+          "cleanMs": 37.2
+        },
+        {
+          "storeMs": 191.2,
+          "p0Ms": 0.5,
+          "pMidMs": 0.6,
+          "pLateMs": 0.4,
+          "csvExportMs": 101.6,
+          "cleanMs": 40.1
+        },
+        {
+          "storeMs": 222.4,
+          "p0Ms": 0.6,
+          "pMidMs": 0.5,
+          "pLateMs": 0.4,
+          "csvExportMs": 101.9,
+          "cleanMs": 44.5
+        }
+      ],
+      "baseline": {
+        "storeMs": 188.8,
+        "storeRange": [
+          172.4,
+          277.3
+        ],
+        "p0Ms": 13,
+        "p0Range": [
+          9.4,
+          13.6
+        ],
+        "pMidMs": 10.1,
+        "pMidRange": [
+          9,
+          10.9
+        ],
+        "pLateMs": 9.6,
+        "pLateRange": [
+          8.7,
+          11.4
+        ],
+        "csvExportMs": 1569.9,
+        "csvRange": [
+          1497.7,
+          1696.6
+        ],
+        "cleanMs": 39,
+        "cleanRange": [
+          32.8,
+          41.5
+        ],
+        "verified": true
+      },
+      "candidate": {
+        "storeMs": 191.6,
+        "storeRange": [
+          191.2,
+          222.4
+        ],
+        "p0Ms": 0.5,
+        "p0Range": [
+          0.5,
+          0.6
+        ],
+        "pMidMs": 0.5,
+        "pMidRange": [
+          0.4,
+          0.6
+        ],
+        "pLateMs": 0.4,
+        "pLateRange": [
+          0.4,
+          0.5
+        ],
+        "csvExportMs": 101.6,
+        "csvRange": [
+          88.3,
+          101.9
+        ],
+        "cleanMs": 40.1,
+        "cleanRange": [
+          37.2,
+          44.5
+        ],
+        "verified": true
+      },
+      "speedup": {
+        "csvExport": 15.45,
+        "p0": 26,
+        "pMid": 20.2,
+        "pLate": 24,
+        "storeDeltaMs": 2.8,
+        "cleanDeltaMs": 1.1
+      },
+      "verified": true
+    }
+  ],
+  "correctness": {
+    "overwriteAccounting": true,
+    "ownerIsolation": true,
+    "cancellationRollback": true,
+    "legacyWriteRegression": true,
+    "singlePageConcurrentWriters": true,
+    "nativeReadonlyAbortErrorRejection": true,
+    "stableOrdering": true,
+    "fullNumbersAndOutcomes": true,
+    "quotaRollback": true,
+    "exactCanonicalEquality": {
+      "totalEvents": 80,
+      "oracleSha256": "ae0f70165a02abd6c9bb2c30662a3477947f9008aa03848d9d5c6162fecae5fe",
+      "paginatedSha256": "ae0f70165a02abd6c9bb2c30662a3477947f9008aa03848d9d5c6162fecae5fe",
+      "csvSha256": "ae0f70165a02abd6c9bb2c30662a3477947f9008aa03848d9d5c6162fecae5fe",
+      "matches": true
+    },
+    "twoPageSharedDbConcurrentDifferentSymbols": true,
+    "twoPageSharedDbConcurrentSameSymbolOverwrite": true
+  }
+}

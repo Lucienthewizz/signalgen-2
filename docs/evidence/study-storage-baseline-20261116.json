@@ -1,0 +1,121 @@
+{
+  "label": "baseline",
+  "timestamp": "2026-11-16T03:51:17.191Z",
+  "environment": {
+    "platform": "linux/arm64",
+    "browser": "Chromium 1248 (official Playwright Linux ARM64 sha256:f609973e8fd93f38a5ddfd706a65805294247dae8d81b2541c0afe2787746197)",
+    "storage": "Native IndexedDB signalgen-study-temporary-1 v2",
+    "network": "offline loopback namespace (--network none)",
+    "isolation": "bounded CPU (2 cores), RAM (2GB), PIDs (100), read-only source mount"
+  },
+  "benchmarkScenarios": [
+    {
+      "symbols": 10,
+      "density": 2,
+      "totalEvents": 20,
+      "storeMs": 4.2,
+      "p0Ms": 1.0,
+      "pMidMs": 0.5,
+      "pLateMs": 0.4,
+      "csvExportMs": 0.5,
+      "cleanMs": 1.1,
+      "verified": true
+    },
+    {
+      "symbols": 10,
+      "density": 10,
+      "totalEvents": 100,
+      "storeMs": 2.5,
+      "p0Ms": 0.3,
+      "pMidMs": 0.5,
+      "pLateMs": 0.5,
+      "csvExportMs": 1.1,
+      "cleanMs": 1.6,
+      "verified": true
+    },
+    {
+      "symbols": 10,
+      "density": 30,
+      "totalEvents": 300,
+      "storeMs": 4.1,
+      "p0Ms": 0.8,
+      "pMidMs": 0.7,
+      "pLateMs": 0.5,
+      "csvExportMs": 1.5,
+      "cleanMs": 0.9,
+      "verified": true
+    },
+    {
+      "symbols": 100,
+      "density": 2,
+      "totalEvents": 200,
+      "storeMs": 31.6,
+      "p0Ms": 1.5,
+      "pMidMs": 1.2,
+      "pLateMs": 0.9,
+      "csvExportMs": 2.3,
+      "cleanMs": 6.9,
+      "verified": true
+    },
+    {
+      "symbols": 100,
+      "density": 10,
+      "totalEvents": 1000,
+      "storeMs": 31.6,
+      "p0Ms": 1.5,
+      "pMidMs": 2.0,
+      "pLateMs": 1.5,
+      "csvExportMs": 22.0,
+      "cleanMs": 10.9,
+      "verified": true
+    },
+    {
+      "symbols": 100,
+      "density": 30,
+      "totalEvents": 3000,
+      "storeMs": 29.3,
+      "p0Ms": 3.6,
+      "pMidMs": 3.6,
+      "pLateMs": 3.4,
+      "csvExportMs": 89.8,
+      "cleanMs": 14.2,
+      "verified": true
+    },
+    {
+      "symbols": 500,
+      "density": 2,
+      "totalEvents": 1000,
+      "storeMs": 185.0,
+      "p0Ms": 5.7,
+      "pMidMs": 5.4,
+      "pLateMs": 4.9,
+      "csvExportMs": 47.8,
+      "cleanMs": 29.8,
+      "verified": true
+    },
+    {
+      "symbols": 500,
+      "density": 10,
+      "totalEvents": 5000,
+      "storeMs": 197.4,
+      "p0Ms": 6.1,
+      "pMidMs": 8.8,
+      "pLateMs": 5.6,
+      "csvExportMs": 338.6,
+      "cleanMs": 42.9,
+      "verified": true
+    },
+    {
+      "symbols": 500,
+      "density": 30,
+      "totalEvents": 15000,
+      "storeMs": 191.7,
+      "p0Ms": 12.5,
+      "pMidMs": 12.4,
+      "pLateMs": 15.7,
+      "csvExportMs": 1524.0,
+      "cleanMs": 35.5,
+      "verified": true
+    }
+  ]
+}
