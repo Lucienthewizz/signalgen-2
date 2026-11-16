@@ -1,0 +1,49 @@
+{
+  "scenario": "synthetic-api-real-worker-wasm-idb",
+  "source_base_commit": "c398fa92caff9b81c72d82a38c116b538c9e22f1",
+  "browser_fixture_sha256": "1860ccce49b91c992525fe72cc58a7611748ed6d3407a933563618e9a13b5d88",
+  "wasm_sha256": "af366a24c478003595dc5d47e126544d74d32412bcc6486632d40bc679b57c51",
+  "runtime_sha256": "0c949f4996f9a89698e4b5c586de32249c3b69b7baadb64d220073cc04acba14",
+  "adaptive": {
+    "worker_hint": 4,
+    "workers": {
+      "created": 4,
+      "active": 0,
+      "peakActive": 3,
+      "featureJobs": 10,
+      "completed": 10
+    },
+    "logical_cpus": 4,
+    "completed": 23,
+    "failed": 0,
+    "features_p50_ms": 9.8,
+    "features_p95_ms": 182.2,
+    "study_p50_ms": 3.6
+  },
+  "baseline": {
+    "worker_hint": 1,
+    "workers": {
+      "created": 2,
+      "active": 0,
+      "peakActive": 1,
+      "featureJobs": 10,
+      "completed": 10
+    },
+    "logical_cpus": 1,
+    "completed": 23,
+    "failed": 0,
+    "features_p50_ms": 5.5,
+    "features_p95_ms": 50.8,
+    "study_p50_ms": 3.6
+  },
+  "result_assertions": [
+    "23/23 completed",
+    "CSV export and IndexedDB assertions passed",
+    "retry/stop/quota lifecycle assertions passed"
+  ],
+  "limitations": [
+    "synthetic API fixtures",
+    "timings are a single alternating pair, not a capacity guarantee",
+    "report stage timings differ due scheduling"
+  ]
+}

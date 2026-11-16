@@ -2,12 +2,38 @@
 // synthetic account/catalog/provider/private decisions. No cloud traffic.
 // prettier-ignore
 async(page)=>{
- const origin=new URL(page.url()).origin,user={id:"11111111-1111-4111-8111-111111111119",email:"study@example.test",full_name:"Signal study QA",role:"user",status:"active"};
+ const pageURL=new URL(page.url()),origin=pageURL.origin,workerHint=pageURL.searchParams.get("workers")==="1"?1:4,user={id:"11111111-1111-4111-8111-111111111119",email:"study@example.test",full_name:"Signal study QA",role:"user",status:"active"};
  const errors=[],reports=[];page.on("pageerror",e=>errors.push(e.message));
  await page.emulateMedia({reducedMotion:"reduce"});
  await page.addInitScript(()=>{sessionStorage.setItem("signalgen.access-token","synthetic-study-only");sessionStorage.setItem("signalgen.app-session","synthetic-session");sessionStorage.setItem("signalgen.app-session-origin","same-origin")});
  let frozen,partial=true,prepares=[],scored=[],counter=0,hold=false,release,entered,etaProbe=false;
  const snapshots=new Map();
+ await page.addInitScript(workerHint => {
+  const stats = {created:0,active:0,peakActive:0,featureJobs:0,completed:0};
+  window.__signalStudyWorkerStats = stats;
+  try { Object.defineProperty(navigator,"hardwareConcurrency",{configurable:true,get:()=>workerHint}); } catch {}
+  try { Object.defineProperty(navigator,"deviceMemory",{configurable:true,get:()=>8}); } catch {}
+  const NativeWorker = window.Worker;
+  window.Worker = class extends NativeWorker {
+   constructor(...args) {
+    super(...args);
+    if (!String(args[0]).includes("signal-study.worker")) return;
+    stats.created++;
+    const pending = new Set();
+    const postMessage = this.postMessage.bind(this);
+    this.postMessage = (message, ...rest) => {
+     if (message?.type === "features") {
+      pending.add(message.jobId);stats.active++;stats.featureJobs++;
+      stats.peakActive=Math.max(stats.peakActive,stats.active);
+     }
+     return postMessage(message, ...rest);
+    };
+    this.addEventListener("message", event => {
+     if (pending.delete(event.data?.jobId)) { stats.active--;stats.completed++; }
+    });
+   }
+  };
+ }, workerHint);
  await page.route("**/*",async route=>{
   const request=route.request(),url=new URL(request.url()),p=url.pathname,method=request.method();
   if(url.origin!==origin)return route.abort();
@@ -33,10 +59,10 @@ async(page)=>{
    for(let i=index*10;i<Math.min((index+1)*10,23);i++){
     const symbol="TEST"+String(i).padStart(2,"0");if(request.postDataJSON().retry_symbols&&!request.postDataJSON().retry_symbols.includes(symbol))continue;stocks.push(symbol);
     if(partial&&i===3){failures.push({symbol,code:"PROVIDER_UNAVAILABLE",retryable:true});continue}
-    const candles=Array.from({length:50},(_,i)=>({timestamp:new Date(Date.UTC(2026,0,1+i)).toISOString(),open:100+i,high:110+i,low:90+i,close:101+i,volume:1000}));
+    const candles=Array.from({length:250},(_,i)=>({timestamp:new Date(Date.UTC(2026,0,1+i)).toISOString(),open:100+i,high:110+i,low:90+i,close:101+i,volume:1000}));
     const backtest={...frozen.config,mode:"rule",rule_id:frozen.rule_id,study_id:frozen.id,definition_hash:frozen.definition_hash},data={schema_version:"ohlcv-multi-1",purpose:"backtest",market:frozen.market,currency:frozen.currency,timeframe:"1d",timezone:"UTC",backtest,series:[{symbol,timezone:"UTC",candles}]};
     const raw=JSON.stringify(data),bytes=new TextEncoder().encode(raw),hash=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),x=>x.toString(16).padStart(2,"0")).join("");
-    const manifest={dataset_id:symbol,version:"v1",purpose:"backtest",market:frozen.market,currency:frozen.currency,timeframe:"1d",symbols:[symbol],backtest,decoded_bytes:bytes.length,checksum:"sha256:"+hash,required_operands:["PRICE"]};snapshots.set(symbol,{raw,manifest});manifests.push(manifest);
+    const manifest={dataset_id:symbol,version:"v1",purpose:"backtest",market:frozen.market,currency:frozen.currency,timeframe:"1d",symbols:[symbol],backtest,candle_count:candles.length,decoded_bytes:bytes.length,checksum:"sha256:"+hash,required_operands:["PRICE","EMA9","EMA20"]};snapshots.set(symbol,{raw,manifest});manifests.push(manifest);
    }return respond({index,stocks,manifests,failures});
   }
   if(p==="/api/v1/backtests/studies/study-qa"&&method==="DELETE")return route.fulfill({status:204});
@@ -127,6 +153,8 @@ async(page)=>{
  await page.goto(origin+"/#app/overview");
  const left=await page.evaluate(async owner=>(await(await import("/src/analysis/signal-study-storage.ts")).studyEventPage(owner,"study-qa")).total,user.id);if(left!==0)throw Error("Navigation retained temporary study details");
  if(errors.length)throw Error(errors.join("; "));
+ const workerStats=await page.evaluate(()=>({...window.__signalStudyWorkerStats}));
+ if(workerStats.completed!==workerStats.featureJobs||workerHint>1&&(workerStats.created<2||workerStats.peakActive<2))throw Error("Adaptive worker overlap was not observed");
  await page.evaluate(()=>document.body.setAttribute("data-signalgen-study-tests","complete"));
- return {synthetic:true,stocks:23,batches:3,signalEvents:92,realWasm:true,indexedDB:true,quotaRollback:true,widths:[1440,390],forcedThemes:["dark","light"],reports};
+ return {synthetic:true,stocks:23,batches:3,signalEvents:92,realWasm:true,indexedDB:true,quotaRollback:true,workerHint,adaptiveWorkers:workerStats,widths:[1440,390],forcedThemes:["dark","light"],reports};
 }

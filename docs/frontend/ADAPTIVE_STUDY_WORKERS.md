@@ -20,3 +20,13 @@ The policy is conservative and does not prove a browser RAM budget. WASM heaps,
 structured-clone copies, browser scheduling, and device memory telemetry need
 separate measurement. Performance claims must compare alternating baseline and
 adaptive runs in the same bounded environment.
+
+The native browser fixture exercises the real application worker, current-source
+Go/WASM, and IndexedDB with synthetic API routes. In the recorded pair,
+`?workers=4` created four workers and reached three concurrent feature jobs;
+`?workers=1` reached one concurrent feature job. Both completed all 23 symbols,
+and the fixture assertions covered CSV export, IndexedDB equality, retry/stop,
+and quota rollback. The compact evidence is in
+`docs/evidence/adaptive-study-workers-browser.json`; its timings are one
+alternating pair in an offline Playwright container, not a production capacity
+or five-minute guarantee.
