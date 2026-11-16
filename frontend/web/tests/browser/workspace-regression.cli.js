@@ -459,7 +459,7 @@ async (page) => {
         }
         if (view === "overview") {
           const primary=await page.evaluate(()=>{const button=document.createElement('button');button.className='bg-primary text-primary-foreground';document.querySelector('.demo-workbench').append(button);const css=getComputedStyle(button);const result={background:css.backgroundColor,color:css.color};button.remove();return result;});
-          if(primary.background!=='rgb(6, 76, 53)'||primary.color!=='rgb(241, 251, 246)')throw Error(`Primary action palette changed: ${JSON.stringify(primary)}`);
+          if(primary.background!=='rgb(13, 57, 38)'||primary.color!=='rgb(241, 248, 243)')throw Error(`Primary action palette changed: ${JSON.stringify(primary)}`);
           if(width===1440){
             const dock=page.getByRole("navigation",{name:"Workspace navigation",exact:true});
             const dashboard=dock.getByRole("button",{name:"Dashboard",exact:true});

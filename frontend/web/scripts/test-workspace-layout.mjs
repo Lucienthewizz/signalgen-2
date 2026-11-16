@@ -31,7 +31,7 @@ try {
   await page.goto(origin+'/#app/rules');
   const library=page.locator('.rule-library'), editor=page.locator('.pen-rule-editor');
   await library.getByRole('button',{name:'Next saved rules page',exact:true}).waitFor();
-  await page.waitForFunction(()=>{const e=document.querySelector('.pen-rule-editor').getBoundingClientRect(),l=document.querySelector('.rule-library').getBoundingClientRect();return l.left>e.right&&Math.abs(l.height-e.height)<2;});
+  await page.waitForFunction(()=>{const e=document.querySelector('.pen-rule-editor').getBoundingClientRect(),l=document.querySelector('.rule-library').getBoundingClientRect();return e.left>l.right&&Math.abs(l.height-e.height)<2;});
   const seen=new Set(); let turns=0;
   while(true){
     for(const name of await library.locator('article strong').allTextContents()) seen.add(name);

@@ -1151,43 +1151,6 @@ export function ServerRulesPanel({
   );
   return (
     <div className="rules-workspace" ref={rulesLayout}>
-      <div className="pen-rule-editor" ref={ruleEditor}>
-        {editing ? (
-          <>
-            {!editorOpen && (
-              <section className="rule-editor-resume">
-                <div>
-                  <strong>{definition.name || editing.name}</strong>
-                  <p>
-                    Your editing draft is kept until you save or start a new
-                    rule.
-                  </p>
-                </div>
-                <Button variant="outline" onClick={() => setEditorOpen(true)}>
-                  Continue editing
-                </Button>
-                <Button variant="ghost" onClick={startNew}>
-                  New blank rule
-                </Button>
-              </section>
-            )}
-            <InfoDialog
-              open={editorOpen}
-              onOpenChange={(open) => {
-                if (!saving) setEditorOpen(open);
-              }}
-              title="Edit rules"
-              description="Update your criteria, then save the changes to your account."
-              returnFocus={editorTrigger}
-              wide
-            >
-              {editor}
-            </InfoDialog>
-          </>
-        ) : (
-          editor
-        )}
-      </div>
       <section
         className="rule-library"
         ref={ruleLibrary}
@@ -1380,6 +1343,43 @@ export function ServerRulesPanel({
           </nav>
         )}
       </section>
+      <div className="pen-rule-editor" ref={ruleEditor}>
+        {editing ? (
+          <>
+            {!editorOpen && (
+              <section className="rule-editor-resume">
+                <div>
+                  <strong>{definition.name || editing.name}</strong>
+                  <p>
+                    Your editing draft is kept until you save or start a new
+                    rule.
+                  </p>
+                </div>
+                <Button variant="outline" onClick={() => setEditorOpen(true)}>
+                  Continue editing
+                </Button>
+                <Button variant="ghost" onClick={startNew}>
+                  New blank rule
+                </Button>
+              </section>
+            )}
+            <InfoDialog
+              open={editorOpen}
+              onOpenChange={(open) => {
+                if (!saving) setEditorOpen(open);
+              }}
+              title="Edit rules"
+              description="Update your criteria, then save the changes to your account."
+              returnFocus={editorTrigger}
+              wide
+            >
+              {editor}
+            </InfoDialog>
+          </>
+        ) : (
+          editor
+        )}
+      </div>
     </div>
   );
 }

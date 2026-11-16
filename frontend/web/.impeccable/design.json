@@ -48,7 +48,7 @@
       "kind": "button",
       "description": "Dark-green action with pale text and Rajdhani 600.",
       "html": "<button class=\"ds-primary\">Run screening</button>",
-      "css": ".ds-primary{background:var(--primary,#064c35);color:var(--primary-foreground,#f1fbf6);border:1px solid transparent;border-radius:6px;padding:10px 16px;font:600 13px Rajdhani,sans-serif}.ds-primary:hover{background:color-mix(in srgb,var(--primary,#064c35) 88%,var(--text,#edf3ef))}.ds-primary:focus-visible{outline:2px solid var(--green,#6de5af);outline-offset:3px}.ds-primary:disabled{opacity:.5}",
+      "css": ".ds-primary{background:var(--primary,#0d3926);color:var(--primary-foreground,#f1f8f3);border:1px solid var(--button-primary-border,#22583d);border-radius:6px;padding:10px 16px;font:600 13px Rajdhani,sans-serif}.ds-primary:hover{background:var(--button-primary-hover,#124a31)}.ds-primary:focus-visible{outline:2px solid var(--green,#69e69c);outline-offset:2px}.ds-primary:active{background:var(--button-primary-pressed,#092b1c)}.ds-primary:disabled{background:var(--surface,#141616);color:var(--disabled-text,#78817b);pointer-events:none}",
       "refersTo": "workspace-button-primary"
     },
     {
@@ -56,35 +56,35 @@
       "kind": "button",
       "description": "A quiet supporting action.",
       "html": "<button class=\"ds-secondary\">Cancel</button>",
-      "css": ".ds-secondary{background:var(--surface-2,#202924);color:var(--text,#edf3ef);border:1px solid var(--line,#2b3632);border-radius:6px;padding:10px 16px;font:600 13px Rajdhani,sans-serif}.ds-secondary:hover{background:var(--surface-3,#26322c)}.ds-secondary:focus-visible{outline:2px solid var(--green,#6de5af);outline-offset:3px}"
+      "css": ".ds-secondary{background:var(--surface-2,#1a1d1b);color:var(--text,#f1f3f2);border:1px solid var(--line,#292c2b);border-radius:6px;padding:10px 16px;font:600 13px Rajdhani,sans-serif}.ds-secondary:hover{background:var(--surface-3,#1a1d1b)}.ds-secondary:focus-visible{outline:2px solid var(--green,#69e69c);outline-offset:2px}"
     },
     {
       "name": "Workspace input",
       "kind": "input",
       "description": "Visible label and a bordered control.",
       "html": "<label class=\"ds-label\" for=\"ds-rule\">Rule name</label><input class=\"ds-input\" id=\"ds-rule\" value=\"Momentum rule\">",
-      "css": ".ds-label{display:block;margin-bottom:6px;color:var(--muted,#a0afa7);font:450 12px \"Inter Variable\",sans-serif}.ds-input{background:var(--control-bg,#101514);color:var(--text,#edf3ef);border:1px solid var(--control-border,#36453e);border-radius:6px;padding:10px 12px;font:400 13px \"Inter Variable\",sans-serif}.ds-input:hover{border-color:var(--muted,#a0afa7)}.ds-input:focus-visible{outline:2px solid var(--green,#6de5af);outline-offset:2px}"
+      "css": ".ds-label{display:block;margin-bottom:6px;color:var(--muted,#a5ada8);font:450 12px \"Inter Variable\",sans-serif}.ds-input{background:var(--control-bg,#090a0a);color:var(--text,#f1f3f2);border:1px solid var(--control-border,#292c2b);border-radius:6px;padding:10px 12px;font:400 13px \"Inter Variable\",sans-serif}.ds-input:hover{border-color:var(--muted,#a5ada8)}.ds-input:focus-visible{outline:2px solid var(--green,#69e69c);outline-offset:2px}"
     },
     {
       "name": "Workspace navigation",
       "kind": "nav",
       "description": "Active navigation has a tonal mint selection.",
       "html": "<nav class=\"ds-nav\" aria-label=\"Workspace\"><button class=\"ds-active\" aria-current=\"page\">Dashboard</button><button>Screener</button></nav>",
-      "css": ".ds-nav{display:grid;gap:5px;background:var(--sidebar,#151c19);padding:16px}.ds-nav button{min-height:44px;text-align:left;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--muted,#a0afa7);padding:10px 12px;font:600 15px Rajdhani,sans-serif}.ds-nav button:hover{background:var(--surface-2,#202924);color:var(--text,#edf3ef)}.ds-nav .ds-active,.ds-nav .ds-active:hover{background:var(--accent-surface,#203b2e);color:var(--green,#6de5af)}.ds-nav button:focus-visible{outline:2px solid var(--green,#6de5af);outline-offset:2px}"
+      "css": ".ds-nav{display:grid;gap:5px;background:var(--sidebar,#101111);padding:16px}.ds-nav button{min-height:44px;text-align:left;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--muted,#a5ada8);padding:10px 12px;font:600 15px Rajdhani,sans-serif}.ds-nav button:hover{background:var(--surface-2,#1a1d1b);color:var(--text,#f1f3f2)}.ds-nav .ds-active,.ds-nav .ds-active:hover{background:var(--accent-surface,#173024);color:var(--green,#69e69c)}.ds-nav button:focus-visible{outline:2px solid var(--green,#69e69c);outline-offset:2px}"
     },
     {
       "name": "Workspace status",
       "kind": "chip",
       "description": "Text preserves meaning alongside a semantic color.",
       "html": "<span class=\"ds-status\">Screening complete</span>",
-      "css": ".ds-status{display:inline-block;color:var(--muted,#a0afa7);border:1px solid transparent;border-radius:6px;padding:4px 8px;font:400 12px \"Inter Variable\",sans-serif}"
+      "css": ".ds-status{display:inline-block;color:var(--muted,#a5ada8);border:1px solid transparent;border-radius:6px;padding:4px 8px;font:400 12px \"Inter Variable\",sans-serif}"
     },
     {
       "name": "Workspace panel",
       "kind": "card",
       "description": "A flat tonal container with a fine border.",
       "html": "<section class=\"ds-panel\"><h3>Portfolio</h3><p>Review saved positions and screening activity.</p></section>",
-      "css": ".ds-panel{background:var(--surface,#181f1d);color:var(--text,#edf3ef);border:1px solid var(--line,#2b3632);border-radius:10px;padding:24px;box-shadow:none}.ds-panel h3{margin:0 0 8px;font:600 17px Rajdhani,sans-serif}.ds-panel p{margin:0;color:var(--muted,#a0afa7);font:400 13px/1.55 \"Inter Variable\",sans-serif}",
+      "css": ".ds-panel{background:var(--surface,#141616);color:var(--text,#f1f3f2);border:1px solid var(--line,#292c2b);border-radius:10px;padding:24px;box-shadow:none}.ds-panel h3{margin:0 0 8px;font:600 17px Rajdhani,sans-serif}.ds-panel p{margin:0;color:var(--muted,#a5ada8);font:400 13px/1.55 \"Inter Variable\",sans-serif}",
       "refersTo": "workspace-panel"
     }
   ],

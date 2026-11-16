@@ -34,11 +34,11 @@ try {
    await page.locator('.pen-workbench').waitFor();
    await page.locator('.route-loading').waitFor({state:'hidden'});
    await page.evaluate(async()=>{await document.fonts.ready; await document.fonts.load('600 16px "Rajdhani"'); await document.fonts.load('400 13px "IBM Plex Mono"'); await document.fonts.load('400 13px "Inter Variable"');await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
-   for(const theme of ['dark','light']) {
+   for(const theme of ['dark']) {
     await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
     const check=await page.locator('.pen-workbench').evaluate(el=>({font:getComputedStyle(el).fontFamily,canvas:getComputedStyle(el).getPropertyValue('--canvas').trim(),overflow:document.documentElement.scrollWidth>innerWidth+1}));
     if(!check.font.includes('Inter Variable'))throw Error('Pen font not applied '+JSON.stringify({view,width,check}));
-    if(theme==='dark'&&check.canvas!=='#101514')throw Error('Pen canvas token not applied '+view);
+    if(theme==='dark'&&check.canvas!=='#090a0a')throw Error('Pen canvas token not applied '+view);
     if(check.overflow)throw Error('Page overflow '+view+' '+width+' '+theme);
     await page.screenshot({path:'/tmp/signalgen-pen-qa/'+view+'-'+width+'-'+theme+'.png',fullPage:true,animations:'disabled'});
    }
@@ -46,7 +46,7 @@ try {
   }
  }
  if(errors.length)throw Error(errors.join('\\n'));
- console.log('PASS: eight Pen workspace routes, 1440/1218/390px, dark/light, Inter font, canvas tokens, no overflow; synthetic account/API only.');
+ console.log('PASS: eight Pen workspace routes, 1440/1218/390px, dark-only, Inter font, canvas tokens, no overflow; synthetic account/API only.');
 }`;
   const scenario = eval("(" + run + ")");
   await scenario(page);

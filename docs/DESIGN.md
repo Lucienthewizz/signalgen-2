@@ -21,20 +21,20 @@ colors:
   accent-ink: "#04120a"
   skeleton: "#1a211c"
   skeleton-resolve: "#29332d"
-  workspace-canvas: "#101514"
-  workspace-sidebar: "#151c19"
-  workspace-surface: "#181f1d"
-  workspace-surface-2: "#202924"
-  workspace-surface-3: "#26322c"
-  workspace-line: "#2b3632"
-  workspace-line-soft: "#26302c"
-  workspace-text: "#edf3ef"
-  workspace-muted: "#a0afa7"
-  workspace-mint: "#6de5af"
-  workspace-mint-bright: "#8debc3"
-  workspace-action: "#064c35"
-  workspace-action-ink: "#f1fbf6"
-  workspace-accent-surface: "#203b2e"
+  workspace-canvas: "#090a0a"
+  workspace-sidebar: "#101111"
+  workspace-surface: "#141616"
+  workspace-surface-2: "#1a1d1b"
+  workspace-surface-3: "#1a1d1b"
+  workspace-line: "#292c2b"
+  workspace-line-soft: "#292c2b"
+  workspace-text: "#f1f3f2"
+  workspace-muted: "#a5ada8"
+  workspace-mint: "#69e69c"
+  workspace-mint-bright: "#69e69c"
+  workspace-action: "#0d3926"
+  workspace-action-ink: "#f1f8f3"
+  workspace-accent-surface: "#173024"
 typography:
   display:
     fontFamily: '"Manrope Variable", sans-serif'
@@ -239,11 +239,11 @@ The screenshot sits in a restrained window frame with an explanatory caption. Fe
 
 ## Pen workspace identity
 
-The user-supplied Pen frames establish a flat charcoal-and-mint workspace. This replaces the earlier forest gradient treatment for `/#app/overview`, `/#app/analysis`, `/#app/backtest`, `/#app/journal`, `/#app/rules`, `/#app/universes`, `/#app/realtime`, and `/#app/news`. The landing page and authentication keep their current identity. Implementation authority is `frontend/web/src/styles/pen-workspace.css`, scoped to `.pen-workbench` and `html[data-typography="workspace"]`.
+The 16 November black/green Pen frames establish a flat, neutral-black workspace with dark-green actions. This replaces the earlier forest gradient treatment for `/#app/overview`, `/#app/analysis`, `/#app/backtest`, `/#app/journal`, `/#app/rules`, `/#app/universes`, `/#app/realtime`, and `/#app/news`. The landing page and authentication keep their current identity. Implementation authority is `frontend/web/src/styles/pen-workspace.css`, scoped to `.pen-workbench` and `html[data-typography="workspace"]`.
 
 ### Colors
 
-Use the prefixed workspace tokens above for dark mode: charcoal canvas, progressively lighter panel surfaces, fine neutral dividers, pale text, and mint actions/selection. Preserve semantic gain, loss, warning, disabled, and focus states. Light mode uses the stylesheet's separate light palette; it is an adaptation of the supplied dark reference.
+Use the prefixed workspace tokens above for dark mode: charcoal canvas, progressively lighter panel surfaces, fine neutral dividers, pale text, dark-green primary actions, and restrained green accents. Preserve semantic gain, loss, warning, disabled, and focus states. The product remains dark-only; the new reference supersedes the earlier workspace light adaptation.
 
 ### Typography
 
@@ -251,7 +251,7 @@ Headings, navigation, buttons, and summaries use Rajdhani (600). Explanatory cop
 
 ### Layout
 
-The expanded desktop sidebar is 224px; the collapsed sidebar is 76px. At 860px and below it becomes the existing overlay drawer. Workspace gutters step from 32px to 20px, then 18px at 520px. Panels typically use 24px padding and gaps. Rules place the composer first and the saved-rule library on the right, stacking at 1100px. The library follows the composer height and paginates its compact 88px rows. Compact universe catalog and News columns stack at 1000px; Dashboard shortcuts and monitor columns stack at 860px. The study guide stacks at 1180px. Journal, Screener and Market Monitor tables wrap within their cards and become labelled records below a 760px container width. Preserve all fields and existing form behavior.
+The expanded desktop sidebar is 224px; the collapsed sidebar is 76px. At 860px and below it becomes the existing overlay drawer. Workspace gutters step from 32px to 20px, then 18px at 520px. Panels typically use 24px padding and gaps. Rules place the saved-rule library on the left and the composer on the right, stacking at 1100px. The library follows the composer height and paginates its compact 88px rows. Compact universe catalog and News columns stack at 1000px; Dashboard shortcuts and monitor columns stack at 860px. The study guide stacks at 1180px. Journal, Screener and Market Monitor tables wrap within their cards and become labelled records below a 760px container width. Preserve all fields and existing form behavior.
 
 ### Elevation & Depth
 
@@ -263,7 +263,7 @@ Workspace controls use 6px corners and panels use 10–12px corners. Dashboard r
 
 ### Components
 
-Primary actions use dark green with pale text. Mint remains reserved for readable accent text, selection and positive data. Active navigation combines mint text with a darker green surface. Inputs use a distinct control background and border. Tables use subdued headers, fine row dividers, and monospaced data. Account menus, dialogs, screening, studies, portfolio calculations, and API ownership retain their existing behavior.
+Primary actions use dark green with pale text. Mint remains reserved for readable accent text, selection and positive data. Active navigation combines mint text with a darker green surface. Inputs use the page-black control background and neutral border. Primary hover uses #124A31, pressed uses #092B1C, and focus uses a 2px #69E69C outline with 2px offset. Disabled controls use a neutral dark surface and muted text. Tables use subdued headers, fine row dividers, and monospaced data. Account menus, dialogs, screening, studies, portfolio calculations, and API ownership retain their existing behavior.
 
 ### Do's and Don'ts
 

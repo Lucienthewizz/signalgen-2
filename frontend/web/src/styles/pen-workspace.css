@@ -57,74 +57,71 @@ html[data-typography="workspace"]
   ) {
   font-family: var(--font-sans);
 }
-html:not([data-theme="light"]) .demo-workbench.pen-workbench {
-  --canvas: #101514;
-  --sidebar: #151c19;
-  --surface: #181f1d;
-  --surface-2: #202924;
-  --surface-3: #26322c;
-  --line: #2b3632;
-  --line-soft: #26302c;
-  --text: #edf3ef;
-  --muted: #a0afa7;
-  --dim: #a0afa7;
-  --green: #6de5af;
-  --green-bright: #8debc3;
-  --green-soft: #b8f1d8;
-  --accent-surface: #203b2e;
-  --accent-border: #395c49;
-  --control-bg: #101514;
-  --control-border: #36453e;
+/* Workspace tokens also reach portalled dialogs, menus and calendar controls.
+   The public landing/auth palette is unaffected when the workspace is unmounted. */
+html[data-typography="workspace"]:has(.pen-workbench),
+html[data-typography="workspace"]:has(.pen-workbench)
+  .demo-workbench.pen-workbench {
+  color-scheme: dark;
+  --bg-page: #090a0a;
+  --bg-sidebar: #101111;
+  --bg-surface: #141616;
+  --bg-table-header: #1a1d1b;
+  --border-default: #292c2b;
+  --text-primary: #f1f3f2;
+  --text-secondary: #a5ada8;
+  --accent: #69e69c;
+  --bg-selection: #173024;
+  --button-primary-bg: #0d3926;
+  --button-primary-border: #22583d;
+  --button-primary-text: #f1f8f3;
+  --button-primary-hover: #124a31;
+  --button-primary-pressed: #092b1c;
+  --warning-text: #e4c48b;
+  --warning-bg: #22231c;
+  --disabled-text: #78817b;
+  --canvas: var(--bg-page);
+  --sidebar: var(--bg-sidebar);
+  --surface: var(--bg-surface);
+  --surface-2: var(--bg-table-header);
+  --surface-3: var(--bg-table-header);
+  --line: var(--border-default);
+  --line-soft: var(--border-default);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --dim: var(--text-secondary);
+  --green: var(--accent);
+  --green-bright: var(--accent);
+  --green-soft: var(--accent);
+  --green-deep: var(--button-primary-bg);
+  --accent-surface: var(--bg-selection);
+  --accent-border: var(--button-primary-border);
+  --control-bg: var(--bg-page);
+  --control-border: var(--border-default);
   --danger: #ff9696;
-  --warning: #e4c48b;
-  --header-bg: #101514;
+  --danger-text: var(--danger);
+  --warning: var(--warning-text);
+  --header-bg: var(--bg-page);
   --workspace-page-gradient: none;
   --workspace-card-gradient: none;
-  --background: var(--canvas);
-  --foreground: var(--text);
-  --card: var(--surface);
-  --card-foreground: var(--text);
-  --popover: var(--surface);
-  --popover-foreground: var(--text);
-  --primary: #6de5af;
-  --primary-foreground: #101514;
-  --secondary: var(--surface-2);
-  --secondary-foreground: var(--text);
-  --muted-foreground: var(--muted);
-  --ui-muted: var(--surface-2);
-  --accent: var(--accent-surface);
-  --accent-foreground: var(--green);
-  --input: var(--control-border);
-  --border: var(--line);
-  --ring: var(--green);
-  --focus: var(--green);
-}
-html[data-theme="light"] .demo-workbench.pen-workbench {
-  --canvas: #f5f7f5;
-  --sidebar: #edf2ee;
-  --surface: #ffffff;
-  --surface-2: #edf2ee;
-  --surface-3: #e1eae4;
-  --line: #cad7ce;
-  --line-soft: #dce5df;
-  --text: #182d22;
-  --muted: #50695a;
-  --dim: #50695a;
-  --green: #086644;
-  --green-bright: #075c3d;
-  --accent-surface: #dcefe3;
-  --control-bg: #ffffff;
-  --control-border: #a4b8aa;
-  --workspace-page-gradient: none;
-  --workspace-card-gradient: none;
-  --primary: #086644;
-  --primary-foreground: #ffffff;
-  --background: var(--canvas);
-  --foreground: var(--text);
-  --card: var(--surface);
-  --card-foreground: var(--text);
-  --border: var(--line);
-  --input: var(--control-border);
+  --elevation: none;
+  --background: var(--bg-page);
+  --foreground: var(--text-primary);
+  --card: var(--bg-surface);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-surface);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--button-primary-bg);
+  --primary-foreground: var(--button-primary-text);
+  --secondary: var(--bg-surface);
+  --secondary-foreground: var(--text-primary);
+  --muted-foreground: var(--text-secondary);
+  --ui-muted: var(--bg-table-header);
+  --accent-foreground: var(--accent);
+  --input: var(--border-default);
+  --border: var(--border-default);
+  --ring: var(--accent);
+  --focus: var(--accent);
 }
 .pen-workbench {
   --workspace-gutter: 32px;
@@ -322,11 +319,11 @@ html[data-theme="light"] .demo-workbench.pen-workbench {
   color: var(--primary-foreground);
   background: var(--primary);
   background-image: none;
-  border-color: transparent;
+  border-color: var(--button-primary-border);
   backdrop-filter: none;
 }
 .pen-workbench [data-slot="button"].bg-primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary) 88%, var(--text));
+  background: var(--button-primary-hover);
 }
 .pen-workbench [data-slot="button"].workspace-glass-action {
   background-image: none;
@@ -1058,13 +1055,6 @@ html[data-typography="workspace"]
 }
 
 /* Screenshot layout refinements: work first, supporting content alongside. */
-html:not([data-theme="light"]) .demo-workbench.pen-workbench {
-  --primary: #064c35;
-  --primary-foreground: #f1fbf6;
-}
-.pen-workbench .bg-primary:not(:disabled):hover {
-  background: #075c40;
-}
 .pen-workbench .overview-shortcuts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1374,7 +1364,7 @@ html:not([data-theme="light"]) .demo-workbench.pen-workbench {
 .pen-workbench .stock-catalog-picker__category-tabs [aria-pressed="true"] {
   background: var(--primary);
   color: var(--primary-foreground);
-  border-color: var(--primary);
+  border-color: var(--button-primary-border);
 }
 .pen-workbench
   .stock-catalog-picker--compact
@@ -1719,7 +1709,7 @@ html:not([data-theme="light"]) .demo-workbench.pen-workbench {
   border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--line));
   border-radius: 8px;
   color: var(--warning);
-  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+  background: var(--warning-bg);
   font-size: 12px;
 }
 .pen-workbench .monitor-snapshot-notice svg {
@@ -1963,4 +1953,180 @@ html:not([data-theme="light"]) .demo-workbench.pen-workbench {
   min-height: 20px;
   padding-block: 3px;
   line-height: 1.4;
+}
+
+/* Shared states also cover content portalled to body. */
+html[data-typography="workspace"]:has(.pen-workbench) body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+}
+html[data-typography="workspace"]:has(.pen-workbench)
+  :is(
+    [data-slot="button"],
+    .workspace-spotlight,
+    .signalgen-date-popup button,
+    .journal-month-popup button,
+    .calendar-caption-select
+  ) {
+  border-radius: 6px;
+  box-shadow: none;
+  background-image: none;
+}
+html[data-typography="workspace"]:has(.pen-workbench)
+  [data-slot="button"].bg-primary {
+  background: var(--button-primary-bg);
+  border: 1px solid var(--button-primary-border);
+  color: var(--button-primary-text);
+}
+html[data-typography="workspace"]:has(.pen-workbench)
+  [data-slot="button"].bg-primary:hover:not(:disabled):not(
+    [aria-disabled="true"]
+  ) {
+  background: var(--button-primary-hover);
+}
+html[data-typography="workspace"]:has(.pen-workbench)
+  [data-slot="button"].bg-primary:active:not(:disabled):not(
+    [aria-disabled="true"]
+  ) {
+  background: var(--button-primary-pressed);
+}
+html[data-typography="workspace"]:has(.pen-workbench)
+  :is(
+    [data-slot="button"].border-border,
+    [data-slot="button"].bg-secondary,
+    .workspace-spotlight
+  ) {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+html[data-typography="workspace"]:has(.pen-workbench)
+  :is(
+    input:not([type="range"]):not([type="checkbox"]),
+    textarea,
+    select,
+    [data-slot="select-trigger"],
+    .signalgen-date-control
+  ) {
+  background-color: var(--bg-page);
+  background-image: none;
+  color: var(--text-primary);
+  border-color: var(--border-default);
+  box-shadow: none;
+}
+html[data-typography="workspace"]:has(.pen-workbench)
+  :is(input, textarea)::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+html[data-typography="workspace"]:has(.pen-workbench) :focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+html[data-typography="workspace"]:has(.pen-workbench)
+  :is(
+    button,
+    input,
+    textarea,
+    select,
+    [data-slot="button"],
+    [data-slot="select-trigger"]
+  ):is(:disabled, [aria-disabled="true"], [data-disabled]) {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--disabled-text);
+  box-shadow: none;
+  opacity: 1;
+  pointer-events: none;
+  cursor: default;
+}
+html[data-typography="workspace"]:has(.pen-workbench)
+  :is(
+    .signalgen-confirm,
+    .signalgen-date-popup,
+    .journal-month-popup,
+    [data-slot="select-content"],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="tooltip-content"]
+  ) {
+  background: var(--bg-surface);
+  background-image: none;
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  box-shadow: none;
+}
+html[data-typography="workspace"]:has(.pen-workbench)
+  :is([data-slot="select-item"], [data-slot="dropdown-menu-item"]):is(
+    [data-highlighted],
+    [data-selected],
+    :focus-visible
+  ) {
+  background: var(--bg-selection);
+  color: var(--green);
+}
+html[data-typography="workspace"]:has(.pen-workbench) ::selection {
+  background: var(--bg-selection);
+  color: var(--text-primary);
+}
+.pen-workbench :is(.magic-bento__card, .workspace-spotlight) {
+  --mb-surface: var(--bg-surface);
+  --mb-ink: var(--text-primary);
+  --mb-shadow: none;
+  --mb-focus: var(--green);
+  background-image: none;
+  box-shadow: none;
+}
+.pen-workbench
+  :is(.magic-bento__light, .magic-bento__border, .magic-bento__scrim),
+.pen-workbench .workspace-spotlight::before {
+  background: none;
+}
+.pen-workbench :is(.magic-bento__card, .workspace-spotlight)::after {
+  box-shadow: none;
+}
+.pen-workbench .monitor-snapshot-notice {
+  color: var(--warning-text);
+  background: var(--warning-bg);
+}
+.pen-workbench .news-video__poster {
+  background: var(--bg-selection);
+  background-image: none;
+  border-color: var(--button-primary-border);
+}
+.pen-workbench .overview-last-screen li:first-child strong {
+  color: var(--green);
+}
+/* The current reference places the library before the editor. */
+.pen-workbench .rules-workspace {
+  grid-template-columns: minmax(280px, 0.48fr) minmax(0, 1fr);
+}
+@media (max-width: 1100px) {
+  .pen-workbench .rules-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.pen-workbench [data-slot="badge"][data-variant="success"] {
+  background: var(--bg-selection);
+  color: var(--green);
+}
+.pen-workbench .tradingview-chart__status {
+  background: var(--bg-page);
+}
+.pen-workbench .tradingview-chart__status span {
+  color: var(--text-secondary);
+}
+html[data-typography="workspace"]:has(.pen-workbench)
+  [data-slot="button"].bg-primary
+  svg {
+  color: inherit;
+}
+html[data-typography="workspace"]:has(.pen-workbench)
+  :is(
+    input,
+    textarea,
+    select,
+    [data-slot="select-trigger"]
+  )[aria-invalid="true"] {
+  border-color: var(--danger);
 }
