@@ -2,6 +2,7 @@ package collection
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -47,7 +48,7 @@ func TestRoutedViewPreservesUSLiveAndIDXArchiveRouting(t *testing.T) {
 	if err != nil || len(result) != len(items) || result[0].Symbol != "BBCA.JK" || result[1].Symbol != "AAPL" {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
-	if len(archive.calls) != 1 || archive.calls[0] != "BBCA.JK" || len(live.calls) != 1 || live.calls[0] != "AAPL" {
+	if len(archive.calls) != 0 || len(live.calls) != 2 || live.calls[0] != "BBCA.JK" || live.calls[1] != "AAPL" {
 		t.Fatalf("archive calls=%v live calls=%v", archive.calls, live.calls)
 	}
 }
@@ -61,5 +62,51 @@ func TestRoutedViewDoesNotFallbackMissingIDXHistoryToLive(t *testing.T) {
 	}
 	if len(archive.calls) != 1 || len(live.calls) != 0 {
 		t.Fatalf("archive calls=%v live calls=%v", archive.calls, live.calls)
+	}
+}
+
+func TestRoutedStoreSnapshotWorksThroughCachedProvider(t *testing.T) {
+	catalog, options, base := syncFixture(t)
+	if _, err := Sync(context.Background(), catalog, base, options, 7, nil); err != nil {
+		t.Fatal(err)
+	}
+	live := &routedFixtureProvider{}
+	routed, err := NewRoutedStoreProvider(options.Directory, live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache, err := marketdata.NewCachedProvider(routed, marketdata.DefaultCacheOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.Daily(context.Background(), []universe.Instrument{{Symbol: "AAPL", ProviderSymbol: "AAPL"}}, 20); err != nil {
+		t.Fatalf("cached live daily request failed: %v", err)
+	}
+	if len(live.calls) != 1 || live.calls[0] != "AAPL" {
+		t.Fatalf("unexpected live calls: %v", live.calls)
+	}
+}
+
+func TestRoutedStoreMissingIDXHistoryStaysUnavailableThroughCache(t *testing.T) {
+	catalog, options, base := syncFixture(t)
+	options.AllowPartial = true
+	if _, err := Sync(context.Background(), catalog, &selectiveHistory{rangeHistory: base, failedSymbol: "TLKM.JK"}, options, 7, nil); err != nil {
+		t.Fatal(err)
+	}
+	live := &routedFixtureProvider{}
+	routed, err := NewRoutedStoreProvider(options.Directory, live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache, err := marketdata.NewCachedProvider(routed, marketdata.DefaultCacheOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = cache.DailyHistory(context.Background(), universe.Instrument{Symbol: "TLKM.JK", ProviderSymbol: "TLKM.JK"}, options.From, options.To)
+	if !errors.Is(err, marketdata.ErrUnavailable) {
+		t.Fatalf("missing IDX history was hidden or substituted: %v", err)
+	}
+	if len(live.calls) != 0 {
+		t.Fatalf("missing IDX history fell through to live provider: %v", live.calls)
 	}
 }

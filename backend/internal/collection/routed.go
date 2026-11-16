@@ -36,7 +36,7 @@ func (p *RoutedStoreProvider) Snapshot(ctx context.Context) (string, marketdata.
 	if err != nil {
 		return "", nil, err
 	}
-	return revision + "\x00yahoo-live", &routedView{archive: archive, live: p.live}, nil
+	return revision + "-yahoo-live", &routedView{archive: archive, live: p.live}, nil
 }
 
 func (p *RoutedStoreProvider) Daily(ctx context.Context, instruments []universe.Instrument, outputSize int) ([]marketdata.Series, error) {
@@ -70,31 +70,11 @@ type routedView struct {
 }
 
 func (v *routedView) Daily(ctx context.Context, instruments []universe.Instrument, outputSize int) ([]marketdata.Series, error) {
-	idx, us := make([]universe.Instrument, 0, len(instruments)), make([]universe.Instrument, 0, len(instruments))
-	for _, instrument := range instruments {
-		switch universe.SymbolMarket(instrument.Symbol) {
-		case "IDX":
-			idx = append(idx, instrument)
-		case "US":
-			us = append(us, instrument)
-		default:
-			return nil, marketdata.ErrInvalidData
-		}
-	}
-	var result []marketdata.Series
-	if len(idx) > 0 {
-		series, err := v.archive.Daily(ctx, idx, outputSize)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, series...)
-	}
-	if len(us) > 0 {
-		series, err := v.live.Daily(ctx, us, outputSize)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, series...)
+	// Daily powers latest/live screening for every market. Only explicit
+	// historical range requests are routed to the IDX archive.
+	result, err := v.live.Daily(ctx, instruments, outputSize)
+	if err != nil {
+		return nil, err
 	}
 	ordered := make(map[string]marketdata.Series, len(result))
 	for _, series := range result {
@@ -109,6 +89,19 @@ func (v *routedView) Daily(ctx context.Context, instruments []universe.Instrumen
 		result = append(result, series)
 	}
 	return result, marketdata.ValidateSeries(result, instruments, outputSize)
+}
+
+func (v *routedView) Candles(ctx context.Context, instruments []universe.Instrument, outputSize int, timeframe string) ([]marketdata.Series, error) {
+	provider, ok := v.live.(interface {
+		Candles(context.Context, []universe.Instrument, int, string) ([]marketdata.Series, error)
+	})
+	if !ok {
+		if timeframe != "1d" {
+			return nil, marketdata.ErrIntervalUnavailable
+		}
+		return v.live.Daily(ctx, instruments, outputSize)
+	}
+	return provider.Candles(ctx, instruments, outputSize, timeframe)
 }
 
 func (v *routedView) DailyHistory(ctx context.Context, instrument universe.Instrument, from, to time.Time) (marketdata.History, error) {

@@ -24,10 +24,11 @@ are refreshed when the next generation is collected.
 ## Explicit local Docker setup
 
 Use the verified image from this branch's evidence, a private existing output
-store writable by container UID/GID 10001 and an operator-supplied catalog file.
-The catalog may be the official IDX export or an explicit project catalog JSON;
-the latter carries active symbol/name metadata only and does not claim historical
-listing membership.
+store writable by container UID/GID 10001 and an operator-supplied project
+catalog JSON. The JSON carries active symbol/name metadata only and does not
+claim historical listing membership. The compose collector profile remains
+mounted as `/catalog/idx.csv` for strict official CSV/XLSX workflows; do not
+rename an official export to JSON.
 The scheduler does not fetch the catalog or treat a bundled list as complete.
 Set these variables in a clean operator shell; never copy personal environment
 files into the image or repository:
