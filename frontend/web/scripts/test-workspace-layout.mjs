@@ -64,6 +64,13 @@ try {
   if(!balanced)throw Error('Dashboard quick access widths differ');
   const cards=page.locator('.overview-resources a');
   if(!await cards.evaluateAll(nodes=>nodes.every(el=>{const r=el.getBoundingClientRect();return parseFloat(getComputedStyle(el).borderRadius)>=12&&[...el.querySelectorAll('.feature-gallery__copy>*')].every(c=>{const b=c.getBoundingClientRect();return b.left>=r.left+12&&b.right<=r.right-12;});})))throw Error('Rounded dashboard card copy escapes its inset');
+  const summarySurfaces=await page.locator('.overview-launch, .overview-next, .overview-portfolio').evaluateAll(nodes=>nodes.map(el=>getComputedStyle(el).backgroundColor));
+  if(summarySurfaces.some(color=>color!=='rgba(0, 0, 0, 0)'))throw Error('Dashboard summary retains a gray surface: '+summarySurfaces);
+  const lastSelection=page.getByRole('button',{name:'Use last selection',exact:true});
+  await page.mouse.move(0,0);
+  await page.waitForFunction(()=>getComputedStyle(document.querySelector('.overview-open-screener')).backgroundColor==='rgb(13, 57, 38)');
+  const resourceAlignment=await cards.evaluateAll(nodes=>nodes.map(el=>{const icon=el.querySelector('.overview-resources__icon').getBoundingClientRect(),label=el.querySelector('.feature-gallery__copy>strong').getBoundingClientRect(),value=el.querySelector('.overview-resources__value').getBoundingClientRect(),action=el.querySelector('.feature-gallery__copy>span').getBoundingClientRect();return {iconTop:icon.top,labelTop:label.top,valueTop:value.top,actionTop:action.top};}));
+  if(resourceAlignment.some(row=>Math.abs(row.iconTop-row.labelTop)>2||Math.abs(row.valueTop-resourceAlignment[0].valueTop)>2||Math.abs(row.actionTop-resourceAlignment[0].actionTop)>2))throw Error('Resource icon/copy rows are misaligned '+JSON.stringify(resourceAlignment));
   await page.goto(origin+'/#app/backtest');
   const horizon=page.locator('#study-horizon');await horizon.waitFor();
   const full=await horizon.evaluate(el=>{const field=el.closest('[data-slot="field"]'),grid=field.parentElement;return Math.abs(field.getBoundingClientRect().width-grid.getBoundingClientRect().width)<2;});
@@ -131,6 +138,8 @@ try {
   if(!navFont.includes('Saira Condensed'))throw Error('Techno navigation font missing');
   const filterType=await page.locator('.rule-library__filters [data-signal]').evaluateAll(nodes=>nodes.map(n=>parseFloat(getComputedStyle(n).fontSize)));
   if(filterType.some(size=>size>10.5))throw Error('Rule signal filter type is too large');
+  const filterBoxes=await page.locator('.rule-library__filters [data-signal]').evaluateAll(nodes=>nodes.map(el=>el.getBoundingClientRect().height));
+  if(filterBoxes.some(height=>height>33||height<32))throw Error('Signal filter boxes are not compact: '+filterBoxes);
   await page.goto(origin+'/#app/news');
   const separator=await page.locator('.news-video').evaluate(el=>({border:getComputedStyle(el).borderLeftWidth,padding:getComputedStyle(el).paddingLeft}));
   if(separator.border!=='1px'||parseFloat(separator.padding)<24)throw Error('News/video separator missing');

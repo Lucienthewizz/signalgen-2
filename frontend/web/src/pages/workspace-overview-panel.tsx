@@ -319,7 +319,7 @@ export function WorkspaceOverviewPanel({
             )}
             <Button
               size="lg"
-              variant={latest ? "outline" : "default"}
+              variant="default"
               className="workspace-glass-action overview-open-screener"
               disabled={preparing}
               onClick={() =>

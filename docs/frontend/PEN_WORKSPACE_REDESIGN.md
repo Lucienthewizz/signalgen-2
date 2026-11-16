@@ -83,3 +83,9 @@ The latest image request separates navigation from content typography: self-host
 The latest user correction supersedes the typography experiments above. Font roles were checked against `frontend/pre-pen-redesign-20261115`: Saira Variable body/form text, Saira Condensed headings/actions/navigation and Geist Mono Variable data. These fonts are already installed; no new dependency is required.
 
 The saved-rule library no longer observes or measures the condition editor. It renders five rules per page with content-sized groups and pagination, aligned at the top. Adding conditions cannot stretch the library or introduce space between private and system rules. The layout regression adds three conditions and checks the library height/top remain unchanged before exercising all 25 fixture rules. The earlier small filters and responsive News/video separator remain.
+
+## Dashboard alignment and compact filter follow-up
+
+The analysis and portfolio summaries now use the page canvas without gray fills, while retaining their borders and content. Use last selection uses the shared dark-green primary variant. Resource tiles align their icon/label, value and action on explicit shared rows. Signal filters use compact 32px boxes for pointer devices and retain 44px targets for coarse pointers. No financial or selection logic changes. The scoped layout check validates transparent summary surfaces, primary action color and resource row alignment.
+
+All workspace table headers share a bold 700 weight, including native and shared table components. Their colors, labels, sorting and table content are unchanged. The browser route checks verify the computed header weight on desktop and mobile.

@@ -353,8 +353,16 @@ html[data-typography="workspace"]:has(.pen-workbench)
   color: var(--muted);
   font-family: var(--font-sans);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.01em;
+}
+.demo-workbench.pen-workbench :is([data-slot="table-head"], thead th) {
+  font-weight: 700;
+}
+.demo-workbench.pen-workbench
+  :is([data-slot="table-head"], thead th)
+  :is(span, button, small) {
+  font-weight: 700;
 }
 .pen-workbench :is([data-slot="table-cell"], tbody td) {
   font-family: var(--font-sans);
@@ -2594,4 +2602,80 @@ html[data-typography="workspace"] .pen-workbench .sidebar .nav-group button {
 }
 .pen-workbench .rule-library__pagination {
   margin-top: 0;
+}
+
+/* Dashboard summaries sit on the page canvas; resource labels share one baseline. */
+.demo-workbench.pen-workbench .workspace .workspace__content .overview-launch,
+.demo-workbench.pen-workbench
+  .overview-launch
+  > :is(.overview-next, .overview-portfolio) {
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+.pen-workbench .overview-bento a.feature-gallery__item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.pen-workbench .overview-bento .overview-resources__icon {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  margin: 0;
+  align-self: start;
+}
+.pen-workbench .overview-bento .overview-resources__icon svg {
+  width: 20px;
+  height: 20px;
+}
+.pen-workbench .overview-bento .feature-gallery__copy {
+  display: grid;
+  grid-template-rows: 20px 38px 20px;
+  align-content: start;
+  align-items: center;
+  justify-items: start;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+}
+.pen-workbench .overview-bento .feature-gallery__copy > strong {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.pen-workbench .overview-bento .overview-resources__value {
+  min-height: 0;
+  margin: 0;
+  line-height: 1.25;
+}
+.pen-workbench .overview-bento .feature-gallery__copy > span {
+  min-height: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  line-height: 20px;
+}
+.pen-workbench .rule-library__filters [data-signal] {
+  min-height: 32px;
+  height: 32px;
+  min-width: 40px;
+  padding: 6px 8px;
+  font-size: 10px;
+  border-radius: 6px;
+}
+@media (max-width: 520px) {
+  .pen-workbench .overview-bento a.feature-gallery__item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (pointer: coarse) {
+  .pen-workbench .rule-library__filters [data-signal] {
+    min-height: 44px;
+    height: 44px;
+  }
 }

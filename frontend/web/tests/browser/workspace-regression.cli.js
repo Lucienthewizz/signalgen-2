@@ -347,6 +347,8 @@ async (page) => {
           loaded: document.fonts.check('14px "Saira Variable"') && document.fonts.check('600 16px "Saira Condensed"') && document.fonts.check('600 28px "Saira Condensed"'),
         }));
         if (!typography.body.includes("Saira Variable") || !typography.nav.includes("Saira Condensed") || !typography.heading.includes("Saira Condensed") || !typography.loaded) throw Error(`Workspace fonts missing: ${view} ${JSON.stringify(typography)}`);
+        const tableHeadWeights = await page.locator('.pen-workbench thead th, .pen-workbench [role="columnheader"]').evaluateAll(nodes=>nodes.map(el=>Number(getComputedStyle(el).fontWeight)));
+        if (tableHeadWeights.some(weight=>weight<700)) throw Error(`Table headers must be bold: ${view} ${tableHeadWeights}`);
         const close = page.getByRole("button", { name: "Close menu", includeHidden: true });
         const bounds = await close.count() ? await close.boundingBox() : null;
         if (bounds && bounds.x >= 0 && bounds.x + bounds.width <= width) await close.click({ timeout: 5000 });
@@ -528,7 +530,7 @@ async (page) => {
             const buttons = [...el.querySelectorAll('[data-signal]')].map(item => item.getBoundingClientRect().height);
             return { height: search.height, buttons, misplacedCount: Boolean(el.querySelector('[role="status"]')) };
           });
-          if (filters.buttons.some(height => height < 44) || filters.misplacedCount) throw Error(`Rule filters must match the search height with count moved beside Your rules: ${JSON.stringify(filters)}`);
+          if (filters.buttons.some(height => height < 32) || filters.misplacedCount) throw Error(`Rule filters must remain compact with count beside Your rules: ${JSON.stringify(filters)}`);
           if (!(await page.locator('.rule-library__list-heading [role="status"]').innerText()).includes('[')) throw Error('Bracketed rule count missing');
           const refresh = page.locator(".rule-library").getByRole("button", { name: "Refresh", exact: true });
           if (!(await refresh.getAttribute("class")).split(" ").includes("bg-primary")) throw Error("Rules refresh not primary");
