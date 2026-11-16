@@ -57,7 +57,11 @@ class FakeWorker {
     if (this.mode === "stall") return;
     setTimeout(() => {
       this.active--;
-      if (this.mode === "error") {
+      if (this.mode === "errorEvent") {
+        this.onerror?.({ message: "worker error" });
+      } else if (this.mode === "messageerror") {
+        this.onmessageerror?.({ data: "worker message error" });
+      } else if (this.mode === "error") {
         this.onmessage?.({ data: { jobId: message.jobId, error: "boom" } });
       } else if (this.mode === "malformed") {
         this.onmessage?.({ data: { jobId: message.jobId } });
@@ -189,7 +193,7 @@ test("payload and queue budgets reject excess work without deadlock", async () =
 });
 
 test("worker errors and malformed responses fail every pending job", async () => {
-  for (const mode of ["error", "malformed"]) {
+  for (const mode of ["error", "malformed", "errorEvent", "messageerror"]) {
     const engine = freshEngine({ mode, maxWorkers: 2 });
     const controller = new AbortController();
     const jobs = [
@@ -201,6 +205,18 @@ test("worker errors and malformed responses fail every pending job", async () =>
     assert.equal(engine.queuedJobs, 0);
     assert.equal(engine.workerCount, 0);
   }
+});
+
+test("initialize and timeout dispose the pool without late writes", async () => {
+  const ready = freshEngine();
+  const initialized = await ready.initialize(signal());
+  assert.deepEqual(initialized, { ok: true });
+  ready.dispose();
+
+  const stalled = freshEngine({ mode: "stall", timeoutMs: 5 });
+  await assert.rejects(stalled.initialize(signal()), /exceeded 5 milliseconds/);
+  assert.equal(stalled.workerCount, 0);
+  assert.equal(stalled.activeJobs, 0);
 });
 
 test("stale results are ignored and abort rejects active and queued jobs", async () => {

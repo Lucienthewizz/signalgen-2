@@ -214,7 +214,10 @@ export class SignalStudyEngine {
       const job = this.queue.shift()!;
       slot.job = job;
       job.timer = setTimeout(
-        () => this.fail(Error("Study worker exceeded 60 seconds.")),
+        () =>
+          this.fail(
+            Error(`Study worker exceeded ${this.timeoutMs} milliseconds.`),
+          ),
         this.timeoutMs,
       );
       try {
