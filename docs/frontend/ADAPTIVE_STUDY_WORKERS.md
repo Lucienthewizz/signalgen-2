@@ -49,10 +49,10 @@ offline Go procedure, then set `DEPS_DIR` to the prepared read-only dependency
 tree and `WASM_DIR` to the three generated artifacts and run:
 
 ```sh
-DEPS_DIR=/path/to/node_modules \
-WASM_DIR=/path/to/wasm-artifacts \
-EVIDENCE_DIR=/tmp/signalgen-adaptive-evidence \
-sh docs/evidence/adaptive-study-workers-reproduce.sh
+python3 docs/evidence/adaptive-study-workers-reproduce.py \
+  --deps /path/to/node_modules \
+  --wasm /path/to/wasm-artifacts \
+  --evidence /tmp/signalgen-adaptive-evidence
 ```
 
 The retained runner uses Playwright image
@@ -61,4 +61,10 @@ The retained runner uses Playwright image
 two CPUs, 3 GiB RAM, 512 PIDs, 200 MiB file size, a loopback-only Vite
 server, and fresh containers for each alternating case. It runs the exact
 small/heavy order recorded in the benchmark JSON and invokes the canonical
-parity comparator, including the mutation-probe checks.
+parity comparator, including the mutation-probe checks. The trusted parent
+inspects the pinned `orbstack` context as `linux/arm64`, snapshots only tracked
+regular files (excluding credentials, environment files, dependencies, and
+symlinks), keeps dependencies/WASM read-only, enforces per-case and overall
+deadlines, and exports bounded named JSON only after validating a stdout marker.
+Mocked preflight, timeout, and cleanup tests are in
+`docs/evidence/test_adaptive_study_workers_reproduce.py`.
