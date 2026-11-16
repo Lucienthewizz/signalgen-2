@@ -19,7 +19,7 @@ All containers share the disposable PostgreSQL container's `network-none` loopba
 
 ## User Journey & Verification Results
 
-63 explicit assertions (20 HTTP assertions, 43 browser UI/storage assertions) and 181 network requests executed across the real stack:
+59 explicit assertions (20 HTTP assertions, 39 browser UI/storage assertions) and 187 network requests executed across the real stack. The recorded run was built from clean commit `d746e4c`:
 
 1. **Pre-flight & Database Initialization**:
    - Four coordinator-approved Linux ARM64 packages verified against `package-lock.json` (`c27cd5cbed7490dbd4d92c4e558bdf5dac976e0013ecd49a80627aca21117063`) and safely extracted into a bounded temporary dependency snapshot without lifecycle scripts.

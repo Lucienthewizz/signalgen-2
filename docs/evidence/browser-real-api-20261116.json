@@ -71,11 +71,11 @@
       "http_assertions_count": 20,
       "browser_ui_assertions_count": 39,
       "total_assertions_count": 59,
-      "network_requests_count": 185
+      "network_requests_count": 187
     },
     "reports": {
       "saved_rule": {
-        "id": "rule_a03ba8d1a6decd749e5b2f3a",
+        "id": "rule_105efbc49edacb637ff3b742",
         "hash": "sha256:042fad7ed869c3f7ecb215af2d090b173a133aed5925a457842734af33171678"
       },
       "api_owner_isolation": "verified: 404 foreign rule, 403 session mismatch",
@@ -153,8 +153,8 @@
     "docs/evidence/browser-real-api-mobile-light-backtest.png"
   ],
   "frontend_source_manifest": {
-    "head_commit": "35351a9d6783f79a7407c272dba2e27099c00425",
-    "dirty": true,
+    "head_commit": "d746e4c58255a89538f646a3748c5a049824d53d",
+    "dirty": false,
     "total_tracked_files": 300,
     "files": {
       "frontend/web/README.md": {
