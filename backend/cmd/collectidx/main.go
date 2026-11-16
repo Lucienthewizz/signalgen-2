@@ -32,8 +32,8 @@ func run() error {
 	}
 	now := time.Now()
 	latestEnd := closedDayBoundary(now, jakarta)
-	catalogPath := flag.String("catalog", "", "official IDX .xlsx or UTF-8 CSV")
-	source := flag.String("source-url", "https://www.idx.co.id/id/data-pasar/data-saham/daftar-saham/", "source provenance (not fetched by this job)")
+	catalogPath := flag.String("catalog", "", "official IDX .xlsx/CSV or explicit project catalog JSON")
+	source := flag.String("source-url", "", "source provenance (defaults by catalog type; not fetched by this job)")
 	asOf := flag.String("as-of", latestEnd.Format("2006-01-02"), "exclusive end date in Asia/Jakarta; excludes this entire date")
 	fromDate := flag.String("from", "", "inclusive date, defaults to one year before as-of")
 	output := flag.String("out", "data/idx", "private backend output directory")
@@ -67,6 +67,13 @@ func run() error {
 	if *catalogPath == "" {
 		return fmt.Errorf("-catalog is required; no hardcoded list is presented as complete IDX")
 	}
+	if *source == "" {
+		if strings.EqualFold(filepath.Ext(*catalogPath), ".json") {
+			*source = "project://signalgen.stock_catalog"
+		} else {
+			*source = "https://www.idx.co.id/id/data-pasar/data-saham/daftar-saham/"
+		}
+	}
 	if *interval < 500*time.Millisecond || *interval > time.Minute || *limit < 0 {
 		return fmt.Errorf("delay must be 500ms..1m and limit must be nonnegative")
 	}
@@ -99,8 +106,8 @@ func run() error {
 	if !from.Before(to) || to.Sub(from) > 6*366*24*time.Hour {
 		return fmt.Errorf("window must be positive and at most six years")
 	}
-	if !strings.HasPrefix(*source, "https://") {
-		return fmt.Errorf("source-url must identify an HTTPS source")
+	if !strings.HasPrefix(*source, "https://") && *source != "project://signalgen.stock_catalog" {
+		return fmt.Errorf("source-url must identify an HTTPS source or project://signalgen.stock_catalog")
 	}
 	if *scheduled {
 		provider, err := collectorProvider()

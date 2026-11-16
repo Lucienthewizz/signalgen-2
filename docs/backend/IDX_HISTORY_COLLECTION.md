@@ -88,6 +88,21 @@ File asli tidak diubah. Metadata katalog memuat source URL, timestamp import,
 SHA-256 file asli dan daftar ticker. Mapping `KODE.JK` masih memerlukan verifikasi
 ketersediaan pada Yahoo, yang hasilnya terlihat sebagai success/failed per ticker.
 
+Jika ekspor resmi tidak tersedia, collector juga menerima JSON katalog aktif
+proyek yang diekspor operator (bukan report audit dan bukan daftar buatan):
+
+```json
+{"items":[
+  {"symbol":"BBCA.JK","provider_symbol":"BBCA.JK","name":"Bank Central Asia"},
+  {"symbol":"TLKM.JK","provider_symbol":"TLKM.JK","name":"Telkom Indonesia","listing_date":"1995-11-14"}
+]}
+```
+
+`listing_date` boleh tidak ada dan tetap kosong; adapter tidak mengarang tanggal
+atau menyatakan membership historis. JSON ini hanya metadata symbol/name aktif,
+harus memiliki `provider_symbol` yang sama, dan provenance tersimpan sebagai
+`project://signalgen.stock_catalog` bila `-source-url` tidak diberikan.
+
 ## Hasil dan arti keamanan
 
 ```text

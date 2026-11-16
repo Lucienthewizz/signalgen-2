@@ -23,8 +23,8 @@ type ScheduledResult struct {
 }
 
 func (o ScheduleOptions) Validate() error {
-	if o.CatalogPath == "" || o.Directory == "" || !strings.HasPrefix(o.SourceURL, "https://") {
-		return fmt.Errorf("scheduler requires a catalog, output store and HTTPS provenance")
+	if o.CatalogPath == "" || o.Directory == "" || (!strings.HasPrefix(o.SourceURL, "https://") && o.SourceURL != "project://signalgen.stock_catalog") {
+		return fmt.Errorf("scheduler requires a catalog, output store and HTTPS or project provenance")
 	}
 	if o.Every < time.Minute || o.Every > 7*24*time.Hour || o.RetryDelay < time.Minute || o.RetryDelay > 24*time.Hour || o.RunTimeout <= 0 || o.RunTimeout > 6*time.Hour {
 		return fmt.Errorf("schedule every must be 1m..168h, retry 1m..24h and run timeout positive..6h")

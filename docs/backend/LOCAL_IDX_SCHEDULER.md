@@ -22,6 +22,9 @@ next generation is collected.
 
 Use the verified image from this branch's evidence, a private existing output
 store writable by container UID/GID 10001 and an operator-supplied catalog file.
+The catalog may be the official IDX export or an explicit project catalog JSON;
+the latter carries active symbol/name metadata only and does not claim historical
+listing membership.
 The scheduler does not fetch the catalog or treat a bundled list as complete.
 Set these variables in a clean operator shell; never copy personal environment
 files into the image or repository:

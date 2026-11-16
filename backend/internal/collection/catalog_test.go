@@ -27,6 +27,30 @@ func TestCatalogCSVProvenanceDatesAndDuplicates(t *testing.T) {
 	}
 }
 
+func TestProjectCatalogAllowsUnknownListingDateWithoutInventingOne(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "project-catalog.json")
+	data := `{"items":[{"symbol":"TLKM.JK","provider_symbol":"TLKM.JK","name":"Telkom Indonesia"},{"symbol":"BBCA.JK","provider_symbol":"BBCA.JK","name":"Bank Central Asia","listing_date":"2000-05-31"}]}`
+	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := ReadCatalog(path, "project://signalgen.stock_catalog", time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC))
+	if err != nil || len(catalog.Items) != 2 || catalog.Items[0].Code != "BBCA" || catalog.Items[1].ListingDate != "" {
+		t.Fatalf("catalog=%+v err=%v", catalog, err)
+	}
+	for _, invalid := range []string{
+		`{"items":[{"symbol":"TLKM.JK","provider_symbol":"OTHER.JK","name":"Telkom"}]}`,
+		`{"items":[{"symbol":"TLKM.JK","provider_symbol":"TLKM.JK","name":""}]}`,
+		`{"items":[{"symbol":"TLKM.JK","provider_symbol":"TLKM.JK","name":"Telkom","unexpected":true}]}`,
+	} {
+		if err := os.WriteFile(path, []byte(invalid), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ReadCatalog(path, "project://signalgen.stock_catalog", time.Now()); err == nil {
+			t.Fatalf("accepted invalid project catalog %s", invalid)
+		}
+	}
+}
+
 func TestCatalogXLSXPlainExportAndFormulaRejection(t *testing.T) {
 	for _, formula := range []bool{false, true} {
 		path := filepath.Join(t.TempDir(), "export.xlsx")
