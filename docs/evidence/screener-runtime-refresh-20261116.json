@@ -1,0 +1,22 @@
+{
+  "date": "2026-11-16",
+  "scope": "User-requested local screener endpoint repair",
+  "cause": "Frontend screening route existed in source but port8080 served an older API image without that route",
+  "old_image": "sha256:f1baf33b1e06c6a7b54f6226cf758785efd2efe99a358c9f613aa906da2077f4",
+  "new_image": "sha256:d4a008edc07e48837b4784a5e1be1f806bd4b8bc522f6704412719c6506f6d02",
+  "new_image_product_revision": "baf888ac34e7afaa7d8495e4adfc40a4ddc23a9a",
+  "service": "signalgen-2-go-api-1",
+  "compose_action": "up -d --no-deps --no-build go-api with a local image override",
+  "default_local_image_tag": "signalgen-2-go-api:latest",
+  "before": { "screening_post_http": 404, "code": "RESOURCE_NOT_FOUND", "openapi_screening_route": false },
+  "after": {
+    "direct_screening_post_http": 401,
+    "frontend_proxy_screening_post_http": 401,
+    "code": "AUTH_REQUIRED",
+    "openapi_http": 200,
+    "openapi_screening_route": true,
+    "openapi_screening_signals_route": true,
+    "container_health": "healthy"
+  },
+  "limits": "Unauthenticated routing checks only; no authenticated full-catalog scan, provider download, database migration, or Midtrans source deployment was performed"
+}
