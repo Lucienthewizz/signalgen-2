@@ -203,8 +203,9 @@ def validate_evidence_json(raw_content: str) -> dict:
         # Check all float metrics are finite
         for field in [
             "throughput_completed_per_sec", "throughput_attempts_per_sec",
-            "create_p50_ms", "prepare_p50_ms", "evaluate_batch_p50_ms",
-            "release_p50_ms", "completed_lifecycle_p50_ms", "attempt_p50_ms"
+            "create_p50_ms", "prepare_p50_ms", "evaluate_stock_p50_ms",
+            "evaluate_batch_p50_ms", "release_p50_ms", "completed_lifecycle_p50_ms",
+            "attempt_p50_ms", "rejected_admission_p50_ms", "rejected_batch_p50_ms",
         ]:
             if field in run:
                 val = run[field]

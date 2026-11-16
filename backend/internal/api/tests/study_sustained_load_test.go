@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -215,6 +216,8 @@ type stageLatencies struct {
 	evaluateBatch      []float64
 	release            []float64
 	attempt            []float64
+	rejectedAdmission  []float64
+	rejectedBatch      []float64
 	completedLifecycle []float64
 }
 
@@ -234,6 +237,10 @@ func (l *stageLatencies) record(stage string, ms float64) {
 		l.release = append(l.release, ms)
 	case "attempt":
 		l.attempt = append(l.attempt, ms)
+	case "rejected_admission":
+		l.rejectedAdmission = append(l.rejectedAdmission, ms)
+	case "rejected_batch":
+		l.rejectedBatch = append(l.rejectedBatch, ms)
 	case "completed_lifecycle":
 		l.completedLifecycle = append(l.completedLifecycle, ms)
 	}
@@ -261,6 +268,7 @@ type studyHTTPClient struct {
 	baseURL   string
 	sentBytes atomic.Int64
 	rcvdBytes atomic.Int64
+	faultHook func(method, path string) *studyHTTPResponse
 }
 
 type studyHTTPResponse struct {
@@ -274,6 +282,13 @@ type studyHTTPResponse struct {
 }
 
 func (c *studyHTTPClient) do(owner, session, method, path string, body []byte) studyHTTPResponse {
+	if c.faultHook != nil {
+		if injected := c.faultHook(method, path); injected != nil {
+			r := *injected
+			r.owner = owner
+			return r
+		}
+	}
 	r := studyHTTPResponse{owner: owner}
 	req, err := http.NewRequest(method, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
@@ -998,6 +1013,89 @@ func TestStudySustainedTargetedFaults(t *testing.T) {
 		// Verify zero leaks after fault tests using validStudyPayload
 		assertFullCapacityAndZeroLeaks(t, client, store, validStudyPayload)
 	})
+
+	t.Run("table_driven_mid_lifecycle_fault_cleanup", func(t *testing.T) {
+		faultCases := []struct {
+			name         string
+			faultMatcher func(method, path string) bool
+		}{
+			{
+				name: "prepare_500",
+				faultMatcher: func(method, path string) bool {
+					return method == "POST" && strings.Contains(path, "/batches/0/prepare")
+				},
+			},
+			{
+				name: "content_500",
+				faultMatcher: func(method, path string) bool {
+					return method == "GET" && strings.HasPrefix(path, "/api/v1/datasets/") && strings.HasSuffix(path, "/content")
+				},
+			},
+			{
+				name: "grant_500",
+				faultMatcher: func(method, path string) bool {
+					return method == "POST" && path == "/api/v1/compute-grants"
+				},
+			},
+			{
+				name: "signals_500",
+				faultMatcher: func(method, path string) bool {
+					return method == "POST" && path == "/api/v1/backtests/signals"
+				},
+			},
+			{
+				name: "batch_release_500",
+				faultMatcher: func(method, path string) bool {
+					return method == "DELETE" && strings.Contains(path, "/batches/0/prepare")
+				},
+			},
+		}
+
+		for _, tc := range faultCases {
+			t.Run(tc.name, func(t *testing.T) {
+				tracker := &admittedContextTracker{}
+				faultClient := &studyHTTPClient{
+					client:  &http.Client{Timeout: 5 * time.Second},
+					baseURL: host.URL,
+					faultHook: func(method, path string) *studyHTTPResponse {
+						if tc.faultMatcher(method, path) {
+							return &studyHTTPResponse{
+								status:  500,
+								body:    []byte(`{"error":{"code":"INTERNAL_ERROR","message":"injected mid-lifecycle fault"}}`),
+								headers: http.Header{"X-Request-ID": []string{"req_injected_fault"}},
+							}
+						}
+						return nil
+					},
+				}
+
+				owner := "synthetic-fault-" + tc.name
+				res := executeWholeStudyLifecycle(faultClient, owner, validStudyPayload, nil, tracker, 1*time.Second)
+
+				// 1. Must fail with outcomeFailed, never completed or rejected
+				if res.outcome != outcomeFailed {
+					t.Fatalf("%s: expected outcomeFailed, got %s", tc.name, res.outcome)
+				}
+				if res.err == nil {
+					t.Fatalf("%s: expected error to be preserved, got nil", tc.name)
+				}
+
+				// 2. Must clean up admitted context without leak
+				if tracker.activeCount() != 0 {
+					t.Fatalf("%s: leaked admitted context: count=%d", tc.name, tracker.activeCount())
+				}
+
+				// 3. Must release any prepared snapshots from store
+				activeSnaps, _ := store.Inflight()
+				if activeSnaps != 0 {
+					t.Fatalf("%s: leaked active snapshots in store: count=%d", tc.name, activeSnaps)
+				}
+
+				// 4. Assert full 32-context and 12-batch capacity can be immediately reused
+				assertFullCapacityAndZeroLeaks(t, client, store, validStudyPayload)
+			})
+		}
+	})
 }
 
 // TestStudySustainedLoadProfile runs an opt-in multi-client bounded sustained
@@ -1054,8 +1152,14 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 		AttemptP50Ms              float64 `json:"attempt_p50_ms"`
 		AttemptP95Ms              float64 `json:"attempt_p95_ms"`
 		AttemptP99Ms              float64 `json:"attempt_p99_ms"`
+		RejectedAdmissionP50Ms    float64 `json:"rejected_admission_p50_ms,omitempty"`
+		RejectedAdmissionP95Ms    float64 `json:"rejected_admission_p95_ms,omitempty"`
+		RejectedAdmissionP99Ms    float64 `json:"rejected_admission_p99_ms,omitempty"`
+		RejectedBatchP50Ms        float64 `json:"rejected_batch_p50_ms,omitempty"`
+		RejectedBatchP95Ms        float64 `json:"rejected_batch_p95_ms,omitempty"`
+		RejectedBatchP99Ms        float64 `json:"rejected_batch_p99_ms,omitempty"`
 		CompletedLifecycleP50Ms   float64 `json:"completed_lifecycle_p50_ms"`
-		CompletedLifecycleP95Ms   float64 `json:"completed_lifecycle_p95_ms"`
+		CompletedLifecycleP95Ms   float64 `json:"completed_lifecycle_p50_ms"`
 		CompletedLifecycleP99Ms   float64 `json:"completed_lifecycle_p99_ms"`
 		MemAllocBeforeBytes       uint64  `json:"mem_alloc_before_bytes"`
 		MemAllocAfterBytes        uint64  `json:"mem_alloc_after_bytes"`
@@ -1177,6 +1281,11 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 							}
 						case outcomeRejected:
 							rejectedCount.Add(1)
+							if res.retryAfterSec == 60 {
+								latencies.record("rejected_admission", attMs)
+							} else {
+								latencies.record("rejected_batch", attMs)
+							}
 							// Closed-loop backoff compliance: honor server Retry-After header
 							waitDur := time.Duration(res.retryAfterSec) * time.Second
 							remaining := tierDeadline.Sub(time.Now())
@@ -1270,6 +1379,12 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 				AttemptP50Ms:              calculatePercentile(latencies.attempt, 0.50),
 				AttemptP95Ms:              calculatePercentile(latencies.attempt, 0.95),
 				AttemptP99Ms:              calculatePercentile(latencies.attempt, 0.99),
+				RejectedAdmissionP50Ms:    calculatePercentile(latencies.rejectedAdmission, 0.50),
+				RejectedAdmissionP95Ms:    calculatePercentile(latencies.rejectedAdmission, 0.95),
+				RejectedAdmissionP99Ms:    calculatePercentile(latencies.rejectedAdmission, 0.99),
+				RejectedBatchP50Ms:        calculatePercentile(latencies.rejectedBatch, 0.50),
+				RejectedBatchP95Ms:        calculatePercentile(latencies.rejectedBatch, 0.95),
+				RejectedBatchP99Ms:        calculatePercentile(latencies.rejectedBatch, 0.99),
 				CompletedLifecycleP50Ms:   calculatePercentile(latencies.completedLifecycle, 0.50),
 				CompletedLifecycleP95Ms:   calculatePercentile(latencies.completedLifecycle, 0.95),
 				CompletedLifecycleP99Ms:   calculatePercentile(latencies.completedLifecycle, 0.99),
