@@ -315,7 +315,8 @@ def run():
         if path.is_symlink() or not path.is_file() or path.stat().st_size > 16 * 1024 * 1024:
             raise ValueError("Unsafe source input: " + relative)
         data = path.read_bytes()
-        if not relative.startswith("backend/scripts/") and data != call(["git", "show", BASE + ":" + relative]):
+        # Go test files are not compiled into the pinned API image.
+        if not relative.startswith("backend/scripts/") and not relative.endswith("_test.go") and data != call(["git", "show", BASE + ":" + relative]):
             raise ValueError("Protected source changed: " + relative)
         total += len(data)
         if total > 64 * 1024 * 1024:

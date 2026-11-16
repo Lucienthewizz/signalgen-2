@@ -5,6 +5,7 @@ import (
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/api/shared"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/compute"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 )
 
 // CreateComputeGrant owns HTTP concerns only: verified identity/session, rate
@@ -14,12 +15,12 @@ func (server *Handler) CreateComputeGrant(writer http.ResponseWriter, request *h
 	if !ok {
 		return
 	}
-	if !server.AllowRate(writer, request, "compute-grants:create", principal.ID) {
-		return
-	}
 	var input compute.IssueInput
 	if err := shared.DecodeJSON(request, &input); err != nil {
 		shared.WriteJSONInputError(writer, request, err, "Permintaan compute grant tidak valid.")
+		return
+	}
+	if !server.AllowStudyOrRate(writer, request, "compute-grants:create", principal.ID, input.DatasetID, dataset.StudyUseGrant) {
 		return
 	}
 	service := compute.IssuanceService{Features: server.Access, Datasets: server.Datasets, Rules: server.Rules, Grants: server.Compute}

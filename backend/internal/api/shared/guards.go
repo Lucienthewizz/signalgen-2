@@ -182,3 +182,21 @@ func (server *Context) AllowRate(writer http.ResponseWriter, request *http.Reque
 	WriteError(writer, request, http.StatusTooManyRequests, "RATE_LIMITED", "Terlalu banyak permintaan; coba lagi nanti.")
 	return false
 }
+
+type studyUseCounter interface {
+	ConsumeStudyUse(owner, id, kind string) (isStudy, allowed bool)
+}
+
+// AllowStudyOrRate applies the fixed per-symbol quota to live study snapshots
+// and the per-minute limiter to every other dataset.
+func (server *Context) AllowStudyOrRate(writer http.ResponseWriter, request *http.Request, operation, userID, datasetID, kind string) bool {
+	if counter, ok := server.Datasets.(studyUseCounter); ok && strings.TrimSpace(datasetID) != "" {
+		if isStudy, allowed := counter.ConsumeStudyUse(userID, datasetID, kind); isStudy {
+			if !allowed {
+				WriteError(writer, request, http.StatusConflict, "STUDY_RETRY_LIMIT", "This study stock was already retried; run the batch again.")
+			}
+			return allowed
+		}
+	}
+	return server.AllowRate(writer, request, operation, userID)
+}
