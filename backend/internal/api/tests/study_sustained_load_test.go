@@ -171,14 +171,51 @@ func (m *monitoredDynamicStore) ResetPeak() {
 	m.mu.Unlock()
 }
 
+// Admitted-only context tracker. ONLY increments when a context is actually admitted (status 201).
+// Decrements when a context is verified deleted (status 204). Tracks real server-held context peaks.
+type admittedContextTracker struct {
+	mu     sync.Mutex
+	active int64
+	peak   int64
+}
+
+func (t *admittedContextTracker) recordAdmitted() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.active++
+	if t.active > t.peak {
+		t.peak = t.active
+	}
+}
+
+func (t *admittedContextTracker) recordReleased() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.active--
+}
+
+func (t *admittedContextTracker) activeCount() int64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.active
+}
+
+func (t *admittedContextTracker) peakCount() int64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.peak
+}
+
 // Stage-level latency tracking helper.
 type stageLatencies struct {
-	mu        sync.Mutex
-	create    []float64
-	prepare   []float64
-	evaluate  []float64
-	release   []float64
-	lifecycle []float64
+	mu                 sync.Mutex
+	create             []float64
+	prepare            []float64
+	evaluateStock      []float64
+	evaluateBatch      []float64
+	release            []float64
+	attempt            []float64
+	completedLifecycle []float64
 }
 
 func (l *stageLatencies) record(stage string, ms float64) {
@@ -189,12 +226,16 @@ func (l *stageLatencies) record(stage string, ms float64) {
 		l.create = append(l.create, ms)
 	case "prepare":
 		l.prepare = append(l.prepare, ms)
-	case "evaluate":
-		l.evaluate = append(l.evaluate, ms)
+	case "evaluate_stock":
+		l.evaluateStock = append(l.evaluateStock, ms)
+	case "evaluate_batch":
+		l.evaluateBatch = append(l.evaluateBatch, ms)
 	case "release":
 		l.release = append(l.release, ms)
-	case "lifecycle":
-		l.lifecycle = append(l.lifecycle, ms)
+	case "attempt":
+		l.attempt = append(l.attempt, ms)
+	case "completed_lifecycle":
+		l.completedLifecycle = append(l.completedLifecycle, ms)
 	}
 }
 
@@ -281,22 +322,61 @@ type wholeStudyResult struct {
 	studyID       string
 	totalStocks   int
 	totalEvents   int
+	checksum      string
+	retryAfterSec int
 	retryAttempts int
 	err           error
 }
 
+// Canonical deterministic fixture oracle: validates that for a given symbol,
+// exactly 4 SELL events were generated at the expected dates and prices.
+func verifyStockStudyOracle(symbol string, events []core.StudyEvent) error {
+	if len(events) != 4 {
+		return fmt.Errorf("symbol %s: expected 4 events, got %d", symbol, len(events))
+	}
+	expectedDates := []string{
+		"2026-01-20T00:00:00Z",
+		"2026-01-21T00:00:00Z",
+		"2026-01-22T00:00:00Z",
+		"2026-01-23T00:00:00Z",
+	}
+	expectedPrices := []float64{191.0, 192.0, 193.0, 194.0}
+	for i, ev := range events {
+		if ev.Symbol != symbol {
+			return fmt.Errorf("symbol %s event %d: symbol mismatch: got %s", symbol, i, ev.Symbol)
+		}
+		if ev.SignalType != "SELL" {
+			return fmt.Errorf("symbol %s event %d: expected SELL, got %s", symbol, i, ev.SignalType)
+		}
+		if ev.Timestamp != expectedDates[i] {
+			return fmt.Errorf("symbol %s event %d: date mismatch: got %s want %s", symbol, i, ev.Timestamp, expectedDates[i])
+		}
+		if ev.ReferencePrice != expectedPrices[i] {
+			return fmt.Errorf("symbol %s event %d: price mismatch: got %.2f want %.2f", symbol, i, ev.ReferencePrice, expectedPrices[i])
+		}
+	}
+	return nil
+}
+
+func computeStudyEventsChecksum(events []core.StudyEvent) string {
+	h := sha256.New()
+	for _, ev := range events {
+		fmt.Fprintf(h, "%s|%s|%s|%.2f\n", ev.Symbol, ev.SignalType, ev.Timestamp, ev.ReferencePrice)
+	}
+	return fmt.Sprintf("sha256:%x", h.Sum(nil))
+}
+
 // executeWholeStudyLifecycle runs the complete study workload across all 3 batches
-// and all 23 stocks. It records stage latencies and validates signal events.
+// and all 23 stocks. It records stage latencies and validates signal events against the oracle.
 func executeWholeStudyLifecycle(
 	client *studyHTTPClient,
 	owner string,
 	studyPayload []byte,
 	latencies *stageLatencies,
-	activeContexts *atomic.Int64,
+	tracker *admittedContextTracker,
 	maxRetryWait time.Duration,
 ) wholeStudyResult {
 	sessionID := "synthetic-session"
-	lifeStart := time.Now()
 
 	// 1. Create Study Context
 	cStart := time.Now()
@@ -313,10 +393,13 @@ func executeWholeStudyLifecycle(
 		return wholeStudyResult{outcome: outcomeFailed, err: res.err}
 	}
 	if res.status == 429 {
-		if latencies != nil {
-			latencies.record("lifecycle", float64(time.Since(lifeStart).Nanoseconds())/1e6)
+		retrySec := 60
+		if s := res.headers.Get("Retry-After"); s != "" {
+			if n, err := strconv.Atoi(s); err == nil && n > 0 {
+				retrySec = n
+			}
 		}
-		return wholeStudyResult{outcome: outcomeRejected}
+		return wholeStudyResult{outcome: outcomeRejected, retryAfterSec: retrySec}
 	}
 	if res.status != 201 {
 		return wholeStudyResult{outcome: outcomeFailed, err: fmt.Errorf("create returned %d: %s", res.status, res.body)}
@@ -327,21 +410,30 @@ func executeWholeStudyLifecycle(
 		return wholeStudyResult{outcome: outcomeFailed, err: fmt.Errorf("invalid context JSON: %w", err)}
 	}
 
-	activeContexts.Add(1)
 	studyPath := "/api/v1/backtests/studies/" + ctx.ID
+	admitted := true
+	released := false
+
+	if tracker != nil {
+		tracker.recordAdmitted()
+	}
 
 	// Defer cleanup of context in case of premature exit
-	cleanedUp := false
 	defer func() {
-		if !cleanedUp {
-			client.do(owner, sessionID, "DELETE", studyPath, nil)
-			activeContexts.Add(-1)
+		if admitted && !released {
+			delRes := client.do(owner, sessionID, "DELETE", studyPath, nil)
+			if delRes.status == 204 {
+				released = true
+				if tracker != nil {
+					tracker.recordReleased()
+				}
+			}
 		}
 	}()
 
 	totalStocksEvaluated := 0
-	totalEventsCount := 0
 	seenSymbols := make(map[string]bool)
+	allEvents := make([]core.StudyEvent, 0, 92)
 	retriesUsed := 0
 
 	// 2. Process all batches (Batch 0: 10 stocks, Batch 1: 10 stocks, Batch 2: 3 stocks)
@@ -370,11 +462,7 @@ func executeWholeStudyLifecycle(
 				}
 				waitDur := time.Duration(retrySec) * time.Second
 				if maxRetryWait < waitDur {
-					// Cannot wait real Retry-After duration within budget: terminate as rejected
-					if latencies != nil {
-						latencies.record("lifecycle", float64(time.Since(lifeStart).Nanoseconds())/1e6)
-					}
-					return wholeStudyResult{outcome: outcomeRejected, retryAttempts: retriesUsed}
+					return wholeStudyResult{outcome: outcomeRejected, retryAfterSec: retrySec, retryAttempts: retriesUsed}
 				}
 				time.Sleep(waitDur)
 				continue
@@ -398,20 +486,19 @@ func executeWholeStudyLifecycle(
 			latencies.record("prepare", pMs)
 		}
 		if !prepared {
-			if latencies != nil {
-				latencies.record("lifecycle", float64(time.Since(lifeStart).Nanoseconds())/1e6)
-			}
-			return wholeStudyResult{outcome: outcomeRejected, retryAttempts: retriesUsed}
+			return wholeStudyResult{outcome: outcomeRejected, retryAfterSec: 1, retryAttempts: retriesUsed}
 		}
 
 		// 3. Evaluate each stock in the prepared batch
-		eStart := time.Now()
+		batchEvalStart := time.Now()
 		for _, manifest := range batch.Manifests {
 			symbol := manifest.Symbols[0]
 			if seenSymbols[symbol] {
 				return wholeStudyResult{outcome: outcomeFailed, err: fmt.Errorf("duplicate symbol %s", symbol)}
 			}
 			seenSymbols[symbol] = true
+
+			stockEvalStart := time.Now()
 
 			// Fetch dataset content
 			cRes := client.do(owner, sessionID, "GET", "/api/v1/datasets/"+manifest.DatasetID+"/content", nil)
@@ -482,16 +569,24 @@ func executeWholeStudyLifecycle(
 			if err != nil {
 				return wholeStudyResult{outcome: outcomeFailed, err: fmt.Errorf("run signal study for %s: %w", symbol, err)}
 			}
-			if len(studyRun.Events) != 4 || studyRun.Events[0].SignalType != "SELL" {
-				return wholeStudyResult{outcome: outcomeFailed, err: fmt.Errorf("unexpected signal study result for %s: %d events", symbol, len(studyRun.Events))}
+
+			// Deterministic oracle validation for this stock
+			if err := verifyStockStudyOracle(symbol, studyRun.Events); err != nil {
+				return wholeStudyResult{outcome: outcomeFailed, err: err}
+			}
+
+			stockEvalMs := float64(time.Since(stockEvalStart).Nanoseconds()) / 1e6
+			if latencies != nil {
+				latencies.record("evaluate_stock", stockEvalMs)
 			}
 
 			totalStocksEvaluated++
-			totalEventsCount += len(studyRun.Events)
+			allEvents = append(allEvents, studyRun.Events...)
 		}
-		eMs := float64(time.Since(eStart).Nanoseconds()) / 1e6
+
+		batchEvalMs := float64(time.Since(batchEvalStart).Nanoseconds()) / 1e6
 		if latencies != nil {
-			latencies.record("evaluate", eMs)
+			latencies.record("evaluate_batch", batchEvalMs)
 		}
 
 		// 4. Release Batch snapshots before proceeding to next batch
@@ -513,21 +608,24 @@ func executeWholeStudyLifecycle(
 	// 5. Delete Study Context
 	cStart = time.Now()
 	delStudyRes := client.do(owner, sessionID, "DELETE", studyPath, nil)
-	cleanedUp = true
-	activeContexts.Add(-1)
 	if delStudyRes.status != 204 {
 		return wholeStudyResult{outcome: outcomeFailed, err: fmt.Errorf("delete study returned %d", delStudyRes.status)}
 	}
+	released = true
+	if tracker != nil {
+		tracker.recordReleased()
+	}
 	if latencies != nil {
 		latencies.record("release", float64(time.Since(cStart).Nanoseconds())/1e6)
-		latencies.record("lifecycle", float64(time.Since(lifeStart).Nanoseconds())/1e6)
 	}
 
+	checksum := computeStudyEventsChecksum(allEvents)
 	return wholeStudyResult{
 		outcome:       outcomeCompleted,
 		studyID:       ctx.ID,
 		totalStocks:   totalStocksEvaluated,
-		totalEvents:   totalEventsCount,
+		totalEvents:   len(allEvents),
+		checksum:      checksum,
 		retryAttempts: retriesUsed,
 	}
 }
@@ -564,6 +662,72 @@ func setupTestServer(t *testing.T) (*httptest.Server, *monitoredDynamicStore, *b
 	}
 	host := httptest.NewServer(server)
 	return host, store, prices, catalog
+}
+
+// Proves fresh 32 retained contexts and 12 held batches capacity after any test run.
+func assertFullCapacityAndZeroLeaks(t *testing.T, client *studyHTTPClient, store *monitoredDynamicStore, studyPayload []byte) {
+	t.Helper()
+
+	// 1. Store active snapshots must be 0
+	activeSnaps, _ := store.Inflight()
+	if activeSnaps != 0 {
+		t.Fatalf("leak proof: expected 0 active snapshots, got %d", activeSnaps)
+	}
+
+	// 2. Concurrently admit 32 fresh retained contexts
+	freshCtxs := make([]studies.StudyContext, 32)
+	for i := 0; i < 32; i++ {
+		owner := fmt.Sprintf("synthetic-cap-check-%d", i)
+		res := client.do(owner, "synthetic-session", "POST", "/api/v1/backtests/studies", studyPayload)
+		if res.status != 201 {
+			t.Fatalf("leak proof: failed to admit fresh context %d: status=%d %s", i, res.status, res.body)
+		}
+		if err := json.Unmarshal(res.body, &freshCtxs[i]); err != nil {
+			t.Fatalf("leak proof: unmarshal fresh context %d: %v", i, err)
+		}
+	}
+
+	// 33rd attempt must be rejected with HTTP 429 STUDY_CAPACITY and Retry-After: 60
+	res33 := client.do("synthetic-cap-overflow", "synthetic-session", "POST", "/api/v1/backtests/studies", studyPayload)
+	if res33.status != 429 {
+		t.Fatalf("leak proof: expected 429 on 33rd context, got %d %s", res33.status, res33.body)
+	}
+	if res33.headers.Get("Retry-After") != "60" {
+		t.Fatalf("leak proof: expected Retry-After: 60, got %s", res33.headers.Get("Retry-After"))
+	}
+
+	// 3. Simultaneously prepare batch 0 across 12 contexts (120 snapshots)
+	for i := 0; i < 12; i++ {
+		path := fmt.Sprintf("/api/v1/backtests/studies/%s/batches/0/prepare", freshCtxs[i].ID)
+		bRes := client.do(fmt.Sprintf("synthetic-cap-check-%d", i), "synthetic-session", "POST", path, []byte(`{}`))
+		if bRes.status != 200 {
+			t.Fatalf("leak proof: batch prepare failed at %d: %d %s", i, bRes.status, bRes.body)
+		}
+	}
+
+	// 13th batch must be rejected with HTTP 429 SNAPSHOT_CAPACITY and Retry-After: 1
+	path13 := fmt.Sprintf("/api/v1/backtests/studies/%s/batches/0/prepare", freshCtxs[12].ID)
+	bRes13 := client.do("synthetic-cap-check-12", "synthetic-session", "POST", path13, []byte(`{}`))
+	if bRes13.status != 429 {
+		t.Fatalf("leak proof: expected 429 on 13th batch, got %d %s", bRes13.status, bRes13.body)
+	}
+	if bRes13.headers.Get("Retry-After") != "1" {
+		t.Fatalf("leak proof: expected Retry-After: 1, got %s", bRes13.headers.Get("Retry-After"))
+	}
+
+	// 4. Clean up all 32 fresh contexts, asserting HTTP 204 on every single one
+	for i := 0; i < 32; i++ {
+		delRes := client.do(fmt.Sprintf("synthetic-cap-check-%d", i), "synthetic-session", "DELETE", "/api/v1/backtests/studies/"+freshCtxs[i].ID, nil)
+		if delRes.status != 204 {
+			t.Fatalf("leak proof: failed to delete fresh context %d: status=%d %s", i, delRes.status, delRes.body)
+		}
+	}
+
+	// 5. Store active snapshots returned to 0
+	activeSnapsAfter, _ := store.Inflight()
+	if activeSnapsAfter != 0 {
+		t.Fatalf("leak proof: expected 0 active snapshots after cleanup, got %d", activeSnapsAfter)
+	}
 }
 
 // TestStudySustainedWorkloadCorrectnessAndOverloadRecovery tests all correctness
@@ -661,49 +825,8 @@ func TestStudySustainedWorkloadCorrectnessAndOverloadRecovery(t *testing.T) {
 			client.do(fmt.Sprintf("synthetic-sat-%d", i), "synthetic-session", "DELETE", "/api/v1/backtests/studies/"+contexts[i].ID, nil)
 		}
 
-		// Step 8: Strict leak proof:
-		// Admit 32 CONCURRENTLY RETAINED fresh contexts simultaneously to prove all 32 slots exist and are reusable.
-		freshCtxs := make([]studies.StudyContext, 32)
-		for i := 0; i < 32; i++ {
-			owner := fmt.Sprintf("synthetic-fresh-leakproof-%d", i)
-			res := client.do(owner, "synthetic-session", "POST", "/api/v1/backtests/studies", studyPayload)
-			if res.status != 201 {
-				t.Fatalf("leak detected: fresh context %d failed with status=%d %s", i, res.status, res.body)
-			}
-			json.Unmarshal(res.body, &freshCtxs[i])
-		}
-
-		// 33rd attempt must be rejected, proving all 32 slots are filled
-		res33 := client.do("synthetic-fresh-33", "synthetic-session", "POST", "/api/v1/backtests/studies", studyPayload)
-		if res33.status != 429 {
-			t.Fatalf("expected 429 on 33rd context, got %d", res33.status)
-		}
-
-		// Simultaneously prepare batch 0 on 12 contexts (120 snapshots)
-		for i := 0; i < 12; i++ {
-			path := fmt.Sprintf("/api/v1/backtests/studies/%s/batches/0/prepare", freshCtxs[i].ID)
-			bRes := client.do(fmt.Sprintf("synthetic-fresh-leakproof-%d", i), "synthetic-session", "POST", path, []byte(`{}`))
-			if bRes.status != 200 {
-				t.Fatalf("fresh batch prepare failed at %d: %d", i, bRes.status)
-			}
-		}
-
-		// Batch 13 prepare must be rejected, proving 120 snapshots are held
-		bRes13 := client.do("synthetic-fresh-leakproof-12", "synthetic-session", "POST", fmt.Sprintf("/api/v1/backtests/studies/%s/batches/0/prepare", freshCtxs[12].ID), []byte(`{}`))
-		if bRes13.status != 429 {
-			t.Fatalf("expected 429 on 13th batch, got %d", bRes13.status)
-		}
-
-		// Clean up all 32 fresh contexts
-		for i := 0; i < 32; i++ {
-			client.do(fmt.Sprintf("synthetic-fresh-leakproof-%d", i), "synthetic-session", "DELETE", "/api/v1/backtests/studies/"+freshCtxs[i].ID, nil)
-		}
-
-		// Check public observable emptiness: store has 0 active snapshots
-		activeSnaps, _ := store.Inflight()
-		if activeSnaps != 0 {
-			t.Fatalf("expected 0 active snapshots in store, got %d", activeSnaps)
-		}
+		// Step 8: Strict leak proof using helper
+		assertFullCapacityAndZeroLeaks(t, client, store, studyPayload)
 	})
 
 	t.Run("concurrent_whole_study_invariants", func(t *testing.T) {
@@ -719,9 +842,9 @@ func TestStudySustainedWorkloadCorrectnessAndOverloadRecovery(t *testing.T) {
 			rejectedCount  atomic.Int64
 			failedCount    atomic.Int64
 			cancelledCount atomic.Int64
-			activeContexts atomic.Int64
 		)
 
+		tracker := &admittedContextTracker{}
 		var wg sync.WaitGroup
 		startGate := make(chan struct{})
 
@@ -735,7 +858,7 @@ func TestStudySustainedWorkloadCorrectnessAndOverloadRecovery(t *testing.T) {
 					attemptsCount.Add(1)
 					owner := fmt.Sprintf("synthetic-worker-%d-%d", workerID, it)
 
-					res := executeWholeStudyLifecycle(client, owner, studyPayload, nil, &activeContexts, 2*time.Second)
+					res := executeWholeStudyLifecycle(client, owner, studyPayload, nil, tracker, 2*time.Second)
 					switch res.outcome {
 					case outcomeCompleted:
 						if res.totalStocks != 23 || res.totalEvents != 92 {
@@ -764,8 +887,8 @@ func TestStudySustainedWorkloadCorrectnessAndOverloadRecovery(t *testing.T) {
 		failed := failedCount.Load()
 		cancelled := cancelledCount.Load()
 
-		t.Logf("invariants: attempts=%d completed=%d rejected=%d failed=%d cancelled=%d",
-			attempts, completed, rejected, failed, cancelled)
+		t.Logf("invariants: attempts=%d completed=%d rejected=%d failed=%d cancelled=%d peak_admitted=%d",
+			attempts, completed, rejected, failed, cancelled, tracker.peakCount())
 
 		if attempts != maxAttempts {
 			t.Fatalf("attempts mismatch: got %d want %d", attempts, maxAttempts)
@@ -776,22 +899,32 @@ func TestStudySustainedWorkloadCorrectnessAndOverloadRecovery(t *testing.T) {
 		if failed != 0 {
 			t.Fatalf("unexpected failures: %d", failed)
 		}
-		if activeContexts.Load() != 0 {
-			t.Fatalf("context leak: %d still active", activeContexts.Load())
+		if tracker.activeCount() != 0 {
+			t.Fatalf("context leak: %d still active", tracker.activeCount())
+		}
+		if tracker.peakCount() > 32 {
+			t.Fatalf("peak admitted contexts exceeded 32: %d", tracker.peakCount())
 		}
 	})
 }
 
 // TestStudySustainedTargetedFaults validates error handling, classification,
-// and state isolation under abnormal client requests.
+// and state isolation under abnormal client requests and injected failures.
 func TestStudySustainedTargetedFaults(t *testing.T) {
-	host, _, _, _ := setupTestServer(t)
+	host, store, _, _ := setupTestServer(t)
 	defer host.Close()
 
 	client := &studyHTTPClient{
 		client:  &http.Client{Timeout: 5 * time.Second},
 		baseURL: host.URL,
 	}
+
+	validStudyPayload, _ := json.Marshal(studies.StudyInput{
+		Source: "market",
+		Market: "US",
+		RuleID: sharedStudyRuleID,
+		Config: core.SignalStudyConfig{From: "2026-01-20", To: "2026-01-23", NSteps: 3},
+	})
 
 	t.Run("malformed_json_create", func(t *testing.T) {
 		res := client.do("synthetic-user", "synthetic-session", "POST", "/api/v1/backtests/studies", []byte(`{invalid-json`))
@@ -817,26 +950,14 @@ func TestStudySustainedTargetedFaults(t *testing.T) {
 	})
 
 	t.Run("unauthenticated_request", func(t *testing.T) {
-		goodPayload, _ := json.Marshal(studies.StudyInput{
-			Source: "market",
-			Market: "US",
-			RuleID: sharedStudyRuleID,
-			Config: core.SignalStudyConfig{From: "2026-01-20", To: "2026-01-23", NSteps: 3},
-		})
-		res := client.do("", "", "POST", "/api/v1/backtests/studies", goodPayload)
+		res := client.do("", "", "POST", "/api/v1/backtests/studies", validStudyPayload)
 		if res.status != 401 {
 			t.Fatalf("expected 401 on unauthenticated request, got %d", res.status)
 		}
 	})
 
 	t.Run("foreign_owner_batch_access", func(t *testing.T) {
-		goodPayload, _ := json.Marshal(studies.StudyInput{
-			Source: "market",
-			Market: "US",
-			RuleID: sharedStudyRuleID,
-			Config: core.SignalStudyConfig{From: "2026-01-20", To: "2026-01-23", NSteps: 3},
-		})
-		createRes := client.do("synthetic-ownerA", "synthetic-session", "POST", "/api/v1/backtests/studies", goodPayload)
+		createRes := client.do("synthetic-ownerA", "synthetic-session", "POST", "/api/v1/backtests/studies", validStudyPayload)
 		if createRes.status != 201 {
 			t.Fatalf("create failed: %d", createRes.status)
 		}
@@ -861,6 +982,22 @@ func TestStudySustainedTargetedFaults(t *testing.T) {
 			t.Fatalf("ownerA cleanup failed: %d", cleanRes.status)
 		}
 	})
+
+	t.Run("injected_fault_lifecycle_accounting", func(t *testing.T) {
+		tracker := &admittedContextTracker{}
+		// Malformed study payload must fail create and NOT increment admitted contexts
+		badPayload := []byte(`{invalid-json`)
+		res := executeWholeStudyLifecycle(client, "synthetic-user-fault", badPayload, nil, tracker, 1*time.Second)
+		if res.outcome != outcomeFailed {
+			t.Fatalf("expected outcomeFailed on malformed create, got %s", res.outcome)
+		}
+		if tracker.activeCount() != 0 || tracker.peakCount() != 0 {
+			t.Fatalf("tracker incorrectly accounted failed create: active=%d peak=%d", tracker.activeCount(), tracker.peakCount())
+		}
+
+		// Verify zero leaks after fault tests using validStudyPayload
+		assertFullCapacityAndZeroLeaks(t, client, store, validStudyPayload)
+	})
 }
 
 // TestStudySustainedLoadProfile runs an opt-in multi-client bounded sustained
@@ -884,43 +1021,49 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 	})
 
 	type profileRunResult struct {
-		Concurrency              int     `json:"concurrency"`
-		TargetAttempts           int     `json:"target_attempts"`
-		Attempts                 int64   `json:"attempts"`
-		Completed                int64   `json:"completed"`
-		Rejected                 int64   `json:"rejected"`
-		Failed                   int64   `json:"failed"`
-		Cancelled                int64   `json:"cancelled"`
-		MaxInflightContexts      int64   `json:"max_inflight_contexts"`
-		MaxInflightSnapshots     int64   `json:"max_inflight_snapshots"`
-		WarmupDurationMs         float64 `json:"warmup_duration_ms"`
-		MeasuredDurationMs       float64 `json:"measured_duration_ms"`
-		ThroughputCompletedPS    float64 `json:"throughput_completed_per_sec"`
-		ThroughputAttemptsPS     float64 `json:"throughput_attempts_per_sec"`
-		PayloadBodyBytesSent     int64   `json:"payload_body_bytes_sent"`
-		PayloadBodyBytesReceived int64   `json:"payload_body_bytes_received"`
-		CreateP50Ms              float64 `json:"create_p50_ms"`
-		CreateP95Ms              float64 `json:"create_p95_ms"`
-		CreateP99Ms              float64 `json:"create_p99_ms"`
-		PrepareP50Ms             float64 `json:"prepare_p50_ms"`
-		PrepareP95Ms             float64 `json:"prepare_p95_ms"`
-		PrepareP99Ms             float64 `json:"prepare_p99_ms"`
-		EvaluateP50Ms            float64 `json:"evaluate_p50_ms"`
-		EvaluateP95Ms            float64 `json:"evaluate_p95_ms"`
-		EvaluateP99Ms            float64 `json:"evaluate_p99_ms"`
-		ReleaseP50Ms             float64 `json:"release_p50_ms"`
-		ReleaseP95Ms             float64 `json:"release_p95_ms"`
-		ReleaseP99Ms             float64 `json:"release_p99_ms"`
-		LifecycleP50Ms           float64 `json:"lifecycle_p50_ms"`
-		LifecycleP95Ms           float64 `json:"lifecycle_p95_ms"`
-		LifecycleP99Ms           float64 `json:"lifecycle_p99_ms"`
-		MemAllocBeforeBytes      uint64  `json:"mem_alloc_before_bytes"`
-		MemAllocAfterBytes       uint64  `json:"mem_alloc_after_bytes"`
-		MemAllocBytesDelta       int64   `json:"mem_alloc_bytes_delta"`
-		TotalAllocBytesDelta     uint64  `json:"total_alloc_bytes_delta"`
-		MallocsDelta             uint64  `json:"mallocs_delta"`
-		FreesDelta               uint64  `json:"frees_delta"`
-		NumGCDelta               uint32  `json:"num_gc_delta"`
+		Concurrency               int     `json:"concurrency"`
+		TargetAttempts            int     `json:"target_attempts"`
+		Attempts                  int64   `json:"attempts"`
+		Completed                 int64   `json:"completed"`
+		Rejected                  int64   `json:"rejected"`
+		Failed                    int64   `json:"failed"`
+		Cancelled                 int64   `json:"cancelled"`
+		MaxInflightContexts       int64   `json:"max_inflight_contexts"`
+		MaxInflightSnapshots      int64   `json:"max_inflight_snapshots"`
+		WarmupDurationMs          float64 `json:"warmup_duration_ms"`
+		MeasuredDurationMs        float64 `json:"measured_duration_ms"`
+		ThroughputCompletedPS     float64 `json:"throughput_completed_per_sec"`
+		ThroughputAttemptsPS      float64 `json:"throughput_attempts_per_sec"`
+		PayloadBodyBytesSent      int64   `json:"payload_body_bytes_sent"`
+		PayloadBodyBytesReceived  int64   `json:"payload_body_bytes_received"`
+		CreateP50Ms               float64 `json:"create_p50_ms"`
+		CreateP95Ms               float64 `json:"create_p95_ms"`
+		CreateP99Ms               float64 `json:"create_p99_ms"`
+		PrepareP50Ms              float64 `json:"prepare_p50_ms"`
+		PrepareP95Ms              float64 `json:"prepare_p95_ms"`
+		PrepareP99Ms              float64 `json:"prepare_p99_ms"`
+		EvaluateStockP50Ms        float64 `json:"evaluate_stock_p50_ms"`
+		EvaluateStockP95Ms        float64 `json:"evaluate_stock_p95_ms"`
+		EvaluateStockP99Ms        float64 `json:"evaluate_stock_p99_ms"`
+		EvaluateBatchP50Ms        float64 `json:"evaluate_batch_p50_ms"`
+		EvaluateBatchP95Ms        float64 `json:"evaluate_batch_p95_ms"`
+		EvaluateBatchP99Ms        float64 `json:"evaluate_batch_p99_ms"`
+		ReleaseP50Ms              float64 `json:"release_p50_ms"`
+		ReleaseP95Ms              float64 `json:"release_p95_ms"`
+		ReleaseP99Ms              float64 `json:"release_p99_ms"`
+		AttemptP50Ms              float64 `json:"attempt_p50_ms"`
+		AttemptP95Ms              float64 `json:"attempt_p95_ms"`
+		AttemptP99Ms              float64 `json:"attempt_p99_ms"`
+		CompletedLifecycleP50Ms   float64 `json:"completed_lifecycle_p50_ms"`
+		CompletedLifecycleP95Ms   float64 `json:"completed_lifecycle_p95_ms"`
+		CompletedLifecycleP99Ms   float64 `json:"completed_lifecycle_p99_ms"`
+		MemAllocBeforeBytes       uint64  `json:"mem_alloc_before_bytes"`
+		MemAllocAfterBytes        uint64  `json:"mem_alloc_after_bytes"`
+		MemAllocBytesDelta        int64   `json:"mem_alloc_bytes_delta"`
+		TotalAllocBytesDelta      uint64  `json:"total_alloc_bytes_delta"`
+		MallocsDelta              uint64  `json:"mallocs_delta"`
+		FreesDelta                uint64  `json:"frees_delta"`
+		NumGCDelta                uint32  `json:"num_gc_delta"`
 	}
 
 	// Configurable tier duration: default 5 seconds of sustained load per tier
@@ -950,18 +1093,24 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 
 			// Warmup phase (1 cycle per worker)
 			warmupStart := time.Now()
-			var warmupCtxs atomic.Int64
+			warmupTracker := &admittedContextTracker{}
 			var warmupWg sync.WaitGroup
 			for w := 0; w < concurrency; w++ {
 				warmupWg.Add(1)
 				go func(id int) {
 					defer warmupWg.Done()
 					owner := fmt.Sprintf("synthetic-warmup-%d-%d", concurrency, id)
-					executeWholeStudyLifecycle(client, owner, studyPayload, nil, &warmupCtxs, 1*time.Second)
+					res := executeWholeStudyLifecycle(client, owner, studyPayload, nil, warmupTracker, 1*time.Second)
+					if res.outcome == outcomeFailed {
+						t.Errorf("warmup failed for worker %d: %v", id, res.err)
+					}
 				}(w)
 			}
 			warmupWg.Wait()
 			warmupDuration := time.Since(warmupStart)
+			if warmupTracker.activeCount() != 0 {
+				t.Fatalf("warmup leaked %d active contexts", warmupTracker.activeCount())
+			}
 
 			// Store reset before measured phase
 			store.ResetPeak()
@@ -978,20 +1127,17 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 				rejectedCount  atomic.Int64
 				failedCount    atomic.Int64
 				cancelledCount atomic.Int64
-
-				activeContexts atomic.Int64
-				peakContexts   atomic.Int64
 			)
 
+			tracker := &admittedContextTracker{}
 			latencies := &stageLatencies{}
 			measuredStart := time.Now()
+			tierDeadline := measuredStart.Add(minTierDuration)
 			stopGate := make(chan struct{})
 
-			// Stop timer after minTierDuration
-			go func() {
-				time.Sleep(minTierDuration)
+			time.AfterFunc(minTierDuration, func() {
 				close(stopGate)
-			}()
+			})
 
 			var wg sync.WaitGroup
 			for w := 0; w < concurrency; w++ {
@@ -1001,6 +1147,10 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 					seq := 0
 
 					for {
+						now := time.Now()
+						if now.After(tierDeadline) || now.Sub(measuredStart) >= minTierDuration {
+							return
+						}
 						select {
 						case <-stopGate:
 							return
@@ -1011,31 +1161,41 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 						seq++
 
 						attemptsCount.Add(1)
-						curCtx := activeContexts.Add(1)
-						for {
-							peak := peakContexts.Load()
-							if curCtx <= peak || peakContexts.CompareAndSwap(peak, curCtx) {
-								break
-							}
-						}
-
-						// Execute whole-study lifecycle
-						res := executeWholeStudyLifecycle(client, owner, studyPayload, latencies, &activeContexts, 1*time.Second)
-						activeContexts.Add(-1)
+						attStart := time.Now()
+						res := executeWholeStudyLifecycle(client, owner, studyPayload, latencies, tracker, 1*time.Second)
+						attMs := float64(time.Since(attStart).Nanoseconds()) / 1e6
+						latencies.record("attempt", attMs)
 
 						switch res.outcome {
 						case outcomeCompleted:
 							if res.totalStocks == 23 && res.totalEvents == 92 {
 								completedCount.Add(1)
+								latencies.record("completed_lifecycle", attMs)
 							} else {
 								failedCount.Add(1)
+								t.Errorf("worker %d completed with invalid stock/event count: %d stocks, %d events", workerID, res.totalStocks, res.totalEvents)
 							}
 						case outcomeRejected:
 							rejectedCount.Add(1)
+							// Closed-loop backoff compliance: honor server Retry-After header
+							waitDur := time.Duration(res.retryAfterSec) * time.Second
+							remaining := tierDeadline.Sub(time.Now())
+							if waitDur > remaining || waitDur <= 0 {
+								// Cannot wait Retry-After within remaining tier budget: worker terminates cleanly
+								return
+							}
+							select {
+							case <-stopGate:
+								return
+							case <-time.After(waitDur):
+							}
 						case outcomeCancelled:
 							cancelledCount.Add(1)
+							return
 						case outcomeFailed:
 							failedCount.Add(1)
+							t.Errorf("worker %d encounter unexpected failure: %v", workerID, res.err)
+							return
 						}
 					}
 				}(w)
@@ -1052,7 +1212,7 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 			rejected := rejectedCount.Load()
 			failed := failedCount.Load()
 			cancelled := cancelledCount.Load()
-			peakCtx := peakContexts.Load()
+			peakCtx := tracker.peakCount()
 			_, peakSnaps := store.Inflight()
 
 			// Invariant assertions
@@ -1062,8 +1222,14 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 			if failed > 0 {
 				t.Fatalf("tier %d encountered %d failures", concurrency, failed)
 			}
-			if activeContexts.Load() != 0 {
-				t.Fatalf("tier %d leaked %d active contexts", concurrency, activeContexts.Load())
+			if tracker.activeCount() != 0 {
+				t.Fatalf("tier %d leaked %d active contexts", concurrency, tracker.activeCount())
+			}
+			if peakCtx > 32 {
+				t.Fatalf("tier %d peak admitted contexts %d exceeded ceiling 32", concurrency, peakCtx)
+			}
+			if concurrency <= 32 && peakCtx > int64(concurrency) {
+				t.Fatalf("tier %d peak admitted contexts %d exceeded concurrency %d", concurrency, peakCtx, concurrency)
 			}
 
 			wallSec := measuredDuration.Seconds()
@@ -1092,15 +1258,21 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 				PrepareP50Ms:             calculatePercentile(latencies.prepare, 0.50),
 				PrepareP95Ms:             calculatePercentile(latencies.prepare, 0.95),
 				PrepareP99Ms:             calculatePercentile(latencies.prepare, 0.99),
-				EvaluateP50Ms:            calculatePercentile(latencies.evaluate, 0.50),
-				EvaluateP95Ms:            calculatePercentile(latencies.evaluate, 0.95),
-				EvaluateP99Ms:            calculatePercentile(latencies.evaluate, 0.99),
-				ReleaseP50Ms:             calculatePercentile(latencies.release, 0.50),
-				ReleaseP95Ms:             calculatePercentile(latencies.release, 0.95),
-				ReleaseP99Ms:             calculatePercentile(latencies.release, 0.99),
-				LifecycleP50Ms:           calculatePercentile(latencies.lifecycle, 0.50),
-				LifecycleP95Ms:           calculatePercentile(latencies.lifecycle, 0.95),
-				LifecycleP99Ms:           calculatePercentile(latencies.lifecycle, 0.99),
+				EvaluateStockP50Ms:        calculatePercentile(latencies.evaluateStock, 0.50),
+				EvaluateStockP95Ms:        calculatePercentile(latencies.evaluateStock, 0.95),
+				EvaluateStockP99Ms:        calculatePercentile(latencies.evaluateStock, 0.99),
+				EvaluateBatchP50Ms:        calculatePercentile(latencies.evaluateBatch, 0.50),
+				EvaluateBatchP95Ms:        calculatePercentile(latencies.evaluateBatch, 0.95),
+				EvaluateBatchP99Ms:        calculatePercentile(latencies.evaluateBatch, 0.99),
+				ReleaseP50Ms:              calculatePercentile(latencies.release, 0.50),
+				ReleaseP95Ms:              calculatePercentile(latencies.release, 0.95),
+				ReleaseP99Ms:              calculatePercentile(latencies.release, 0.99),
+				AttemptP50Ms:              calculatePercentile(latencies.attempt, 0.50),
+				AttemptP95Ms:              calculatePercentile(latencies.attempt, 0.95),
+				AttemptP99Ms:              calculatePercentile(latencies.attempt, 0.99),
+				CompletedLifecycleP50Ms:   calculatePercentile(latencies.completedLifecycle, 0.50),
+				CompletedLifecycleP95Ms:   calculatePercentile(latencies.completedLifecycle, 0.95),
+				CompletedLifecycleP99Ms:   calculatePercentile(latencies.completedLifecycle, 0.99),
 				MemAllocBeforeBytes:      memBefore.Alloc,
 				MemAllocAfterBytes:       memAfter.Alloc,
 				MemAllocBytesDelta:       int64(memAfter.Alloc) - int64(memBefore.Alloc),
@@ -1111,14 +1283,17 @@ func TestStudySustainedLoadProfile(t *testing.T) {
 			}
 			results = append(results, runRes)
 
-			t.Logf("concurrency=%d completed=%d rejected=%d wall=%.2fs completed/s=%.2f lifecycle_p95=%.2fms",
-				concurrency, completed, rejected, wallSec, compPS, runRes.LifecycleP95Ms)
+			t.Logf("concurrency=%d completed=%d rejected=%d peak_ctx=%d wall=%.2fs completed/s=%.2f lifecycle_p95=%.2fms",
+				concurrency, completed, rejected, peakCtx, wallSec, compPS, runRes.CompletedLifecycleP95Ms)
+
+			// Prove fresh 32 retained contexts and 12 held batches capacity after tier
+			assertFullCapacityAndZeroLeaks(t, client, store, studyPayload)
 		})
 	}
 
 	sourceCommit := os.Getenv("SIGNALGEN_SOURCE_COMMIT")
 	if sourceCommit == "" {
-		sourceCommit = "47839331d625c19f61b1a5db646ff14faf0958a5"
+		sourceCommit = "58766cb23f539d9ece6583aad25744a1e5c52fd8"
 	}
 
 	report := map[string]any{

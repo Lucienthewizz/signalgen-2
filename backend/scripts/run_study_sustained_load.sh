@@ -10,6 +10,8 @@ if [ ! -f "$REPO_ROOT/backend/go.mod" ]; then
   exit 1
 fi
 
+export PYTHONPATH="$REPO_ROOT/backend/scripts:${PYTHONPATH:-}"
+
 IMAGE_REF="sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61"
 DOCKER_BIN="docker"
 DOCKER_CONTEXT="orbstack"
@@ -21,21 +23,9 @@ INSPECT_JSON=$($DOCKER_BIN --context "$DOCKER_CONTEXT" image inspect "$IMAGE_REF
 }
 
 python3 -c '
-import json, sys
-data = json.loads(sys.argv[1])[0]
-img_id = data.get("Id")
-if img_id != sys.argv[2]:
-    sys.stderr.write("Error: Image ID mismatch: " + str(img_id) + " != " + sys.argv[2] + "\n")
-    sys.exit(1)
-if data.get("Architecture") != "arm64":
-    sys.stderr.write("Error: Unexpected architecture: " + str(data.get("Architecture")) + "\n")
-    sys.exit(1)
-if data.get("Os") != "linux":
-    sys.stderr.write("Error: Unexpected OS: " + str(data.get("Os")) + "\n")
-    sys.exit(1)
-if data.get("Config", {}).get("OnBuild"):
-    sys.stderr.write("Error: Pinned image contains unexpected OnBuild triggers\n")
-    sys.exit(1)
+import sys
+from study_load_runner_helpers import validate_image_inspect
+validate_image_inspect(sys.argv[1], sys.argv[2])
 ' "$INSPECT_JSON" "$IMAGE_REF"
 
 MODULE_CACHE=$(go env GOMODCACHE)
@@ -47,54 +37,31 @@ fi
 EVIDENCE_OUT="$REPO_ROOT/docs/evidence/study-sustained-load-20261116.json"
 mkdir -p "$REPO_ROOT/docs/evidence"
 
-# Disposable tracked-source snapshot: export tracked backend source via git archive
 TMP_DIR=$(mktemp -d)
 CONTAINER_NAME="signalgen-study-sustained-$(date +%s)-$$"
 
 cleanup() {
-  $DOCKER_BIN --context "$DOCKER_CONTEXT" rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  python3 -c '
+import sys
+from study_load_runner_helpers import docker_cleanup_container
+docker_cleanup_container(sys.argv[1], sys.argv[2])
+' "$CONTAINER_NAME" "$DOCKER_CONTEXT" >/dev/null 2>&1 || true
   rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT INT TERM
 
-TREE_REF=$(git stash create 2>/dev/null || echo "")
-if [ -z "$TREE_REF" ]; then
-  TREE_REF="HEAD"
-fi
-git archive "$TREE_REF" backend | tar -x -C "$TMP_DIR"
-
-# Strip all .env files from the snapshot so none enter container
-find "$TMP_DIR/backend" -name ".env*" -delete
-
-# Verify exported snapshot has no credentials, no .env, and matches allowlist
+# Safe tracked-source snapshot: copy tracked backend files with lstat regular-file checks
+# and allowlist validation, excluding any .env or credentials.
 python3 -c '
-import os, sys
+import sys
 from pathlib import Path
-
-src = Path(sys.argv[1]) / "backend"
-allowed_exts = {".go", ".mod", ".sum", ".sh", ".py", ".sql", ".md", ".json", ".yml", ".yaml", ".txt", ".mjs", ".cjs"}
-disallowed_names = {".env", ".env.local", ".env.production", "localstack.db", "runtime.db"}
-
-total_bytes = 0
-for root, _, files in os.walk(src):
-    for f in files:
-        p = Path(root) / f
-        if f.startswith(".env") or f in disallowed_names or p.suffix in {".pem", ".key", ".sqlite", ".db"}:
-            sys.stderr.write(f"Error: Disallowed file in source snapshot: {p}\n")
-            sys.exit(1)
-        if p.suffix not in allowed_exts and not f.endswith("Dockerfile") and not "Dockerfile" in f and f != ".gitignore":
-            sys.stderr.write(f"Error: Extension not allowed in snapshot: {p}\n")
-            sys.exit(1)
-        sz = p.stat().st_size
-        if sz > 32 * 1024 * 1024:
-            sys.stderr.write(f"Error: Oversized file in snapshot: {p} ({sz} bytes)\n")
-            sys.exit(1)
-        total_bytes += sz
-
-if total_bytes > 64 * 1024 * 1024:
-    sys.stderr.write(f"Error: Total snapshot size exceeds 64MB: {total_bytes} bytes\n")
-    sys.exit(1)
-' "$TMP_DIR"
+from study_load_runner_helpers import safe_extract_tracked_source
+res = safe_extract_tracked_source(Path(sys.argv[1]), Path(sys.argv[2]))
+count = res["file_count"]
+size = res["total_bytes"]
+mhash = res["manifest_sha256"][:16]
+print(f"Exported {count} tracked files ({size} bytes), manifest hash: {mhash}")
+' "$REPO_ROOT" "$TMP_DIR"
 
 SOURCE_COMMIT=$(git rev-parse HEAD)
 
@@ -153,11 +120,12 @@ except subprocess.TimeoutExpired:
         CGO_ENABLED=0 go test ./internal/api/tests -run "^TestStudySustainedLoadProfile$" -v -count=1 &&
         cat /scratch/study-sustained-load-20261116.json
       '\''
-  ' > "$TMP_CONTAINER_OUT"
+  ' 2>&1 | tee "$TMP_CONTAINER_OUT"
 
-# Extract and validate JSON output
+# Extract and validate JSON output using study_load_runner_helpers
 python3 -c '
-import sys, json
+import json, sys
+from study_load_runner_helpers import validate_evidence_json
 
 content = sys.stdin.read()
 marker = "\"kind\": \"loopback_http_sustained_workload\""
@@ -172,33 +140,12 @@ if start == -1:
     sys.exit(1)
 
 json_text = content[start:].strip()
-data = json.loads(json_text)
-
-schema_ver = data.get("schema_version")
-if schema_ver != 3:
-    sys.stderr.write("Unexpected schema version: " + str(schema_ver) + "\n")
-    sys.exit(1)
-
-runs = data.get("runs", [])
-if len(runs) != 4:
-    sys.stderr.write("Expected 4 concurrency runs, got " + str(len(runs)) + "\n")
-    sys.exit(1)
-
-for r in runs:
-    conc = r.get("concurrency")
-    failed = r.get("failed", 0)
-    dur = r.get("measured_duration_ms", 0)
-    if failed > 0:
-        sys.stderr.write("Run concurrency " + str(conc) + " had unexpected failures: " + str(failed) + "\n")
-        sys.exit(1)
-    if dur < 4500:
-        sys.stderr.write("Run concurrency " + str(conc) + " measured duration < 4.5s: " + str(dur) + "ms\n")
-        sys.exit(1)
+data = validate_evidence_json(json_text)
 
 with open(sys.argv[1], "w") as f:
     json.dump(data, f, indent=2)
     f.write("\n")
-print(f"Successfully recorded verified sustained load evidence to {sys.argv[1]}")
 ' "$EVIDENCE_OUT" < "$TMP_CONTAINER_OUT"
 
+echo "Successfully recorded verified sustained load evidence to $EVIDENCE_OUT"
 echo "=== Sustained HTTP Signal-Study Load Workload Completed Successfully ==="

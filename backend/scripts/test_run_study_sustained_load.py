@@ -1,21 +1,34 @@
 #!/usr/bin/env python3
-"""Targeted preflight and fault unit tests for run_study_sustained_load.sh.
-Covers:
+"""Targeted preflight and fault unit tests for sustained load runner and helpers.
+Exercises production functions from study_load_runner_helpers:
 1. Working directory preflight: non-root directory exits with error.
-2. Pinned image identity / platform / OnBuild preflight validation.
-3. Source snapshot allowlist validation: disallows .env, credentials, runtime databases, oversized files.
-4. Evidence JSON schema and run validation.
-5. Exact container cleanup under simulated failure.
+2. validate_image_inspect: identity, platform, and untrusted triggers.
+3. safe_extract_tracked_source: safe path traversal, symlink rejection, allowlist checks.
+4. validate_evidence_json: schema, duration lower-bound, partition invariants, peak limits, finite numbers.
+5. docker_cleanup_container: bounded container removal under simulated failure.
 """
 
 import json
+import math
 import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# Add backend/scripts to sys.path
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent.parent
+import sys
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from study_load_runner_helpers import (
+    validate_image_inspect,
+    safe_extract_tracked_source,
+    validate_evidence_json,
+    docker_cleanup_container,
+)
 
 
 class TestRunStudySustainedLoad(unittest.TestCase):
@@ -30,117 +43,129 @@ class TestRunStudySustainedLoad(unittest.TestCase):
             self.assertNotEqual(res.returncode, 0)
             self.assertIn("Must run from repository root", res.stderr)
 
-    def test_image_inspection_preflight(self):
-        # Image validator rejects wrong architecture, missing ID, or OnBuild hooks
-        def validate(mock_inspect, expected_id):
-            data = json.loads(mock_inspect)[0]
-            if data.get("Id") != expected_id:
-                raise ValueError("Image ID mismatch")
-            if data.get("Architecture") != "arm64":
-                raise ValueError("Unexpected architecture")
-            if data.get("Os") != "linux":
-                raise ValueError("Unexpected OS")
-            if data.get("Config", {}).get("OnBuild"):
-                raise ValueError("Unexpected OnBuild")
-
+    def test_validate_image_inspect(self):
         valid_raw = json.dumps([
-            {"Id": "sha256:valid", "Architecture": "arm64", "Os": "linux", "Config": {}}
+            {"Id": "sha256:target_hash", "Architecture": "arm64", "Os": "linux", "Config": {}}
         ])
-        validate(valid_raw, "sha256:valid")
+        res = validate_image_inspect(valid_raw, "sha256:target_hash")
+        self.assertEqual(res.get("Id"), "sha256:target_hash")
 
-        # Wrong architecture must fail
+        # ID mismatch
+        with self.assertRaises(ValueError):
+            validate_image_inspect(valid_raw, "sha256:other_hash")
+
+        # Wrong architecture
         wrong_arch = json.dumps([
-            {"Id": "sha256:valid", "Architecture": "amd64", "Os": "linux", "Config": {}}
+            {"Id": "sha256:target_hash", "Architecture": "amd64", "Os": "linux", "Config": {}}
         ])
         with self.assertRaises(ValueError):
-            validate(wrong_arch, "sha256:valid")
+            validate_image_inspect(wrong_arch, "sha256:target_hash")
 
-        # OnBuild hook must fail
+        # Wrong OS
+        wrong_os = json.dumps([
+            {"Id": "sha256:target_hash", "Architecture": "arm64", "Os": "windows", "Config": {}}
+        ])
+        with self.assertRaises(ValueError):
+            validate_image_inspect(wrong_os, "sha256:target_hash")
+
+        # OnBuild trigger
         onbuild = json.dumps([
-            {"Id": "sha256:valid", "Architecture": "arm64", "Os": "linux", "Config": {"OnBuild": ["RUN something"]}}
+            {"Id": "sha256:target_hash", "Architecture": "arm64", "Os": "linux", "Config": {"OnBuild": ["RUN evil"]}}
         ])
         with self.assertRaises(ValueError):
-            validate(onbuild, "sha256:valid")
+            validate_image_inspect(onbuild, "sha256:target_hash")
 
-    def test_source_snapshot_allowlist(self):
+    def test_safe_extract_tracked_source(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            src = Path(tmpdir) / "backend"
-            src.mkdir()
-            (src / "valid.go").write_text("package main")
+            target = Path(tmpdir)
+            stats = safe_extract_tracked_source(REPO_ROOT, target)
+            self.assertGreater(stats["file_count"], 50)
+            self.assertGreater(stats["total_bytes"], 100000)
+            self.assertTrue(len(stats["manifest_sha256"]) == 64)
 
-            def check_dir(p):
-                allowed_exts = {".go", ".mod", ".sum", ".sh", ".py", ".sql", ".md", ".json", ".yml", ".yaml", ".txt"}
-                disallowed_names = {".env", ".env.local", ".env.production", "localstack.db", "runtime.db"}
-                total = 0
-                for root, _, files in os.walk(p):
-                    for f in files:
-                        cur = Path(root) / f
-                        if f.startswith(".env") or f in disallowed_names or cur.suffix in {".pem", ".key", ".sqlite", ".db"}:
-                            raise ValueError(f"Disallowed file: {cur}")
-                        if cur.suffix not in allowed_exts and not f.startswith("Dockerfile") and not f == "Go.Dockerfile":
-                            raise ValueError(f"Disallowed extension: {cur}")
-                        sz = cur.stat().st_size
-                        if sz > 32 * 1024 * 1024:
-                            raise ValueError(f"Oversized file: {cur}")
-                        total += sz
-                if total > 64 * 1024 * 1024:
-                    raise ValueError("Total size exceeds 64MB")
+            # Verify manifest exists and is valid JSON
+            manifest_p = target / "backend_snapshot_manifest.json"
+            self.assertTrue(manifest_p.exists())
+            manifest = json.loads(manifest_p.read_text())
+            self.assertIn("backend/go.mod", manifest)
 
-            check_dir(src)
+            # Verify no .env files were exported
+            for p in target.glob("**/*"):
+                self.assertFalse(p.name.startswith(".env"))
+                self.assertFalse(p.suffix in {".pem", ".key", ".db"})
 
-            # Test disallowed .env
-            env_file = src / ".env"
-            env_file.write_text("SECRET=123")
-            with self.assertRaises(ValueError):
-                check_dir(src)
-            env_file.unlink()
-
-            # Test disallowed .key
-            key_file = src / "test.key"
-            key_file.write_text("private-key")
-            with self.assertRaises(ValueError):
-                check_dir(src)
-            key_file.unlink()
-
-    def test_evidence_schema_validation(self):
+    def test_validate_evidence_json(self):
         valid_evidence = {
             "kind": "loopback_http_sustained_workload",
             "schema_version": 3,
             "timestamp": "2026-11-16T12:00:00Z",
             "measured_date": "2026-11-16",
             "runs": [
-                {"concurrency": 1, "failed": 0, "measured_duration_ms": 5000.0},
-                {"concurrency": 10, "failed": 0, "measured_duration_ms": 5000.0},
-                {"concurrency": 30, "failed": 0, "measured_duration_ms": 5000.0},
-                {"concurrency": 40, "failed": 0, "measured_duration_ms": 5000.0},
+                {
+                    "concurrency": 1,
+                    "measured_duration_ms": 5010.0,
+                    "attempts": 100,
+                    "completed": 100,
+                    "rejected": 0,
+                    "failed": 0,
+                    "cancelled": 0,
+                    "max_inflight_contexts": 1,
+                    "max_inflight_snapshots": 10,
+                },
+                {
+                    "concurrency": 40,
+                    "measured_duration_ms": 5050.0,
+                    "attempts": 500,
+                    "completed": 450,
+                    "rejected": 50,
+                    "failed": 0,
+                    "cancelled": 0,
+                    "max_inflight_contexts": 32,
+                    "max_inflight_snapshots": 120,
+                },
             ]
         }
+        res = validate_evidence_json(json.dumps(valid_evidence))
+        self.assertEqual(res["schema_version"], 3)
 
-        def validate_schema(data):
-            if data.get("schema_version") != 3:
-                raise ValueError("Wrong schema version")
-            runs = data.get("runs", [])
-            if len(runs) != 4:
-                raise ValueError("Expected 4 runs")
-            for r in runs:
-                if r.get("failed", 0) > 0:
-                    raise ValueError("Unexpected failure in run")
-                if r.get("measured_duration_ms", 0) < 4500:
-                    raise ValueError("Duration too short")
-
-        validate_schema(valid_evidence)
-
-        # Failure count > 0 must fail
-        failing_evidence = json.loads(json.dumps(valid_evidence))
-        failing_evidence["runs"][0]["failed"] = 1
+        # Fail on sub-5s duration
+        short_run = json.loads(json.dumps(valid_evidence))
+        short_run["runs"][0]["measured_duration_ms"] = 4000.0
         with self.assertRaises(ValueError):
-            validate_schema(failing_evidence)
+            validate_evidence_json(json.dumps(short_run))
 
-        # Short duration must fail
-        short_evidence = json.loads(json.dumps(valid_evidence))
-        short_evidence["runs"][1]["measured_duration_ms"] = 100.0
+        # Fail on peak contexts > 32
+        bad_ctx = json.loads(json.dumps(valid_evidence))
+        bad_ctx["runs"][1]["max_inflight_contexts"] = 33
         with self.assertRaises(ValueError):
-            validate_schema(short_evidence)
+            validate_evidence_json(json.dumps(bad_ctx))
+
+        # Fail on partition mismatch
+        mismatch = json.loads(json.dumps(valid_evidence))
+        mismatch["runs"][0]["completed"] = 99
+        with self.assertRaises(ValueError):
+            validate_evidence_json(json.dumps(mismatch))
+
+        # Fail on failed > 0
+        has_failed = json.loads(json.dumps(valid_evidence))
+        has_failed["runs"][0]["failed"] = 1
+        with self.assertRaises(ValueError):
+            validate_evidence_json(json.dumps(has_failed))
+
+        # Fail on NaN
+        has_nan = json.loads(json.dumps(valid_evidence))
+        has_nan["runs"][0]["throughput_completed_per_sec"] = float("nan")
+        with self.assertRaises(ValueError):
+            validate_evidence_json(json.dumps(has_nan))
+
+    def test_docker_cleanup_container(self):
+        # Empty container name returns True safely
+        self.assertTrue(docker_cleanup_container(""))
+
+        # Non-existent container removal with short timeout completes without uncaught exception
+        res = docker_cleanup_container("nonexistent-test-container-99999", timeout=2)
+        # returncode is either 0 or False on non-existent, but must not crash
+        self.assertIsInstance(res, bool)
 
 
 if __name__ == "__main__":
