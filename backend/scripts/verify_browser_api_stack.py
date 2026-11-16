@@ -1,6 +1,7 @@
 """Full browser UI + Worker/WASM + native IndexedDB to actual packaged API with disposable PostgreSQL.
 Bounded container isolation; no published ports, ambient credentials, host Chrome, or external network.
 """
+import base64
 import hashlib
 import io
 import json
@@ -27,6 +28,7 @@ INPUTS = [
     "backend/go.mod", "backend/go.sum", "backend/contract.go", "backend/openapi.yaml",
     "supabase/migrations", "supabase/tests"
 ]
+APPROVED_MANIFEST = Path("/var/folders/kg/_nf5wv453qz03_sf7b6pfxcw0000gn/T/signalgen-approved-linux-build-inputs-0q32sgev/manifest.json")
 
 
 def call(args, timeout=60):
@@ -67,14 +69,17 @@ def unpack(raw, allowed=None):
         raise ValueError("Oversized artifact archive")
     with tarfile.open(fileobj=io.BytesIO(raw)) as archive:
         for member in archive:
-            path = Path(member.name)
+            name = member.name.lstrip("./")
+            if not name or (member.isdir() and member.name in {".", "./"}):
+                continue
+            path = Path(name)
             if (path.is_absolute() or ".." in path.parts or not member.isfile() or
-                    member.name in result or not 0 < member.size <= 32 * 1024 * 1024 or
-                    (allowed is not None and member.name not in allowed)):
-                raise ValueError("Unexpected artifact path/type/size")
-            result[member.name] = archive.extractfile(member).read()
+                    name in result or not 0 < member.size <= 32 * 1024 * 1024 or
+                    (allowed is not None and name not in allowed)):
+                raise ValueError("Unexpected artifact path/type/size: " + member.name)
+            result[name] = archive.extractfile(member).read()
     if allowed is not None and set(result) != set(allowed):
-        raise ValueError("Missing named artifact")
+        raise ValueError(f"Missing named artifact: expected {allowed}, got {set(result)}")
     return result
 
 
@@ -132,44 +137,110 @@ def cleanup_containers(names):
             raise RuntimeError(message)
 
 
-def find_toolchain_inputs():
-    """Locate pre-existing node_modules with Playwright 1.64.1 and built dist."""
-    node_modules_candidates = [
+def verify_approved_build_inputs(manifest_path, lockfile_path):
+    """Verify lockfile integrity and approved archive SRI hashes before extraction."""
+    manifest_path = Path(manifest_path)
+    lockfile_path = Path(lockfile_path)
+    if not manifest_path.is_file():
+        raise FileNotFoundError("Approved build inputs manifest not found: " + str(manifest_path))
+    if not lockfile_path.is_file():
+        raise FileNotFoundError("Frontend lockfile not found: " + str(lockfile_path))
+
+    lock_data = lockfile_path.read_bytes()
+    lock_hash = hashlib.sha256(lock_data).hexdigest()
+    manifest = json.loads(manifest_path.read_text())
+    if lock_hash != manifest.get("lockfile_sha256"):
+        raise ValueError("Lockfile SHA256 mismatch against coordinator manifest")
+
+    lock = json.loads(lock_data.decode("utf-8"))
+    verified_packages = []
+    for pkg in manifest["packages"]:
+        key = "node_modules/" + pkg["package"]
+        entry = lock.get("packages", {}).get(key)
+        if not entry:
+            raise ValueError("Missing lockfile entry for approved package: " + key)
+        if entry.get("integrity") != pkg["integrity"] or entry.get("version") != pkg["version"]:
+            raise ValueError("Package integrity/version mismatch in lockfile: " + key)
+
+        archive = Path(pkg["archive"])
+        if not archive.is_file():
+            raise FileNotFoundError("Approved package archive not found: " + str(archive))
+        data = archive.read_bytes()
+        if len(data) != pkg["bytes"]:
+            raise ValueError(f"Archive size mismatch for {pkg['package']}: expected {pkg['bytes']}, got {len(data)}")
+        sha256 = hashlib.sha256(data).hexdigest()
+        if sha256 != pkg["sha256"]:
+            raise ValueError(f"Archive SHA256 mismatch for {pkg['package']}")
+        sri = "sha512-" + base64.b64encode(hashlib.sha512(data).digest()).decode("utf-8")
+        if sri != pkg["integrity"]:
+            raise ValueError(f"Archive SRI mismatch for {pkg['package']}")
+        verified_packages.append({
+            "package": pkg["package"],
+            "version": pkg["version"],
+            "sha256": sha256,
+            "bytes": len(data),
+            "archive": str(archive),
+        })
+    return verified_packages
+
+
+def extract_approved_package(archive_path, dest_dir, max_file_size=32*1024*1024, max_cumulative=64*1024*1024):
+    """Safely extract tar.gz npm package under strict bounds (package/ regular files only)."""
+    archive_path = Path(archive_path)
+    dest_dir = Path(dest_dir)
+    total_size = 0
+    extracted = set()
+
+    with tarfile.open(archive_path, "r:gz") as tar:
+        for member in tar:
+            if not member.name.startswith("package/"):
+                raise ValueError("Archive entry outside package/ root: " + member.name)
+            rel = member.name[len("package/"):]
+            if not rel:
+                continue
+            path = Path(rel)
+            if path.is_absolute() or ".." in path.parts:
+                raise ValueError("Traversal path in archive: " + rel)
+            if not (member.isfile() or member.isdir()):
+                raise ValueError("Forbidden member type (symlink/device/fifo): " + rel)
+            if member.isfile():
+                if member.size > max_file_size or member.size < 0:
+                    raise ValueError(f"Oversized member in archive: {rel} ({member.size} bytes)")
+                total_size += member.size
+                if total_size > max_cumulative:
+                    raise ValueError("Cumulative archive size limit exceeded")
+            if rel in extracted:
+                raise ValueError("Duplicate entry in archive: " + rel)
+            extracted.add(rel)
+
+            target = dest_dir / rel
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+            elif member.isfile():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with tar.extractfile(member) as f_in, open(target, "wb") as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+                target.chmod(member.mode)
+
+
+def find_base_node_modules():
+    """Locate pre-existing portable node_modules with Playwright 1.64.1."""
+    candidates = [
         ROOT / "frontend/web/node_modules",
+        ROOT.parent / "browser-regression-integration/frontend/web/node_modules",
         ROOT.parent / "frontend/web/node_modules",
         Path("/Users/lucienyudistirapurnawarman/Documents/Kuliah/signalgen-2/signalgen-2/frontend/web/node_modules"),
-        ROOT.parent / "browser-regression-integration/frontend/web/node_modules",
     ]
-    node_modules_path = None
-    for candidate in node_modules_candidates:
+    for candidate in candidates:
         pw_pkg = candidate / "playwright/package.json"
         if pw_pkg.is_file():
             try:
                 pkg_data = json.loads(pw_pkg.read_text())
                 if pkg_data.get("version") == "1.64.1":
-                    node_modules_path = candidate
-                    break
+                    return candidate
             except Exception:
                 pass
-    if not node_modules_path:
-        raise FileNotFoundError("Could not find local node_modules with Playwright 1.64.1")
-
-    dist_candidates = [
-        ROOT / "frontend/web/dist",
-        Path("/Users/lucienyudistirapurnawarman/Documents/Kuliah/signalgen-2/signalgen-2/frontend/web/dist"),
-        ROOT.parent / "browser-regression-integration/frontend/web/dist",
-    ]
-    dist_path = None
-    for candidate in dist_candidates:
-        index_html = candidate / "index.html"
-        wasm_file = candidate / "wasm/signalgen_core.wasm"
-        if index_html.is_file() and wasm_file.is_file():
-            dist_path = candidate
-            break
-    if not dist_path:
-        raise FileNotFoundError("Could not find local built frontend distribution directory")
-
-    return node_modules_path, dist_path
+    raise FileNotFoundError("Could not find local node_modules with Playwright 1.64.1")
 
 
 def run():
@@ -187,15 +258,17 @@ def run():
     if pg_img["Config"].get("Entrypoint") != ["docker-entrypoint.sh"] or pg_img["Config"].get("Cmd") != ["postgres"]:
         raise ValueError("Unexpected Postgres image configuration")
 
-    node_modules_dir, dist_dir = find_toolchain_inputs()
+    # Phase 0: Reverify 4 approved Linux build packages against package-lock.json
+    lockfile_path = ROOT / "frontend/web/package-lock.json"
+    approved_packages = verify_approved_build_inputs(APPROVED_MANIFEST, lockfile_path)
+
+    base_node_modules = find_base_node_modules()
 
     scratch = Path(tempfile.mkdtemp(prefix="signalgen-browser-api-"))
     scratch.chmod(0o700)
     source = scratch / "source"
-    output_dir = scratch / "output"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_dir.chmod(0o777)
 
+    # Tracked source snapshot for backend
     paths = call(["git", "ls-files", *INPUTS]).decode().splitlines()
     paths += ["backend/scripts/localstack/main.go", "backend/scripts/localstack/main_test.go"]
     hashes, total = {}, 0
@@ -227,7 +300,7 @@ def run():
         return call(args, timeout=seconds)
 
     try:
-        print("PHASE 1: Bounded offline compile/vet/unit for Go helper", file=sys.stderr)
+        print("PHASE 1: Bounded offline Go compile & WASM core build", file=sys.stderr)
         cache = call(["go", "env", "GOMODCACHE"]).decode().strip()
         build = bounded(prefix + "-build", GO, [(source, "/source"), (cache, "/gomod")],
                         user="65534:65534", memory="2g", scratch=2048)
@@ -241,21 +314,106 @@ go vet ./scripts/localstack >&2
 go test ./scripts/localstack >&2
 go build -trimpath -o /scratch/out/localstack ./scripts/localstack
 go build -trimpath -o /scratch/out/schematest ./cmd/schematest
-tar -C /scratch/out -cf - localstack schematest main.go main_test.go'
+GOOS=js GOARCH=wasm go build -trimpath -o /scratch/out/signalgen_core.wasm ./cmd/wasm
+cp /usr/local/go/lib/wasm/wasm_exec.js /scratch/out/wasm_exec.js
+go run ./cmd/wasmmanifest --wasm /scratch/out/signalgen_core.wasm --runtime /scratch/out/wasm_exec.js --output /scratch/out/signalgen_core.manifest.json
+tar -C /scratch/out -cf - localstack schematest main.go main_test.go signalgen_core.wasm wasm_exec.js signalgen_core.manifest.json'
 """
         artifacts = unpack(execute(build + ["/bin/sh", "-ec", script], 375),
-                           {"localstack", "schematest", "main.go", "main_test.go"})
+                           {"localstack", "schematest", "main.go", "main_test.go",
+                            "signalgen_core.wasm", "wasm_exec.js", "signalgen_core.manifest.json"})
         tools = scratch / "tools"
         tools.mkdir()
-        for name, data in artifacts.items():
-            if name.endswith(".go"):
-                continue
+        for name in ["localstack", "schematest"]:
+            data = artifacts[name]
             if not data.startswith(b"\x7fELF"):
-                raise ValueError("Non-ELF artifact")
+                raise ValueError("Non-ELF artifact: " + name)
             (tools / name).write_bytes(data)
             (tools / name).chmod(0o555)
 
-        print("PHASE 2: Synthetic 23-stock published archive", file=sys.stderr)
+        # Verify WASM boundary markers
+        wasm_file = scratch / "signalgen_core.wasm"
+        wasm_file.write_bytes(artifacts["signalgen_core.wasm"])
+        boundary_check = subprocess.run(
+            ["bash", str(ROOT / "backend/scripts/verify_wasm_boundary.sh"), str(wasm_file)],
+            capture_output=True, text=True, check=True
+        )
+        print("WASM Boundary Check: " + boundary_check.stdout.strip(), file=sys.stderr)
+
+        print("PHASE 2: Safe dependency extraction and offline frontend rebuild", file=sys.stderr)
+        deps_dir = scratch / "deps/node_modules"
+        deps_dir.parent.mkdir(parents=True, exist_ok=True)
+        # Fast copy-on-write APFS clone of portable node_modules
+        subprocess.run(["cp", "-Rc", str(base_node_modules), str(deps_dir)], check=True)
+
+        # Extract 4 approved Linux packages into own dependency snapshot
+        for pkg in approved_packages:
+            extract_dest = deps_dir / pkg["package"]
+            extract_dest.mkdir(parents=True, exist_ok=True)
+            extract_approved_package(pkg["archive"], extract_dest)
+
+        # Clean tracked frontend source snapshot
+        web_source = scratch / "web_source"
+        web_source.mkdir(parents=True, exist_ok=True)
+        tracked_web = call(["git", "ls-files", "frontend/web"]).decode().splitlines()
+        for rel in tracked_web:
+            src = ROOT / rel
+            sub = rel[len("frontend/web/"):]
+            dst = web_source / sub
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dst)
+
+        # Place fresh matching WASM runtime assets in public/wasm
+        wasm_public = web_source / "public/wasm"
+        wasm_public.mkdir(parents=True, exist_ok=True)
+        for w_asset in ["signalgen_core.wasm", "wasm_exec.js", "signalgen_core.manifest.json"]:
+            (wasm_public / w_asset).write_bytes(artifacts[w_asset])
+
+        # Pre-create empty node_modules mountpoint inside web_source
+        (web_source / "node_modules").mkdir(parents=True, exist_ok=True)
+
+        # Offline frontend build container
+        pw_build_mounts = [
+            (str(web_source), "/app", True),
+            (str(deps_dir), "/app/node_modules", True),
+        ]
+        pw_build_cmd = bounded_playwright(
+            prefix + "-fe-build", PLAYWRIGHT, pw_build_mounts, network="none", user="1001:1001", memory="2g", scratch=1024, shm=256
+        )
+        fe_build_script = """mkdir -p /scratch/dist /scratch/tmp
+exec env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/scratch TMPDIR=/scratch/tmp timeout 240 /bin/sh -ec '
+cd /app
+node ./node_modules/vite/bin/vite.js build --outDir /scratch/dist > /scratch/vite.log 2>&1 || (cat /scratch/vite.log >&2 && exit 1)
+tar -C /scratch/dist -cf - .'
+"""
+        dist_tar = execute(pw_build_cmd + ["/bin/sh", "-ec", fe_build_script], 260)
+        dist_dir = scratch / "dist"
+        dist_dir.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(fileobj=io.BytesIO(dist_tar)) as archive:
+            for member in archive:
+                path = Path(member.name)
+                if path.is_absolute() or ".." in path.parts:
+                    raise ValueError("Unsafe member in dist tar: " + member.name)
+                if member.isdir():
+                    (dist_dir / member.name).mkdir(parents=True, exist_ok=True)
+                elif member.isfile():
+                    target = dist_dir / member.name
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with archive.extractfile(member) as f_in, open(target, "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+
+        # Verify essential dist outputs
+        if not (dist_dir / "index.html").is_file() or not (dist_dir / "wasm/signalgen_core.wasm").is_file():
+            raise FileNotFoundError("Frontend dist missing index.html or wasm artifact")
+
+        dist_hashes = {}
+        for root_p, _, files in os.walk(dist_dir):
+            for f in sorted(files):
+                full_p = Path(root_p) / f
+                rel_p = str(full_p.relative_to(dist_dir))
+                dist_hashes[rel_p] = hashlib.sha256(full_p.read_bytes()).hexdigest()
+
+        print("PHASE 3: Synthetic 23-stock published archive", file=sys.stderr)
         fixture = unpack(execute(bounded(prefix + "-archive", API, [(tools, "/tools")]) +
                                  ["/tools/localstack", "archive"]))
         store = scratch / "store"
@@ -267,7 +425,7 @@ tar -C /scratch/out -cf - localstack schematest main.go main_test.go'
             path.write_bytes(data)
             path.chmod(0o444)
 
-        print("PHASE 3: Disposable PostgreSQL & 14 migrations/3 policy checks", file=sys.stderr)
+        print("PHASE 4: Disposable PostgreSQL & 14 migrations/3 policy checks", file=sys.stderr)
         pgname = prefix + "-pg"
         pgcmd = bounded(pgname, PG, user="999:999", scratch=512)
         pgcmd.insert(2, "-d")
@@ -308,7 +466,7 @@ exec postgres -D /scratch/pgdata -h 127.0.0.1 -k /scratch -c shared_buffers=32MB
         seed = execute(bounded(prefix + "-seed", API, common, network=network) +
                        ["/tools/localstack", "bootstrap"]).decode()
 
-        print("PHASE 4: Actual API & mock identity startup in shared network namespace", file=sys.stderr)
+        print("PHASE 5: Actual API & mock identity startup in shared network namespace", file=sys.stderr)
         for mode in ["identity", "api"]:
             args = bounded(prefix + "-" + mode, API,
                            common + ([(store, "/store")] if mode == "api" else []), network=network)
@@ -325,13 +483,12 @@ exec postgres -D /scratch/pgdata -h 127.0.0.1 -k /scratch -c shared_buffers=32MB
                     raise RuntimeError("Packaged API readiness did not pass in network-none namespace")
                 time.sleep(0.2)
 
-        print("PHASE 5: Browser journey execution in official Playwright container", file=sys.stderr)
+        print("PHASE 6: Browser journey execution in official Playwright container (no host /output mount)", file=sys.stderr)
         tests_dir = ROOT / "frontend/web/tests"
         pw_mounts = [
-            (str(node_modules_dir), "/node_modules", True),
+            (str(deps_dir), "/node_modules", True),
             (str(dist_dir), "/dist", True),
             (str(tests_dir), "/tests", True),
-            (str(output_dir), "/output", False),
         ]
         pw_cmd = bounded_playwright(
             prefix + "-browser", PLAYWRIGHT, pw_mounts, network=network, user="1001:1001", memory="2g", scratch=512, shm=256
@@ -343,31 +500,32 @@ exec postgres -D /scratch/pgdata -h 127.0.0.1 -k /scratch -c shared_buffers=32MB
             "HOME=/scratch",
             "TMPDIR=/scratch",
             "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
-            "node",
-            "/tests/browser/real-api-study.runner.mjs",
-            "--dist", "/dist",
-            "--port", "5174",
-            "--api", "http://127.0.0.1:8080",
-            "--output", "/output"
+            "/bin/sh", "-ec",
+            """mkdir -p /scratch/output
+node /tests/browser/real-api-study.runner.mjs --dist /dist --port 5174 --api http://127.0.0.1:8080 --output /scratch/output > /scratch/runner.log 2>&1 || (cat /scratch/runner.log >&2 && exit 1)
+tar -C /scratch/output -cf - browser-real-api-result.json browser-real-api-desktop-dark-screening.png browser-real-api-mobile-dark-screening.png browser-real-api-desktop-light-backtest.png browser-real-api-mobile-light-backtest.png
+"""
         ]
         raw_output = execute(pw_cmd + pw_runner_script, 240)
-        browser_report = json.loads(raw_output)
+        allowed_artifacts = {
+            "browser-real-api-result.json",
+            "browser-real-api-desktop-dark-screening.png",
+            "browser-real-api-mobile-dark-screening.png",
+            "browser-real-api-desktop-light-backtest.png",
+            "browser-real-api-mobile-light-backtest.png",
+        }
+        browser_artifacts = unpack(raw_output, allowed_artifacts)
+        browser_report = json.loads(browser_artifacts["browser-real-api-result.json"].decode("utf-8"))
 
         evidence_dir = ROOT / "docs/evidence"
         evidence_dir.mkdir(parents=True, exist_ok=True)
 
         copied_screenshots = []
-        for png in output_dir.glob("*.png"):
-            dest_png = evidence_dir / png.name
-            shutil.copyfile(png, dest_png)
-            copied_screenshots.append(str(dest_png.relative_to(ROOT)))
-
-        dist_hashes = {}
-        for root_p, _, files in os.walk(dist_dir):
-            for f in sorted(files):
-                full_p = Path(root_p) / f
-                rel_p = str(full_p.relative_to(dist_dir))
-                dist_hashes[rel_p] = hashlib.sha256(full_p.read_bytes()).hexdigest()
+        for name, data in browser_artifacts.items():
+            if name.endswith(".png"):
+                dest_png = evidence_dir / name
+                dest_png.write_bytes(data)
+                copied_screenshots.append(str(dest_png.relative_to(ROOT)))
 
         evidence = {
             "date": "2026-11-16",
@@ -393,16 +551,22 @@ exec postgres -D /scratch/pgdata -h 127.0.0.1 -k /scratch -c shared_buffers=32MB
                 "api_user": "10001:10001",
                 "pg_user": "999:999",
                 "shared_memory": "private bounded /dev/shm 256MB tmpfs (no ipc=host)",
+                "output_mount": "none (written to container tmpfs /scratch, unpacked with bounded validation)",
+            },
+            "build_inputs": {
+                "approved_manifest": str(APPROVED_MANIFEST),
+                "packages": approved_packages,
             },
             "schema_check": schema_result.strip(),
             "bootstrap": seed.strip(),
             "browser_report": browser_report,
             "screenshots": copied_screenshots,
             "dist_source": {
-                "path": str(dist_dir),
+                "path": "scratch/dist (offline container build)",
                 "total_files": len(dist_hashes),
                 "wasm_sha256": dist_hashes.get("wasm/signalgen_core.wasm"),
                 "index_sha256": dist_hashes.get("index.html"),
+                "manifest_sha256": dist_hashes.get("wasm/signalgen_core.manifest.json"),
             },
             "verified_boundaries": {
                 "mock_upstream_idp_only": True,

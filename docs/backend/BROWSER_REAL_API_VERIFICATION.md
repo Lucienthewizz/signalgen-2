@@ -39,6 +39,8 @@ Each image is inspected prior to execution to verify:
 ## Process & Security Isolation
 
 - **File System**: Roots are mounted read-only (`--read-only`). Toolchain caches, test files, and built assets are mounted read-only. Writable paths are restricted to private, bounded tmpfs mounts (`/scratch:rw,exec,size=512m` and `/dev/shm:rw,exec,size=256m`).
+- **Eliminated Host Output Mount**: No host output directory is mounted into the container. The Playwright container writes artifacts to its private tmpfs `/scratch/output`, and exports them via a stdout archive. The parent unpacks and validates each file with strict path, mode, and size checks before promoting them to `docs/evidence/`.
+- **Offline Frontend Build**: Frontend assets and WASM are compiled in isolated Linux containers using a bounded temporary snapshot containing the four coordinator-approved, SRI-verified Linux ARM64 native packages (`@esbuild/linux-arm64`, `@rollup/rollup-linux-arm64-gnu`, `@tailwindcss/oxide-linux-arm64-gnu`, `lightningcss-linux-arm64-gnu`). No network calls or npm lifecycle scripts are executed.
 - **Privileges**: Dropped capabilities (`--cap-drop ALL`), no privilege elevation (`--security-opt no-new-privileges`), and non-root execution (`1001:1001` for Playwright, `10001:10001` for API, `999:999` for PostgreSQL).
 - **Environment**: Child processes run in sanitized environments using `env -i` with strict allowlists (`PATH`, `HOME`, `TMPDIR`, and `PLAYWRIGHT_BROWSERS_PATH`). No host credential directories, `.env` files, or Docker sockets enter any container.
 - **Cleanup**: Container names are uniquely prefixed and tracked. On error, timeout, or completion, all containers are removed in reverse order using `docker rm -f`.
@@ -47,7 +49,7 @@ Each image is inspected prior to execution to verify:
 
 ### 1. Preflight and Fault Tests
 
-Run the offline unit tests verifying isolation flags, image inspection checks, archive unpack bounds, and container cleanup behavior:
+Run the offline unit tests verifying isolation flags, image inspection checks, package extraction bounds, archive unpack guards, and container cleanup behavior:
 
 ```sh
 python3 backend/scripts/test_browser_api_stack.py
@@ -62,20 +64,24 @@ PYTHONDONTWRITEBYTECODE=1 python3 backend/scripts/verify_browser_api_stack.py
 ```
 
 This command will:
-1. Inspect image digests and verify protected backend source hashes against base commit `baf888ac34e7afaa7d8495e4adfc40a4ddc23a9a`.
-2. Compile and vet `localstack` and `schematest` inside the isolated Go container.
-3. Build the synthetic 23-stock published archive.
-4. Start disposable PostgreSQL, run 14 migrations and 3 policy checks, and bootstrap disposable Pro users `stack-0@test.invalid` and `stack-1@test.invalid`.
-5. Launch the actual Go API and mock identity stub in the shared container namespace.
-6. Launch the official Playwright container with headless Chromium:
+1. Inspect image digests and verify approved Linux build packages against `frontend/web/package-lock.json`.
+2. Compile and vet `localstack`, `schematest`, and `signalgen_core.wasm` in the isolated Go container, extract `wasm_exec.js`, generate `signalgen_core.manifest.json`, and verify boundaries with `verify_wasm_boundary.sh`.
+3. Safely extract approved Linux ARM64 packages into a temporary dependency snapshot without lifecycle scripts.
+4. Build the latest frontend offline inside the Playwright container (`vite build`).
+5. Build the synthetic 23-stock published archive.
+6. Start disposable PostgreSQL, run 14 migrations and 3 policy checks, and bootstrap disposable Pro users `stack-0@test.invalid` and `stack-1@test.invalid`.
+7. Launch the actual Go API and mock identity stub in the shared container namespace.
+8. Launch the official Playwright container with headless Chromium:
    - Perform real UI login and establish an app session.
-   - Screen historical signals across 23 stocks and verify no auto outcomes.
+   - Screen historical signals across 23 stocks (10/10/3 batches, 12 matched, 11 unmatched) and verify no auto outcomes.
+   - Verify deterministic Stop action, preventing late rows and enabling UI restart.
    - Run signal study evaluation with real Go/WASM computation and IndexedDB storage.
-   - Assert owner isolation, capacity limiting (HTTP 429), and Stop/retry recovery.
-   - Export and verify signal details CSV.
+   - Verify populated Target reached rate statistics (no "Unavailable" warning).
+   - Verify IndexedDB records in `signalgen-study-temporary-1` and full canonical CSV equality against oracle.
+   - Assert owner isolation, capacity limiting (HTTP 429), and deterministic Stop/retry recovery.
    - Capture desktop and mobile screenshots across light and dark themes.
-7. Save evidence to `docs/evidence/browser-real-api-20261116.json` and copy screenshots to `docs/evidence/`.
-8. Clean up all created containers and temporary directories.
+9. Promote verified artifacts to `docs/evidence/` and record evidence JSON.
+10. Clean up all created containers and temporary directories.
 
 ## Associated Evidence
 

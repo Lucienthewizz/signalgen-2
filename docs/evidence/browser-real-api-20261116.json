@@ -21,15 +21,60 @@
     "playwright_user": "1001:1001 (pwuser)",
     "api_user": "10001:10001",
     "pg_user": "999:999",
-    "shared_memory": "private bounded /dev/shm 256MB tmpfs (no ipc=host)"
+    "shared_memory": "private bounded /dev/shm 256MB tmpfs (no ipc=host)",
+    "output_mount": "none (written to container tmpfs /scratch, unpacked with bounded validation)"
+  },
+  "build_inputs": {
+    "approved_manifest": "/var/folders/kg/_nf5wv453qz03_sf7b6pfxcw0000gn/T/signalgen-approved-linux-build-inputs-0q32sgev/manifest.json",
+    "packages": [
+      {
+        "package": "@esbuild/linux-arm64",
+        "version": "0.25.12",
+        "sha256": "d5e01d210e026823d559e2b82554cdcdab6fd87c4a57b519b392ef183c1f87fd",
+        "bytes": 4042485,
+        "archive": "/var/folders/kg/_nf5wv453qz03_sf7b6pfxcw0000gn/T/signalgen-approved-linux-build-inputs-0q32sgev/esbuild-linux-arm64-0.25.12.tgz"
+      },
+      {
+        "package": "@rollup/rollup-linux-arm64-gnu",
+        "version": "4.63.2",
+        "sha256": "86f08e512601b3d061f52f8e5bed9fdf8657fe086d42d6038fc86dcdcb98118e",
+        "bytes": 869991,
+        "archive": "/var/folders/kg/_nf5wv453qz03_sf7b6pfxcw0000gn/T/signalgen-approved-linux-build-inputs-0q32sgev/rollup-rollup-linux-arm64-gnu-4.63.2.tgz"
+      },
+      {
+        "package": "@tailwindcss/oxide-linux-arm64-gnu",
+        "version": "4.3.3",
+        "sha256": "a5e2a0e1f93586662f459a374fd9edc06713bbd6bf2b9a2cd1caf2856cdd8126",
+        "bytes": 1173794,
+        "archive": "/var/folders/kg/_nf5wv453qz03_sf7b6pfxcw0000gn/T/signalgen-approved-linux-build-inputs-0q32sgev/tailwindcss-oxide-linux-arm64-gnu-4.3.3.tgz"
+      },
+      {
+        "package": "lightningcss-linux-arm64-gnu",
+        "version": "1.32.0",
+        "sha256": "06d493826b5f26c3cdfd6c08ef6414cec5d4650a7a7933ef67e78b3f738648f5",
+        "bytes": 3584504,
+        "archive": "/var/folders/kg/_nf5wv453qz03_sf7b6pfxcw0000gn/T/signalgen-approved-linux-build-inputs-0q32sgev/lightningcss-linux-arm64-gnu-1.32.0.tgz"
+      }
+    ]
   },
   "schema_check": "schema test passed: 14 migrations, 3 policy checks",
   "bootstrap": "PASS disposable DB seeded: two dummy owners, server-owned Pro subscriptions, 23 synthetic catalog rows",
   "browser_report": {
     "status": "pass",
+    "browser_info": {
+      "version": "156.0.8078.80",
+      "hasShm": true,
+      "sandbox": "standard-unprivileged-user-namespaces"
+    },
+    "assertion_counts": {
+      "http_assertions_count": 20,
+      "browser_ui_assertions_count": 43,
+      "total_assertions_count": 63,
+      "network_requests_count": 181
+    },
     "reports": {
       "saved_rule": {
-        "id": "rule_3960f39a0249a367900d75e0",
+        "id": "rule_18b6c31e640748ce2d3cf2ab",
         "hash": "sha256:042fad7ed869c3f7ecb215af2d090b173a133aed5925a457842734af33171678"
       },
       "api_owner_isolation": "verified: 404 foreign rule, 403 session mismatch",
@@ -37,11 +82,18 @@
       "historical_screening": {
         "stocks": 23,
         "batches": 3,
+        "batch_coverage": "10/10/3 (total 23 stocks)",
         "matched_stocks": 12,
         "unmatched_stocks": 11,
         "signals_count": 48,
         "auto_outcomes": false,
         "boundary": "screened-only, no auto outcomes"
+      },
+      "stop_action": {
+        "verified": true,
+        "stopped_cleanly": true,
+        "late_rows_prevented": true,
+        "restart_enabled": true
       },
       "evaluation_and_wasm": {
         "method": "target",
@@ -49,30 +101,43 @@
         "signals_evaluated": 48,
         "csv_filename": "signal-study-events.csv",
         "csv_rows": 481,
-        "stats_text": "Target reached rate: Unavailable \u00b7 reload the updated engine and rerun this study",
+        "stats_text": "Target reached rate: 0.00% \u00b7 0/48 evaluated \u00b7 0 incomplete",
+        "indexeddb": {
+          "database": "signalgen-study-temporary-1",
+          "batches": 23,
+          "total_events": 48,
+          "owner_partitioned": true
+        },
         "wasm_and_indexeddb": "pass"
       },
-      "recovery_and_capacity": "verified: 429 STUDY_CAPACITY, release and recreation"
+      "recovery_and_capacity": {
+        "setup_201": true,
+        "concurrent_429": true,
+        "delete_204": true,
+        "retry_201": true,
+        "cleanup_204": true,
+        "deleted_confirmation_404": true
+      }
     },
     "screenshots": [
-      "/output/browser-real-api-desktop-dark-screening.png",
-      "/output/browser-real-api-mobile-dark-screening.png",
-      "/output/browser-real-api-desktop-light-backtest.png",
-      "/output/browser-real-api-mobile-light-backtest.png"
-    ],
-    "requestLogCount": 182
+      "/scratch/output/browser-real-api-desktop-dark-screening.png",
+      "/scratch/output/browser-real-api-mobile-dark-screening.png",
+      "/scratch/output/browser-real-api-desktop-light-backtest.png",
+      "/scratch/output/browser-real-api-mobile-light-backtest.png"
+    ]
   },
   "screenshots": [
-    "docs/evidence/browser-real-api-mobile-dark-screening.png",
     "docs/evidence/browser-real-api-desktop-dark-screening.png",
-    "docs/evidence/browser-real-api-mobile-light-backtest.png",
-    "docs/evidence/browser-real-api-desktop-light-backtest.png"
+    "docs/evidence/browser-real-api-mobile-dark-screening.png",
+    "docs/evidence/browser-real-api-desktop-light-backtest.png",
+    "docs/evidence/browser-real-api-mobile-light-backtest.png"
   ],
   "dist_source": {
-    "path": "/Users/lucienyudistirapurnawarman/Documents/Kuliah/signalgen-2/signalgen-2/frontend/web/dist",
+    "path": "scratch/dist (offline container build)",
     "total_files": 103,
-    "wasm_sha256": "f4ef8296a624fe73ef87675417760cea9677879dbb0f71ff679886c76c670ff6",
-    "index_sha256": "2d4f131a1b36f83ed0c6ec9884587d6cc2c245cb6c1dc3e97958e609b88b4259"
+    "wasm_sha256": "af366a24c478003595dc5d47e126544d74d32412bcc6486632d40bc679b57c51",
+    "index_sha256": "2d4f131a1b36f83ed0c6ec9884587d6cc2c245cb6c1dc3e97958e609b88b4259",
+    "manifest_sha256": "3167389e4e3f21684a72501120554976b01c7c205ebf3a2f0608c101aed207c9"
   },
   "verified_boundaries": {
     "mock_upstream_idp_only": true,

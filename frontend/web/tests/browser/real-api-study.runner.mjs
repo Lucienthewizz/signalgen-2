@@ -76,8 +76,9 @@ export function createServer(distDir, apiOrigin) {
     // Static files
     let cleanPath = p.replace(/^\/+/, "");
     if (!cleanPath) cleanPath = "index.html";
-    const filePath = path.resolve(distDir, cleanPath);
-    if (!filePath.startsWith(path.resolve(distDir))) {
+    const resolvedDist = path.resolve(distDir);
+    const filePath = path.resolve(resolvedDist, cleanPath);
+    if (filePath !== resolvedDist && !filePath.startsWith(resolvedDist + path.sep)) {
       res.writeHead(403, { "Content-Type": "text/plain" });
       res.end("Forbidden");
       return;
@@ -140,6 +141,11 @@ async function main() {
     headless: true,
   });
 
+  // Verify Chromium process and private /dev/shm
+  const browserVersion = browser.version();
+  const shmStat = fs.existsSync("/dev/shm") ? fs.statSync("/dev/shm") : null;
+  console.error(`[Runner] Chromium version ${browserVersion} launched; /dev/shm present: ${Boolean(shmStat)}`);
+
   try {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 1000 },
@@ -151,6 +157,11 @@ async function main() {
       baseURL,
       apiOrigin,
       screenshotDir: outputDir,
+      browserInfo: {
+        version: browserVersion,
+        hasShm: Boolean(shmStat),
+        sandbox: "standard-unprivileged-user-namespaces",
+      },
     });
 
     const reportPath = path.join(outputDir, "browser-real-api-result.json");

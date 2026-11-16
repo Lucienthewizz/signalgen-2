@@ -1,14 +1,17 @@
 """Focused preflight and cleanup fault tests for verify_browser_api_stack.py.
 Offline unit tests; does not start Docker or read personal environment.
 """
-import io
+import base64
 import contextlib
+import hashlib
+import io
 import json
+import os
+from pathlib import Path
 import subprocess
 import tarfile
 import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from verify_browser_api_stack import (
@@ -22,7 +25,9 @@ from verify_browser_api_stack import (
     cleanup_containers,
     inspect_image,
     unpack,
-    find_toolchain_inputs,
+    verify_approved_build_inputs,
+    extract_approved_package,
+    find_base_node_modules,
 )
 
 
@@ -79,7 +84,7 @@ class BrowserApiStackPreflightTests(unittest.TestCase):
         args = bounded_playwright(
             "test-pw",
             PLAYWRIGHT,
-            [("/node_modules", "/node_modules", True), ("/output", "/output", False)],
+            [("/node_modules", "/node_modules", True), ("/dist", "/dist", True)],
             network="container:test-pg",
             user="1001:1001",
             memory="2g",
@@ -96,9 +101,11 @@ class BrowserApiStackPreflightTests(unittest.TestCase):
         self.assertNotIn("--ipc=host", args)
         # Private bounded /dev/shm
         self.assertIn("/dev/shm:rw,exec,size=256m,mode=1777", " ".join(args))
-        # Ensure /node_modules is readonly while /output is rw
+        # Ensure all mounts are readonly
         self.assertTrue(any("src=/node_modules,dst=/node_modules,readonly" in x for x in args))
-        self.assertTrue(any("src=/output,dst=/output" in x and not x.endswith(",readonly") for x in args))
+        self.assertTrue(any("src=/dist,dst=/dist,readonly" in x for x in args))
+        # No host output mount
+        self.assertFalse(any("dst=/output" in x for x in args))
 
     def test_image_inspection_validates_identity_platform_hooks(self):
         valid = json.dumps([{
@@ -151,14 +158,112 @@ class BrowserApiStackPreflightTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             unpack(out.getvalue(), {"valid_elf", "missing_required"})
 
-    def test_find_toolchain_inputs(self):
-        node_modules, dist = find_toolchain_inputs()
+    def test_find_base_node_modules(self):
+        node_modules = find_base_node_modules()
         self.assertTrue(node_modules.is_dir())
-        self.assertTrue(dist.is_dir())
         pw_json = json.loads((node_modules / "playwright/package.json").read_text())
         self.assertEqual(pw_json.get("version"), "1.64.1")
-        self.assertTrue((dist / "index.html").is_file())
-        self.assertTrue((dist / "wasm/signalgen_core.wasm").is_file())
+
+    def test_verify_approved_build_inputs(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            archive_data = b"dummy tar package content"
+            archive_sha256 = hashlib.sha256(archive_data).hexdigest()
+            archive_sri = "sha512-" + base64.b64encode(hashlib.sha512(archive_data).digest()).decode("utf-8")
+            archive_path = tmp / "test-pkg.tgz"
+            archive_path.write_bytes(archive_data)
+
+            lockfile_obj = {
+                "packages": {
+                    "node_modules/test-pkg": {
+                        "version": "1.0.0",
+                        "integrity": archive_sri,
+                    }
+                }
+            }
+            lockfile_bytes = json.dumps(lockfile_obj).encode("utf-8")
+            lockfile_hash = hashlib.sha256(lockfile_bytes).hexdigest()
+            lockfile_path = tmp / "package-lock.json"
+            lockfile_path.write_bytes(lockfile_bytes)
+
+            manifest_obj = {
+                "lockfile_sha256": lockfile_hash,
+                "packages": [
+                    {
+                        "package": "test-pkg",
+                        "version": "1.0.0",
+                        "integrity": archive_sri,
+                        "sha256": archive_sha256,
+                        "bytes": len(archive_data),
+                        "archive": str(archive_path),
+                    }
+                ]
+            }
+            manifest_path = tmp / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest_obj))
+
+            # Valid check
+            verified = verify_approved_build_inputs(manifest_path, lockfile_path)
+            self.assertEqual(len(verified), 1)
+            self.assertEqual(verified[0]["package"], "test-pkg")
+
+            # Mismatched lockfile sha256
+            bad_manifest = dict(manifest_obj, lockfile_sha256="wrong-hash")
+            manifest_path.write_text(json.dumps(bad_manifest))
+            with self.assertRaisesRegex(ValueError, "Lockfile SHA256 mismatch"):
+                verify_approved_build_inputs(manifest_path, lockfile_path)
+
+            # Mismatched archive SRI
+            bad_sri_manifest = dict(manifest_obj, packages=[
+                dict(manifest_obj["packages"][0], integrity="sha512-wrong")
+            ])
+            manifest_path.write_text(json.dumps(bad_sri_manifest))
+            with self.assertRaisesRegex(ValueError, "Package integrity/version mismatch"):
+                verify_approved_build_inputs(manifest_path, lockfile_path)
+
+    def test_extract_approved_package_security_bounds(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+
+            # Traversal entry rejected
+            out = io.BytesIO()
+            with tarfile.open(fileobj=out, mode="w:gz") as tar:
+                ti = tarfile.TarInfo("package/../secret")
+                ti.size = 5
+                tar.addfile(ti, io.BytesIO(b"hello"))
+            archive_bad = tmp / "bad-traversal.tgz"
+            archive_bad.write_bytes(out.getvalue())
+            with self.assertRaisesRegex(ValueError, "Traversal path"):
+                extract_approved_package(archive_bad, tmp / "dest1")
+
+            # Symlink entry rejected
+            out = io.BytesIO()
+            with tarfile.open(fileobj=out, mode="w:gz") as tar:
+                ti = tarfile.TarInfo("package/link")
+                ti.type = tarfile.SYMTYPE
+                tar.fileobj.write(ti.tobuf())
+            archive_sym = tmp / "bad-symlink.tgz"
+            archive_sym.write_bytes(out.getvalue())
+            with self.assertRaisesRegex(ValueError, "Forbidden member type"):
+                extract_approved_package(archive_sym, tmp / "dest2")
+
+            # Valid extraction
+            out = io.BytesIO()
+            with tarfile.open(fileobj=out, mode="w:gz") as tar:
+                ti_dir = tarfile.TarInfo("package/bin")
+                ti_dir.type = tarfile.DIRTYPE
+                tar.addfile(ti_dir)
+
+                ti_file = tarfile.TarInfo("package/bin/run")
+                ti_file.size = 5
+                ti_file.mode = 0o755
+                tar.addfile(ti_file, io.BytesIO(b"hello"))
+            archive_good = tmp / "good.tgz"
+            archive_good.write_bytes(out.getvalue())
+            dest = tmp / "dest3"
+            extract_approved_package(archive_good, dest)
+            self.assertTrue((dest / "bin/run").is_file())
+            self.assertEqual((dest / "bin/run").read_bytes(), b"hello")
 
 
 if __name__ == "__main__":
