@@ -1474,7 +1474,7 @@ paths:
                 retry_symbols: {type: array, maxItems: 10, uniqueItems: true, items: {type: string}, description: Optional subset validated against the frozen batch; omitted or empty prepares all members}
       responses:
         '200':
-          description: Partial or complete batch; a 200 is not a claim of full market coverage
+          description: Complete or provider-partial batch; capacity never produces a partial 200
           content:
             application/json:
               schema:
@@ -1491,14 +1491,21 @@ paths:
                       required: [symbol, code, retryable]
                       properties:
                         symbol: {type: string}
-                        code: {type: string, enum: [PROVIDER_UNAVAILABLE, INSUFFICIENT_CANDLES, SNAPSHOT_CAPACITY]}
+                        code: {type: string, enum: [PROVIDER_UNAVAILABLE, INSUFFICIENT_CANDLES]}
                         retryable: {type: boolean}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {description: "Busy batch, expired/canceled context or changed rule; start again for version mismatch"}
         '422': {$ref: '#/components/responses/InvalidRequest'}
-        '429': {$ref: '#/components/responses/RateLimited'}
+        '429':
+          description: "RATE_LIMITED or SNAPSHOT_CAPACITY. Capacity refusal publishes no new batch handles; release active snapshots and retry this frozen batch. No wait queue."
+          headers:
+            Retry-After: {description: "Suggested retry delay in seconds; 1 for snapshot capacity", schema: {type: integer, minimum: 1}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorEnvelope'}
+        '503': {description: "Batch preparation canceled or timed out; no new batch handles published"}
     delete:
       tags: [Analysis]
       operationId: releaseMarketScanBatch
@@ -1610,7 +1617,7 @@ paths:
                 retry_symbols: {type: array, maxItems: 10, uniqueItems: true, items: {type: string}, description: Optional subset validated against the frozen batch; omitted or empty prepares all members}
       responses:
         '200':
-          description: Partial or complete batch; a 200 is not a claim of full market coverage
+          description: Complete or provider-partial batch; capacity never produces a partial 200
           content:
             application/json:
               schema:
@@ -1627,14 +1634,21 @@ paths:
                       required: [symbol, code, retryable]
                       properties:
                         symbol: {type: string}
-                        code: {type: string, enum: [PROVIDER_UNAVAILABLE, INSUFFICIENT_CANDLES, SNAPSHOT_CAPACITY]}
+                        code: {type: string, enum: [PROVIDER_UNAVAILABLE, INSUFFICIENT_CANDLES]}
                         retryable: {type: boolean}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {description: "Busy batch, expired/canceled context or changed rule; start again for version mismatch"}
         '422': {$ref: '#/components/responses/InvalidRequest'}
-        '429': {$ref: '#/components/responses/RateLimited'}
+        '429':
+          description: "RATE_LIMITED or SNAPSHOT_CAPACITY. Capacity refusal publishes no new batch handles; release active snapshots and retry this frozen batch. No wait queue."
+          headers:
+            Retry-After: {description: "Suggested retry delay in seconds; 1 for snapshot capacity", schema: {type: integer, minimum: 1}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorEnvelope'}
+        '503': {description: "Batch preparation canceled or timed out; no new batch handles published"}
     delete:
       tags: [Analysis]
       operationId: releaseSignalStudyBatch

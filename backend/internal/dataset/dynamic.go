@@ -43,13 +43,14 @@ func DefaultSnapshotLimits() SnapshotLimits {
 // remain server-derived metadata: the browser chooses a rule and universe,
 // never an arbitrary provider symbol or date window.
 type DynamicStore struct {
-	provider  marketdata.Provider
-	universes universe.Repository
-	mu        sync.RWMutex
-	entries   map[string]dynamicEntry
-	limits    SnapshotLimits
-	bytes     int
-	now       func() time.Time
+	provider     marketdata.Provider
+	universes    universe.Repository
+	mu           sync.RWMutex
+	entries      map[string]dynamicEntry
+	reservations map[*studyReservation]struct{}
+	limits       SnapshotLimits
+	bytes        int
+	now          func() time.Time
 }
 
 func NewDynamicStore(provider marketdata.Provider, universes universe.Repository) (*DynamicStore, error) {
@@ -63,7 +64,7 @@ func NewDynamicStoreWithLimits(provider marketdata.Provider, universes universe.
 	if limits.TTL <= 0 || limits.MaxEntries < 1 || limits.MaxPerOwner < 1 || limits.MaxBytes < 1 {
 		return nil, fmt.Errorf("invalid dataset snapshot limits")
 	}
-	return &DynamicStore{provider: provider, universes: universes, entries: make(map[string]dynamicEntry), limits: limits, now: time.Now}, nil
+	return &DynamicStore{provider: provider, universes: universes, entries: make(map[string]dynamicEntry), limits: limits, reservations: make(map[*studyReservation]struct{}), now: time.Now}, nil
 }
 
 func (store *DynamicStore) Prepare(ctx context.Context, owner string, request PrepareRequest) (Manifest, error) {
@@ -235,6 +236,11 @@ func (store *DynamicStore) Content(ctx context.Context, owner, id string) ([]byt
 }
 
 func (store *DynamicStore) pruneExpiredLocked() {
+	for reservation := range store.reservations {
+		if reservation.ctx.Err() != nil || !store.now().Before(reservation.expiresAt) {
+			reservation.closeLocked()
+		}
+	}
 	for id, entry := range store.entries {
 		if !store.now().Before(entry.expiresAt) {
 			store.bytes -= len(entry.content)
@@ -244,7 +250,8 @@ func (store *DynamicStore) pruneExpiredLocked() {
 }
 
 func (store *DynamicStore) hasCapacityLocked(owner string, bytes int) bool {
-	if len(store.entries) >= store.limits.MaxEntries || store.bytes+bytes > store.limits.MaxBytes {
+	reserved, reservedOwner, reservedBytes := store.reservedLocked(owner)
+	if len(store.entries)+reserved >= store.limits.MaxEntries || store.bytes+reservedBytes+bytes > store.limits.MaxBytes {
 		return false
 	}
 	count := 0
@@ -253,7 +260,7 @@ func (store *DynamicStore) hasCapacityLocked(owner string, bytes int) bool {
 			count++
 		}
 	}
-	return count < store.limits.MaxPerOwner
+	return count+reservedOwner < store.limits.MaxPerOwner
 }
 
 func cloneManifest(manifest Manifest) Manifest {

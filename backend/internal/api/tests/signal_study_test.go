@@ -140,26 +140,26 @@ func TestSignalStudyRetryOnlyFrozenFailuresWithLimitedCapacity(t *testing.T) {
 		assertErrorCode(t, response, 422, "INVALID_REQUEST")
 	}
 	response = backtestHTTP(t, server, "POST", path, map[string]any{})
-	if response.Code != 200 {
-		t.Fatal(response.Body.String())
+	assertErrorCode(t, response, 429, "SNAPSHOT_CAPACITY")
+	if response.Header().Get("Retry-After") == "" {
+		t.Fatal("missing backpressure")
 	}
-	var first studies.StudyBatch
-	json.Unmarshal(response.Body.Bytes(), &first)
-	if len(first.Manifests) != 1 || len(first.Failures) != 1 || first.Failures[0].Code != "SNAPSHOT_CAPACITY" {
-		t.Fatalf("expected bounded partial batch %+v", first)
-	}
-	response = backtestHTTP(t, server, "DELETE", path, nil)
-	if response.Code != 204 {
-		t.Fatal(response.Body.String())
-	}
-	response = backtestHTTP(t, server, "POST", path, map[string]any{"retry_symbols": []string{first.Failures[0].Symbol}})
-	if response.Code != 200 {
-		t.Fatal(response.Body.String())
-	}
-	var retry studies.StudyBatch
-	json.Unmarshal(response.Body.Bytes(), &retry)
-	if len(retry.Stocks) != 1 || len(retry.Manifests) != 1 || len(retry.Failures) != 0 || retry.Manifests[0].Symbols[0] != first.Failures[0].Symbol {
-		t.Fatalf("retry repeated successful stocks %+v", retry)
+	// This deliberately tiny per-owner budget cannot fit two stocks. Explicit
+	// frozen subsets can still make progress without a random partial result.
+	for _, symbol := range []string{"TEST", "OTHER"} {
+		response = backtestHTTP(t, server, "POST", path, map[string]any{"retry_symbols": []string{symbol}})
+		if response.Code != 200 {
+			t.Fatal(response.Body.String())
+		}
+		var retry studies.StudyBatch
+		json.Unmarshal(response.Body.Bytes(), &retry)
+		if len(retry.Stocks) != 1 || len(retry.Manifests) != 1 || len(retry.Failures) != 0 || retry.Manifests[0].Symbols[0] != symbol {
+			t.Fatalf("invalid frozen retry %+v", retry)
+		}
+		response = backtestHTTP(t, server, "DELETE", path, nil)
+		if response.Code != 204 {
+			t.Fatal(response.Body.String())
+		}
 	}
 }
 

@@ -151,34 +151,6 @@ func (p *incrementalHistory) DailyHistory(ctx context.Context, item universe.Ins
 	return fresh, nil
 }
 
-// StoreProvider resolves the publication per request. Existing requests keep
-// their immutable generation; the API's shared cache still applies its TTL.
-type StoreProvider struct{ root string }
-
-func NewStoreProvider(root string) (*StoreProvider, error) {
-	if _, err := publishedArchive(root); err != nil {
-		return nil, err
-	}
-	return &StoreProvider{root}, nil
-}
-func (p *StoreProvider) Daily(ctx context.Context, items []universe.Instrument, size int) ([]marketdata.Series, error) {
-	a, err := publishedArchive(p.root)
-	if err != nil {
-		return nil, marketdata.ErrUnavailable
-	}
-	return a.Daily(ctx, items, size)
-}
-func (p *StoreProvider) DailyHistory(ctx context.Context, item universe.Instrument, from, to time.Time) (marketdata.History, error) {
-	a, err := publishedArchive(p.root)
-	if err != nil {
-		return marketdata.History{}, marketdata.ErrUnavailable
-	}
-	return a.DailyHistory(ctx, item, from, to)
-}
-func (p *StoreProvider) Source() marketdata.Source {
-	return marketdata.Source{Provider: "yahoo_finance", Warnings: []string{"Scheduled IDX archive; daily data, not real-time. Publication changes are subject to the shared cache TTL; inspect snapshot available dates."}}
-}
-
 func (p *ArchiveProvider) DailyHistory(ctx context.Context, item universe.Instrument, from, to time.Time) (marketdata.History, error) {
 	if err := ctx.Err(); err != nil {
 		return marketdata.History{}, err

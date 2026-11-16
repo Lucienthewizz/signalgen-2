@@ -1,0 +1,147 @@
+[
+  {
+    "id": "sparse_10x300_h5",
+    "input_sha256": "ef70eba0a7459fa41c1c8d1d5c19c747e1553cabc9fde2961aeaf230675205fd",
+    "output_sha256": "35d17381ff7f8d09819a3d510e81a02d39b472cd323bc4ea329e00e59d365037"
+  },
+  {
+    "id": "dense_10x300_h5",
+    "input_sha256": "441ec38d0759872d3812d47a86582c8deb75fab7ed7d1248c495395e05d27ee9",
+    "output_sha256": "f6da0025205ce96dcaf09e461fb05a8eda948537f7137649259352646a06eadd"
+  },
+  {
+    "id": "dense_10x1000_h5",
+    "input_sha256": "4fcf23e38674d2a49894554b280efe849c822a3ec16075f6096a1af0807e31f8",
+    "output_sha256": "52df643ec83c29258805461dddbb1836579e7a5b6eee67057557ddf3fe8598d0"
+  },
+  {
+    "id": "sparse_10x2500_h100",
+    "input_sha256": "b24a43d798fe895dbecfbce0bdad3317fb4161ba3f44374407a9652f785a90e9",
+    "output_sha256": "1e8b039947730fab5956aef3cd7ca4cc174328cbcf19c6b1843df88ffa33ed46"
+  },
+  {
+    "id": "random_5",
+    "input_sha256": "ab59c910ce777b2ff6692fff3fff096e67048b208d5f8c2ab527017b9b47b146",
+    "output_sha256": "6fb7545d0b6b5c04aa8a0ef1287b55b033c4e769b17587311c8fc2f0438d0553"
+  },
+  {
+    "id": "random_6",
+    "input_sha256": "49e123b0e1ef22214699de2b9f9c31bd319c46d5d75079aa52f1c8f0e747a173",
+    "output_sha256": "4e1bbe104ef80ca4e0dbd516b68fe9b1cec5f685bfe996c80d54d056c36fc03d"
+  },
+  {
+    "id": "random_7",
+    "input_sha256": "90ff5ec6397f285cfea0e89983c1e63256c729a4e0ee09ad8c8dfea65f0cc524",
+    "output_sha256": "0efd5d98f9ecf4b18e6436dbea3ac6e5f079ad89fe03aaf38a8773a903a42ddd"
+  },
+  {
+    "id": "random_8",
+    "input_sha256": "d3df45a8a1159b8146321f71e6d2da2c00b2071392c81747c76c2fc2324d25fd",
+    "output_sha256": "08282e9f6a21bd12c140cba705be82708eda93ab6d1b7ad48c16151fd007e70e"
+  },
+  {
+    "id": "random_9",
+    "input_sha256": "7f9fed4f2718f3ac1c8a17f3833ad19de389b6dbb2bd39d329b5cab56291709b",
+    "output_sha256": "0725d69c54ab5205cc363d5dc093f7ac99608b36a1bd19426c846528ebdaaff5"
+  },
+  {
+    "id": "random_10",
+    "input_sha256": "29f90ac23d256c51cfaf155e84d661a7e0a59560f4928655726c1200c16ffedb",
+    "output_sha256": "2f9857e41a4cb14035a7180643720fd3f607ef71d560e671a96d8ae413111fbc"
+  },
+  {
+    "id": "random_11",
+    "input_sha256": "c3134c087c7a90afadd5b3a16679ff8dc2c65c78c7262010298650fe87c28272",
+    "output_sha256": "b9390132d31de588bdeadb1449ce235484a2c433e8c2a191a11b9aa58eaa5da8"
+  },
+  {
+    "id": "random_12",
+    "input_sha256": "8bb52667eb7bf79505c982260311fac7845aff118634b9139caa761d70b90577",
+    "output_sha256": "98b9b1b47d0eb71ec25b4af9e47da2ac50e70d9b5e3e24fac676220d9220a3ae"
+  },
+  {
+    "id": "random_13",
+    "input_sha256": "33e4984ebdb8eac6edf8ab7d20a1dd47a3dc5a9b9cf65d9f679ede3dc76ccc61",
+    "output_sha256": "6142cf3916b8e3b81f529dd546b2f9dff6b91bcac82a67ae0d4e62dc922a2d9d"
+  },
+  {
+    "id": "random_14",
+    "input_sha256": "a288bd23b5687cffc2c060480a963c4a56e5674cd16a2322973ddd6878b1289a",
+    "output_sha256": "82e631c136fa226d35740a398e9fed38adca59097664c4608367daa312665af3"
+  },
+  {
+    "id": "random_15",
+    "input_sha256": "5ba921c6ed5141b9f8104de317ead1de7d4ed7a6d67ccab3d5a341b2781f2b42",
+    "output_sha256": "f609dbc78c0044d492b04534271292e4eedf9805704ac05bcd38fc0d2086e74a"
+  },
+  {
+    "id": "random_16",
+    "input_sha256": "0e05a3d7ffeec54041603910b44320eb00485b11168a5bada9a9df58defdf39b",
+    "output_sha256": "623a649fe0113bcf3d0bb258cca53f0e344ef4bb65b1a3e59b136c71f43c3b77"
+  },
+  {
+    "id": "year_1",
+    "input_sha256": "5f4f09d8c118b58aaaf28c8ce90aec2b5c88fb5d412542022a8e22c9b52f501a",
+    "output_sha256": "0f3b629a3882fecd29f6afbcf5baf3c9c43f3bccb38fb789f9470c2bc0686fe4"
+  },
+  {
+    "id": "year_9998",
+    "input_sha256": "ec4e89f031453d4e9a5d940ea9b01f03d5d1811466fd1258aa6b9c05d05dbe48",
+    "output_sha256": "6168b52d4878f310a9bf9add33ce73a55d4a993adc7f90eab194f56722e2fbce"
+  },
+  {
+    "id": "empty_target",
+    "input_sha256": "17f4182c6e02dfb381a1de16329cb8d66d99a06502726849db00e1bfa4225c0c",
+    "output_sha256": "a40c434b2e5aa62de0421fdf67e760b1cb5d30b914a84b1bf5cd960ec2fd9d05"
+  },
+  {
+    "id": "empty_no_target",
+    "input_sha256": "2bc6e2587e73a94c207c0c9bae7127c593f985828ee8a81ac64f9f70936abbc4",
+    "output_sha256": "3807cdc53258852f7375e291707686b473633990f78256a977357f16504c40fe"
+  },
+  {
+    "id": "invalid_timestamp",
+    "input_sha256": "b65ab5bd6886d1943bd9c4297d6278e1181a516f09d152606e92058852d231f2",
+    "error": "invalid study signal"
+  },
+  {
+    "id": "duplicate_instant",
+    "input_sha256": "5b2af2485fda0326862686cb65cbd94a3c71f822d0ea68e77614c16615e7f954",
+    "error": "signal requires exact warm candle and cannot repeat"
+  },
+  {
+    "id": "unknown_symbol",
+    "input_sha256": "89153e534ad3609d516fcd6080a08ba3bfc51f7cbad9213a09a7e2bfbbd956de",
+    "error": "signal requires exact warm candle and cannot repeat"
+  },
+  {
+    "id": "invalid_side",
+    "input_sha256": "851955d34b80d7d4986024cef4a7fe02f3d7e17b06f5ff2ce10a6272419aa7b2",
+    "error": "invalid study signal"
+  },
+  {
+    "id": "warmup",
+    "input_sha256": "a063a614e56ca6b3dc507fe60b51cd9ae75604078f9ae628b7a80a320bd94f50",
+    "error": "signal outside study range"
+  },
+  {
+    "id": "invalid_series",
+    "input_sha256": "68ac0c8d6118428efd870fd64da5f42a1d92c4657da6bbe58b44508de3e48ec0",
+    "error": "candles must be strictly chronological"
+  },
+  {
+    "id": "invalid_schema",
+    "input_sha256": "213cd8feafd0a30d3797c3a6ad0c20422bce8755e2e1d9dfd219a6126e6296e4",
+    "error": "unsupported signal study schema"
+  },
+  {
+    "id": "outside_range",
+    "input_sha256": "4268a0c022ece1b63a601590a804edc6d5f35202045a445699795569e54d2639",
+    "error": "signal outside study range"
+  },
+  {
+    "id": "not_exact_nanosecond",
+    "input_sha256": "e8b1dbfc20a88797291cba5f274e2d0ea28114411fabdb00d8f2ab0bf4bf73d7",
+    "error": "signal requires exact warm candle and cannot repeat"
+  }
+]
