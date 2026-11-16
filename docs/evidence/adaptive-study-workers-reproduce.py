@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import pathlib
+import selectors
 import shutil
 import subprocess
 import sys
@@ -34,6 +35,7 @@ SOURCE_EXCLUDES = (
     "secrets",
 )
 RESULT_MARKER = "__SIGNALGEN_RESULT__\n"
+MAX_PROCESS_OUTPUT = 2_500_000
 
 
 def run_checked(args: list[str], *, timeout: int = 30) -> str:
@@ -173,6 +175,100 @@ cat "$result"
     ]
 
 
+def comparator_args(
+    name: str,
+    comparator: pathlib.Path,
+    adaptive: pathlib.Path,
+    baseline: pathlib.Path,
+) -> list[str]:
+    return [
+        *DOCKER,
+        "run",
+        "--pull=never",
+        "--name",
+        name,
+        "--network",
+        "none",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--user",
+        "1000:1000",
+        "--cpus",
+        "2",
+        "--memory",
+        "3g",
+        "--pids-limit",
+        "512",
+        "--ulimit",
+        "fsize=209715200:209715200",
+        "--tmpfs",
+        "/scratch:rw,exec,size=3g,mode=0700,uid=1000,gid=1000",
+        "-v",
+        f"{comparator}:/scratch/compare.mjs:ro",
+        "-v",
+        f"{adaptive}:/scratch/adaptive.json:ro",
+        "-v",
+        f"{baseline}:/scratch/baseline.json:ro",
+        IMAGE,
+        "/usr/bin/env",
+        "-i",
+        "PATH=/usr/local/bin:/usr/bin:/bin",
+        "HOME=/scratch/home",
+        "TMPDIR=/scratch/tmp",
+        "node",
+        "/scratch/compare.mjs",
+        "/scratch/adaptive.json",
+        "/scratch/baseline.json",
+    ]
+
+
+class OutputLimitExceeded(RuntimeError):
+    pass
+
+
+def run_bounded(
+    args: list[str], *, env: dict[str, str] | None = None, timeout: int, output_limit: int
+) -> tuple[int, bytes, bytes]:
+    process = subprocess.Popen(
+        args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    assert process.stdout is not None and process.stderr is not None
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ, "stdout")
+    selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+    buffers = {"stdout": bytearray(), "stderr": bytearray()}
+    deadline = time.monotonic() + timeout
+    try:
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                process.kill()
+                process.wait(timeout=10)
+                raise TimeoutError("bounded process deadline exceeded")
+            for key, _ in selector.select(min(0.2, remaining)):
+                chunk = key.fileobj.read1(65536)
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                    key.fileobj.close()
+                    continue
+                target = buffers[key.data]
+                target.extend(chunk)
+                if len(target) > output_limit:
+                    process.kill()
+                    process.wait(timeout=10)
+                    raise OutputLimitExceeded(
+                        f"bounded {key.data} output exceeded {output_limit} bytes"
+                    )
+        return process.wait(timeout=10), bytes(buffers["stdout"]), bytes(buffers["stderr"])
+    finally:
+        selector.close()
+        for stream in (process.stdout, process.stderr):
+            stream.close()
+
+
 def cleanup(names: list[str]) -> None:
     failures: list[str] = []
     for name in names:
@@ -208,31 +304,74 @@ def run_case(
     args = docker_args(name, snapshot, deps, wasm, workers, candles, operands)
     env = os.environ.copy()
     env.update({"WORKERS": str(workers), "CANDLES": str(candles), "OPERANDS": str(operands)})
-    remaining = max(1, min(CASE_TIMEOUT, int(deadline - time.monotonic())))
+    remaining_seconds = int(deadline - time.monotonic())
+    if remaining_seconds <= 0:
+        raise TimeoutError("overall reproduction deadline exceeded")
+    remaining = min(CASE_TIMEOUT, remaining_seconds)
     try:
-        completed = subprocess.run(
-            args,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=remaining,
+        returncode, stdout, stderr = run_bounded(
+            args, env=env, timeout=remaining, output_limit=MAX_PROCESS_OUTPUT
         )
-        if completed.returncode:
-            detail = (completed.stdout + "\n" + completed.stderr)[-4000:]
-            raise RuntimeError(f"{label}: container exited {completed.returncode}\n{detail}")
-        if RESULT_MARKER not in completed.stdout:
+        if returncode:
+            detail = (stdout + b"\n" + stderr)[-4000:].decode(errors="replace")
+            raise RuntimeError(f"{label}: container exited {returncode}\n{detail}")
+        decoded = stdout.decode()
+        if RESULT_MARKER not in decoded:
             raise RuntimeError(f"{label}: bounded result marker missing")
-        payload = completed.stdout.split(RESULT_MARKER, 1)[1].encode()
+        payload = decoded.split(RESULT_MARKER, 1)[1].encode()
         if len(payload) > MAX_RESULT_BYTES:
             raise RuntimeError(f"{label}: bounded result exceeded {MAX_RESULT_BYTES} bytes")
         result = json.loads(payload)
         output.mkdir(parents=True, exist_ok=True)
         (output / f"{label}.json").write_text(json.dumps(result, indent=2) + "\n")
-    except subprocess.TimeoutExpired as error:
+    except TimeoutError as error:
         try:
             subprocess.run([*DOCKER, "kill", name], timeout=20, check=False)
         finally:
             raise TimeoutError(f"{label}: container deadline exceeded") from error
+
+
+def compare_cases(
+    root: pathlib.Path,
+    output: pathlib.Path,
+    adaptive: str,
+    baseline: str,
+    owned: list[str],
+    deadline: float,
+) -> None:
+    name = f"signalgen-adaptive-compare-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    owned.append(name)
+    args = comparator_args(
+        name,
+        root / "frontend/web/tests/browser/compare-signal-study-evidence.mjs",
+        output / f"{adaptive}.json",
+        output / f"{baseline}.json",
+    )
+    remaining = max(1, min(30, int(deadline - time.monotonic())))
+    if time.monotonic() >= deadline:
+        raise TimeoutError("overall reproduction deadline exceeded")
+    try:
+        returncode, stdout, stderr = run_bounded(
+            args, timeout=remaining, output_limit=64 * 1024
+        )
+        if returncode:
+            detail = (stdout + b"\n" + stderr)[-4000:].decode(errors="replace")
+            raise RuntimeError(f"comparator exited {returncode}\n{detail}")
+    except TimeoutError as error:
+        try:
+            subprocess.run([*DOCKER, "kill", name], timeout=20, check=False)
+        finally:
+            raise TimeoutError("comparator deadline exceeded") from error
+
+
+def case_schedule(smoke: bool) -> tuple[tuple[tuple[int, int, int, str], tuple[int, int, int, str]], ...]:
+    cases = (
+        ((4, 250, 3, "small-adaptive-1"), (1, 250, 3, "small-baseline-1")),
+        ((4, 250, 3, "small-adaptive-2"), (1, 250, 3, "small-baseline-2")),
+        ((4, 1250, 5, "heavy-adaptive-1"), (1, 1250, 5, "heavy-baseline-1")),
+        ((4, 1250, 5, "heavy-adaptive-2"), (1, 1250, 5, "heavy-baseline-2")),
+    )
+    return cases[:1] if smoke else cases
 
 
 def main() -> int:
@@ -240,6 +379,7 @@ def main() -> int:
     parser.add_argument("--deps", type=pathlib.Path, required=True)
     parser.add_argument("--wasm", type=pathlib.Path, required=True)
     parser.add_argument("--evidence", type=pathlib.Path, required=True)
+    parser.add_argument("--smoke", action="store_true")
     args = parser.parse_args()
     root = pathlib.Path(__file__).resolve().parents[2]
     validate_inputs(args.deps, args.wasm)
@@ -255,26 +395,12 @@ def main() -> int:
             (args.evidence / "source-hashes.json").write_text(
                 json.dumps({"files": source_hashes}, indent=2) + "\n"
             )
-            cases = (
-                (4, 250, 3, "small-adaptive-1"),
-                (1, 250, 3, "small-baseline-1"),
-            )
-            for case in cases:
+            schedules = case_schedule(args.smoke)
+            flattened = [case for pair in schedules for case in pair]
+            for case in flattened:
                 run_case(root, snapshot, args.deps, args.wasm, args.evidence, *case, owned, deadline)
-            comparator = root / "frontend/web/tests/browser/compare-signal-study-evidence.mjs"
-            for adaptive, baseline in (
-                ("small-adaptive-1", "small-baseline-1"),
-            ):
-                subprocess.run(
-                    [
-                        "node",
-                        str(comparator),
-                        str(args.evidence / f"{adaptive}.json"),
-                        str(args.evidence / f"{baseline}.json"),
-                    ],
-                    check=True,
-                    timeout=30,
-                )
+            for adaptive, baseline in schedules:
+                compare_cases(root, args.evidence, adaptive[3], baseline[3], owned, deadline)
     finally:
         cleanup(owned)
     return 0

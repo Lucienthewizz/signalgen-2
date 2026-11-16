@@ -4,10 +4,10 @@
     "frontend/web/src/analysis/adaptive-study-policy.ts": "c8e5389c8c9c576668ccb6c2a2db037cc5c2204e31e296cb0e19786c7e805a88",
     "frontend/web/tests/browser/signal-study.cli.js": "9a1e66b18f1eab5be3f555b7626b96247ff7c47bc97ca71d1caa3fb68b3cf13f",
     "frontend/web/tests/browser/compare-signal-study-evidence.mjs": "f64bf7a00644fd9723ed74a40ad4d3d50ebb8db239fdc46a3161e80d607806b3",
-    "docs/evidence/adaptive-study-workers-reproduce.py": "3426d833e6fe35ca1b2ddc4592f15a80656ea7eea9783b8a0204c8227e1c8e0f",
-    "docs/evidence/test_adaptive_study_workers_reproduce.py": "7bee78d88145cd89717bbd47edab0d44446cd9c69f468e4539e1f6c9b354427d"
+    "docs/evidence/adaptive-study-workers-reproduce.py": "1c8c44db42ceb0d4bd2c398ef18d867bc5b24570e8637a286ee8ce86fb576cfa",
+    "docs/evidence/test_adaptive_study_workers_reproduce.py": "1bb6c08365619a73531f51bf748f36855c8c6fc16fc4766cf89332f371440945"
   },
-  "container": {
+  "product_check_container": {
     "image": "sha256:f609973e8fd93f38a5ddfd706a65805294247dae8d81b2541c0afe2787746197",
     "network": "none",
     "cpus": 2,
@@ -18,6 +18,17 @@
     "source_and_dependencies": "read-only",
     "backend_fixtures": "read-only"
   },
+  "reproduction_container": {
+    "image": "sha256:f609973e8fd93f38a5ddfd706a65805294247dae8d81b2541c0afe2787746197",
+    "network": "none",
+    "cpus": 2,
+    "memory": "3g",
+    "pids": 512,
+    "file_size": "200 MiB",
+    "user": "1000:1000",
+    "source_dependencies_wasm": "read-only",
+    "comparator": "separate named container, comparator and two result JSON mounts read-only"
+  },
   "commands": {
     "unit": "node --test tests/*.test.cjs",
     "typecheck": "tsc -b --pretty false",
@@ -25,7 +36,7 @@
     "build": "vite build",
     "budgets": "node scripts/check-performance-budgets.mjs",
     "syntax": "node --check frontend/web/tests/browser/signal-study.cli.js && node --check frontend/web/tests/browser/compare-signal-study-evidence.mjs && python3 -m py_compile docs/evidence/adaptive-study-workers-reproduce.py docs/evidence/test_adaptive_study_workers_reproduce.py",
-    "runner_smoke": "python3 docs/evidence/adaptive-study-workers-reproduce.py --deps /private/tmp/signalgen-coordinator-frontend-o6v9sw1u/deps --wasm /tmp/signalgen-wasm-final --evidence /tmp/signalgen-runner-smoke",
+    "runner_smoke": "python3 docs/evidence/adaptive-study-workers-reproduce.py --smoke --deps /private/tmp/signalgen-coordinator-frontend-o6v9sw1u/deps --wasm /tmp/signalgen-wasm-final --evidence /tmp/signalgen-runner-smoke-comparator",
     "runner_tests": "python3 -m unittest docs/evidence/test_adaptive_study_workers_reproduce.py"
   },
   "results": {
@@ -35,8 +46,8 @@
     "build": "passed",
     "budgets": "passed",
     "syntax": "passed",
-    "runner_smoke": "passed: one adaptive/baseline 250-candle pair and canonical comparator",
-    "runner_tests": "4 passed"
+    "runner_smoke": "passed: --smoke adaptive/baseline 250-candle pair and in-container canonical comparator",
+    "runner_tests": "8 passed"
   },
   "performance_disclosure": "The heavy adaptive browser workload was slower than the single-worker baseline; no speedup, optimality, or RAM guarantee is claimed."
 }

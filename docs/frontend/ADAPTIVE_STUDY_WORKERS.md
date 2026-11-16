@@ -55,6 +55,10 @@ python3 docs/evidence/adaptive-study-workers-reproduce.py \
   --evidence /tmp/signalgen-adaptive-evidence
 ```
 
+The default runs all eight alternating cases (two 250-candle pairs and two
+1,250-candle pairs). Use `--smoke` to run only the first 250-candle
+adaptive/baseline pair; both schedules are covered by focused mocked tests.
+
 The retained runner uses Playwright image
 `sha256:f609973e8fd93f38a5ddfd706a65805294247dae8d81b2541c0afe2787746197`,
 `--network none`, read-only source/dependencies/WASM, non-root UID 1000,
@@ -66,5 +70,8 @@ inspects the pinned `orbstack` context as `linux/arm64`, snapshots only tracked
 regular files (excluding credentials, environment files, dependencies, and
 symlinks), keeps dependencies/WASM read-only, enforces per-case and overall
 deadlines, and exports bounded named JSON only after validating a stdout marker.
+The comparator itself runs in a separately named bounded container with only
+the comparator and two result JSON files mounted read-only; the host never
+executes Node for parity.
 Mocked preflight, timeout, and cleanup tests are in
 `docs/evidence/test_adaptive_study_workers_reproduce.py`.

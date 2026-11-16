@@ -14,6 +14,23 @@ SPEC.loader.exec_module(MODULE)
 
 
 class ReproductionRunnerTests(unittest.TestCase):
+    def test_smoke_and_default_schedules_are_explicit(self):
+        self.assertEqual(len(MODULE.case_schedule(True)), 1)
+        self.assertEqual(len(MODULE.case_schedule(False)), 4)
+        self.assertEqual(
+            [case[3] for pair in MODULE.case_schedule(False) for case in pair],
+            [
+                "small-adaptive-1",
+                "small-baseline-1",
+                "small-adaptive-2",
+                "small-baseline-2",
+                "heavy-adaptive-1",
+                "heavy-baseline-1",
+                "heavy-adaptive-2",
+                "heavy-baseline-2",
+            ],
+        )
+
     def test_snapshot_excludes_secrets_dependencies_and_symlinks(self):
         with tempfile.TemporaryDirectory() as temp:
             root = pathlib.Path(temp)
@@ -64,6 +81,51 @@ class ReproductionRunnerTests(unittest.TestCase):
         self.assertIn("CANDLES=250", args)
         self.assertIn("OPERANDS=3", args)
 
+    def test_comparator_runs_node_inside_owned_container(self):
+        args = MODULE.comparator_args(
+            "compare-case",
+            pathlib.Path("/compare.mjs"),
+            pathlib.Path("/adaptive.json"),
+            pathlib.Path("/baseline.json"),
+        )
+        self.assertIn("compare-case", args)
+        self.assertIn("node", args)
+        self.assertIn("/scratch/compare.mjs", args)
+        self.assertIn("--cap-drop", args)
+        self.assertIn("ALL", args)
+        self.assertIn("--security-opt", args)
+        self.assertIn("no-new-privileges", args)
+        self.assertIn("-i", args)
+        self.assertNotIn("frontend/web/tests/browser/compare-signal-study-evidence.mjs", args)
+
+    def test_compare_cases_never_invokes_host_node(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            output = root / "evidence"
+            output.mkdir()
+            with mock.patch.object(
+                MODULE, "run_bounded", return_value=(0, b"", b"")
+            ), mock.patch.object(MODULE.subprocess, "run") as host_run:
+                owned = []
+                MODULE.compare_cases(
+                    root,
+                    output,
+                    "adaptive",
+                    "baseline",
+                    owned,
+                    MODULE.time.monotonic() + 10,
+                )
+            self.assertEqual(host_run.call_count, 0)
+            self.assertEqual(len(owned), 1)
+
+    def test_bounded_process_rejects_output_overflow(self):
+        with self.assertRaises(MODULE.OutputLimitExceeded):
+            MODULE.run_bounded(
+                ["python3", "-c", "print('x' * 10000)"],
+                timeout=10,
+                output_limit=100,
+            )
+
     def test_cleanup_attempts_every_owned_container(self):
         calls = []
 
@@ -81,14 +143,9 @@ class ReproductionRunnerTests(unittest.TestCase):
     def test_timeout_kills_named_container_before_propagating(self):
         with tempfile.TemporaryDirectory() as temp:
             owned = []
-            def timeout_then_kill(args, **kwargs):
-                if args[3] == "kill":
-                    return mock.DEFAULT
-                raise subprocess.TimeoutExpired(args, 1)
-
             with mock.patch.object(
-                MODULE.subprocess, "run", side_effect=timeout_then_kill
-            ) as run:
+                MODULE, "run_bounded", side_effect=TimeoutError("timeout")
+            ), mock.patch.object(MODULE.subprocess, "run") as run:
                 with self.assertRaises(TimeoutError):
                     MODULE.run_case(
                         pathlib.Path(temp),
@@ -104,8 +161,8 @@ class ReproductionRunnerTests(unittest.TestCase):
                         MODULE.time.monotonic() + 10,
                     )
             self.assertEqual(len(owned), 1)
-            self.assertEqual(run.call_count, 2)
-            self.assertEqual(run.call_args_list[1].args[0][3], "kill")
+            self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_args.args[0][3], "kill")
 
 
 if __name__ == "__main__":
