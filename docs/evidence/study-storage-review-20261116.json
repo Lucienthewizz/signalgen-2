@@ -1,0 +1,38 @@
+{
+  "reviewedCommit": "df92fc14a4637cca153b55a884731c1d0804a2b8",
+  "baselineCommit": "e74b1651d7e04059141b4f7ff9a4d1f23f6c2c8e",
+  "sourceSha256": {
+    "frontend/web/src/analysis/signal-study-storage.ts": "43f81fd8f588db1b069caff664d88ffb9182601bbca848b313754e578300d2fb",
+    "frontend/web/tests/study-storage.test.cjs": "a8eca7bfa0c31c95f1d12a2f77fe1b41af61822df1632323e1faadb75a8d1ade",
+    "frontend/web/tests/browser/study-storage-benchmark.mjs": "f61fe62a1ebcfef5d5103648acb5396b3997e1164af23465d56a5292939e4b64",
+    "docs/backend/STUDY_STORAGE_MEASUREMENT.md": "7c3d4461dddd70b77b613d5be860e07219bf0079901a93a2a7a6a4eb251e7727",
+    "docs/evidence/study-storage-baseline-20261116.json": "cfe1eea4c93956dc7e2f3f774fb3e1be50b03ffce3653eaa0b179f803c120a83",
+    "docs/evidence/study-storage-optimized-20261116.json": "2fb2e543bebe79421329b6aefa8a109877bddabdae80acf6ddf1753967ea8f02",
+    "docs/evidence/study-storage-measurement-20261116.txt": "07beecc66739003e5564b5828af66bc114ccb5c50626c4ce784eac2166ccd9ae"
+  },
+  "checks": {
+    "headMatchesReviewedCommit": true,
+    "baselineDeltaInspected": true,
+    "callersInspected": true,
+    "benchmarkHasNonzeroFailureAssertions": true,
+    "isolatedContainerSyntaxCheck": "pass",
+    "runtimeBenchmarkReproduced": false
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "classification": "confirmed evidence defect",
+      "status": "performance conclusion unresolved"
+    },
+    {
+      "id": "R2",
+      "classification": "confirmed coverage gap",
+      "status": "candidate behavior risk; not confirmed defect"
+    },
+    {
+      "id": "R3",
+      "classification": "confirmed disclosure/coverage gap",
+      "status": "readonly failure and tradeoff need validation"
+    }
+  ]
+}
