@@ -3085,11 +3085,15 @@ html[data-theme="light"] .market-hero__chart {
   background: #172019;
 }
 .pricing-plan--featured .pricing-plan__action {
-  color: #04120a;
-  background: var(--green-bright);
+  border-color: var(--button-primary-border);
+  color: var(--button-primary-text);
+  background: var(--button-primary-bg);
 }
 .pricing-plan--featured .pricing-plan__action:hover {
-  background: #a5fbd0;
+  background: var(--button-primary-hover);
+}
+.pricing-plan--featured .pricing-plan__action:active {
+  background: var(--button-primary-pressed);
 }
 .pricing-section__assurance {
   display: flex;

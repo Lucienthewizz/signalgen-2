@@ -347,7 +347,7 @@ export function JournalPortfolio({
           description="Realized P&L uses the sale month in Singapore Time (SGT)."
         />
       </div>
-      <p>
+      <p className="journal-portfolio__summary">
         {month
           ? `Sale month: ${month} · SGT`
           : "All recorded sales · all months"}
@@ -383,7 +383,7 @@ export function JournalPortfolio({
               before recording more transactions.
             </p>
           )}
-          <p>
+          <p className="journal-portfolio__note">
             Record a BUY to open a position and a SELL to realize P&amp;L. Open
             positions are excluded from this chart.
           </p>

@@ -46,6 +46,7 @@ const newsDateFormat = new Intl.DateTimeFormat("en-GB", {
   timeStyle: "short",
   timeZone: SINGAPORE_TIME_ZONE,
 });
+const NEWS_PAGE_SIZE = 4;
 
 export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
   const [playing, setPlaying] = useState(false);
@@ -58,6 +59,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
   const [revision, setRevision] = useState(0);
   const [query, setQuery] = useState("");
   const [ticker, setTicker] = useState("all");
+  const [page, setPage] = useState(0);
   const watchlist = useMemo(() => {
     try {
       const stored: unknown =
@@ -86,6 +88,15 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
     () => filterMarketArticles(articles, query, ticker),
     [articles, query, ticker],
   );
+  const pageCount = Math.max(
+    1,
+    Math.ceil(visibleArticles.length / NEWS_PAGE_SIZE),
+  );
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageArticles = visibleArticles.slice(
+    currentPage * NEWS_PAGE_SIZE,
+    (currentPage + 1) * NEWS_PAGE_SIZE,
+  );
   useEffect(() => {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 12_000);
@@ -96,6 +107,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
       .then((result) => {
         if (active) {
           setArticles(result.items);
+          setPage(0);
           setError(result.warning);
         }
       })
@@ -124,10 +136,6 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
       <div className="news-toolbar">
         <header className="news-toolbar__actions">
           <WindowDots />
-          <h3 id="market-news-title" className="sr-only">
-            <Newspaper aria-hidden="true" />
-            Stock market news
-          </h3>
           <span className="news-article-count" role="status">
             {visibleArticles.length} articles
           </span>
@@ -153,7 +161,10 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                   type="search"
                   placeholder="Search headlines or company names"
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setPage(0);
+                  }}
                 />
               </Field>
             </details>
@@ -161,7 +172,10 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
               <FieldLabel htmlFor="news-stock">Watchlist stock</FieldLabel>
               <Select
                 value={ticker}
-                onValueChange={(value) => setTicker(value ?? "all")}
+                onValueChange={(value) => {
+                  setTicker(value ?? "all");
+                  setPage(0);
+                }}
               >
                 <SelectTrigger id="news-stock">
                   <SelectValue>
@@ -188,6 +202,11 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
         aria-labelledby="market-news-title"
         aria-busy={loading}
       >
+        <header className="news-feed__header">
+          <h3 id="market-news-title">
+            <Newspaper aria-hidden="true" /> Stock market news
+          </h3>
+        </header>
         {error && (
           <Alert variant="destructive">
             <AlertTitle>News could not be refreshed</AlertTitle>
@@ -202,7 +221,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
           </div>
         ) : visibleArticles.length ? (
           <AnimatedList>
-            {visibleArticles.map((article) => (
+            {pageArticles.map((article) => (
               <li key={article.url}>
                 <div>
                   <Badge variant="outline">{article.source}</Badge>
@@ -214,9 +233,6 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                 </div>
                 <a href={article.url} target="_blank" rel="noreferrer">
                   <span>{article.title}</span>
-                  <span className="news-read-link">
-                    Read on {article.source} <ExternalLink aria-hidden="true" />
-                  </span>
                 </a>
               </li>
             ))}
@@ -243,6 +259,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                     onClick={() => {
                       setQuery("");
                       setTicker("all");
+                      setPage(0);
                     }}
                   >
                     Reset filters
@@ -251,6 +268,37 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
               )}
             </Empty>
           )
+        )}
+        {visibleArticles.length > NEWS_PAGE_SIZE && (
+          <nav className="news-pagination" aria-label="News pages">
+            <span role="status">
+              {currentPage * NEWS_PAGE_SIZE + 1}–
+              {Math.min(
+                (currentPage + 1) * NEWS_PAGE_SIZE,
+                visibleArticles.length,
+              )}{" "}
+              of {visibleArticles.length} articles · Page {currentPage + 1} of{" "}
+              {pageCount}
+            </span>
+            <div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loading || currentPage === 0}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loading || currentPage + 1 >= pageCount}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </nav>
         )}
       </section>
       <section className="news-video" aria-labelledby="idx-video-title">

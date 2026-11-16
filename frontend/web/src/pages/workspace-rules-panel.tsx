@@ -1302,7 +1302,6 @@ export function ServerRulesPanel({
                         <div className="rule-library__swipe-copy">
                           <div className="rule-library__swipe-heading">
                             <strong>{rule.name}</strong>
-                            <ArrowLeft aria-hidden="true" />
                           </div>
                           <small className="rule-library__condition-count">
                             {rule.definition?.conditions.length ?? 0} conditions
@@ -1310,6 +1309,10 @@ export function ServerRulesPanel({
                           </small>
                           <p>{summary(rule.definition)}</p>
                         </div>
+                        <ArrowLeft
+                          className="rule-library__swipe-arrow"
+                          aria-hidden="true"
+                        />
                       </SwipeRow>
                     </article>
                   ))}

@@ -621,24 +621,28 @@ export function JournalPanel({
                       {time(d.screened_at)}
                     </TableCell>
                     <TableCell data-label="Details">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        aria-expanded={detailId === item.id}
-                        aria-controls="journal-snapshot-detail"
-                        onClick={() =>
-                          setDetailId(detailId === item.id ? null : item.id)
-                        }
-                      >
-                        View {d.symbol.replace(/\.JK$/, "")} details
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setTradeDraft({ ...d })}
-                      >
-                        Record {d.symbol.replace(/\.JK$/, "")} trade
-                      </Button>
+                      <div className="journal-row-actions">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`View ${d.symbol.replace(/\.JK$/, "")} details`}
+                          aria-expanded={detailId === item.id}
+                          aria-controls="journal-snapshot-detail"
+                          onClick={() =>
+                            setDetailId(detailId === item.id ? null : item.id)
+                          }
+                        >
+                          Details
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          aria-label={`Record ${d.symbol.replace(/\.JK$/, "")} trade`}
+                          onClick={() => setTradeDraft({ ...d })}
+                        >
+                          Record trade
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

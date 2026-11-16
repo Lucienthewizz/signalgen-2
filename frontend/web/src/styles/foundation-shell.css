@@ -42,6 +42,11 @@
   --green: #45e69f;
   --green-bright: #7af5bd;
   --green-deep: #064c35;
+  --button-primary-bg: #0d3926;
+  --button-primary-border: #22583d;
+  --button-primary-text: #f1f8f3;
+  --button-primary-hover: #124a31;
+  --button-primary-pressed: #092b1c;
   --green-soft: #9df8cc;
   --danger: #ff8585;
   --warning: #e8bf75;
