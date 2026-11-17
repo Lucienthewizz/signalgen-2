@@ -107,6 +107,31 @@ func (h *StudyHandler) definition(ctx context.Context, owner, id string) (core.R
 	r, e := h.Rules.Get(ctx, owner, id)
 	return r.Definition, r.DefinitionHash, e
 }
+
+// Current only exposes the caller's own session, never another tab's identity
+// or another account's study. Expired reservations cannot block recovery.
+func (h *StudyHandler) Current(w http.ResponseWriter, r *http.Request) {
+	owner, sid, ok := h.authorize(w, r)
+	if !ok {
+		return
+	}
+	items := []StudyContext{}
+	h.mu.Lock()
+	for id, item := range h.items {
+		if item.owner != owner || item.session != sid {
+			continue
+		}
+		if time.Now().After(item.ExpiresAt) {
+			h.Datasets.(studyDatasets).ReleaseStudy(owner, id)
+			delete(h.items, id)
+			continue
+		}
+		items = append(items, *item)
+	}
+	h.mu.Unlock()
+	shared.WriteJSON(w, 200, map[string]any{"items": items})
+}
+
 func (h *StudyHandler) Create(w http.ResponseWriter, r *http.Request) {
 	owner, sid, ok := h.authorize(w, r)
 	if !ok {

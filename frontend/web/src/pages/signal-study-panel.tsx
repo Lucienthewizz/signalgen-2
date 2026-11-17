@@ -1,3 +1,4 @@
+import { StudyRecovery, useStudyRecovery } from "@/components/study-recovery";
 import ElasticSlider from "@/components/react-bits/ElasticSlider";
 import Stepper from "@/components/react-bits/Stepper";
 import { Profiler, useEffect, useRef, useState, type FormEvent } from "react";
@@ -115,6 +116,11 @@ export function SignalStudyPanel({
     [total, setTotal] = useState(0),
     [groupPage, setGroupPage] = useState(0);
   const [horizonPage, setHorizonPage] = useState(0);
+  const recovery = useStudyRecovery(
+    authenticated ? userId : undefined,
+    "backtest",
+    backendOnline,
+  );
   const operation = useRef<AbortController | null>(null),
     current = useRef<StudyProgress | null>(null),
     ownerRef = useRef(userId);
@@ -281,7 +287,7 @@ export function SignalStudyPanel({
     };
   }, [progress?.completed, progress?.context.id, userId, page]);
   async function start(retry = false) {
-    if (operation.current || !userId) return;
+    if (operation.current || !userId || recovery.blocked) return;
     if (retry && frozenSelection.current !== selectionSignature) {
       setError(
         "Settings changed. Start a new study; retry cannot change the frozen rule, market or dates.",
@@ -354,8 +360,18 @@ export function SignalStudyPanel({
           await discardContext(result.context.id).catch(() => {});
       }
     } catch (e) {
+      if (active() && e instanceof ApiError && e.code === "STUDY_CAPACITY")
+        void recovery.refresh(true);
       if (active()) {
-        setError(e instanceof Error ? e.message : "Study failed.");
+        if (e instanceof ApiError && e.code === "STUDY_CAPACITY")
+          setMessage("Resolve the previous run status before starting.");
+        setError(
+          e instanceof ApiError && e.code === "STUDY_CAPACITY"
+            ? ""
+            : e instanceof Error
+              ? e.message
+              : "Study failed.",
+        );
         if (
           e &&
           typeof e === "object" &&
@@ -686,7 +702,10 @@ export function SignalStudyPanel({
               </details>
             </fieldset>
             <div className="study-actions study-config-actions">
-              <Button type="submit" disabled={busy || !backendOnline}>
+              <Button
+                type="submit"
+                disabled={busy || !backendOnline || recovery.blocked}
+              >
                 <Play data-icon="inline-start" />
                 Start signal study
               </Button>
@@ -720,7 +739,8 @@ export function SignalStudyPanel({
           <p role="status" aria-live="polite" aria-atomic="true">
             {message}
           </p>
-          {error && <p role="alert">{error}</p>}
+          {!busy && <StudyRecovery recovery={recovery} />}
+          {error && !recovery.previous && <p role="alert">{error}</p>}
           {busy && <StudyEstimate progress={progress} />}
           {progress && (
             <>

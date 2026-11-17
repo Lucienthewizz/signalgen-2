@@ -1,3 +1,4 @@
+import { StudyRecovery, useStudyRecovery } from "@/components/study-recovery";
 import Stepper from "@/components/react-bits/Stepper";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError } from "@/api/client";
@@ -34,6 +35,7 @@ export function MarketScreenPanel({
     rows: [],
     total: 0,
   });
+  const recovery = useStudyRecovery(userId, "screen", backendOnline);
   const operation = useRef<AbortController | null>(null),
     current = useRef<StudyProgress | null>(null);
   const [reload, setReload] = useState(0),
@@ -86,7 +88,7 @@ export function MarketScreenPanel({
   }, [userId, progress?.completed, progress?.context.id, page]);
   async function start(e: FormEvent) {
     e.preventDefault();
-    if (!userId || operation.current) return;
+    if (!userId || operation.current || recovery.blocked) return;
     const controller = new AbortController();
     operation.current = controller;
     setBusy(true);
@@ -128,7 +130,12 @@ export function MarketScreenPanel({
         await api.cancelStudy(p.context.id, false, "screen");
       }
     } catch (e) {
-      if (!controller.signal.aborted)
+      if (e instanceof ApiError && e.code === "STUDY_CAPACITY")
+        void recovery.refresh(true);
+      if (
+        !controller.signal.aborted &&
+        !(e instanceof ApiError && e.code === "STUDY_CAPACITY")
+      )
         setError(
           e instanceof Error
             ? e.message
@@ -237,7 +244,10 @@ export function MarketScreenPanel({
           </p>
         </fieldset>
         <div className="study-actions">
-          <Button type="submit" disabled={busy || !backendOnline}>
+          <Button
+            type="submit"
+            disabled={busy || !backendOnline || recovery.blocked}
+          >
             Start screening
           </Button>
           <Button
@@ -267,9 +277,12 @@ export function MarketScreenPanel({
           ? `${progress.completed}/${progress.context.total} stocks processed; ${progress.failures.length} failed. ${busy ? "Screening…" : complete ? "Selection complete." : "Partial results; some stocks were not processed."}`
           : busy
             ? "Checking access and preparing data…"
-            : "Ready to screen."}
+            : recovery.blocked
+              ? "Resolve the previous run status before starting."
+              : "Ready to screen."}
       </p>
-      {error && <p role="alert">{error}</p>}
+      {!busy && <StudyRecovery recovery={recovery} />}
+      {error && !recovery.previous && <p role="alert">{error}</p>}
       {progress && (
         <>
           <p>

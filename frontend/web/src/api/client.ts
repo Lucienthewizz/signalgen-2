@@ -842,6 +842,13 @@ export const api = {
     request<{ backtest?: BacktestCapabilities }>("/api/v1/capabilities", {
       signal,
     }),
+  activeStudies: (purpose: "screen" | "backtest", signal?: AbortSignal) =>
+    request<{ items: import("@/analysis/signal-study-types").StudyContext[] }>(
+      purpose === "screen"
+        ? "/api/v1/screener/scans"
+        : "/api/v1/backtests/studies",
+      { signal },
+    ),
   createStudy: (
     input: import("@/analysis/signal-study-types").StudyInput,
     signal: AbortSignal,

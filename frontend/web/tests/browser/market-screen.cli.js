@@ -21,6 +21,7 @@ async(page)=>{
   if(p==="/api/v1/subscription")return respond({subscription:null});
   if(p==="/api/v1/workspace")return respond({items:[]});
   if(p.startsWith("/api/v1/workspace/")){const b=request.postDataJSON();return respond({...b,version:b.version+1})}
+  if(p==="/api/v1/screener/scans"&&method==="GET")return respond({items:[]});
   if(p==="/api/v1/screener/scans"){
    if(denied)return respond({error:{code:"ENTITLEMENT_REQUIRED",message:"Screener access expired."}},403);const b=request.postDataJSON();frozen={purpose:"screen",source:b.source,universe_id:b.universe_id,id:"scan-qa-"+(++scanCounter),engine_version:"core-0.5.0",rule_schema_version:"signal-baseline-1",schema_version:"signal-study-1",policy_version:"signal-close-independent-1",market:b.market,currency:b.market==="US"?"USD":"IDR",config:b.config,rule_id:b.rule_id,definition_hash:"sha256:rule",catalog_hash:"sha256:qa-frozen-catalog",total:23,batch_size:10,batches:3,expires_at:"2027-11-01T00:00:00Z"};return respond(frozen,201);
   }
