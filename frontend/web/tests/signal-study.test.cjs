@@ -6,8 +6,8 @@ function load(file,dependencies={},clock={}){
  const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src',file),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:n=>dependencies[n]??{},AbortController,DOMException,TextEncoder,crypto,performance,setTimeout,clearTimeout,...clock});return exports;
 }
 const types=load('analysis/signal-study-types.ts');
-function harness({failure,quota,version=false,purpose="backtest"}={}){
- const calls={prepare:[],preparedStocks:[],features:[],save:[],release:[],workers:0,disposed:0,studies:0,events:[]};let revision=1;
+function harness({failure,quota,version=false,purpose="backtest",scoreHook,featureHook}={}){
+ const calls={prepare:[],preparedStocks:[],features:[],save:[],release:[],workers:0,disposed:0,studies:0,events:[],score:[],activeScores:0,peakScores:0,activeFeatures:0,peakFeatures:0,releaseActive:[]};let revision=1;
  const config={from:'2026-01-20',to:'2026-01-23',n_steps:3};
  const context={purpose,id:'study',schema_version:types.STUDY_SCHEMA,policy_version:types.STUDY_POLICY,engine_version:'core-0.5.0',rule_schema_version:'signal-baseline-1',market:'US',currency:'USD',definition_hash:'hash',batch_size:10,batches:3,total:23,config};
  const contents=new Map();let broken=failure;
@@ -23,11 +23,11 @@ function harness({failure,quota,version=false,purpose="backtest"}={}){
     const data={purpose,timeframe:'1d',market:'US',currency:'USD',backtest,series:[{symbol,timezone:'UTC',candles}]},raw=JSON.stringify(data);
     contents.set(symbol,raw);manifests.push({purpose,timeframe:'1d',dataset_id:symbol,symbols:[symbol],market:'US',currency:'USD',backtest,decoded_bytes:Buffer.byteLength(raw),checksum:'sha256:'+createHash('sha256').update(raw).digest('hex')});
    }return {index:batch,stocks,manifests,failures};
-  },getDatasetContentText:async id=>contents.get(id),createStudyGrant:async manifest=>({id:manifest.symbols[0]}),backtestSignals:async(id,candidates)=>({policy_version:types.STUDY_POLICY,entries:[{symbol:id,timestamp:candidates[0].timestamp,signal_type:'BUY'}]}),releaseStudyBatch:async(_,batch)=>calls.release.push(batch)};
+  },getDatasetContentText:async id=>contents.get(id),createStudyGrant:async manifest=>({id:manifest.symbols[0]}),backtestSignals:async(id,candidates)=>{calls.score.push(id);calls.activeScores++;calls.peakScores=Math.max(calls.peakScores,calls.activeScores);try{await scoreHook?.(id);return {policy_version:types.STUDY_POLICY,entries:[{symbol:id,timestamp:candidates[0].timestamp,signal_type:'BUY'}]}}finally{calls.activeScores--}},releaseStudyBatch:async(_,batch)=>{calls.releaseActive.push(calls.activeScores+calls.activeFeatures);calls.release.push(batch)}};
  class Engine {
   constructor(){calls.workers++}dispose(){calls.disposed++}
   async initialize(){return {schema_version:types.STUDY_SCHEMA,policy_version:types.STUDY_POLICY}}
-  async features(series){calls.features.push(series[0].symbol);return [{engine_version:version?'old':context.engine_version,feature_schema_version:'screener-features-1',candidates:series[0].candles.slice(19).map(c=>({symbol:series[0].symbol,timestamp:c.timestamp,features:{}}))}]}
+  async features(series){calls.activeFeatures++;calls.peakFeatures=Math.max(calls.peakFeatures,calls.activeFeatures);try{await featureHook?.(series[0].symbol);}finally{calls.activeFeatures--}calls.features.push(series[0].symbol);return [{engine_version:version?'old':context.engine_version,feature_schema_version:'screener-features-1',candidates:series[0].candles.slice(19).map(c=>({symbol:series[0].symbol,timestamp:c.timestamp,features:{}}))}]}
   async study(request){calls.studies++;const metrics={signals:1,evaluated:1,missing:0,wins:1,losses:0,flats:0,sum_return_pct:5,mean_return_pct:5,win_rate:100};return {schema_version:types.STUDY_SCHEMA,policy_version:types.STUDY_POLICY,events:[],horizons:[{step:1,basis:'close',...metrics}],swing:metrics,by_symbol:[{key:request.series[0].symbol,...metrics}],by_day:[{key:'2026-01-20',...metrics}]}}
  }
  const {runSignalStudy}=load('analysis/signal-study.ts',{'@/api/client':{api,session,ApiError},'./signal-study-engine':{SignalStudyEngine:Engine},'./signal-study-types':types,'./signal-study-storage':{storeStudySymbol:async(_owner,_id,symbol,result)=>{if(quota===symbol)throw new DOMException('Temporary storage quota reached','QuotaExceededError');calls.save.push(symbol);calls.events.push(...result.events)}}});
@@ -85,4 +85,32 @@ test('batch prefetch runs at most four jobs and keeps item order',async()=>{
  const out=[];for(const {manifest,result} of jobs){try{out.push([manifest,await result])}catch(e){out.push([manifest,e.message])}}
  assert.equal(peak,4);assert.equal(started.length,10);
  assert.deepEqual(out,[[0,0],[1,10],[2,20],[3,30],[4,40],[5,50],[6,'boom'],[7,70],[8,80],[9,90]]);
+});
+
+test('screen scoring overlaps at most four requests, keeps one WASM call and ordered commits',async()=>{
+ const h=harness({purpose:'screen',scoreHook:async id=>{await new Promise(r=>setTimeout(r,10+(3-Number(id.slice(5))%4)*5))},featureHook:async()=>{await new Promise(r=>setTimeout(r,1))}});
+ const p=await h.runSignalStudy({purpose:'screen'},'owner',new AbortController().signal,()=>{});
+ assert.equal(p.completed,23);assert.equal(h.calls.peakScores,4);assert.equal(h.calls.peakFeatures,1);
+ assert.deepEqual(h.calls.save,Array.from({length:23},(_,i)=>'STOCK'+i));
+ assert.equal(new Set(h.calls.score).size,23);assert.equal(h.calls.score.length,23);
+ assert.ok(h.calls.releaseActive.every(n=>n===0));
+});
+test('screen pipeline stops dispatch on scoring failure, joins requests before release, then resumes without duplicate commits',async()=>{
+ let fail=true,failureAt=-1;
+ const h=harness({purpose:'screen',scoreHook:async id=>{await new Promise(r=>setTimeout(r,id==='STOCK1'?2:15));if(fail&&id==='STOCK1'){failureAt=h.calls.score.length;throw Error('scoring unavailable')}}});let partial;
+ await assert.rejects(h.runSignalStudy({purpose:'screen'},'owner',new AbortController().signal,p=>partial=p),/scoring unavailable/);
+ assert.equal(h.calls.score.length,failureAt);assert.ok(failureAt<=4);assert.ok(h.calls.save.every(s=>s==='STOCK0'));
+ assert.equal(h.calls.releaseActive[0],0);assert.equal(h.calls.disposed,1);
+ fail=false;const p=await h.runSignalStudy({purpose:'screen'},'owner',new AbortController().signal,()=>{},partial);
+ assert.equal(p.completed,23);assert.equal(h.calls.save.length,23);assert.equal(new Set(h.calls.save).size,23);
+ assert.ok(h.calls.releaseActive.every(n=>n===0));
+});
+test('screen cancellation and account switch during in-flight scoring never commit later symbols and drain the pipeline',async()=>{
+ for(const action of ['abort','identity']){
+  const controller=new AbortController();let triggered=false,partial,dispatchAtStop;
+  const h=harness({purpose:'screen',scoreHook:async()=>{if(!triggered){triggered=true;dispatchAtStop=h.calls.score.length;if(action==='abort')controller.abort();else h.changeIdentity()}await new Promise(r=>setTimeout(r,5))}});
+  await assert.rejects(h.runSignalStudy({purpose:'screen'},'owner',controller.signal,p=>partial=p));
+  assert.equal(h.calls.save.length,0);assert.equal(h.calls.score.length,dispatchAtStop);assert.equal(h.calls.activeScores,0);assert.equal(h.calls.activeFeatures,0);assert.equal(h.calls.disposed,1);
+  if(action==='abort'){const p=await h.runSignalStudy({purpose:'screen'},'owner',new AbortController().signal,()=>{},partial);assert.equal(p.completed,23);assert.equal(new Set(h.calls.save).size,23)}
+ }
 });

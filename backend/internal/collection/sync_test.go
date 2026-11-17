@@ -20,6 +20,18 @@ type rangeHistory struct {
 	fail   bool
 }
 
+type selectiveHistory struct {
+	*rangeHistory
+	failedSymbol string
+}
+
+func (p *selectiveHistory) DailyHistory(ctx context.Context, item universe.Instrument, from, to time.Time) (marketdata.History, error) {
+	if item.Symbol == p.failedSymbol {
+		return marketdata.History{}, marketdata.ErrUnavailable
+	}
+	return p.rangeHistory.DailyHistory(ctx, item, from, to)
+}
+
 func (p *rangeHistory) DailyHistory(_ context.Context, item universe.Instrument, from, to time.Time) (marketdata.History, error) {
 	p.starts = append(p.starts, from)
 	if p.fail {
@@ -42,6 +54,7 @@ func TestSyncBackfillIncrementalCorrectionAndIdempotency(t *testing.T) {
 	if _, err := Sync(ctx, c, p, o, 7, nil); err != nil {
 		t.Fatal(err)
 	}
+
 	store, err := NewStoreProvider(o.Directory)
 	if err != nil {
 		t.Fatal(err)
@@ -84,6 +97,36 @@ func TestSyncBackfillIncrementalCorrectionAndIdempotency(t *testing.T) {
 		t.Fatalf("repeated published run fetched again: %v", err)
 	}
 }
+
+func TestSyncExplicitPartialPublicationKeepsFailuresVisible(t *testing.T) {
+	catalog, options, base := syncFixture(t)
+	provider := &selectiveHistory{rangeHistory: base, failedSymbol: "TLKM.JK"}
+	options.AllowPartial = true
+	report, err := Sync(context.Background(), catalog, provider, options, 7, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Entries[0].Status != "success" || report.Entries[1].Status != "failed" {
+		t.Fatalf("unexpected report entries: %+v", report.Entries)
+	}
+	if _, err := os.Stat(filepath.Join(options.Directory, "current.json")); err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewStoreProvider(options.Directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Daily(context.Background(), []universe.Instrument{{Symbol: "BBCA.JK", ProviderSymbol: "BBCA.JK"}}, 20); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Daily(context.Background(), []universe.Instrument{{Symbol: "TLKM.JK", ProviderSymbol: "TLKM.JK"}}, 20); !errors.Is(err, marketdata.ErrUnavailable) {
+		t.Fatalf("failed IDX history was hidden or substituted: %v", err)
+	}
+	if _, err := Prune(context.Background(), options.Directory, RetentionOptions{Keep: 2, MinAge: 24 * time.Hour, DryRun: true}); err != nil {
+		t.Fatalf("partial publication failed retention validation: %v", err)
+	}
+}
+
 func TestSyncFailureRetainsPublicationAndResumes(t *testing.T) {
 	c, o, p := syncFixture(t)
 	ctx := context.Background()

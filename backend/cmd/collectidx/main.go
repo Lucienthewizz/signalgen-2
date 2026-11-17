@@ -32,8 +32,8 @@ func run() error {
 	}
 	now := time.Now()
 	latestEnd := closedDayBoundary(now, jakarta)
-	catalogPath := flag.String("catalog", "", "official IDX .xlsx or UTF-8 CSV")
-	source := flag.String("source-url", "https://www.idx.co.id/id/data-pasar/data-saham/daftar-saham/", "source provenance (not fetched by this job)")
+	catalogPath := flag.String("catalog", "", "official IDX .xlsx/CSV or explicit project catalog JSON")
+	source := flag.String("source-url", "", "source provenance (defaults by catalog type; not fetched by this job)")
 	asOf := flag.String("as-of", latestEnd.Format("2006-01-02"), "exclusive end date in Asia/Jakarta; excludes this entire date")
 	fromDate := flag.String("from", "", "inclusive date, defaults to one year before as-of")
 	output := flag.String("out", "data/idx", "private backend output directory")
@@ -42,6 +42,7 @@ func run() error {
 	retryFailed := flag.Bool("retry-failed", false, "retry previously failed rows")
 	refresh := flag.Bool("refresh", false, "explicitly refetch saved successes for the same window")
 	incremental := flag.Bool("incremental", false, "maintain a published rolling history store")
+	allowPartial := flag.Bool("allow-partial", false, "explicitly publish successful histories while failed catalog entries remain visible")
 	years := flag.Int("years", 5, "incremental rolling history in years (1..5)")
 	overlap := flag.Int("overlap-days", 7, "incremental correction overlap (1..90 calendar days)")
 	keep := flag.Int("keep-generations", 3, "incremental retention: current plus recent retired complete generations (minimum 2)")
@@ -67,6 +68,13 @@ func run() error {
 	if *catalogPath == "" {
 		return fmt.Errorf("-catalog is required; no hardcoded list is presented as complete IDX")
 	}
+	if *source == "" {
+		if strings.EqualFold(filepath.Ext(*catalogPath), ".json") {
+			*source = "project://signalgen.stock_catalog"
+		} else {
+			*source = "https://www.idx.co.id/id/data-pasar/data-saham/daftar-saham/"
+		}
+	}
 	if *interval < 500*time.Millisecond || *interval > time.Minute || *limit < 0 {
 		return fmt.Errorf("delay must be 500ms..1m and limit must be nonnegative")
 	}
@@ -82,6 +90,9 @@ func run() error {
 	}
 	if *years < 1 || *years > 5 || *overlap < 1 || *overlap > 90 {
 		return fmt.Errorf("years must be 1..5 and overlap-days 1..90")
+	}
+	if !*incremental && *allowPartial {
+		return fmt.Errorf("-allow-partial requires -incremental")
 	}
 	if *incremental && (*refresh || *retryFailed) {
 		return fmt.Errorf("incremental mode retries failures automatically; use a separate output store for a full rebuild")
@@ -99,8 +110,8 @@ func run() error {
 	if !from.Before(to) || to.Sub(from) > 6*366*24*time.Hour {
 		return fmt.Errorf("window must be positive and at most six years")
 	}
-	if !strings.HasPrefix(*source, "https://") {
-		return fmt.Errorf("source-url must identify an HTTPS source")
+	if !strings.HasPrefix(*source, "https://") && *source != "project://signalgen.stock_catalog" {
+		return fmt.Errorf("source-url must identify an HTTPS source or project://signalgen.stock_catalog")
 	}
 	if *scheduled {
 		provider, err := collectorProvider()
@@ -109,7 +120,7 @@ func run() error {
 		}
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer cancel()
-		options := collection.ScheduleOptions{CatalogPath: *catalogPath, SourceURL: *source, Directory: *output, Every: *every, RetryDelay: *retryDelay, RunTimeout: *runTimeout, InstrumentDelay: *interval, Keep: *keep, RetirementGrace: *grace, RetentionDryRun: *retentionDryRun}
+		options := collection.ScheduleOptions{CatalogPath: *catalogPath, SourceURL: *source, Directory: *output, Every: *every, RetryDelay: *retryDelay, RunTimeout: *runTimeout, InstrumentDelay: *interval, Keep: *keep, RetirementGrace: *grace, RetentionDryRun: *retentionDryRun, AllowPartial: *allowPartial}
 		return collection.RunScheduler(ctx, options, provider, func(result collection.ScheduledResult) {
 			if result.Err != nil {
 				if ctx.Err() != nil {
@@ -136,7 +147,7 @@ func run() error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	options := collection.Options{Directory: *output, From: from, To: to, Interval: *interval, Limit: *limit, RetryFailed: *retryFailed, Refresh: *refresh}
+	options := collection.Options{Directory: *output, From: from, To: to, Interval: *interval, Limit: *limit, RetryFailed: *retryFailed, Refresh: *refresh, AllowPartial: *allowPartial}
 	progress := func(entry collection.Entry) {
 		fmt.Printf("%s: %s; candles=%d; %s\n", entry.Code, entry.Status, entry.Candles, entry.Error)
 	}

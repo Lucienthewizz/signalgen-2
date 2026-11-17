@@ -63,16 +63,31 @@ func Sync(ctx context.Context, catalog Catalog, provider HistoryProvider, option
 	if previous != nil && previous.directory == options.Directory {
 		return readReport(previous.directory)
 	}
-	options.RetryFailed = true
+	// A bounded acquisition may have already completed for this exact
+	// generation. In explicit partial mode, validate and publish that durable
+	// report without re-downloading known failures during activation.
+	reusePartialReport := false
+	if options.AllowPartial {
+		if _, statErr := os.Stat(filepath.Join(options.Directory, "report.json")); statErr == nil {
+			reusePartialReport = true
+		}
+	}
+	options.RetryFailed = !reusePartialReport
 	options.Refresh = false
 	report, err := Run(ctx, catalog, &incrementalHistory{upstream: provider, previous: previous, overlapDays: overlapDays}, options, progress)
 	if err != nil {
 		return report, err
 	}
+	successes := 0
 	for _, entry := range report.Entries {
-		if entry.Status != "success" {
+		if entry.Status == "success" {
+			successes++
+		} else if !options.AllowPartial {
 			return report, fmt.Errorf("incremental collection incomplete; previous publication retained")
 		}
+	}
+	if successes == 0 {
+		return report, fmt.Errorf("incremental collection has no successful histories; previous publication retained")
 	}
 	if report.StoppedReason != "" {
 		return report, fmt.Errorf("incremental collection stopped: %s", report.StoppedReason)

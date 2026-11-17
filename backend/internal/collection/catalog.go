@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/csv"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -34,6 +35,7 @@ type Catalog struct {
 }
 
 var stockCode = regexp.MustCompile(`^[A-Z]{4}$`)
+var projectStockCode = regexp.MustCompile(`^[A-Z0-9]{4}$`)
 
 // ReadCatalog preserves source provenance and rejects duplicate/invalid codes.
 // Only the first worksheet of the plain IDX export is supported; formulas and
@@ -58,8 +60,10 @@ func ReadCatalog(path, sourceURL string, now time.Time) (Catalog, error) {
 		rows, err = reader.ReadAll()
 	case ".xlsx":
 		rows, err = readXLSX(raw)
+	case ".json":
+		return readProjectCatalog(raw, sourceURL, now)
 	default:
-		return Catalog{}, fmt.Errorf("catalog must be the IDX .xlsx export or UTF-8 comma-separated CSV")
+		return Catalog{}, fmt.Errorf("catalog must be the IDX .xlsx export, UTF-8 CSV, or explicit project catalog JSON")
 	}
 	if err != nil {
 		return Catalog{}, err
@@ -115,6 +119,62 @@ func ReadCatalog(path, sourceURL string, now time.Time) (Catalog, error) {
 	}
 	if len(items) == 0 {
 		return Catalog{}, fmt.Errorf("empty catalog")
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Code < items[j].Code })
+	hash := sha256.Sum256(raw)
+	return Catalog{SourceURL: sourceURL, RetrievedAt: now.UTC().Format(time.RFC3339), SourceSHA256: hex.EncodeToString(hash[:]), Items: items}, nil
+}
+
+// readProjectCatalog is deliberately narrower than the official IDX export
+// reader. The active project catalog has trusted symbol/name metadata but may
+// not carry listing dates, so an absent date remains unknown rather than being
+// fabricated. This input does not claim point-in-time index membership.
+func readProjectCatalog(raw []byte, sourceURL string, now time.Time) (Catalog, error) {
+	var input struct {
+		Items []struct {
+			Symbol         string `json:"symbol"`
+			ProviderSymbol string `json:"provider_symbol"`
+			Name           string `json:"name"`
+			ListingDate    string `json:"listing_date"`
+		} `json:"items"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		return Catalog{}, fmt.Errorf("invalid project catalog JSON: %w", err)
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return Catalog{}, fmt.Errorf("project catalog JSON has trailing data")
+	}
+	if len(input.Items) < 1 || len(input.Items) > 12000 {
+		return Catalog{}, fmt.Errorf("project catalog must contain 1..12000 items")
+	}
+	items := make([]Instrument, 0, len(input.Items))
+	seen := map[string]bool{}
+	for index, item := range input.Items {
+		symbol := strings.TrimSpace(item.Symbol)
+		providerSymbol := strings.TrimSpace(item.ProviderSymbol)
+		if !strings.HasSuffix(symbol, ".JK") || providerSymbol != symbol {
+			return Catalog{}, fmt.Errorf("invalid project catalog symbol at item %d", index+1)
+		}
+		code := strings.TrimSuffix(symbol, ".JK")
+		if !projectStockCode.MatchString(code) || seen[code] {
+			return Catalog{}, fmt.Errorf("invalid or duplicate project catalog symbol at item %d", index+1)
+		}
+		name := strings.TrimSpace(item.Name)
+		if name == "" || len([]rune(name)) > 300 {
+			return Catalog{}, fmt.Errorf("invalid project catalog name at item %d", index+1)
+		}
+		listingDate := strings.TrimSpace(item.ListingDate)
+		if listingDate != "" {
+			stamp, err := time.Parse("2006-01-02", listingDate)
+			if err != nil || stamp.After(now) {
+				return Catalog{}, fmt.Errorf("invalid project catalog listing date at item %d", index+1)
+			}
+			listingDate = stamp.Format("2006-01-02")
+		}
+		seen[code] = true
+		items = append(items, Instrument{Code: code, Name: name, ListingDate: listingDate, ProviderSymbol: providerSymbol})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Code < items[j].Code })
 	hash := sha256.Sum256(raw)

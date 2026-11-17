@@ -13,21 +13,28 @@ calendar or proof that every provider row is final.
 
 The scheduler reuses existing `Sync`: seven-day incremental correction overlap,
 immutable generations, same-catalog/same-window idempotency and retention only
-after successful publication. A failed/partial run keeps the previous published
-generation. A visible catalog-content update is picked up on a later run. Same-day unchanged
-input does not redownload provider history; corrections are refreshed when the
-next generation is collected.
+after successful publication. This local profile explicitly enables
+`-allow-partial`: a generation is published only when it has at least one
+validated history, while every failed or pending catalog entry remains visible
+and unavailable. A failed run with no successful histories keeps the previous
+published generation. A visible catalog-content update is picked up on a later
+run. Same-day unchanged input does not redownload provider history; corrections
+are refreshed when the next generation is collected.
 
 ## Explicit local Docker setup
 
 Use the verified image from this branch's evidence, a private existing output
-store writable by container UID/GID 10001 and an operator-supplied catalog file.
+store writable by container UID/GID 10001 and an operator-supplied project
+catalog JSON. The JSON carries active symbol/name metadata only and does not
+claim historical listing membership. The compose collector profile remains
+mounted as `/catalog/idx.csv` for strict official CSV/XLSX workflows; do not
+rename an official export to JSON.
 The scheduler does not fetch the catalog or treat a bundled list as complete.
 Set these variables in a clean operator shell; never copy personal environment
 files into the image or repository:
 
 ```sh
-export SIGNALGEN_LOCAL_IMAGE='sha256:6341966d32f78ce0adcdb235138a5fce45552bdeb8a9c05c3a0db9493832439b'
+export SIGNALGEN_LOCAL_IMAGE='sha256:ae53e95a19711d59ebe8f7efd0ce68d85c6347702bd2d2c7498f70ab21afad7a'
 export SIGNALGEN_LOCAL_IDX_STORE=/absolute/private/idx-store
 export SIGNALGEN_LOCAL_IDX_CATALOG=/absolute/operator/catalog.csv
 export SIGNALGEN_LOCAL_API_ENV_FILE=/absolute/explicit/api-env-file
@@ -48,6 +55,10 @@ mounted. Restart this service after an atomic catalog replacement; catalog
 auto-download/rediscovery is not included. The API keeps its read-only published-store mount. API env
 configuration is still explicit because the standalone compose file also defines
 the API; no authenticated API is needed to run this collector job.
+If starting the packaged collector directly with `docker run`, pass
+`--no-healthcheck`: this process serves no HTTP endpoint, so an inherited API
+healthcheck would report a false failure. Compose disables that check for the
+`idx-scheduler` profile.
 
 The scheduler service has `restart: unless-stopped`, a read-only root, non-root
 UID/GID 10001, a read-only catalog bind, a separate writable store bind, dropped
@@ -82,6 +93,9 @@ and stop the loop. No systemd unit or host scheduler is installed or activated.
 
 Scheduled mode rejects fixed `-as-of`/`-from`, nonzero `-limit`, validate/prune-only
 and refresh/retry-failed flags. It retries failures automatically through Sync.
+The local compose profile opts into partial publication explicitly; this does not
+change the CLI default, which remains strict and retains the previous
+publication when any catalog entry fails.
 Timing flags without `-schedule` are rejected rather than silently ignored.
 Manual one-shot, validate-only, incremental and prune behavior otherwise remains
 unchanged. An execution taking an hour shifts the next success check by that

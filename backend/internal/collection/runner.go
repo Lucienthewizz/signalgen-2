@@ -21,13 +21,14 @@ type HistoryProvider interface {
 }
 
 type Options struct {
-	Directory   string
-	From        time.Time
-	To          time.Time
-	Interval    time.Duration
-	Limit       int
-	RetryFailed bool
-	Refresh     bool
+	Directory    string
+	From         time.Time
+	To           time.Time
+	Interval     time.Duration
+	Limit        int
+	RetryFailed  bool
+	Refresh      bool
+	AllowPartial bool
 }
 
 type Entry struct {
