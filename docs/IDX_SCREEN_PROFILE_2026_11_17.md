@@ -34,20 +34,40 @@ symbol are still unmeasured here.
 
 Prices, catalog and outputs stay outside the repository.
 
-## Environment
+## Environment and provenance
 
-Docker, Go image `sha256:5cf287a7…`, CGO off, `--network none`, read-only root,
-user 65532, 2 CPUs, 3 GB RAM, 256 PIDs, file-size and wall-clock caps. The store and
-catalog are mounted read-only; only the output directory is writable. RTT is simulated
-by a client-side sleep before each request.
+The results below come from two historical passes run by hand on 2026-11-17 (the
+`out` and `out2` passes). Both used Docker context `orbstack` on arm64 and the Go
+image pinned by digest `sha256:5cf287a7…`, with CGO off, `--network none`,
+`--read-only`, user 65532, `--cpus 2 --memory 3g --pids-limit 256`,
+`nofile=4096`, an in-container `timeout`, and the store, catalog and binary
+mounted read-only. Variables reached the container only through explicit `-e`
+flags. Those passes did not set `--cap-drop ALL` or `no-new-privileges`, did
+not pin `--pull=never` or `--platform`, and wrote output and the Go build cache
+to bind-mounted host scratch directories with no disk cap. The `out2` pass
+also capped file size at 256 MB. Treat their control provenance as weaker than
+the runner below. Rerunning the runner below reproduces them under full controls.
+
+RTT is simulated by a client-side sleep before each request.
 
 ## Reproduce
 
 ```sh
-SCREEN_STORE=<pinned store root> SCREEN_CATALOG=<catalog.json> SCREEN_OUT=<dir> \
+SCREEN_STORE=<pinned store root> SCREEN_CATALOG=<catalog.json> SCREEN_OUT=<new dir outside the repo> \
 SCREEN_REPORT_SHA256=826411447c5f5ab04ad2bca7f7ab151cd2389acaf62a8714d61d2ba07d84574f \
-backend/scripts/profile_screen_catalog.sh
+python3 -I backend/scripts/profile_screen_catalog.py
 ```
+
+`profile_screen_catalog.py` gives the docker CLI only `PATH` and `HOME` and pins
+the context, platform, image digest and `--pull=never`. Each container runs as
+user 65532 with `--cap-drop ALL`, `no-new-privileges`, `--network none` and
+`--read-only`. Source, module cache, archive, catalog and binary are mounted
+read-only. The only writable path is a size-capped tmpfs at `/scratch`. Limits:
+2 CPUs, 3 GB RAM and swap, 256 PIDs, 256 MB files, 4096 open files, plus a
+wall-clock timeout inside and outside the container. Artifacts leave as a tar
+on stdout, and the runner promotes only allowlisted regular files within byte
+limits, never overwriting. `backend/scripts/test_profile_screen_catalog.py`
+checks these controls and the promotion rules.
 
 Each scenario writes `timing.json` (stages, per-route counts/statuses/bytes),
 `oracle.json` (canonical outcome for every catalog member) and `cpu.pprof`.
