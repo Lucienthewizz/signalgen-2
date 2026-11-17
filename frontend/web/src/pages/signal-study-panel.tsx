@@ -1,3 +1,6 @@
+import { StudyRecovery, useStudyRecovery } from "@/components/study-recovery";
+import ElasticSlider from "@/components/react-bits/ElasticSlider";
+import Stepper from "@/components/react-bits/Stepper";
 import { Profiler, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, session, ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -13,7 +16,14 @@ import {
   FieldSet,
   FieldLegend,
 } from "@/components/ui/field";
-import { SlidersHorizontal, Play, Square, RefreshCw } from "lucide-react";
+import {
+  SlidersHorizontal,
+  Play,
+  Square,
+  RefreshCw,
+  CheckCheck,
+  Info,
+} from "lucide-react";
 import { runSignalStudy, type StudyProgress } from "@/analysis/signal-study";
 import {
   clearStudyOwner,
@@ -91,6 +101,14 @@ export function SignalStudyPanel({
     [universe, setUniverse] = useState<string>(
       screeningSelection?.universe ?? "",
     );
+  const [periodComparison, setComparison] = useState<{
+    owner: string;
+    context: StudyProgress["context"];
+    metrics: StudyMetrics;
+  } | null>(null);
+  useEffect(() => {
+    setComparison(null);
+  }, [userId]);
   const [progress, setProgress] = useState<StudyProgress | null>(null),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
@@ -105,6 +123,12 @@ export function SignalStudyPanel({
   const [horizonPage, setHorizonPage] = useState(0);
   const [evaluation, setEvaluation] = useState("exact");
   const [detailStep, setDetailStep] = useState(3);
+  const recovery = useStudyRecovery(
+    authenticated ? userId : undefined,
+    "backtest",
+    backendOnline,
+  );
+
   const operation = useRef<AbortController | null>(null),
     current = useRef<StudyProgress | null>(null),
     ownerRef = useRef(userId);
@@ -277,7 +301,7 @@ export function SignalStudyPanel({
     };
   }, [progress?.completed, progress?.context.id, userId, page]);
   async function start(retry = false) {
-    if (operation.current || !userId) return;
+    if (operation.current || !userId || recovery.blocked) return;
     if (retry && frozenSelection.current !== selectionSignature) {
       setError(
         "Settings changed. Start a new study; retry cannot change the frozen rule, market or dates.",
@@ -351,8 +375,18 @@ export function SignalStudyPanel({
           await discardContext(result.context.id).catch(() => {});
       }
     } catch (e) {
+      if (active() && e instanceof ApiError && e.code === "STUDY_CAPACITY")
+        void recovery.refresh(true);
       if (active()) {
-        setError(e instanceof Error ? e.message : "Study failed.");
+        if (e instanceof ApiError && e.code === "STUDY_CAPACITY")
+          setMessage("Resolve the previous run status before starting.");
+        setError(
+          e instanceof ApiError && e.code === "STUDY_CAPACITY"
+            ? ""
+            : e instanceof Error
+              ? e.message
+              : "Study failed.",
+        );
         if (
           e &&
           typeof e === "object" &&
@@ -442,6 +476,7 @@ export function SignalStudyPanel({
   if (!authenticated || !userId)
     return <p role="status">Sign in to analyse historical signals.</p>;
   const ready = progress?.context;
+  const selectedMetrics = progress?.swing;
   const resultStep = Math.min(detailStep, ready?.config.n_steps ?? 1);
   const comparison = progress
     ? evaluationComparison(
@@ -463,6 +498,9 @@ export function SignalStudyPanel({
         recordSample("react_render_ms", duration)
       }
     >
+      <div
+        className={`pen-study-layout ${progress || busy ? "has-results" : ""}`}
+      >
       <section className="signal-study-panel" aria-labelledby="study-heading">
         <header className="study-config-heading">
           <span className="study-config-heading__icon" aria-hidden="true">
@@ -471,14 +509,24 @@ export function SignalStudyPanel({
           <div>
             <h2 id="study-heading">Analyse every signal</h2>
             <p>
-              Signal-study statistics measure each signal from its candle’s
-              close. Overlapping signals are independent observations; portfolio
-              return requires the separate Portfolio simulation mode.
+                Independent daily observations from the signal candle’s close.
+                Not a cash portfolio or executed trades.
+
             </p>
           </div>
           <Badge variant="outline">Daily candles</Badge>
         </header>
+          <Stepper
+            stage={busy ? 1 : progress ? 2 : 0}
+            partial={
+              !!progress && progress.completed !== progress.context.total
+            }
+          />
         <form
+            onInvalidCapture={(event) => {
+              const details = (event.target as HTMLElement).closest("details");
+              if (details) details.open = true;
+            }}
           onSubmit={(e: FormEvent) => {
             e.preventDefault();
             void start();
@@ -584,27 +632,53 @@ export function SignalStudyPanel({
                     }
                   />
                 </Field>
-                <Field>
+                  <Field className="study-horizon-field">
+                    <div className="study-horizon-label">
                   <FieldLabel htmlFor="study-horizon">
                     Trading candles after signal
                   </FieldLabel>
+                      <span id="study-horizon-help">
+                        (1–100 completed daily candles, not calendar days)
+                      </span>
+                    </div>
                   <Input
                     id="study-horizon"
+                      aria-describedby="study-horizon-help"
                     required
                     type="number"
                     min={1}
                     max={100}
                     value={config.n_steps}
                     onChange={(e) =>
-                      setConfig({ ...config, n_steps: Number(e.target.value) })
+                        setConfig({
+                          ...config,
+                          n_steps: Number(e.target.value),
+                        })
+                      }
+                    />
+                    <ElasticSlider
+                      value={config.n_steps}
+                      label="Trading candles slider"
+                      onChange={(value) =>
+                        setConfig({ ...config, n_steps: value })
                     }
                   />
-                  <FieldDescription>
-                    1–100 completed daily candles, not calendar days.
-                  </FieldDescription>
                 </Field>
               </FieldGroup>
             </FieldSet>
+              <details className="run-advanced">
+                <summary>
+                  Take profit &amp; stop loss{" "}
+                  <small>
+                    {config.take_profit_pct
+                      ? `TP ${config.take_profit_pct}%`
+                      : "No take profit"}{" "}
+                    ·{" "}
+                    {config.stop_loss_pct
+                      ? `SL ${config.stop_loss_pct}%`
+                      : "No stop loss"}
+                  </small>
+                </summary>
             <FieldSet className="study-settings-section">
               <FieldLegend>Take profit &amp; stop loss</FieldLegend>
               <Field>
@@ -635,6 +709,7 @@ export function SignalStudyPanel({
                   unfinished windows remain incomplete.
                 </FieldDescription>
               </Field>
+
               <FieldGroup className="study-form-grid">
                 <Field data-study-target="profit">
                   <FieldLabel htmlFor="study-tp">
@@ -690,11 +765,16 @@ export function SignalStudyPanel({
                 SL. Percentages are measured from the signal Close in its BUY or
                 SELL direction. If both barriers are touched in the same candle,
                 stop loss comes first.
+
               </p>
             </FieldSet>
+              </details>
           </fieldset>
           <div className="study-actions study-config-actions">
-            <Button type="submit" disabled={busy || !backendOnline}>
+              <Button
+                type="submit"
+                disabled={busy || !backendOnline || recovery.blocked}
+              >
               <Play data-icon="inline-start" />
               Start signal study
             </Button>
@@ -728,7 +808,8 @@ export function SignalStudyPanel({
         <p role="status" aria-live="polite" aria-atomic="true">
           {message}
         </p>
-        {error && <p role="alert">{error}</p>}
+          {!busy && <StudyRecovery recovery={recovery} />}
+          {error && !recovery.previous && <p role="alert">{error}</p>}
         {busy && <StudyEstimate progress={progress} />}
         {progress && (
           <>
@@ -739,8 +820,8 @@ export function SignalStudyPanel({
             />
             <p>
               {progress.completed}/{ready!.total} stocks processed ·{" "}
-              {progress.failures.length} failed · {progress.remaining} remaining
-              · {ready!.market}/{ready!.currency}
+                {progress.failures.length} failed · {progress.remaining}{" "}
+                remaining · {ready!.market}/{ready!.currency}
             </p>
             <p>
               Frozen period: {ready!.config.from}–{ready!.config.to}; T+
@@ -844,6 +925,145 @@ export function SignalStudyPanel({
                 the rule and signal search dates.
               </p>
             )}
+              <section
+                className="study-comparison"
+                aria-label="Compare historical studies"
+              >
+                <h3>Compare periods</h3>
+                <p>
+                  Keep a completed result, change the dates, then run again. The
+                  reference stays in this page until you reload or change
+                  account. Different rules or stock coverage can also change the
+                  results.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={
+                    busy ||
+                    progress.completed !== ready!.total ||
+                    progress.failures.length > 0
+                  }
+                  onClick={() =>
+                    setComparison({
+                      owner: userId!,
+                      context: structuredClone(ready!),
+                      metrics: { ...selectedMetrics! },
+                    })
+                  }
+                >
+                  Keep result for comparison
+                </Button>
+                {periodComparison?.owner === userId && (
+                  <>
+                    <div className="study-comparison__scroll">
+                      <table>
+                        <caption className="sr-only">
+                          Reference and current independent signal study
+                        </caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">Metric</th>
+                            <th scope="col">Reference</th>
+                            <th scope="col">
+                              Current
+                              {busy
+                                ? " (processing)"
+                                : progress.completed !== ready!.total ||
+                                    progress.failures.length
+                                  ? " (partial)"
+                                  : ""}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <th scope="row">Period</th>
+                            <td>
+                              {periodComparison.context.config.from} –{" "}
+                              {periodComparison.context.config.to}
+                            </td>
+                            <td>
+                              {ready!.config.from} – {ready!.config.to}
+                            </td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Source / stocks</th>
+                            <td>
+                              {periodComparison.context.market} /{" "}
+                              {periodComparison.context.total}
+                            </td>
+                            <td>
+                              {ready!.market} / {ready!.total}
+                            </td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Rule</th>
+                            <td>{periodComparison.context.rule_id}</td>
+                            <td>{ready!.rule_id}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Horizon</th>
+                            <td>T+{periodComparison.context.config.n_steps}</td>
+                            <td>T+{ready!.config.n_steps}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">TP / SL</th>
+                            <td>
+                              {periodComparison.context.config.take_profit_pct ??
+                                "Off"}{" "}
+                              /{" "}
+                              {periodComparison.context.config.stop_loss_pct ?? "Off"}
+                            </td>
+                            <td>
+                              {ready!.config.take_profit_pct ?? "Off"} /{" "}
+                              {ready!.config.stop_loss_pct ?? "Off"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Source</th>
+                            <td>
+                              {periodComparison.context.source === "universe"
+                                ? periodComparison.context.universe_id
+                                : "Entire catalog"}
+                            </td>
+                            <td>
+                              {ready!.source === "universe"
+                                ? ready!.universe_id
+                                : "Entire catalog"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Evaluated signals</th>
+                            <td>{periodComparison.metrics.evaluated}</td>
+                            <td>{selectedMetrics!.evaluated}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Win rate</th>
+                            <td>{pct(periodComparison.metrics.win_rate)}</td>
+                            <td>{pct(selectedMetrics!.win_rate)}</td>
+                          </tr>
+                          <tr>
+                            <th scope="row">Mean return</th>
+                            <td>{pct(periodComparison.metrics.mean_return_pct)}</td>
+                            <td>{pct(selectedMetrics!.mean_return_pct)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setComparison(null)}
+                    >
+                      Clear reference
+                    </Button>
+                  </>
+                )}
+              </section>
+
             {!!(
               progress.failures.some((f) => f.retryable) ||
               progress.failedBatches.length
@@ -862,8 +1082,8 @@ export function SignalStudyPanel({
             )}
             {frozenSelection.current !== selectionSignature && (
               <p role="status">
-                Settings changed. Start a new study to apply them; the displayed
-                result still uses its frozen context.
+                  Settings changed. Start a new study to apply them; the
+                  displayed result still uses its frozen context.
               </p>
             )}
             <div className="study-actions">
@@ -1111,6 +1331,7 @@ export function SignalStudyPanel({
               <table>
                 <caption>
                   Signal details — exact T+{resultStep} and window outcomes;{" "}
+
                   {total} signals
                 </caption>
                 <thead>
@@ -1217,7 +1438,8 @@ export function SignalStudyPanel({
                 {progress.traffic.decoded_candle_bytes.toLocaleString()} ·
                 Feature candidate JSON bytes:{" "}
                 {progress.traffic.candidate_json_bytes.toLocaleString()}.
-                Excludes HTTP headers, grant/context metadata, and compression.
+                  Excludes HTTP headers, grant/context metadata, and
+                  compression.
               </p>
               <Button variant="outline" onClick={exportPerformance}>
                 Export measured stages JSON
@@ -1230,6 +1452,46 @@ export function SignalStudyPanel({
           </>
         )}
       </section>
+        {!progress && !busy && (
+          <aside className="pen-study-guide" aria-label="Understand the study">
+            <header className="study-guide-heading">
+              <SlidersHorizontal aria-hidden="true" />
+              <h3>Understand the study</h3>
+            </header>
+            <p>
+              Each matched signal is an independent daily observation, measured
+              from the signal candle’s close.
+            </p>
+            <ol>
+              <li>
+                <SlidersHorizontal aria-hidden="true" />
+                <div>
+                  <strong>Configure</strong>
+                  <span>Choose your rule, market, and period.</span>
+                </div>
+              </li>
+              <li>
+                <Play aria-hidden="true" />
+                <div>
+                  <strong>Process</strong>
+                  <span>Evaluate completed daily candles.</span>
+                </div>
+              </li>
+              <li>
+                <CheckCheck aria-hidden="true" />
+                <div>
+                  <strong>Review</strong>
+                  <span>Inspect outcomes for each signal.</span>
+                </div>
+              </li>
+            </ol>
+            <p className="pen-study-guide__note">
+              <Info aria-hidden="true" />
+              This is not a cash portfolio or a record of executed trades.
+            </p>
+          </aside>
+        )}
+      </div>
     </Profiler>
   );
 }

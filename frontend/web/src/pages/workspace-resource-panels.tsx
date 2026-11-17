@@ -1,3 +1,5 @@
+import AnimatedContent from "@/components/react-bits/AnimatedContent";
+import AnimatedList from "@/components/react-bits/AnimatedList";
 import { tierAccess, tierName, monthlyPrice } from "@/lib/tier-access";
 import type { AccountState } from "@/types";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -313,12 +315,15 @@ export function StockUniversesPanel({
 
   return (
     <div className="universe-workspace">
-      <form
+      <AnimatedContent
+        as="form"
+        animationKey={`${editing?.id ?? "new"}:${market}`}
         onSubmit={save}
         className="universe-editor universe-form"
         aria-labelledby="universe-editor-title"
       >
         <StockCatalogPicker
+          compact
           key={`${editing?.id ?? "new"}:${market}`}
           catalog={marketCatalog}
           selected={symbols}
@@ -445,7 +450,7 @@ export function StockUniversesPanel({
           </div>
           {error && <FieldError>{error}</FieldError>}
         </StockCatalogPicker>
-      </form>
+      </AnimatedContent>
 
       <section
         className="universe-library"
@@ -491,7 +496,7 @@ export function StockUniversesPanel({
             </EmptyHeader>
           </Empty>
         ) : (
-          <div className="universe-library__rows">
+          <AnimatedList as="div" className="universe-library__rows">
             {universes.slice(0, 2).map((universe) => (
               <article
                 key={universe.id}
@@ -543,7 +548,7 @@ export function StockUniversesPanel({
                 </div>
               </article>
             ))}
-          </div>
+          </AnimatedList>
         )}
         {universes.length > 2 && (
           <Button

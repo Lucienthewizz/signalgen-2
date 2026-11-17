@@ -283,3 +283,15 @@
     min-height: 44px;
   }
 }
+
+.study-horizon-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+}
+.study-horizon-label > span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}

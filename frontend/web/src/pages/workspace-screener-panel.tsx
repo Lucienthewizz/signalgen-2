@@ -1,3 +1,6 @@
+import AnimatedContent from "@/components/react-bits/AnimatedContent";
+import AnimatedList from "@/components/react-bits/AnimatedList";
+import Stepper from "@/components/react-bits/Stepper";
 import { MarketScreenPanel } from "./market-screen-panel";
 import { tierAccess } from "@/lib/tier-access";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
@@ -182,6 +185,7 @@ function LatestScreenerPanel({
   const [loadingResources, setLoadingResources] = useState(true);
   const [resourceError, setResourceError] = useState(false);
   const [state, setState] = useState<RunState>("idle");
+  const [runStage, setRunStage] = useState<0 | 1 | 2>(0);
   const [stage, setStage] = useState("Ready to screen");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -375,6 +379,7 @@ function LatestScreenerPanel({
       setUniverseId("");
       setPreferencesReady(false);
       setState("idle");
+      setRunStage(0);
       restoredUser.current = null;
     }
     if (authenticated) void loadResources();
@@ -509,6 +514,7 @@ function LatestScreenerPanel({
         setError(null);
         setErrorOpen(false);
         setState("loading");
+        setRunStage(1);
         setProgress(5);
         setStage("Checking completed candles");
         return runLiveScreener(
@@ -544,6 +550,7 @@ function LatestScreenerPanel({
         setProgress(100);
         setStage("Waiting for the next data check");
         setState("completed");
+        setRunStage(2);
       },
       error: (caught, retrying) => {
         setFailure(
@@ -567,6 +574,7 @@ function LatestScreenerPanel({
             : "Monitoring stopped",
         );
         setState("failed");
+        setRunStage(0);
         // Open once per Start, not on every automatic background retry.
         if (!failurePresented) {
           failurePresented = true;
@@ -580,6 +588,7 @@ function LatestScreenerPanel({
   function cancel() {
     monitor.stop();
     setState(run ? "completed" : "idle");
+    setRunStage((current) => (current === 2 ? 2 : 0));
     setProgress(0);
     setStage("Monitoring stopped");
   }
@@ -801,6 +810,7 @@ function LatestScreenerPanel({
           </div>
         ) : (
           <div className="screener-console__body">
+            <Stepper stage={runStage} />
             {selectionIssue && (
               <Alert>
                 <CircleAlert aria-hidden="true" />
@@ -826,7 +836,10 @@ function LatestScreenerPanel({
                   }))}
                   value={ruleId}
                   disabled={monitorState.active}
-                  onValueChange={(value) => setRuleId(value ?? "")}
+                  onValueChange={(value) => {
+                    setRuleId(value ?? "");
+                    setRunStage(0);
+                  }}
                 >
                   <SelectTrigger id="screen-rule">
                     <SelectValue>{selectedRule?.name}</SelectValue>
@@ -859,8 +872,12 @@ function LatestScreenerPanel({
                   value={timeframe}
                   disabled={monitorState.active}
                   onValueChange={(value) => {
-                    if (screenerIntervals.some((item) => item.value === value))
+                    if (
+                      screenerIntervals.some((item) => item.value === value)
+                    ) {
                       setTimeframe(value as ScreenerTimeframe);
+                      setRunStage(0);
+                    }
                   }}
                 >
                   <SelectTrigger id="screen-interval">
@@ -903,7 +920,10 @@ function LatestScreenerPanel({
                   }))}
                   value={universeId}
                   disabled={monitorState.active}
-                  onValueChange={(value) => setUniverseId(value ?? "")}
+                  onValueChange={(value) => {
+                    setUniverseId(value ?? "");
+                    setRunStage(0);
+                  }}
                 >
                   <SelectTrigger id="screen-universe">
                     <SelectValue>{selectedUniverse?.name}</SelectValue>
@@ -1294,7 +1314,9 @@ function LatestScreenerPanel({
         ) : (
           <>
             {detailRow && (
-              <section
+              <AnimatedContent
+                as="section"
+                animationKey={detailRow.decision.symbol}
                 className="stock-detail"
                 ref={detailRef}
                 tabIndex={-1}
@@ -1468,7 +1490,7 @@ function LatestScreenerPanel({
                   decisions above come from the screening snapshot, not the
                   chart.
                 </p>
-              </section>
+              </AnimatedContent>
             )}
             <FieldGroup className="screener-result-filters">
               <Field>
@@ -1736,10 +1758,10 @@ function LatestScreenerPanel({
               of {run.rows.length} stocks shown
             </p>
             <div
-              className="screener-result-ledger"
+              className="screener-result-ledger fit-data-table"
               role="region"
               tabIndex={0}
-              aria-label="Screening results table, scroll horizontally on smaller screens"
+              aria-label="Screening results table"
             >
               <Table>
                 <TableHeader>
@@ -1758,10 +1780,13 @@ function LatestScreenerPanel({
                 <TableBody>
                   {displayedRows.map((row, index) => (
                     <TableRow key={row.decision.symbol}>
-                      <TableCell className="analysis-row-number">
+                      <TableCell
+                        data-label="No."
+                        className="analysis-row-number"
+                      >
                         {index + 1}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Stock">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1772,7 +1797,7 @@ function LatestScreenerPanel({
                           {row.decision.symbol.replace(".JK", "")}
                         </Button>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Decision">
                         <Badge
                           variant={
                             row.decision.matched
@@ -1813,7 +1838,7 @@ function LatestScreenerPanel({
                           )}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Open price">
                         {row.latestOpen != null &&
                         Number.isFinite(row.latestOpen)
                           ? formatStockPrice(
@@ -1822,15 +1847,19 @@ function LatestScreenerPanel({
                             )
                           : "—"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Close price">
                         {formatStockPrice(
                           row.latestClose,
                           run.manifest.currency,
                         )}
                       </TableCell>
-                      <TableCell>{row.features.rsi14.toFixed(2)}</TableCell>
-                      <TableCell>{row.features.ema20.toFixed(2)}</TableCell>
-                      <TableCell>
+                      <TableCell data-label="RSI14">
+                        {row.features.rsi14.toFixed(2)}
+                      </TableCell>
+                      <TableCell data-label="EMA20">
+                        {row.features.ema20.toFixed(2)}
+                      </TableCell>
+                      <TableCell data-label="Reason">
                         {decisionReasons(
                           row.decision.reason_codes,
                           evidenceRule?.definition?.logic,
@@ -1844,7 +1873,10 @@ function LatestScreenerPanel({
                           View details
                         </Button>
                       </TableCell>
-                      <TableCell className="analysis-select-cell">
+                      <TableCell
+                        data-label="Add to journal"
+                        className="analysis-select-cell"
+                      >
                         <input
                           type="checkbox"
                           aria-label={`Select ${row.decision.symbol.replace(/\.JK$/, "")} for journal`}
@@ -1990,7 +2022,7 @@ function LatestScreenerPanel({
               No saved screens match these filters.
             </p>
           )}
-          <ul className="screener-history-list">
+          <AnimatedList className="screener-history-list">
             {filteredHistory.map((item) => (
               <li key={`${item.run.result.request_id}-${item.recordedAt}`}>
                 <div>
@@ -2065,6 +2097,7 @@ function LatestScreenerPanel({
                     disabled={monitorState.active}
                     onClick={() => {
                       setRun(item.run);
+                      setRunStage(0);
                       setRunContext(null);
                       setHistoricalRun(item);
                       setDetailSymbol(null);
@@ -2093,7 +2126,7 @@ function LatestScreenerPanel({
                 </div>
               </li>
             ))}
-          </ul>
+          </AnimatedList>
           {history.length > 1 && (
             <section
               className="screener-comparison"

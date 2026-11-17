@@ -1,8 +1,14 @@
+import AnimatedContent from "@/components/react-bits/AnimatedContent";
+import SwipeRow from "@/components/react-bits/SwipeRow";
+import AnimatedList from "@/components/react-bits/AnimatedList";
 import { tierAccess } from "@/lib/tier-access";
 import type { AccountState } from "@/types";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
   BookOpenCheck,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
   CopyPlus,
   ListChecks,
@@ -146,6 +152,9 @@ export function ServerRulesPanel({
   const editorTrigger = useRef<HTMLElement | null>(null);
   const previewTrigger = useRef<HTMLButtonElement>(null);
   const [ruleSearch, setRuleSearch] = useState("");
+  const [rulePage, setRulePage] = useState(0);
+  const [openRuleActions, setOpenRuleActions] = useState<string | null>(null);
+  const rulePageSize = 5;
   const [signalFilter, setSignalFilter] = useState<string[]>(["all"]);
   const [confirmation, setConfirmation] = useState<
     | { kind: "preset"; preset: (typeof rulePresets)[number] }
@@ -154,6 +163,10 @@ export function ServerRulesPanel({
     | null
   >(null);
   const confirmationTrigger = useRef<HTMLElement | null>(null);
+  useEffect(
+    () => setOpenRuleActions(null),
+    [rulePage, ruleSearch, signalFilter],
+  );
   const validation = validateRule(definition);
   const criteriaReady =
     !!editing ||
@@ -259,13 +272,21 @@ export function ServerRulesPanel({
       ),
     [rules, ruleSearch, signalFilter],
   );
-  const privateRules = filteredRules.filter(
-    (rule) => rule.owner_type === "user",
+  const orderedRules = [
+    ...filteredRules.filter((rule) => rule.owner_type === "user"),
+    ...filteredRules.filter((rule) => rule.owner_type === "system"),
+  ];
+  const rulePageCount = Math.max(
+    1,
+    Math.ceil(orderedRules.length / rulePageSize),
   );
-  const systemRules = useMemo(
-    () => filteredRules.filter((rule) => rule.owner_type === "system"),
-    [filteredRules],
+  const currentRulePage = Math.min(rulePage, rulePageCount - 1);
+  const pageRules = orderedRules.slice(
+    currentRulePage * rulePageSize,
+    (currentRulePage + 1) * rulePageSize,
   );
+  const privateRules = pageRules.filter((rule) => rule.owner_type === "user");
+  const systemRules = pageRules.filter((rule) => rule.owner_type === "system");
 
   function startNew() {
     setStartMode("blank");
@@ -476,35 +497,7 @@ export function ServerRulesPanel({
           </Dialog.Viewport>
         </Dialog.Portal>
       </Dialog.Root>
-      <ConfirmDialog
-        open={confirmation !== null}
-        title={
-          confirmation?.kind === "delete"
-            ? "Delete this rule?"
-            : "Replace current criteria?"
-        }
-        description={
-          confirmation?.kind === "delete"
-            ? `“${confirmation.rule.name}” will be deleted from your account. This cannot be undone.`
-            : confirmation?.kind === "preset"
-              ? `Use “${confirmation.preset.name}” instead of your current criteria. Unsaved edits will be replaced; saved rules stay unchanged until you save.`
-              : "Start a blank rule instead of your current criteria. Unsaved edits will be replaced; saved rules stay unchanged."
-        }
-        confirmLabel={
-          confirmation?.kind === "delete" ? "Delete rule" : "Replace criteria"
-        }
-        destructive={confirmation?.kind === "delete"}
-        returnFocus={confirmationTrigger}
-        onCancel={() => setConfirmation(null)}
-        onConfirm={() => {
-          if (!confirmation) return;
-          const choice = confirmation;
-          setConfirmation(null);
-          if (choice.kind === "preset") applyPreset(choice.preset);
-          else if (choice.kind === "blank") startNew();
-          else void remove(choice.rule);
-        }}
-      />
+
       {!backendOnline && (
         <Alert>
           <CircleAlert />
@@ -515,7 +508,12 @@ export function ServerRulesPanel({
           </AlertDescription>
         </Alert>
       )}
-      <section className="rule-composer" aria-labelledby="rule-composer-title">
+      <AnimatedContent
+        as="section"
+        animationKey={editing?.id ?? "new"}
+        className="rule-composer"
+        aria-labelledby="rule-composer-title"
+      >
         <header className="rule-composer__header">
           <div className="resource-title-lockup">
             <span aria-hidden="true">
@@ -1093,51 +1091,82 @@ export function ServerRulesPanel({
             </footer>
           </fieldset>
         </form>
-      </section>
+      </AnimatedContent>
     </>
   );
   return (
     <div className="rules-workspace">
-      {editing ? (
-        <>
-          {!editorOpen && (
-            <section className="rule-editor-resume">
-              <div>
-                <strong>{definition.name || editing.name}</strong>
-                <p>
-                  Your editing draft is kept until you save or start a new rule.
-                </p>
-              </div>
-              <Button variant="outline" onClick={() => setEditorOpen(true)}>
-                Continue editing
-              </Button>
-              <Button variant="ghost" onClick={startNew}>
-                New blank rule
-              </Button>
-            </section>
-          )}
-          <InfoDialog
-            open={editorOpen}
-            onOpenChange={(open) => {
-              if (!saving) setEditorOpen(open);
-            }}
-            title="Edit rules"
-            description="Update your criteria, then save the changes to your account."
-            returnFocus={editorTrigger}
-            wide
-          >
-            {editor}
-          </InfoDialog>
-        </>
-      ) : (
-        editor
-      )}
+      <ConfirmDialog
+        open={confirmation !== null}
+        title={
+          confirmation?.kind === "delete"
+            ? "Delete this rule?"
+            : "Replace current criteria?"
+        }
+        description={
+          confirmation?.kind === "delete"
+            ? `“${confirmation.rule.name}” will be deleted from your account. This cannot be undone.`
+            : confirmation?.kind === "preset"
+              ? `Use “${confirmation.preset.name}” instead of your current criteria. Unsaved edits will be replaced; saved rules stay unchanged until you save.`
+              : "Start a blank rule instead of your current criteria. Unsaved edits will be replaced; saved rules stay unchanged."
+        }
+        confirmLabel={
+          confirmation?.kind === "delete" ? "Delete rule" : "Replace criteria"
+        }
+        destructive={confirmation?.kind === "delete"}
+        returnFocus={confirmationTrigger}
+        onCancel={() => setConfirmation(null)}
+        onConfirm={() => {
+          if (!confirmation) return;
+          const choice = confirmation;
+          setConfirmation(null);
+          if (choice.kind === "preset") applyPreset(choice.preset);
+          else if (choice.kind === "blank") startNew();
+          else void remove(choice.rule);
+        }}
+      />
+      <div className="pen-rule-editor">
+        {editing ? (
+          <>
+            {!editorOpen && (
+              <section className="rule-editor-resume">
+                <div>
+                  <strong>{definition.name || editing.name}</strong>
+                  <p>
+                    Your editing draft is kept until you save or start a new
+                    rule.
+                  </p>
+                </div>
+                <Button variant="outline" onClick={() => setEditorOpen(true)}>
+                  Continue editing
+                </Button>
+                <Button variant="ghost" onClick={startNew}>
+                  New blank rule
+                </Button>
+              </section>
+            )}
+            <InfoDialog
+              open={editorOpen}
+              onOpenChange={(open) => {
+                if (!saving) setEditorOpen(open);
+              }}
+              title="Edit rules"
+              description="Update your criteria, then save the changes to your account."
+              returnFocus={editorTrigger}
+              wide
+            >
+              {editor}
+            </InfoDialog>
+          </>
+        ) : (
+          editor
+        )}
+      </div>
       <section className="rule-library" aria-labelledby="rule-library-title">
         <header className="resource-library__header">
           <div>
             <h3 id="rule-library-title">Saved rules</h3>
             <ResourceQuota kind="custom_rules" revision={rules.length} />
-            <p>Edit a private rule or run it from the screener.</p>
           </div>
           <div>
             <Button
@@ -1163,16 +1192,20 @@ export function ServerRulesPanel({
             <Input
               id="saved-rule-search"
               value={ruleSearch}
-              onChange={(event) => setRuleSearch(event.target.value)}
+              onChange={(event) => {
+                setRuleSearch(event.target.value);
+                setRulePage(0);
+              }}
               placeholder="Search by rule name"
             />
           </Field>
           <ToggleGroup
             aria-label="Filter rules by signal"
             value={signalFilter}
-            onValueChange={(values) =>
-              setSignalFilter(values.length ? values : ["all"])
-            }
+            onValueChange={(values) => {
+              setSignalFilter(values.length ? values : ["all"]);
+              setRulePage(0);
+            }}
             variant="outline"
           >
             <ToggleGroupItem value="all" data-signal="all">
@@ -1192,6 +1225,11 @@ export function ServerRulesPanel({
             [ {filteredRules.length} of {rules.length} rules ]
           </Badge>
         </div>
+        {privateRules.length > 0 && (
+          <p className="rule-library__swipe-hint">
+            Swipe left to edit or delete a rule. Keyboard: Tab, then Enter.
+          </p>
+        )}
         {loading && !rules.length ? (
           <div className="resource-loading">
             <Skeleton />
@@ -1218,48 +1256,67 @@ export function ServerRulesPanel({
           <div className="rule-library__groups">
             {privateRules.length > 0 && (
               <div>
-                <div className="rule-library__rows">
+                <AnimatedList as="div" className="rule-library__rows">
                   {privateRules.map((rule) => (
-                    <article key={rule.id}>
-                      <div>
-                        <strong>{rule.name}</strong>
-                        <small className="rule-library__condition-count">
-                          {rule.definition?.conditions.length ?? 0} conditions ·{" "}
-                          {rule.definition?.signal_type || "No direction"}
-                        </small>
-                        <p>{summary(rule.definition)}</p>
-                      </div>
-                      <div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(event) => {
-                            editorTrigger.current = event.currentTarget;
+                    <article key={rule.id} className="rule-library__swipe-item">
+                      <SwipeRow
+                        label={rule.name}
+                        className="rule-library__swipe"
+                        disabled={saving}
+                        open={openRuleActions === rule.id}
+                        onOpenChange={(open) =>
+                          setOpenRuleActions(open ? rule.id : null)
+                        }
+                        actions={[
+                          {
+                            id: "delete",
+                            label: "Delete",
+                            accessibleLabel: `Delete ${rule.name}`,
+                            icon: <Trash2 aria-hidden="true" />,
+                            destructive: true,
+                            disabled: !backendOnline,
+                          },
+                          {
+                            id: "edit",
+                            label: "Edit",
+                            accessibleLabel: `Edit ${rule.name}`,
+                            icon: <Pencil aria-hidden="true" />,
+                          },
+                        ]}
+                        onAction={(action, event) => {
+                          const returnTarget =
+                            event.currentTarget
+                              .closest(".swipe-row")
+                              ?.querySelector<HTMLButtonElement>(
+                                ".swipe-row__toggle",
+                              ) ?? null;
+                          if (action.id === "edit") {
+                            editorTrigger.current = returnTarget;
                             edit(rule);
-                          }}
-                          disabled={saving}
-                          aria-label={`Edit ${rule.name}`}
-                          className="rule-library-action"
-                        >
-                          <Pencil data-icon="inline-start" /> Edit rules
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={(event) => {
-                            confirmationTrigger.current = event.currentTarget;
+                          } else {
+                            confirmationTrigger.current = returnTarget;
                             setConfirmation({ kind: "delete", rule });
-                          }}
-                          disabled={saving || !backendOnline}
-                          aria-label={`Delete ${rule.name}`}
-                          className="rule-library-action rule-library-action--delete"
-                        >
-                          <Trash2 />
-                        </Button>
-                      </div>
+                          }
+                        }}
+                      >
+                        <div className="rule-library__swipe-copy">
+                          <div className="rule-library__swipe-heading">
+                            <strong>{rule.name}</strong>
+                          </div>
+                          <small className="rule-library__condition-count">
+                            {rule.definition?.conditions.length ?? 0} conditions
+                            · {rule.definition?.signal_type || "No direction"}
+                          </small>
+                          <p>{summary(rule.definition)}</p>
+                        </div>
+                        <ArrowLeft
+                          className="rule-library__swipe-arrow"
+                          aria-hidden="true"
+                        />
+                      </SwipeRow>
                     </article>
                   ))}
-                </div>
+                </AnimatedList>
               </div>
             )}
             {systemRules.length > 0 && (
@@ -1267,7 +1324,7 @@ export function ServerRulesPanel({
                 <span className="rule-library__eyebrow">
                   System rules · read only
                 </span>
-                <div className="rule-library__rows">
+                <AnimatedList as="div" className="rule-library__rows">
                   {systemRules.map((rule) => (
                     <article key={rule.id}>
                       <div>
@@ -1281,10 +1338,40 @@ export function ServerRulesPanel({
                       <Badge variant="secondary">System</Badge>
                     </article>
                   ))}
-                </div>
+                </AnimatedList>
               </div>
             )}
           </div>
+        )}
+        {filteredRules.length > 0 && (
+          <nav
+            className="rule-library__pagination"
+            aria-label="Saved rules pages"
+          >
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Previous saved rules page"
+              disabled={currentRulePage === 0}
+              onClick={() => setRulePage(currentRulePage - 1)}
+            >
+              <ChevronLeft />
+            </Button>
+            <span role="status">
+              Page {currentRulePage + 1} of {rulePageCount}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Next saved rules page"
+              disabled={currentRulePage + 1 >= rulePageCount}
+              onClick={() => setRulePage(currentRulePage + 1)}
+            >
+              <ChevronRight />
+            </Button>
+          </nav>
         )}
       </section>
     </div>

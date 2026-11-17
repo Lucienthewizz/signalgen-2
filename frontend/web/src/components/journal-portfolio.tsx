@@ -1,3 +1,4 @@
+import { PortfolioExample } from "@/components/portfolio-example";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { api, ApiError, session } from "@/api/client";
@@ -14,6 +15,9 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DateInput } from "@/components/date-input";
+import { JournalMonthPicker } from "@/components/journal-month-picker";
+import { downloadCsv } from "@/lib/csv";
+import { portfolioMonth } from "@/lib/portfolio";
 import { JournalPnlChart } from "@/components/journal-pnl-chart";
 import {
   portfolioClosedTrades,
@@ -67,6 +71,8 @@ export function JournalPortfolio({
   const [loading, setLoading] = useState(true);
   const [market, setMarket] = useState<"IDX" | "US">("IDX");
   const [book, setBook] = useState("");
+  const [month, setMonth] = useState("");
+  const [example, setExample] = useState(false);
   const [form, setForm] = useState<Form>(blank);
   const [edit, setEdit] = useState<PortfolioTransaction | null>(null);
   const [open, setOpen] = useState(false);
@@ -105,7 +111,15 @@ export function JournalPortfolio({
   const totals = summary?.totals.filter(
     (t) => t.market === market && (!book || t.book === book),
   );
-  const realized = totals?.reduce((s, t) => s + Number(t.realized_pnl), 0) ?? 0;
+  const periodTrades = trades?.filter(
+    (t) => !month || portfolioMonth(t.closedAt) === month,
+  );
+  const periodTransactions = filtered.filter(
+    (t) => !month || portfolioMonth(t.data.executed_at) === month,
+  );
+  const realized = month
+    ? (periodTrades?.reduce((s, t) => s + t.pnl, 0) ?? 0)
+    : (totals?.reduce((s, t) => s + Number(t.realized_pnl), 0) ?? 0);
   useEffect(() => {
     const controller = new AbortController(),
       revision = session.getIdentityRevision();
@@ -153,6 +167,8 @@ export function JournalPortfolio({
     setSavedConflict(null);
     setSaveError("");
     setBook("");
+    setMonth("");
+    setExample(false);
     return () => operation.current?.abort();
   }, [userId]);
   useEffect(() => {
@@ -398,6 +414,24 @@ export function JournalPortfolio({
       </SelectContent>
     </Select>
   );
+  if (example)
+    return (
+      <section
+        className="journal-portfolio journal-portfolio--example"
+        aria-label="Portfolio performance"
+      >
+        <header>
+          <div>
+            <h2>Portfolio · chart example</h2>
+            <p>Read-only preview</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setExample(false)}>
+            Show my portfolio
+          </Button>
+        </header>
+        <PortfolioExample />
+      </section>
+    );
   return (
     <section
       className="journal-portfolio"
@@ -409,9 +443,14 @@ export function JournalPortfolio({
           <h2>Portfolio</h2>
           <p>Recorded transactions · realized P&amp;L after fees</p>
         </div>
+        <div className="journal-portfolio__header-actions">
+          <Button size="sm" variant="ghost" onClick={() => setExample(true)}>
+            Preview test data
+          </Button>
         <Button ref={trigger} size="sm" variant="outline" onClick={create}>
           {uncertain ? "Review pending transaction" : "Record transaction"}
         </Button>
+        </div>
       </header>
       <div className="journal-portfolio__filters">
         {choose(
@@ -434,7 +473,18 @@ export function JournalPortfolio({
           ],
           setBook,
         )}
+        <JournalMonthPicker
+          value={month}
+          onChange={setMonth}
+          description="Realized P&L uses the sale month in Singapore Time (SGT)."
+        />
       </div>
+      <p className="journal-portfolio__summary">
+        {month
+          ? `Sale month: ${month} · SGT`
+          : "All recorded sales · all months"}
+        . These controls affect portfolio data only.
+      </p>
       {loading && !summary ? (
         <p role="status">Loading portfolio…</p>
       ) : error ? (
@@ -455,23 +505,61 @@ export function JournalPortfolio({
             className="journal-portfolio__value"
             data-negative={realized < 0 || undefined}
           >
-            {money(realized, currency)}
+            {month && !trades ? "Unavailable" : money(realized, currency)}
           </strong>
           {trades ? (
-            <JournalPnlChart records={trades} currency={currency} />
+            <JournalPnlChart records={periodTrades ?? []} currency={currency} />
           ) : (
             <p role="alert">
               Transaction history could not be reconciled. Reload the portfolio
               before recording more transactions.
             </p>
           )}
-          <p>
+          <p className="journal-portfolio__note">
             Record a BUY to open a position and a SELL to realize P&amp;L. Open
             positions are excluded from this chart.
           </p>
         </>
       )}
       <footer>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={loading || !!error || !periodTransactions.length}
+          onClick={() =>
+            downloadCsv(
+              `portfolio-transactions-${market}-${month || "all"}.csv`,
+              [
+                [
+                  "Symbol",
+                  "Market",
+                  "Currency",
+                  "Portfolio",
+                  "Side",
+                  "Quantity",
+                  "Price",
+                  "Fee",
+                  "Executed at (UTC)",
+                  "Note",
+                ],
+                ...periodTransactions.map(({ data: d }) => [
+                  d.symbol,
+                  d.market,
+                  d.currency,
+                  d.book,
+                  d.side,
+                  d.quantity,
+                  d.price,
+                  d.fee,
+                  d.executed_at,
+                  d.note,
+                ]),
+              ],
+            )
+          }
+        >
+          Export transactions CSV
+        </Button>
         <Button size="sm" variant="ghost" onClick={() => setLedger(true)}>
           Transactions ({filtered.length})
         </Button>

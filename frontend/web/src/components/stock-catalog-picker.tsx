@@ -42,6 +42,14 @@ import {
 } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   catalogPage,
   stockCategories,
   stockGroupLabel,
@@ -71,6 +79,7 @@ type Props = {
   children?: ReactNode;
   header?: ReactNode;
   selectionLimit?: number;
+  compact?: boolean;
 };
 
 export function StockCatalogPicker({
@@ -82,6 +91,7 @@ export function StockCatalogPicker({
   children,
   header,
   selectionLimit = universeSelectionLimit,
+  compact = false,
 }: Props) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<StockCategory>("all");
@@ -113,8 +123,8 @@ export function StockCatalogPicker({
     [catalog, query, requestedPage, category],
   );
   const full = selected.length >= selectionLimit;
-  return (
-    <div className="stock-catalog-picker" aria-busy={loading}>
+  const catalogContent = (
+    <>
       <section
         className="stock-catalog-picker__catalog"
         aria-label="Stock universe catalog"
@@ -141,77 +151,115 @@ export function StockCatalogPicker({
                 </ToggleGroup>
               </div>
             </header>
-            <ToggleGroup
-              className="stock-catalog-picker__group-selector"
-              aria-label="Stock categories"
-              value={[category]}
-              disabled={loading || disabled}
-              onValueChange={(values) => {
-                if (values[0]) {
-                  setCategory(values[0] as StockCategory);
-                  setRequestedPage(0);
-                }
-              }}
-            >
-              <Table aria-label="Stock groups">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead scope="col">Group</TableHead>
-                    <TableHead
-                      scope="col"
-                      className="stock-catalog-picker__samples"
-                    >
-                      Sample symbols
-                    </TableHead>
-                    <TableHead scope="col">Stocks</TableHead>
-                    <TableHead scope="col">Selected</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {groups.map((item) => {
-                    const CategoryIcon = categoryIcons[item.id];
-                    return (
-                      <TableRow
-                        key={item.id}
-                        data-state={
-                          category === item.id ? "selected" : undefined
-                        }
+            {compact ? (
+              <Field className="stock-catalog-picker__category-field">
+                <FieldLabel htmlFor="catalog-category">
+                  Stock category
+                </FieldLabel>
+                <Select
+                  value={category}
+                  disabled={loading || disabled}
+                  items={groups.map((item) => ({
+                    value: item.id,
+                    label: item.label,
+                  }))}
+                  onValueChange={(value) => {
+                    if (value) {
+                      setCategory(value as StockCategory);
+                      setRequestedPage(0);
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    id="catalog-category"
+                    aria-label="Stock categories"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {groups.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : (
+              <ToggleGroup
+                className="stock-catalog-picker__group-selector"
+                aria-label="Stock categories"
+                value={[category]}
+                disabled={loading || disabled}
+                onValueChange={(values) => {
+                  if (values[0]) {
+                    setCategory(values[0] as StockCategory);
+                    setRequestedPage(0);
+                  }
+                }}
+              >
+                <Table aria-label="Stock groups">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead scope="col">Group</TableHead>
+                      <TableHead
+                        scope="col"
+                        className="stock-catalog-picker__samples"
                       >
-                        <TableCell>
-                          <ToggleGroupItem value={item.id}>
-                            <CategoryIcon
-                              data-icon="inline-start"
-                              aria-hidden="true"
-                            />
-                            {item.label}
-                          </ToggleGroupItem>
-                        </TableCell>
-                        <TableCell className="stock-catalog-picker__samples">
-                          <div>
-                            {item.stocks.slice(0, 5).map((stock) => (
-                              <span key={stock.symbol}>
-                                {stock.symbol.replace(/\.JK$/, "")}
-                              </span>
-                            ))}
-                            {item.stocks.length === 0 && <span>—</span>}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {loading
-                            ? "—"
-                            : item.stocks.length.toLocaleString("en-GB")}
-                        </TableCell>
-                        <TableCell>
-                          {item.stocks.filter((stock) =>
-                            selected.includes(stock.symbol),
-                          ).length || "—"}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </ToggleGroup>
+                        Sample symbols
+                      </TableHead>
+                      <TableHead scope="col">Stocks</TableHead>
+                      <TableHead scope="col">Selected</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {groups.map((item) => {
+                      const CategoryIcon = categoryIcons[item.id];
+                      return (
+                        <TableRow
+                          key={item.id}
+                          data-state={
+                            category === item.id ? "selected" : undefined
+                          }
+                        >
+                          <TableCell>
+                            <ToggleGroupItem value={item.id}>
+                              <CategoryIcon
+                                data-icon="inline-start"
+                                aria-hidden="true"
+                              />
+                              {item.label}
+                            </ToggleGroupItem>
+                          </TableCell>
+                          <TableCell className="stock-catalog-picker__samples">
+                            <div>
+                              {item.stocks.slice(0, 5).map((stock) => (
+                                <span key={stock.symbol}>
+                                  {stock.symbol.replace(/\.JK$/, "")}
+                                </span>
+                              ))}
+                              {item.stocks.length === 0 && <span>—</span>}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {loading
+                              ? "—"
+                              : item.stocks.length.toLocaleString("en-GB")}
+                          </TableCell>
+                          <TableCell>
+                            {item.stocks.filter((stock) =>
+                              selected.includes(stock.symbol),
+                            ).length || "—"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </ToggleGroup>
+            )}
           </section>
         </div>
       </section>
@@ -418,6 +466,18 @@ export function StockCatalogPicker({
           </p>
         </details>
       </div>
+    </>
+  );
+  return (
+    <div
+      className={`stock-catalog-picker${compact ? " stock-catalog-picker--compact" : ""}`}
+      aria-busy={loading}
+    >
+      {compact ? (
+        <div className="stock-catalog-picker__listing">{catalogContent}</div>
+      ) : (
+        catalogContent
+      )}
       {children && (
         <aside
           className="universe-selection"

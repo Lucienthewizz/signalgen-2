@@ -325,6 +325,29 @@ async (page) => {
     await page
       .getByLabel("Entry mode", { exact: true })
       .waitFor({ timeout: 20000 });
+    const slider = page.getByRole("slider", { name: "Holding period slider", exact: true });
+    const numeric = page.getByLabel("Holding period (candles)", { exact: true });
+    const previous = await numeric.inputValue();
+    await slider.focus(); await page.keyboard.press("End");
+    if (await numeric.inputValue() !== "100") throw Error("Slider End did not update numeric horizon");
+    await page.keyboard.press("ArrowLeft");
+    if (await numeric.inputValue() !== "99") throw Error("Slider arrow step is not one candle");
+    await page.keyboard.press("Home");
+    if (await numeric.inputValue() !== "1") throw Error("Slider Home did not clamp to one candle");
+    const shell = await slider.locator("..").evaluate(el => {
+      const style = getComputedStyle(el), input = el.querySelector("input");
+      const inner = input.getBoundingClientRect(), outer = el.getBoundingClientRect();
+      return {background: style.backgroundColor, border: parseFloat(style.borderTopWidth), height: inner.height};
+    });
+    if (shell.background!=="rgba(0, 0, 0, 0)" || shell.border!==0 || shell.height<44) throw Error("Slider must be plain with an accessible pointer target");
+    const track = await slider.boundingBox();
+    await page.mouse.move(track.x + track.width / 2, track.y + track.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(track.x + track.width + 40, track.y + track.height / 2, {steps:8});
+    await page.mouse.up();
+    if (await numeric.inputValue() !== "100") throw Error("Dragging slider beyond its end did not clamp at 100");
+    await numeric.fill(previous);
+    if (await slider.inputValue() !== previous) throw Error("Numeric horizon did not update slider");
     if(await page.locator("html").getAttribute("data-theme")!=="dark" || await page.getByRole("button",{name:/Switch to .* mode/}).count()) throw Error("Saved light preference must not enable light mode");
   }
   async function dates() {
@@ -535,6 +558,7 @@ async (page) => {
         path: `output/playwright/backtest-manual-${width}-${theme}.png`,
         fullPage: true,
       });
+      await page.locator("details.run-advanced > summary").click();
       await page
         .getByLabel("Commission per side (%)", { exact: true })
         .fill("1");
@@ -735,7 +759,7 @@ async (page) => {
     const settings=page.getByRole("navigation",{name:"Account settings navigation",exact:true});
     await settings.getByRole("button",{name:"Plan & access",exact:true}).click();
     await page.getByRole("heading",{name:"Your plan",exact:true}).waitFor();
-    await page.getByRole("heading",{name:"QA Pro",exact:true}).waitFor();
+    await page.getByText("Pro",{exact:true}).waitFor();
     if(await page.getByRole("link",{name:"Open plan & access",exact:true}).count()) throw Error("Plan settings still require an intermediate link");
     await assertLayout(width);
     await page.screenshot({path:`output/playwright/account-plan-${width}-${theme}.png`,fullPage:true});

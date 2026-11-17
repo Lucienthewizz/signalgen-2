@@ -70,6 +70,7 @@ export function PublicWorkspace({
   onLogout: () => void | Promise<void>;
 }) {
   const { reduced, light } = useVisualPreferences();
+  const workflowHref = user ? "#app/overview" : "#login";
   return (
     <main className="workbench landing-shell">
       <section className="workspace landing-workspace">
@@ -87,7 +88,7 @@ export function PublicWorkspace({
               <a href="#pricing">Pricing</a>
               <a href="#reviews">Reviews</a>
               <a href="#faq">FAQ</a>
-              <a href="#app/overview">Demo</a>
+              <a href={workflowHref}>Demo</a>
             </nav>
             <div className="landing-header__actions">
               <ThemeToggle compact />
@@ -129,7 +130,19 @@ export function PublicWorkspace({
                   disabled={reduced}
                 />
                 <br />
-                <em>Verify the signal.</em>
+                <em>
+                  <ShinyText
+                    text="Verify the signal."
+                    color={light ? "#0d6f46" : "#a3f6d2"}
+                    shineColor={light ? "#063a27" : "#1c9165"}
+                    speed={2.4}
+                    delay={1.5}
+                    shineWidth={40}
+                    softness={0.8}
+                    trigger="loop"
+                    disabled={reduced}
+                  />
+                </em>
               </h2>
               <p>
                 Build rules, run screenings, and inspect the evidence behind
@@ -139,7 +152,7 @@ export function PublicWorkspace({
                 <Button
                   className="ui-button ui-button--primary"
                   onClick={() => {
-                    location.hash = "app/overview";
+                    location.hash = workflowHref;
                   }}
                 >
                   Explore the workflow <ArrowRight />
@@ -162,7 +175,7 @@ export function PublicWorkspace({
             </div>
           </section>
           <div className="landing-product-flow">
-            <LandingBackground variant="ascii" />
+            <LandingBackground variant="gradient" />
             <div className="landing-stage landing-stage--green landing-stage--features">
               <section className="capability-section" id="capabilities">
                 <div className="section-heading split-heading">
@@ -252,7 +265,7 @@ export function PublicWorkspace({
                     <a href="#capabilities">Features</a>
                     <a href="#pricing">Pricing</a>
                     <a href="#faq">FAQ</a>
-                    <a href="#app/overview">Demo</a>
+                    <a href={workflowHref}>Demo</a>
                     <a href="#creators">Creators</a>
                   </nav>
                 </div>

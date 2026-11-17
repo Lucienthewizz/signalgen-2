@@ -1,3 +1,4 @@
+import AnimatedContent from "@/components/react-bits/AnimatedContent";
 import { useEffect, useMemo, useRef, useState } from "react";
 import "@/styles/screening-journal.css";
 import { Download, NotebookTabs, SearchCheck } from "lucide-react";
@@ -359,6 +360,11 @@ export function JournalPanel({
       )}
       {items.length > 0 && (
         <>
+          <h2 className="journal-section-heading">Saved screening results</h2>
+          <p className="screening-journal__note">
+            Search and date filters below apply to saved screening snapshots.
+            Portfolio controls are separate.
+          </p>
           <FieldGroup
             className="journal-explorer-filters"
             aria-label="Filter screening journal"
@@ -486,17 +492,6 @@ export function JournalPanel({
           {exportNotice && <p role="status">{exportNotice}</p>}
         </>
       )}
-      <JournalBento
-        items={filtered}
-        portfolio={
-          <JournalPortfolio
-            key={userId}
-            userId={userId}
-            draft={tradeDraft}
-            onClearDraft={() => setTradeDraft(null)}
-          />
-        }
-      />
       {error && (
         <Alert variant="destructive">
           <AlertTitle>Journal unavailable</AlertTitle>
@@ -556,18 +551,26 @@ export function JournalPanel({
           </Button>
         </Empty>
       ) : items.length > 0 ? (
-        <div className="journal-ledger">
+        <div className="journal-ledger fit-data-table">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Stock</TableHead>
-                <TableHead>Market</TableHead>
-                <TableHead>Rule</TableHead>
+                <TableHead className="journal-secondary-column">
+                  Market
+                </TableHead>
+                <TableHead className="journal-secondary-column">Rule</TableHead>
                 <TableHead>Signal</TableHead>
-                <TableHead>Interval</TableHead>
-                <TableHead>Candle time (SGT)</TableHead>
+                <TableHead className="journal-secondary-column">
+                  Interval
+                </TableHead>
+                <TableHead className="journal-secondary-column">
+                  Candle time (SGT)
+                </TableHead>
                 <TableHead>Screening price</TableHead>
-                <TableHead>Screened at (SGT)</TableHead>
+                <TableHead className="journal-secondary-column">
+                  Screened at (SGT)
+                </TableHead>
                 <TableHead>Details</TableHead>
               </TableRow>
             </TableHeader>
@@ -576,41 +579,70 @@ export function JournalPanel({
                 const d = item.data;
                 return (
                   <TableRow key={item.id}>
-                    <TableCell>
+                    <TableCell data-label="Stock">
                       <strong>{d.symbol.replace(/\.JK$/, "")}</strong>
                     </TableCell>
-                    <TableCell>
+                    <TableCell
+                      data-label="Market"
+                      className="journal-secondary-column"
+                    >
                       {d.market} / {d.currency}
                     </TableCell>
-                    <TableCell>{d.rule_name}</TableCell>
-                    <TableCell>
+                    <TableCell
+                      data-label="Rule"
+                      className="journal-secondary-column"
+                    >
+                      {d.rule_name}
+                    </TableCell>
+                    <TableCell data-label="Signal">
                       <Badge variant="outline" data-signal={d.signal_type}>
                         {d.signal_type ?? "Match"}
                       </Badge>
                     </TableCell>
-                    <TableCell>{d.timeframe}</TableCell>
-                    <TableCell>{time(d.candle_at)}</TableCell>
-                    <TableCell>{price(d.price, d.currency)}</TableCell>
-                    <TableCell>{time(d.screened_at)}</TableCell>
-                    <TableCell>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        aria-expanded={detailId === item.id}
-                        aria-controls="journal-snapshot-detail"
-                        onClick={() =>
-                          setDetailId(detailId === item.id ? null : item.id)
-                        }
-                      >
-                        View {d.symbol.replace(/\.JK$/, "")} details
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setTradeDraft({ ...d })}
-                      >
-                        Record {d.symbol.replace(/\.JK$/, "")} trade
-                      </Button>
+                    <TableCell
+                      data-label="Interval"
+                      className="journal-secondary-column"
+                    >
+                      {d.timeframe}
+                    </TableCell>
+                    <TableCell
+                      data-label="Candle time (SGT)"
+                      className="journal-secondary-column"
+                    >
+                      {time(d.candle_at)}
+                    </TableCell>
+                    <TableCell data-label="Screening price">
+                      {price(d.price, d.currency)}
+                    </TableCell>
+                    <TableCell
+                      data-label="Screened at (SGT)"
+                      className="journal-secondary-column"
+                    >
+                      {time(d.screened_at)}
+                    </TableCell>
+                    <TableCell data-label="Details">
+                      <div className="journal-row-actions">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`View ${d.symbol.replace(/\.JK$/, "")} details`}
+                          aria-expanded={detailId === item.id}
+                          aria-controls="journal-snapshot-detail"
+                          onClick={() =>
+                            setDetailId(detailId === item.id ? null : item.id)
+                          }
+                        >
+                          Details
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          aria-label={`Record ${d.symbol.replace(/\.JK$/, "")} trade`}
+                          onClick={() => setTradeDraft({ ...d })}
+                        >
+                          Record trade
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -619,8 +651,23 @@ export function JournalPanel({
           </Table>
         </div>
       ) : null}
+      <div id="journal-portfolio" className="pen-journal-portfolio">
+        <JournalBento
+          items={filtered}
+          portfolio={
+            <JournalPortfolio
+              key={userId}
+              userId={userId}
+              draft={tradeDraft}
+              onClearDraft={() => setTradeDraft(null)}
+            />
+          }
+        />
+      </div>
       {detail && (
-        <section
+        <AnimatedContent
+          as="section"
+          animationKey={detailId ?? undefined}
           id="journal-snapshot-detail"
           className="journal-snapshot-detail"
           aria-label="Screening snapshot details"
@@ -712,7 +759,7 @@ export function JournalPanel({
               </div>
             </dl>
           </details>
-        </section>
+        </AnimatedContent>
       )}
       {filtered.length > 25 && (
         <nav className="screening-journal__actions" aria-label="Journal pages">

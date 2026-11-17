@@ -1,6 +1,15 @@
+import Carousel from "@/components/react-bits/Carousel";
+import AnimatedList from "@/components/react-bits/AnimatedList";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Newspaper, Play, RefreshCw, Video } from "lucide-react";
+import {
+  ExternalLink,
+  Newspaper,
+  Play,
+  RefreshCw,
+  Video,
+  Search,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -37,8 +46,10 @@ const newsDateFormat = new Intl.DateTimeFormat("en-GB", {
   timeStyle: "short",
   timeZone: SINGAPORE_TIME_ZONE,
 });
+const NEWS_PAGE_SIZE = 4;
 
 export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
+  const [playing, setPlaying] = useState(false);
   const [selected, setSelected] = useState(IDX_VIDEOS[0]);
   const [articles, setArticles] = useState<MarketArticle[]>(
     () => getCachedMarketNews()?.items ?? [],
@@ -48,6 +59,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
   const [revision, setRevision] = useState(0);
   const [query, setQuery] = useState("");
   const [ticker, setTicker] = useState("all");
+  const [page, setPage] = useState(0);
   const watchlist = useMemo(() => {
     try {
       const stored: unknown =
@@ -76,6 +88,15 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
     () => filterMarketArticles(articles, query, ticker),
     [articles, query, ticker],
   );
+  const pageCount = Math.max(
+    1,
+    Math.ceil(visibleArticles.length / NEWS_PAGE_SIZE),
+  );
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageArticles = visibleArticles.slice(
+    currentPage * NEWS_PAGE_SIZE,
+    (currentPage + 1) * NEWS_PAGE_SIZE,
+  );
   useEffect(() => {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 12_000);
@@ -86,6 +107,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
       .then((result) => {
         if (active) {
           setArticles(result.items);
+          setPage(0);
           setError(result.warning);
         }
       })
@@ -111,60 +133,12 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
   }, [revision]);
   return (
     <div className="workspace-news">
-      <section className="news-video" aria-labelledby="idx-video-title">
-        <header>
+      <div className="news-toolbar">
+        <header className="news-toolbar__actions">
           <WindowDots />
-          <h3 id="idx-video-title">
-            <Video aria-hidden="true" />
-            Video
-          </h3>
-          <span aria-hidden="true" />
-        </header>
-        <div className="news-video__layout">
-          <div className="news-video__player">
-            <iframe
-              key={selected.id}
-              src={`https://www.youtube-nocookie.com/embed/${selected.id}?autoplay=0`}
-              title={selected.title}
-              allow="encrypted-media; picture-in-picture; fullscreen"
-              allowFullScreen
-              referrerPolicy="strict-origin-when-cross-origin"
-            />
-          </div>
-          <div className="news-video__choices">
-            {IDX_VIDEOS.map((video) => (
-              <button
-                key={video.id}
-                type="button"
-                aria-pressed={selected.id === video.id}
-                onClick={() => setSelected(video)}
-              >
-                <Play aria-hidden="true" />
-                <span>{video.title}</span>
-              </button>
-            ))}
-            <a
-              href={`https://www.youtube.com/watch?v=${selected.id}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Watch on YouTube
-              <ExternalLink aria-hidden="true" />
-            </a>
-          </div>
-        </div>
-      </section>
-      <section
-        className="news-feed"
-        aria-labelledby="market-news-title"
-        aria-busy={loading}
-      >
-        <header>
-          <WindowDots />
-          <h3 id="market-news-title">
-            <Newspaper aria-hidden="true" />
-            Stock market news
-          </h3>
+          <span className="news-article-count" role="status">
+            {visibleArticles.length} articles
+          </span>
           <Button
             variant="outline"
             disabled={loading}
@@ -176,21 +150,32 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
         </header>
         <div className="news-filters">
           <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="news-search">Search news</FieldLabel>
-              <Input
-                id="news-search"
-                type="search"
-                placeholder="Search headlines or company names"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </Field>
+            <details className="news-search-disclosure">
+              <summary>
+                <Search aria-hidden="true" /> Search news
+              </summary>
+              <Field>
+                <FieldLabel htmlFor="news-search">Search news</FieldLabel>
+                <Input
+                  id="news-search"
+                  type="search"
+                  placeholder="Search headlines or company names"
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setPage(0);
+                  }}
+                />
+              </Field>
+            </details>
             <Field>
               <FieldLabel htmlFor="news-stock">Watchlist stock</FieldLabel>
               <Select
                 value={ticker}
-                onValueChange={(value) => setTicker(value ?? "all")}
+                onValueChange={(value) => {
+                  setTicker(value ?? "all");
+                  setPage(0);
+                }}
               >
                 <SelectTrigger id="news-stock">
                   <SelectValue>
@@ -210,12 +195,18 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
               </Select>
             </Field>
           </FieldGroup>
-          <p role="status">
-            {visibleArticles.length} articles
-            {ticker !== "all" ? ` about ${ticker}` : ""}. Filters match article
-            headlines.
-          </p>
         </div>
+      </div>
+      <section
+        className="news-feed"
+        aria-labelledby="market-news-title"
+        aria-busy={loading}
+      >
+        <header className="news-feed__header">
+          <h3 id="market-news-title">
+            <Newspaper aria-hidden="true" /> Stock market news
+          </h3>
+        </header>
         {error && (
           <Alert variant="destructive">
             <AlertTitle>News could not be refreshed</AlertTitle>
@@ -229,8 +220,8 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
             ))}
           </div>
         ) : visibleArticles.length ? (
-          <ul>
-            {visibleArticles.map((article) => (
+          <AnimatedList>
+            {pageArticles.map((article) => (
               <li key={article.url}>
                 <div>
                   <Badge variant="outline">{article.source}</Badge>
@@ -241,12 +232,11 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                   )}
                 </div>
                 <a href={article.url} target="_blank" rel="noreferrer">
-                  {article.title}
-                  <ExternalLink aria-hidden="true" />
+                  <span>{article.title}</span>
                 </a>
               </li>
             ))}
-          </ul>
+          </AnimatedList>
         ) : (
           (!error || articles.length > 0) && (
             <Empty>
@@ -269,6 +259,7 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
                     onClick={() => {
                       setQuery("");
                       setTicker("all");
+                      setPage(0);
                     }}
                   >
                     Reset filters
@@ -278,6 +269,97 @@ export function WorkspaceNewsPanel({ userId }: { userId?: string }) {
             </Empty>
           )
         )}
+        {visibleArticles.length > NEWS_PAGE_SIZE && (
+          <nav className="news-pagination" aria-label="News pages">
+            <span role="status">
+              {currentPage * NEWS_PAGE_SIZE + 1}–
+              {Math.min(
+                (currentPage + 1) * NEWS_PAGE_SIZE,
+                visibleArticles.length,
+              )}{" "}
+              of {visibleArticles.length} articles · Page {currentPage + 1} of{" "}
+              {pageCount}
+            </span>
+            <div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loading || currentPage === 0}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loading || currentPage + 1 >= pageCount}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </nav>
+        )}
+      </section>
+      <section className="news-video" aria-labelledby="idx-video-title">
+        <header>
+          <WindowDots />
+          <h3 id="idx-video-title">
+            <Video aria-hidden="true" />
+            Public expose
+          </h3>
+          <span aria-hidden="true" />
+        </header>
+        <div className="news-video__layout">
+          <div className="news-video__player">
+            {playing ? (
+              <iframe
+                key={selected.id}
+                src={`https://www.youtube-nocookie.com/embed/${selected.id}?autoplay=1`}
+                title={selected.title}
+                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+            ) : (
+              <button
+                className="news-video__poster"
+                type="button"
+                onClick={() => setPlaying(true)}
+                aria-label={`Play ${selected.title}`}
+              >
+                <span className="presentation-label">
+                  <Video aria-hidden="true" /> Company presentation
+                </span>
+                <Play aria-hidden="true" />
+                <span>{selected.title}</span>
+                <span className="presentation-caption">
+                  Public Expose · IDX
+                </span>
+              </button>
+            )}
+          </div>
+          <a
+            className="presentation-external"
+            href={`https://www.youtube.com/watch?v=${selected.id}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <ExternalLink aria-hidden="true" /> Watch on YouTube
+          </a>
+          <div className="news-video__choices">
+            <h4>More presentations</h4>
+            <Carousel
+              presentation="list"
+              items={IDX_VIDEOS}
+              selected={selected.id}
+              onSelect={(video) => {
+                setSelected(video);
+                setPlaying(false);
+              }}
+            />
+          </div>
+        </div>
       </section>
     </div>
   );

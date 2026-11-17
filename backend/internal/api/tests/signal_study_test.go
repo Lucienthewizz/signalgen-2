@@ -477,3 +477,67 @@ func TestMarketScreeningFrozenCatalogWithoutBacktestAccess(t *testing.T) {
 	server.ServeHTTP(response, req)
 	assertErrorCode(t, response, 401, "AUTH_REQUIRED")
 }
+
+func TestStudyRecoveryOwnerSessionAndPurpose(t *testing.T) {
+	for _, purpose := range []string{"backtest", "screen"} {
+		t.Run(purpose, func(t *testing.T) {
+			catalog := &studyCatalog{stocks: []universe.Instrument{{Symbol: "TEST", ProviderSymbol: "TEST", Exchange: "XNAS", Currency: "USD"}}}
+			snapshots, _ := dataset.NewDynamicStore(&backtestMarket{}, catalog)
+			identity := &fakeIdentity{principal: auth.Principal{ID: "user-a"}}
+			sessions := &fakeSessions{verified: session.Session{ID: "session-a", UserID: "user-a"}}
+			server, err := api.NewServer(identity, sessions, &fakeAccess{features: []string{access.FeatureBacktest, access.FeatureScreener}}, snapshots, &fakeCompute{}, api.WithUniverseStore(catalog))
+			if err != nil {
+				t.Fatal(err)
+			}
+			path, other := "/api/v1/backtests/studies", "/api/v1/screener/scans"
+			if purpose == "screen" {
+				path, other = other, path
+			}
+			input := studies.StudyInput{Source: "market", Market: "US", RuleID: core.BaselineRuleID, Config: core.SignalStudyConfig{From: "2026-01-20", To: "2026-01-23", NSteps: 1}}
+			count := func(path string, want int) []studies.StudyContext {
+				t.Helper()
+				res := backtestHTTP(t, server, "GET", path, nil)
+				if res.Code != 200 {
+					t.Fatalf("GET %s: %d %s", path, res.Code, res.Body.String())
+				}
+				if res.Header().Get("Cache-Control") != "private, no-store" {
+					t.Fatal("recovery is cacheable")
+				}
+				var result struct {
+					Items []studies.StudyContext `json:"items"`
+				}
+				if err := json.Unmarshal(res.Body.Bytes(), &result); err != nil {
+					t.Fatal(err)
+				}
+				if len(result.Items) != want {
+					t.Fatalf("got %d studies, want %d", len(result.Items), want)
+				}
+				return result.Items
+			}
+			count(path, 0)
+			res := backtestHTTP(t, server, "POST", path, input)
+			if res.Code != 201 {
+				t.Fatal(res.Body.String())
+			}
+			active := count(path, 1)[0]
+			count(other, 0)
+			assertErrorCode(t, backtestHTTP(t, server, "POST", path, input), 429, "STUDY_CAPACITY")
+			sessions.verified.ID = "another-session"
+			count(path, 0)
+			assertErrorCode(t, backtestHTTP(t, server, "DELETE", path+"/"+active.ID, nil), 404, "RESOURCE_NOT_FOUND")
+			identity.principal.ID = "user-b"
+			sessions.verified = session.Session{ID: "session-b", UserID: "user-b"}
+			count(path, 0)
+			identity.principal.ID = "user-a"
+			sessions.verified = session.Session{ID: "session-a", UserID: "user-a"}
+			count(path, 1)
+			if res = backtestHTTP(t, server, "DELETE", path+"/"+active.ID, nil); res.Code != 204 {
+				t.Fatal(res.Body.String())
+			}
+			count(path, 0)
+			if res = backtestHTTP(t, server, "POST", path, input); res.Code != 201 {
+				t.Fatal(res.Body.String())
+			}
+		})
+	}
+}

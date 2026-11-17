@@ -21,6 +21,7 @@ async(page)=>{
   if(p==="/api/v1/subscription")return respond({subscription:null});
   if(p==="/api/v1/workspace")return respond({items:[]});
   if(p.startsWith("/api/v1/workspace/")){const b=request.postDataJSON();return respond({...b,version:b.version+1})}
+  if(p==="/api/v1/backtests/studies"&&method==="GET")return respond({items:[]});
   if(p==="/api/v1/backtests/studies"){
    const b=request.postDataJSON();frozen={id:"study-qa",engine_version:"core-0.5.0",rule_schema_version:"signal-baseline-1",schema_version:"signal-study-1",policy_version:"signal-close-independent-1",market:b.market,currency:b.market==="US"?"USD":"IDR",config:b.config,rule_id:b.rule_id,definition_hash:"sha256:rule",catalog_hash:"sha256:qa-frozen-catalog",total:23,batch_size:10,batches:3,expires_at:"2027-11-01T00:00:00Z"};return respond(frozen,201);
   }
@@ -53,6 +54,7 @@ async(page)=>{
   await page.setViewportSize({width,height:1000});await page.goto(origin+"/#app/backtest");await page.reload();
   const source=page.getByLabel("Stock source",{exact:true});await source.waitFor({timeout:20000});
   await page.evaluate(async()=>{await document.fonts.ready;await Promise.all(document.getAnimations().filter(a=>a.effect?.getComputedTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})))});
+  await page.locator("details.run-advanced > summary").click();
   for(const name of ["Source & rule","Test period","Take profit & stop loss"])if(await page.getByRole("group",{name,exact:true}).count()!==1)throw Error("Missing settings group: "+name);
   const tp=await page.getByLabel("Take profit % (optional)",{exact:true}).boundingBox(),sl=await page.getByLabel("Stop loss % (optional)",{exact:true}).boundingBox();
   if(!tp||!sl||(width>480?(Math.abs(tp.y-sl.y)>1||Math.abs(tp.width-sl.width)>1):sl.y<=tp.y))throw Error("Target fields not aligned at "+width);
@@ -65,6 +67,12 @@ async(page)=>{
     if(!anchor||fields.some(field=>Math.abs(field.x-anchor.x)>1||Math.abs(field.width-anchor.width)>1))throw Error("Settings columns have different widths or edges at "+width);
    }
   }
+  const slider=page.getByRole("slider",{name:"Trading candles slider",exact:true});
+  const number=page.getByLabel("Trading candles after signal",{exact:true});
+  const previous=await number.inputValue();
+  await slider.focus();await page.keyboard.press("End");if(await number.inputValue()!=="100")throw Error("Study slider maximum failed");
+  await page.keyboard.press("Home");if(await number.inputValue()!=="1")throw Error("Study slider minimum failed");
+  await number.fill(previous);if(await slider.inputValue()!==previous)throw Error("Study slider/numeric input out of sync");
   const targetColors=await page.locator('[data-study-target] [data-slot="field-label"]').evaluateAll(items=>items.map(item=>getComputedStyle(item).color.match(/\d+/g).map(Number)));
   if(targetColors.length!==2||targetColors[0][1]<=targetColors[0][0]||targetColors[1][0]<=targetColors[1][1])throw Error("Take profit/stop loss semantic colors missing");
   const arrow=await source.evaluate(el=>{const s=getComputedStyle(el);return{appearance:s.appearance,padding:parseFloat(s.paddingRight),image:s.backgroundImage}});
@@ -93,6 +101,9 @@ async(page)=>{
    partial=false;await page.getByRole("button",{name:"Retry failed stocks",exact:true}).click();
    await page.getByText("Completed the frozen catalog. Review data-quality limits before interpreting results.",{exact:true}).waitFor({timeout:30000});
    if(scored.length!==23||new Set(scored).size!==23||JSON.stringify(prepares)!=="[0,1,2,0]")throw Error("Retry duplicated stocks");
+   await page.getByRole("button",{name:"Keep result for comparison",exact:true}).click();
+   if(await page.getByRole("region",{name:"Compare historical studies",exact:true}).locator("tbody tr").count()!==9)throw Error("Study comparison metrics missing");
+   if(await page.locator(".run-stepper [aria-current=step]").innerText().then(t=>!t.includes("Results")))throw Error("Completed step missing");
    const details=page.locator("table").filter({has:page.locator("caption",{hasText:"Signal details"})});
    if(await details.locator("tbody tr").count()!==50)throw Error("Signal page is not bounded at 50");
    await page.getByRole("button",{name:"Next signals",exact:true}).click();
@@ -104,6 +115,16 @@ async(page)=>{
     try{TextEncoder.prototype.encode=()=>({length:s.STUDY_STORAGE_LIMIT+1});await s.storeStudySymbol(owner,"study-qa","QUOTA",{events:[]},new AbortController().signal);return false}catch(e){if(!String(e).includes("128 MiB"))throw e}finally{TextEncoder.prototype.encode=encode}
     const after=await s.studyEventPage(owner,"study-qa");return before.total===92&&after.total===92;
    },user.id);if(!quota)throw Error("Quota destroyed completed rows");
+   if(width===1440&&theme==="dark"){
+    await page.getByLabel("From (daily session, SGT)",{exact:true}).fill("2026-01-21");
+    await page.getByRole("button",{name:"Start signal study",exact:true}).click();
+    await page.getByText("Completed the frozen catalog. Review data-quality limits before interpreting results.",{exact:true}).waitFor({timeout:30000});
+    const comparison=page.getByRole("region",{name:"Compare historical studies",exact:true});
+    const period=comparison.getByRole("row",{name:/^Period /});
+    if(!(await period.innerText()).includes("2026-01-20")||!(await period.innerText()).includes("2026-01-21"))throw Error("Comparison did not retain the previous period");
+    const evaluated=comparison.getByRole("row",{name:/^Evaluated signals /});
+    if((await evaluated.locator("td").allTextContents()).join(",")!=="92,69")throw Error("Comparison did not keep independent result metrics");
+   }
    if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error(`Page overflow ${width}/${theme}`);
    await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:`output/playwright/signal-study-${width}-${theme}.png`,fullPage:true});
   }

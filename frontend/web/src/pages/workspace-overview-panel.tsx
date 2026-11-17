@@ -1,3 +1,8 @@
+import SpotlightCard from "@/components/react-bits/SpotlightCard";
+import CountUp from "@/components/react-bits/CountUp";
+import MagicBento from "@/components/react-bits/MagicBento";
+import { useVisualPreferences } from "@/lib/visual-preferences";
+import "@/styles/overview-bento.css";
 import { PortfolioOverview } from "@/components/portfolio-overview";
 import { tierName } from "@/lib/tier-access";
 import { screeningSetup } from "@/lib/screening-setup";
@@ -64,6 +69,7 @@ export function WorkspaceOverviewPanel({
   workspaceReady,
   go,
 }: Props) {
+  const { light, reduced } = useVisualPreferences();
   const [account, setAccount] = useState<AccountState | null>(null);
   const [rules, setRules] = useState<RuleResource[]>(
     () => ui.peekRules(userId)?.items ?? [],
@@ -257,7 +263,7 @@ export function WorkspaceOverviewPanel({
                 ? "Available account data appears as it loads."
                 : ready
                   ? latest
-                    ? "Use your last selection or adjust it before screening."
+                    ? null
                     : "Choose a rule and stock universe, then review the results and evidence."
                   : !account
                     ? "Try reloading your workspace. A connection problem does not change your plan."
@@ -270,11 +276,22 @@ export function WorkspaceOverviewPanel({
                 className="overview-last-screen"
                 aria-label="Latest screening summary"
               >
+                <div className="overview-run-heading">
+                  <strong>{latest.rule}</strong>
+                  <time dateTime={latest.recordedAt}>
+                    Last run ·{" "}
+                    {new Date(latest.recordedAt).toLocaleString("en-GB", {
+                      timeZone: SINGAPORE_TIME_ZONE,
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                </div>
                 <p>
-                  Last screen · {latest.run.manifest.market} ·{" "}
-                  {new Date(latest.recordedAt).toLocaleString("en-GB", {
-                    timeZone: SINGAPORE_TIME_ZONE,
-                  })}
+                  {latest.context?.universeName ?? latest.run.manifest.market} /{" "}
+                  {latest.run.manifest.timeframe} candles
                 </p>
                 <ul>
                   {(["buy", "sell", "cooldown"] as const).map((status) => (
@@ -293,114 +310,150 @@ export function WorkspaceOverviewPanel({
               </div>
             )}
           </div>
-          <Button
-            size="lg"
-            className="workspace-glass-action overview-open-screener"
-            disabled={preparing}
-            onClick={() =>
-              !account
-                ? setReload((value) => value + 1)
-                : ready
-                  ? continueScreen()
-                  : go(setup.view)
-            }
-          >
-            <SearchCheck data-icon="inline-start" />
-            {preparing
-              ? "Loading analysis options…"
-              : !account
-                ? "Reload workspace"
-                : setup.label}
-          </Button>
+          <footer className="overview-next-footer">
+            {latest && (
+              <span>
+                {latest.run.rows.filter((row) => row.decision.matched).length}{" "}
+                of {latest.run.rows.length} stocks matched your rule
+              </span>
+            )}
+            <Button
+              size="lg"
+              variant="default"
+              className="workspace-glass-action overview-open-screener"
+              disabled={preparing}
+              onClick={() =>
+                !account
+                  ? setReload((value) => value + 1)
+                  : ready
+                    ? continueScreen(latest)
+                    : go(setup.view)
+              }
+            >
+              <SearchCheck data-icon="inline-start" />
+              {preparing
+                ? "Loading analysis options…"
+                : !account
+                  ? "Reload workspace"
+                  : latest
+                    ? "Use last selection"
+                    : setup.label}
+            </Button>
+          </footer>
         </section>
-        <nav className="overview-shortcuts" aria-label="Quick access">
-          <h3>Follow the market</h3>
-          <button onClick={() => go("realtime")}>
-            <Activity aria-hidden="true" />
-            <span>
-              <strong>Market monitor</strong>
-              <small>Charts and prices for your watchlist</small>
-            </span>
-            <ArrowUpRight aria-hidden="true" />
-          </button>
-          <button onClick={() => go("news")}>
-            <Newspaper aria-hidden="true" />
-            <span>
-              <strong>News & videos</strong>
-              <small>Company updates and market news</small>
-            </span>
-            <ArrowUpRight aria-hidden="true" />
-          </button>
-        </nav>
+        {userId && <PortfolioOverview key={userId} userId={userId} />}
       </div>
-      {userId && <PortfolioOverview key={userId} userId={userId} />}
+
+      <nav className="overview-shortcuts" aria-label="Quick access">
+        <SpotlightCard onClick={() => go("realtime")}>
+          <Activity aria-hidden="true" />
+          <span>
+            <strong>Market monitor</strong>
+            <small>Charts and prices for your watchlist</small>
+          </span>
+          <ArrowUpRight aria-hidden="true" />
+        </SpotlightCard>
+        <SpotlightCard onClick={() => go("news")}>
+          <Newspaper aria-hidden="true" />
+          <span>
+            <strong>News & videos</strong>
+            <small>Company updates and market news</small>
+          </span>
+          <ArrowUpRight aria-hidden="true" />
+        </SpotlightCard>
+      </nav>
       <section
-        className="overview-resources feature-gallery"
+        className="overview-resources overview-bento"
         aria-label="Workspace overview"
       >
-        {(
-          [
-            {
-              view: "rules",
-              icon: ListChecks,
-              label: "Rules",
-              value: pending.rules && !rules.length ? "Loading…" : rules.length,
-              action: "Manage rules",
-            },
-            {
-              view: "universes",
-              icon: Boxes,
-              label: "Stock universes",
-              value:
-                pending.universes && !universes.length
-                  ? "Loading…"
-                  : universes.length,
-              action: "Manage universes",
-            },
-            {
-              view: "subscription",
-              icon: Crown,
-              label: "Plan",
-              value: account?.access
-                ? tierName(account.access.plan_code)
-                : (subscription?.plan_name ??
-                  (pending.account || pending.subscription
+        <MagicBento
+          columns={4}
+          rowHeight={180}
+          gap={12}
+          radius={12}
+          theme={light ? "light" : "dark"}
+          disableAnimations={reduced}
+          intro={false}
+          enableTilt={false}
+          enableMagnetism={false}
+          enableStars={false}
+          clickEffect={false}
+          textAutoHide={false}
+          glowColor="#45e69f"
+          items={(
+            [
+              {
+                view: "rules",
+                icon: ListChecks,
+                label: "Rules",
+                value:
+                  pending.rules && !rules.length ? "Loading…" : rules.length,
+                action: "Manage rules",
+              },
+              {
+                view: "universes",
+                icon: Boxes,
+                label: "Stock universes",
+                value:
+                  pending.universes && !universes.length
                     ? "Loading…"
-                    : account
-                      ? "Free"
-                      : "—")),
-              action: "View plan",
-            },
-            {
-              view: "access",
-              icon: UserRound,
-              label: "Account",
-              value:
-                account?.user.status === "active"
-                  ? "Active"
-                  : (account?.user.status ??
-                    (pending.account ? "Loading…" : "—")),
-              action: "View account",
-            },
-          ] as const
-        ).map(({ icon: Icon, ...resource }) => (
-          <a
-            className="feature-gallery__item"
-            href={`#app/${resource.view}`}
-            key={resource.view}
-          >
-            <div className="feature-gallery__figure overview-resources__icon">
-              <Icon aria-hidden="true" strokeWidth={1.25} />
-            </div>
-            <div className="feature-gallery__copy">
-              <strong>{resource.label}</strong>
-              <p className="overview-resources__value">{resource.value}</p>
-              <span>
-                {resource.action} <ArrowUpRight aria-hidden="true" />
-              </span>
-            </div>
-          </a>
-        ))}
+                    : universes.length,
+                action: "Manage universes",
+              },
+              {
+                view: "subscription",
+                icon: Crown,
+                label: "Plan",
+                value: account?.access
+                  ? tierName(account.access.plan_code)
+                  : (subscription?.plan_name ??
+                    (pending.account || pending.subscription
+                      ? "Loading…"
+                      : account
+                        ? "Free"
+                        : "—")),
+                action: "View plan",
+              },
+              {
+                view: "access",
+                icon: UserRound,
+                label: "Account",
+                value:
+                  account?.user.status === "active"
+                    ? "Active"
+                    : (account?.user.status ??
+                      (pending.account ? "Loading…" : "—")),
+                action: "View account",
+              },
+            ] as const
+          ).map(({ icon: Icon, ...resource }) => ({
+            id: resource.view,
+            content: (
+              <a
+                className="feature-gallery__item"
+                href={`#app/${resource.view}`}
+                key={resource.view}
+              >
+                <div className="feature-gallery__figure overview-resources__icon">
+                  <Icon aria-hidden="true" strokeWidth={1.25} />
+                </div>
+                <div className="feature-gallery__copy">
+                  <strong>{resource.label}</strong>
+                  <p className="overview-resources__value">
+                    {typeof resource.value === "number" ? (
+                      <CountUp to={resource.value} />
+                    ) : (
+                      resource.value
+                    )}
+                  </p>
+                  <span>
+                    {resource.action} <ArrowUpRight aria-hidden="true" />
+                  </span>
+                </div>
+              </a>
+            ),
+          }))}
+        />
       </section>
       {!latest && !preparing && account && (
         <section

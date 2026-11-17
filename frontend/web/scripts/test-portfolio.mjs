@@ -66,6 +66,7 @@ try {
     reducedMotion: "reduce",
   });
   await context.addInitScript(() => {
+    if (location.hostname !== "127.0.0.1") return;
     sessionStorage.setItem(
       "signalgen.access-token",
       "synthetic-portfolio-token",
@@ -143,6 +144,91 @@ try {
   });
   await page.goto(baseURL + "/#app/journal");
   await page
+    .getByRole("button", { name: "Preview test data", exact: true })
+    .click();
+  const example = page.getByLabel("Portfolio chart example", { exact: true });
+  await example.getByText("IDR 60,000", { exact: true }).waitFor();
+  if ((await example.locator(".journal-chart-point").count()) !== 4)
+    throw Error("Expected start plus three completed example trades");
+  if (writes !== 0 || items.length !== 0)
+    throw Error("Chart preview wrote account data");
+  for (const width of [1440, 1218, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    if (width > 860) {
+      const edges = await page
+        .locator(".journal-bento .magic-bento__card")
+        .evaluateAll((nodes) => [
+          nodes[0].getBoundingClientRect().bottom,
+          nodes.at(-1).getBoundingClientRect().bottom,
+        ]);
+      if (Math.abs(edges[0] - edges[1]) > 2)
+        throw Error(
+          `Portfolio does not align with Most used rule at ${width}: ${edges}`,
+        );
+    }
+    if (
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth + 1,
+      )
+    )
+      throw Error("Preview overflow at " + width);
+    await example.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: `/tmp/signalgen-journal-example-${width}.png`,
+      fullPage: true,
+    });
+  }
+  await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
+  await page.screenshot({
+    path: "/tmp/signalgen-journal-example-light.png",
+    fullPage: true,
+  });
+  if (
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth + 1,
+    )
+  )
+    throw Error("Light preview overflow");
+  await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
+  await example.getByRole("button", { name: /^Trade 3 / }).click();
+  await example
+    .getByRole("region", { name: "Selected trade details", exact: true })
+    .getByText(/TLKM/)
+    .waitFor();
+  const point = example.getByRole("button", { name: /^Trade 3 / });
+  await point.focus();
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Enter");
+  await example
+    .getByRole("region", { name: "Selected trade details", exact: true })
+    .getByText(/BBCA/)
+    .waitFor();
+  await page.setViewportSize({ width: 1218, height: 1000 });
+  const detailEdges = await page
+    .locator(".journal-bento .magic-bento__card")
+    .evaluateAll((nodes) => [
+      nodes[0].getBoundingClientRect().bottom,
+      nodes.at(-1).getBoundingClientRect().bottom,
+    ]);
+  if (Math.abs(detailEdges[0] - detailEdges[1]) > 2)
+    throw Error("Expanded chart details break the card alignment");
+  await page
+    .getByRole("button", { name: "Show my portfolio", exact: true })
+    .click();
+  await page.getByText("No realized P&L yet", { exact: true }).waitFor();
+  if (writes !== 0 || items.length !== 0)
+    throw Error("Example records leaked into the account ledger");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const emptyEdges = await page
+    .locator(".journal-bento .magic-bento__card")
+    .evaluateAll((nodes) => [
+      nodes[0].getBoundingClientRect().bottom,
+      nodes.at(-1).getBoundingClientRect().bottom,
+    ]);
+  if (Math.abs(emptyEdges[0] - emptyEdges[1]) > 2)
+    throw Error("Empty portfolio does not extend to Most used rule");
+
+  await page
     .getByRole("button", { name: "Record BBCA trade", exact: true })
     .waitFor();
   await page
@@ -196,6 +282,26 @@ try {
     .locator(".journal-portfolio__value")
     .filter({ hasText: "1,980.00" })
     .waitFor();
+  // Filter on sale month after reconciling all earlier purchases.
+  await page.getByRole("button", { name: "All months", exact: true }).click();
+  await page.getByRole("button", { name: "October 2026", exact: true }).click();
+  await page.getByText("No realized P&L yet", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Oct 2026", exact: true }).click();
+  await page
+    .getByRole("button", { name: "November 2026", exact: true })
+    .click();
+  await page
+    .locator(".journal-portfolio__value")
+    .filter({ hasText: "1,980.00" })
+    .waitFor();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page
+      .getByRole("button", { name: "Export transactions CSV", exact: true })
+      .click(),
+  ]);
+  if (download.suggestedFilename() !== "portfolio-transactions-IDX-2026-11.csv")
+    throw Error("Portfolio CSV scope missing");
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.locator(".journal-portfolio").scrollIntoViewIfNeeded();
@@ -235,6 +341,119 @@ try {
     .getByRole("region", { name: "Realized portfolio P&L", exact: true })
     .getByText("IDR 2,980.00", { exact: true })
     .waitFor();
+  await page
+    .getByText(/^Updated /)
+    .filter({ has: page.locator("time") })
+    .waitFor();
+  const amountFont = await page
+    .locator(".overview-portfolio__totals strong > span")
+    .first()
+    .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  if (amountFont < 24)
+    throw Error("Animated P&L lost the financial value type scale");
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const resources = page.getByRole("region", {
+      name: "Workspace overview",
+      exact: true,
+    });
+    const cards = await resources
+      .locator(".feature-gallery__item")
+      .evaluateAll((nodes) =>
+        nodes.map((el) => el.getBoundingClientRect().height),
+      );
+    if (cards.length !== 4 || cards.some((h) => h < 95 || h > 165))
+      throw Error("Dashboard resource card sizes changed");
+    if (
+      !(await resources
+        .locator(".overview-resources__value span")
+        .evaluateAll((nodes) =>
+          nodes.every((el) => parseFloat(getComputedStyle(el).fontSize) >= 22),
+        ))
+    )
+      throw Error("CountUp lost the resource value type scale");
+    if (
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth + 1,
+      )
+    )
+      throw Error("Dashboard overflow");
+    await resources.screenshot({
+      path: `/tmp/signalgen-dashboard-bento-final-${width}.png`,
+    });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({
+    path: "/tmp/signalgen-overview-portfolio-final.png",
+    fullPage: true,
+  });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.reload();
+  await page
+    .locator(".overview-portfolio__totals")
+    .getByText("IDR 2,980.00", { exact: true })
+    .waitFor();
+  const quick = page.getByRole("button", { name: /Market monitor Charts/ });
+  await quick.hover();
+  await page.waitForTimeout(220);
+  if (
+    (await quick.evaluate((el) =>
+      Number(getComputedStyle(el, "::before").opacity),
+    )) < 0.9
+  )
+    throw Error("Spotlight missing on dashboard hover");
+  await quick.focus();
+  await page.screenshot({
+    path: "/tmp/signalgen-spotlight-dashboard.png",
+    fullPage: true,
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(baseURL + "/#app/news");
+  await page.locator(".news-video__poster").waitFor();
+  if (await page.locator(".news-video iframe").count())
+    throw Error("Video loaded before interaction");
+  await page.locator(".news-video__poster").click();
+  await page.locator(".news-video iframe").waitFor();
+  const presentations = page.getByRole("navigation", {
+    name: "More presentations",
+    exact: true,
+  });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const choice = presentations.getByRole("button").first();
+    const title = await choice.innerText();
+    await choice.focus();
+    await page.keyboard.press("Enter");
+    if (await page.locator(".news-video iframe").count())
+      throw Error("Selecting a presentation autoplayed it");
+    if (
+      !(
+        await page.locator(".news-video__poster").getAttribute("aria-label")
+      ).includes(title)
+    )
+      throw Error("Keyboard selection did not update the presentation");
+    if (
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth + 1,
+      )
+    )
+      throw Error("Presentation list overflows page");
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
+  await page.goto(baseURL + "/#home");
+  if (
+    (
+      await page
+        .getByRole("link", { name: "Demo", exact: true })
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href")))
+    ).some((href) => href !== "#app/overview")
+  )
+    throw Error("Signed-in Demo link does not open workspace");
+  await page
+    .getByRole("button", { name: "Explore the workflow", exact: true })
+    .click();
+  await page.waitForURL((url) => url.hash === "#app/overview");
   await page.goto(baseURL + "/#home");
   if (await page.locator(".landing-header__session").count())
     throw Error("Dashboard still appears outside the account dropdown");
@@ -256,7 +475,7 @@ try {
     throw Error("Portfolio leaked between accounts");
   if (errors.length) throw Error(errors.join("\n"));
   console.log(
-    "PASS: screening draft → BUY → SELL, server P&L, fees, SGT, chart, reload, edit, dashboard, 1440/390px and account isolation. Synthetic API only.",
+    "PASS: read-only 3-trade preview, keyboard chart selection, aligned cards at 1440/1218px, mobile/light layout, zero preview writes; spotlight, presentation list keyboard selection/lazy playback; BUY/SELL, fees, SGT, monthly CSV, reload/edit/dashboard/account isolation. Synthetic API only.",
   );
 } catch (error) {
   console.error(error);

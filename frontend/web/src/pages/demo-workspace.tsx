@@ -1,4 +1,6 @@
+import Dock from "@/components/react-bits/Dock";
 import "@/styles/workspace-forest.css";
+import "@/styles/pen-workspace.css";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
 import "@/styles/tier-access.css";
 import {
@@ -154,12 +156,12 @@ const viewMeta: Record<
   { title: string; description: string; icon: typeof Gauge }
 > = {
   overview: {
-    title: "Workspace overview",
+    title: "Dashboard",
     description: "Continue your analysis and review recent screening activity.",
     icon: Gauge,
   },
   analysis: {
-    title: "Stock screener",
+    title: "Screener",
     description:
       "Choose a rule and stock universe, then review the results and evidence.",
     icon: SearchCheck,
@@ -177,7 +179,7 @@ const viewMeta: Record<
     icon: Activity,
   },
   rules: {
-    title: "Manage rules",
+    title: "Rules",
     description: "Create screening conditions or review your saved rules.",
     icon: ListChecks,
   },
@@ -1875,7 +1877,7 @@ export function DemoWorkspace({
   }
   return (
     <main
-      className={`workbench demo-workbench ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${menuOpen ? "is-menu-open" : ""}`}
+      className={`workbench demo-workbench pen-workbench ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${menuOpen ? "is-menu-open" : ""}`}
     >
       <aside
         id="workspace-sidebar"
@@ -1924,7 +1926,7 @@ export function DemoWorkspace({
           </Tooltip.Root>
         </div>
         <Tooltip.Provider delay={250}>
-          <nav aria-label="Workspace navigation">
+          <Dock disabled={mobileViewport}>
             {navGroups.map((group, index) => {
               const visibleItems = group.items;
               if (!visibleItems.length) return null;
@@ -1972,7 +1974,7 @@ export function DemoWorkspace({
                 </div>
               );
             })}
-          </nav>
+          </Dock>
         </Tooltip.Provider>
         <div className="sidebar__footer">
           {authenticated && user ? (
@@ -2017,9 +2019,13 @@ export function DemoWorkspace({
                   <SidebarToggleIcon open={menuOpen} />
                 </button>
               )}
-              <h1>
-                {view === "operator" ? "Administration" : "Trading workspace"}
-              </h1>
+              <p className="workspace-breadcrumb">
+                <>
+                  <span className="pen-breadcrumb-root">Workspace</span>
+                  <span aria-hidden="true">/</span>
+                  <span>{meta.title}</span>
+                </>
+              </p>
             </div>
             <div className="topbar__actions">
               <span

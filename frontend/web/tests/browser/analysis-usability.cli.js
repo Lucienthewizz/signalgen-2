@@ -32,7 +32,7 @@ async (page) => {
   await page.route("**/*",async route=>{
     const req=route.request(),url=new URL(req.url()),p=url.pathname;
     if(url.origin!==origin)return route.abort();
-    if(p==="/src/analysis/screener.ts")return route.fulfill({contentType:"application/javascript",body:`export async function runLiveScreener(){return ${JSON.stringify(run)};}`});
+    if(p==="/src/analysis/screener.ts")return route.fulfill({contentType:"application/javascript",body:`export async function runLiveScreener(){if(window.__qaFailScreen)throw new Error("Synthetic attempt failed");if(!window.__qaFirstReleased)await new Promise(resolve=>window.__qaReleaseScreen=resolve);return ${JSON.stringify(run)};}`});
     if(p!=="/api"&&!p.startsWith("/api/")&&p!=="/ready")return route.continue();
     if(p==="/api/v1/rules"){
       rulesReads++;
@@ -69,7 +69,15 @@ async (page) => {
   const wait=async predicate=>{for(let n=0;n<80;n++){if(predicate())return;await page.waitForTimeout(50);}throw Error("Fixture did not reach expected request state");};
   await page.goto(`${origin}/#app/analysis`);await page.reload();
   await page.getByRole("button",{name:"Refresh selections",exact:true}).waitFor();
+  await page.getByRole('button',{name:'BBCA',exact:true}).waitFor();
+  if(await page.locator('.run-stepper li[data-state="complete"], .run-stepper li[data-state="current"]').count())throw Error("Restored history colored stages before a new screening started");
+  await page.locator('.run-stepper').screenshot({path:'/tmp/signalgen-idle-stepper-initial.png'});
   await page.getByRole('button',{name:'Start screening',exact:true}).click();
+  await page.waitForFunction(()=>typeof window.__qaReleaseScreen==='function');
+  if(!(await page.locator('.run-stepper li[data-state="current"]').innerText()).includes("Process"))throw Error("Active screening did not show Process");
+  await page.evaluate(()=>{window.__qaFirstReleased=true;window.__qaReleaseScreen();});
+  await page.waitForFunction(()=>document.querySelector('.run-stepper li:last-child')?.dataset.state==='current');
+
   await page.waitForFunction(()=>document.querySelector('input[aria-label="Select BBCA for journal"]')?.disabled===false);
   await page.getByRole('button',{name:'Stop',exact:true}).click();
   const stock=page.getByRole("button",{name:"BBCA",exact:true});
@@ -220,6 +228,12 @@ async (page) => {
   await page.getByRole('button',{name:'Run screening again',exact:true}).click();
   await page.waitForURL('**/#app/analysis');
   if(writes.length!==countBeforeRecovery)throw Error('Recovery silently resubmitted the stale receipt');
+  await page.getByRole('button',{name:'Start screening',exact:true}).waitFor();
+  await page.evaluate(()=>window.__qaFailScreen=true);
+  await page.getByRole('button',{name:'Start screening',exact:true}).click();
+  await page.locator('.screener-error-summary').waitFor();
+  if(await page.locator('.run-stepper li[data-state="complete"],.run-stepper li[data-state="current"]').count())throw Error("Failed attempt marked retained old results as completed");
+  await page.locator('.run-stepper').screenshot({path:'/tmp/signalgen-idle-stepper.png'});
   if(errors.length)throw Error(errors.join("; "));
   await page.evaluate(()=>document.body.setAttribute("data-signalgen-usability-tests","complete"));
   return {synthetic:true,receiptWrites:writes.length,retryOnlyFailed:true,widths:[1440,1218,390]};

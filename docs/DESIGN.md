@@ -21,6 +21,20 @@ colors:
   accent-ink: "#04120a"
   skeleton: "#1a211c"
   skeleton-resolve: "#29332d"
+  workspace-canvas: "#090a0a"
+  workspace-sidebar: "#101111"
+  workspace-surface: "#141616"
+  workspace-surface-2: "#1a1d1b"
+  workspace-surface-3: "#1a1d1b"
+  workspace-line: "#292c2b"
+  workspace-line-soft: "#292c2b"
+  workspace-text: "#f1f3f2"
+  workspace-muted: "#a5ada8"
+  workspace-mint: "#69e69c"
+  workspace-mint-bright: "#69e69c"
+  workspace-action: "#0d3926"
+  workspace-action-ink: "#f1f8f3"
+  workspace-accent-surface: "#173024"
 typography:
   display:
     fontFamily: '"Manrope Variable", sans-serif'
@@ -52,7 +66,27 @@ typography:
     fontSize: "11px"
     fontWeight: 670
     lineHeight: 1
+  workspace-heading:
+    fontFamily: '"Saira Condensed", ui-sans-serif, sans-serif'
+    fontSize: "28px"
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: "-.025em"
+  workspace-body:
+    fontFamily: '"Saira Variable", ui-sans-serif, sans-serif'
+    fontSize: "13px"
+    lineHeight: 1.55
+  workspace-navigation:
+    fontFamily: '"Saira Condensed", ui-sans-serif, sans-serif'
+    fontSize: "16px"
+    fontWeight: 500
+  workspace-data:
+    fontFamily: '"Geist Mono Variable", ui-monospace, monospace'
+    fontSize: "13px"
+    lineHeight: 1.6
 rounded:
+  workspace-control: "6px"
+  workspace-panel: "10px"
   tag: "6px"
   web-control: "8px"
   desktop-control: "9px"
@@ -88,6 +122,15 @@ components:
     backgroundColor: "{colors.surface}"
     rounded: "{rounded.panel}"
     padding: "{spacing.panel}"
+  workspace-button-primary:
+    backgroundColor: "{colors.workspace-action}"
+    textColor: "{colors.workspace-action-ink}"
+    rounded: "{rounded.workspace-control}"
+  workspace-panel:
+    backgroundColor: "{colors.workspace-surface}"
+    textColor: "{colors.workspace-text}"
+    rounded: "{rounded.workspace-panel}"
+    padding: "{spacing.panel}"
   loading-placeholder:
     backgroundColor: "{colors.skeleton}"
     rounded: "{rounded.web-control}"
@@ -98,6 +141,8 @@ components:
 ## Overview
 
 **Creative North Star: "The institutional control ledger"**
+
+**Scope:** The original tokens and guidance below remain the public landing/auth and legacy desktop reference. The user-approved Pen workspace identity overrides them only for the eight routes listed in the scoped workspace section. Its normative tokens use the `workspace-` prefix; do not propagate them to public pages.
 
 Signalgen presents analysis as a legible workspace: near-black surfaces, precise rules, compact controls, and green reserved for action and market state. The desktop establishes the visual world. The public web inherits its colors, Manrope typography, subtle edges, and supplied green candlestick mark, while using larger type and more breathing room.
 
@@ -192,6 +237,40 @@ The screenshot sits in a restrained window frame with an explanatory caption. Fe
 - **Don't** rely on color alone for success, warning, or failure.
 - **Don't** disguise illustrative market values as live data or pending releases as available installers.
 
-## Workspace forest surfaces
+## Pen workspace identity
 
-Workspace routes use a darker forest variant from `workspace-forest.css`: canvas `#030b07`, sidebar `#050e09`, surfaces `#081a12`, `#0c2117` and `#112b1e`, with dividers `#203c2d`. A single diagonal gradient moves from `#0a2117` to `#050f0a` on cards. Existing typography, spacing, control sizing and semantic gain/loss colors remain the reference. The landing page keeps its separate GhostFibers and ASCII backgrounds.
+The 16 November black/green Pen frames establish a flat, neutral-black workspace with dark-green actions. This replaces the earlier forest gradient treatment for `/#app/overview`, `/#app/analysis`, `/#app/backtest`, `/#app/journal`, `/#app/rules`, `/#app/universes`, `/#app/realtime`, and `/#app/news`. The landing page and authentication keep their current identity. Implementation authority is `frontend/web/src/styles/pen-workspace.css`, scoped to `.pen-workbench` and `html[data-typography="workspace"]`.
+
+### Colors
+
+Use the prefixed workspace tokens above for dark mode: charcoal canvas, progressively lighter panel surfaces, fine neutral dividers, pale text, dark-green primary actions, and restrained green accents. Preserve semantic gain, loss, warning, disabled, and focus states. The product remains dark-only; the new reference supersedes the earlier workspace light adaptation.
+
+### Typography
+
+The pre-Pen typography is restored: Saira Variable for body/form text, Saira Condensed for headings/actions and navigation, and Geist Mono Variable for tables/financial data with tabular figures. Page headings are 28px on desktop and 25px at 520px and below; table values use 13px. The font files are local assets. These roles supersede Manrope only within the workspace.
+
+### Layout
+
+The expanded desktop sidebar is 224px; the collapsed sidebar is 76px. At 860px and below it becomes the existing overlay drawer. Workspace gutters step from 32px to 20px, then 18px at 520px. Panels typically use 24px padding and gaps. Rules place the composer on the left and the saved-rule library on the right, stacking at 1100px. The library has its own content height and five 88px rows per page; it does not resize when conditions are added to the composer. Compact universe catalog and News columns stack at 1000px; Dashboard shortcuts and monitor columns stack at 860px. The study guide stacks at 1180px. Journal, Screener and Market Monitor tables wrap within their cards and become labelled records below a 760px container width. Preserve all fields and existing form behavior.
+
+### Elevation & Depth
+
+Resting workspace panels are flat, with tonal separation and one-pixel borders. Page and card gradients are disabled. Existing ReactBits components and interaction logic remain available within the adapted composition; this scoped identity does not inherit the earlier blanket prohibition on carousels or animated components.
+
+### Shapes
+
+Workspace controls use 6px corners and panels use 10–12px corners. Dashboard resource cards use 12px corners and inset copy. Preserve the supplied Signalgen mark, visible focus, status labels, and reduced-motion behavior.
+
+### Components
+
+Primary actions use dark green with pale text. Mint remains reserved for readable accent text, selection and positive data. Active navigation combines mint text with a darker green surface. Inputs use the page-black control background and neutral border. Primary hover uses #124A31, pressed uses #092B1C, and focus uses a 2px #69E69C outline with 2px offset. Disabled controls use a neutral dark surface and muted text. Tables use subdued headers, fine row dividers, and monospaced data. Account menus, dialogs, screening, studies, portfolio calculations, and API ownership retain their existing behavior.
+
+### Do's and Don'ts
+
+- **Do** apply this identity only to the eight authorized workspace routes.
+- **Do** keep the restored Saira/Condensed and Geist Mono font roles.
+- **Do** retain keyboard focus, responsive navigation, semantic states, and reduced-motion support.
+- **Don't** extend this redesign to landing/auth or replace financial and account logic to match a visual reference.
+- **Don't** treat synthetic preview data as evidence of a live backend or market feed.
+
+The workspace extension sidecar is `frontend/web/.impeccable/design.json`. The root `.impeccable/design.json` and config contained pre-existing unrelated state and are not updated by this redesign. Route composition, evidence, and rollback details live in `docs/frontend/PEN_WORKSPACE_REDESIGN.md`.
