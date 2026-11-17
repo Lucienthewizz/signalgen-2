@@ -29,6 +29,20 @@
     "shell_and_python_syntax": "passed",
     "git_diff_check": "passed"
   },
+  "coordinator_frontend_verification": {
+    "tested_source_commit": "b79c58bd3188a366b02ad212d1e68e16474358da",
+    "image": "sha256:f609973e8fd93f38a5ddfd706a65805294247dae8d81b2541c0afe2787746197",
+    "unit_tests": { "passed": 280, "failed": 0, "skipped": 0 },
+    "typecheck": "passed",
+    "full_format_check": "passed",
+    "vite_build": "passed",
+    "performance_budgets": "passed",
+    "execution": "Offline non-root ARM64 container; read-only source and dependency mounts, scratch-only build writes, 2 CPUs, 2 GiB RAM, 128 PIDs, 1536 MiB scratch, file-size limit and 150-second inner deadline.",
+    "dependency_resolution": "A disposable copy of existing dependencies plus the four approved SRI-verified Linux packages was mounted at /toolchain/node_modules. No original dependencies or lockfiles were changed.",
+    "initial_failures": "Earlier coordinator attempts used an incomplete repository fixture layout and mounted dependencies under /deps, which broke Node's package resolution. They failed; after correcting only the test environment, every listed check passed. No product source fix was required.",
+    "storage_benchmark": "Prior paired measurements retained; no new performance measurement claimed. The merged browser-to-real-API journey and frontend checks are separate verification.",
+    "report": "prof-final-local-integration-20261116.md"
+  },
   "claims_not_made": [
     "current operator IDX catalog coverage",
     "live Yahoo five-year coverage or host activation",
