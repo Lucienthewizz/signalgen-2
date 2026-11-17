@@ -447,9 +447,9 @@ export function JournalPortfolio({
           <Button size="sm" variant="ghost" onClick={() => setExample(true)}>
             Preview test data
           </Button>
-        <Button ref={trigger} size="sm" variant="outline" onClick={create}>
-          {uncertain ? "Review pending transaction" : "Record transaction"}
-        </Button>
+          <Button ref={trigger} size="sm" variant="outline" onClick={create}>
+            {uncertain ? "Review pending transaction" : "Record transaction"}
+          </Button>
         </div>
       </header>
       <div className="journal-portfolio__filters">

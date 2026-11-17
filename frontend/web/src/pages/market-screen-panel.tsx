@@ -279,7 +279,7 @@ export function MarketScreenPanel({
             ? "Checking access and preparing data…"
             : recovery.blocked
               ? "Resolve the previous run status before starting."
-            : "Ready to screen."}
+              : "Ready to screen."}
       </p>
       {!busy && <StudyRecovery recovery={recovery} />}
       {error && !recovery.previous && <p role="alert">{error}</p>}

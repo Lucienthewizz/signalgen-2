@@ -501,155 +501,154 @@ export function SignalStudyPanel({
       <div
         className={`pen-study-layout ${progress || busy ? "has-results" : ""}`}
       >
-      <section className="signal-study-panel" aria-labelledby="study-heading">
-        <header className="study-config-heading">
-          <span className="study-config-heading__icon" aria-hidden="true">
-            <SlidersHorizontal />
-          </span>
-          <div>
-            <h2 id="study-heading">Analyse every signal</h2>
-            <p>
+        <section className="signal-study-panel" aria-labelledby="study-heading">
+          <header className="study-config-heading">
+            <span className="study-config-heading__icon" aria-hidden="true">
+              <SlidersHorizontal />
+            </span>
+            <div>
+              <h2 id="study-heading">Analyse every signal</h2>
+              <p>
                 Independent daily observations from the signal candle’s close.
                 Not a cash portfolio or executed trades.
-
-            </p>
-          </div>
-          <Badge variant="outline">Daily candles</Badge>
-        </header>
+              </p>
+            </div>
+            <Badge variant="outline">Daily candles</Badge>
+          </header>
           <Stepper
             stage={busy ? 1 : progress ? 2 : 0}
             partial={
               !!progress && progress.completed !== progress.context.total
             }
           />
-        <form
+          <form
             onInvalidCapture={(event) => {
               const details = (event.target as HTMLElement).closest("details");
               if (details) details.open = true;
             }}
-          onSubmit={(e: FormEvent) => {
-            e.preventDefault();
-            void start();
-          }}
-        >
-          <fieldset disabled={busy} className="study-fields">
-            <legend className="sr-only">Historical study settings</legend>
-            <FieldSet className="study-settings-section">
-              <FieldLegend>Source &amp; rule</FieldLegend>
-              <FieldGroup className="study-form-grid">
-                <Field>
-                  <FieldLabel htmlFor="study-source">Stock source</FieldLabel>
-                  <select
-                    id="study-source"
-                    aria-label="Stock source"
-                    value={source}
-                    onChange={(e) => setSource(e.target.value)}
-                  >
-                    <option value="IDX">Entire IDX catalog · IDR</option>
-                    <option value="US">Entire US catalog · USD</option>
-                    <option value="universe" disabled={!universes.length}>
-                      My stock universe
-                    </option>
-                  </select>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="study-rule">Screening rule</FieldLabel>
-                  <select
-                    id="study-rule"
-                    aria-label="Screening rule"
-                    required
-                    value={rule}
-                    onChange={(e) => setRule(e.target.value)}
-                  >
-                    <option value="default-scalping-v1">
-                      Default Scalping
-                    </option>
-                    {rules
-                      .filter((r) => r.id !== "default-scalping-v1")
-                      .map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name} ·{" "}
-                          {r.definition?.signal_type ?? "System rule"}
-                        </option>
-                      ))}
-                  </select>
-                </Field>
-                {source === "universe" && (
-                  <Field className="study-universe-field">
-                    <FieldLabel htmlFor="study-universe">
-                      Stock universe
-                    </FieldLabel>
+            onSubmit={(e: FormEvent) => {
+              e.preventDefault();
+              void start();
+            }}
+          >
+            <fieldset disabled={busy} className="study-fields">
+              <legend className="sr-only">Historical study settings</legend>
+              <FieldSet className="study-settings-section">
+                <FieldLegend>Source &amp; rule</FieldLegend>
+                <FieldGroup className="study-form-grid">
+                  <Field>
+                    <FieldLabel htmlFor="study-source">Stock source</FieldLabel>
                     <select
-                      id="study-universe"
-                      aria-label="Stock universe"
-                      required
-                      value={universe}
-                      onChange={(e) => setUniverse(e.target.value)}
+                      id="study-source"
+                      aria-label="Stock source"
+                      value={source}
+                      onChange={(e) => setSource(e.target.value)}
                     >
-                      {universes.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                        </option>
-                      ))}
+                      <option value="IDX">Entire IDX catalog · IDR</option>
+                      <option value="US">Entire US catalog · USD</option>
+                      <option value="universe" disabled={!universes.length}>
+                        My stock universe
+                      </option>
                     </select>
                   </Field>
-                )}
-              </FieldGroup>
-            </FieldSet>
-            <FieldSet className="study-settings-section">
-              <FieldLegend>Test period</FieldLegend>
-              <p className="study-settings-note">
-                Search for rule-matching signals within these dates, then
-                evaluate each signal over the following trading candles. A
-                one-month search can use a T+3 evaluation.
-              </p>
-              <FieldGroup className="study-form-grid">
-                <Field>
-                  <FieldLabel htmlFor="study-from">
-                    From (daily session, SGT)
-                  </FieldLabel>
-                  <DateInput
-                    id="study-from"
-                    required
-                    type="date"
-                    value={config.from}
-                    onValueChange={(value) =>
-                      setConfig({ ...config, from: value })
-                    }
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="study-to">
-                    To (inclusive, SGT)
-                  </FieldLabel>
-                  <DateInput
-                    id="study-to"
-                    required
-                    type="date"
-                    value={config.to}
-                    onValueChange={(value) =>
-                      setConfig({ ...config, to: value })
-                    }
-                  />
-                </Field>
+                  <Field>
+                    <FieldLabel htmlFor="study-rule">Screening rule</FieldLabel>
+                    <select
+                      id="study-rule"
+                      aria-label="Screening rule"
+                      required
+                      value={rule}
+                      onChange={(e) => setRule(e.target.value)}
+                    >
+                      <option value="default-scalping-v1">
+                        Default Scalping
+                      </option>
+                      {rules
+                        .filter((r) => r.id !== "default-scalping-v1")
+                        .map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name} ·{" "}
+                            {r.definition?.signal_type ?? "System rule"}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                  {source === "universe" && (
+                    <Field className="study-universe-field">
+                      <FieldLabel htmlFor="study-universe">
+                        Stock universe
+                      </FieldLabel>
+                      <select
+                        id="study-universe"
+                        aria-label="Stock universe"
+                        required
+                        value={universe}
+                        onChange={(e) => setUniverse(e.target.value)}
+                      >
+                        {universes.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  )}
+                </FieldGroup>
+              </FieldSet>
+              <FieldSet className="study-settings-section">
+                <FieldLegend>Test period</FieldLegend>
+                <p className="study-settings-note">
+                  Search for rule-matching signals within these dates, then
+                  evaluate each signal over the following trading candles. A
+                  one-month search can use a T+3 evaluation.
+                </p>
+                <FieldGroup className="study-form-grid">
+                  <Field>
+                    <FieldLabel htmlFor="study-from">
+                      From (daily session, SGT)
+                    </FieldLabel>
+                    <DateInput
+                      id="study-from"
+                      required
+                      type="date"
+                      value={config.from}
+                      onValueChange={(value) =>
+                        setConfig({ ...config, from: value })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="study-to">
+                      To (inclusive, SGT)
+                    </FieldLabel>
+                    <DateInput
+                      id="study-to"
+                      required
+                      type="date"
+                      value={config.to}
+                      onValueChange={(value) =>
+                        setConfig({ ...config, to: value })
+                      }
+                    />
+                  </Field>
                   <Field className="study-horizon-field">
                     <div className="study-horizon-label">
-                  <FieldLabel htmlFor="study-horizon">
-                    Trading candles after signal
-                  </FieldLabel>
+                      <FieldLabel htmlFor="study-horizon">
+                        Trading candles after signal
+                      </FieldLabel>
                       <span id="study-horizon-help">
                         (1–100 completed daily candles, not calendar days)
                       </span>
                     </div>
-                  <Input
-                    id="study-horizon"
+                    <Input
+                      id="study-horizon"
                       aria-describedby="study-horizon-help"
-                    required
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={config.n_steps}
-                    onChange={(e) =>
+                      required
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={config.n_steps}
+                      onChange={(e) =>
                         setConfig({
                           ...config,
                           n_steps: Number(e.target.value),
@@ -661,11 +660,11 @@ export function SignalStudyPanel({
                       label="Trading candles slider"
                       onChange={(value) =>
                         setConfig({ ...config, n_steps: value })
-                    }
-                  />
-                </Field>
-              </FieldGroup>
-            </FieldSet>
+                      }
+                    />
+                  </Field>
+                </FieldGroup>
+              </FieldSet>
               <details className="run-advanced">
                 <summary>
                   Take profit &amp; stop loss{" "}
@@ -679,252 +678,253 @@ export function SignalStudyPanel({
                       : "No stop loss"}
                   </small>
                 </summary>
-            <FieldSet className="study-settings-section">
-              <FieldLegend>Take profit &amp; stop loss</FieldLegend>
-              <Field>
-                <FieldLabel htmlFor="study-evaluation">
-                  Evaluation method
-                </FieldLabel>
-                <select
-                  id="study-evaluation"
-                  value={evaluation}
-                  onChange={(e) => {
-                    setEvaluation(e.target.value);
-                    setConfig({
-                      ...config,
-                      take_profit_pct: undefined,
-                      stop_loss_pct: undefined,
-                    });
-                  }}
-                  aria-describedby="study-evaluation-help"
-                >
-                  <option value="exact">Exact T+X Open / Close</option>
-                  <option value="target">Target reached within window</option>
-                  <option value="tpsl">TP / SL within window</option>
-                </select>
-                <FieldDescription id="study-evaluation-help">
-                  Exact prices keep negative returns. Target mode checks the
-                  first target touch; TP / SL checks the first barrier, with SL
-                  first on a shared candle. Unhit windows use the final Close;
-                  unfinished windows remain incomplete.
-                </FieldDescription>
-              </Field>
+                <FieldSet className="study-settings-section">
+                  <FieldLegend>Take profit &amp; stop loss</FieldLegend>
+                  <Field>
+                    <FieldLabel htmlFor="study-evaluation">
+                      Evaluation method
+                    </FieldLabel>
+                    <select
+                      id="study-evaluation"
+                      value={evaluation}
+                      onChange={(e) => {
+                        setEvaluation(e.target.value);
+                        setConfig({
+                          ...config,
+                          take_profit_pct: undefined,
+                          stop_loss_pct: undefined,
+                        });
+                      }}
+                      aria-describedby="study-evaluation-help"
+                    >
+                      <option value="exact">Exact T+X Open / Close</option>
+                      <option value="target">
+                        Target reached within window
+                      </option>
+                      <option value="tpsl">TP / SL within window</option>
+                    </select>
+                    <FieldDescription id="study-evaluation-help">
+                      Exact prices keep negative returns. Target mode checks the
+                      first target touch; TP / SL checks the first barrier, with
+                      SL first on a shared candle. Unhit windows use the final
+                      Close; unfinished windows remain incomplete.
+                    </FieldDescription>
+                  </Field>
 
-              <FieldGroup className="study-form-grid">
-                <Field data-study-target="profit">
-                  <FieldLabel htmlFor="study-tp">
-                    Take profit %
-                    {evaluation === "exact" ? " (optional)" : " (required)"}
-                  </FieldLabel>
-                  <Input
-                    id="study-tp"
-                    disabled={evaluation === "exact"}
-                    required={evaluation !== "exact"}
-                    type="number"
-                    min="0.01"
-                    max="99.99"
-                    step="any"
-                    value={config.take_profit_pct ?? ""}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        take_profit_pct: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                  />
-                </Field>
-                <Field data-study-target="loss">
-                  <FieldLabel htmlFor="study-sl">
-                    Stop loss %
-                    {evaluation === "tpsl" ? " (required)" : " (optional)"}
-                  </FieldLabel>
-                  <Input
-                    id="study-sl"
-                    disabled={evaluation !== "tpsl"}
-                    required={evaluation === "tpsl"}
-                    type="number"
-                    min="0.01"
-                    max="99.99"
-                    step="any"
-                    value={config.stop_loss_pct ?? ""}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        stop_loss_pct: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                  />
-                </Field>
-              </FieldGroup>
-              <p className="study-settings-note">
-                Enter take profit for target mode, or both thresholds for TP /
-                SL. Percentages are measured from the signal Close in its BUY or
-                SELL direction. If both barriers are touched in the same candle,
-                stop loss comes first.
-
-              </p>
-            </FieldSet>
+                  <FieldGroup className="study-form-grid">
+                    <Field data-study-target="profit">
+                      <FieldLabel htmlFor="study-tp">
+                        Take profit %
+                        {evaluation === "exact" ? " (optional)" : " (required)"}
+                      </FieldLabel>
+                      <Input
+                        id="study-tp"
+                        disabled={evaluation === "exact"}
+                        required={evaluation !== "exact"}
+                        type="number"
+                        min="0.01"
+                        max="99.99"
+                        step="any"
+                        value={config.take_profit_pct ?? ""}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            take_profit_pct: e.target.value
+                              ? Number(e.target.value)
+                              : undefined,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field data-study-target="loss">
+                      <FieldLabel htmlFor="study-sl">
+                        Stop loss %
+                        {evaluation === "tpsl" ? " (required)" : " (optional)"}
+                      </FieldLabel>
+                      <Input
+                        id="study-sl"
+                        disabled={evaluation !== "tpsl"}
+                        required={evaluation === "tpsl"}
+                        type="number"
+                        min="0.01"
+                        max="99.99"
+                        step="any"
+                        value={config.stop_loss_pct ?? ""}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            stop_loss_pct: e.target.value
+                              ? Number(e.target.value)
+                              : undefined,
+                          })
+                        }
+                      />
+                    </Field>
+                  </FieldGroup>
+                  <p className="study-settings-note">
+                    Enter take profit for target mode, or both thresholds for TP
+                    / SL. Percentages are measured from the signal Close in its
+                    BUY or SELL direction. If both barriers are touched in the
+                    same candle, stop loss comes first.
+                  </p>
+                </FieldSet>
               </details>
-          </fieldset>
-          <div className="study-actions study-config-actions">
+            </fieldset>
+            <div className="study-actions study-config-actions">
               <Button
                 type="submit"
                 disabled={busy || !backendOnline || recovery.blocked}
               >
-              <Play data-icon="inline-start" />
-              Start signal study
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!busy}
-              onClick={cancel}
-            >
-              <Square data-icon="inline-start" />
-              Stop study
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => setReload((n) => n + 1)}
-            >
-              <RefreshCw data-icon="inline-start" />
-              Reload selections
-            </Button>
-          </div>
-        </form>
-        {optionsError && <p role="status">{optionsError}</p>}
-        {!backendOnline && (
-          <p role="status">
-            Backend unavailable. Existing results remain visible; reconnect
-            before starting.
+                <Play data-icon="inline-start" />
+                Start signal study
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!busy}
+                onClick={cancel}
+              >
+                <Square data-icon="inline-start" />
+                Stop study
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => setReload((n) => n + 1)}
+              >
+                <RefreshCw data-icon="inline-start" />
+                Reload selections
+              </Button>
+            </div>
+          </form>
+          {optionsError && <p role="status">{optionsError}</p>}
+          {!backendOnline && (
+            <p role="status">
+              Backend unavailable. Existing results remain visible; reconnect
+              before starting.
+            </p>
+          )}
+          <p role="status" aria-live="polite" aria-atomic="true">
+            {message}
           </p>
-        )}
-        <p role="status" aria-live="polite" aria-atomic="true">
-          {message}
-        </p>
           {!busy && <StudyRecovery recovery={recovery} />}
           {error && !recovery.previous && <p role="alert">{error}</p>}
-        {busy && <StudyEstimate progress={progress} />}
-        {progress && (
-          <>
-            <progress
-              aria-label="Catalog study progress"
-              max={ready!.total}
-              value={progress.completed}
-            />
-            <p>
-              {progress.completed}/{ready!.total} stocks processed ·{" "}
+          {busy && <StudyEstimate progress={progress} />}
+          {progress && (
+            <>
+              <progress
+                aria-label="Catalog study progress"
+                max={ready!.total}
+                value={progress.completed}
+              />
+              <p>
+                {progress.completed}/{ready!.total} stocks processed ·{" "}
                 {progress.failures.length} failed · {progress.remaining}{" "}
                 remaining · {ready!.market}/{ready!.currency}
-            </p>
-            <p>
-              Frozen period: {ready!.config.from}–{ready!.config.to}; T+
-              {ready!.config.n_steps}. Catalog{" "}
-              {ready!.catalog_hash.slice(0, 20)}…
-              {ready!.config.take_profit_pct != null && (
-                <>
-                  {" "}
-                  · Frozen TP: {pct(ready!.config.take_profit_pct)}
-                  {ready!.config.stop_loss_pct != null && (
-                    <> · SL: {pct(ready!.config.stop_loss_pct)}</>
-                  )}
-                </>
-              )}
-            </p>
-            <Field className="study-fields">
-              <FieldLabel htmlFor="study-detail-step">
-                Compare exact horizon
-              </FieldLabel>
-              <select
-                id="study-detail-step"
-                value={resultStep}
-                onChange={(e) => setDetailStep(Number(e.target.value))}
-              >
-                {Array.from({ length: ready!.config.n_steps }, (_, i) => (
-                  <option key={i + 1} value={i + 1}>
-                    T+{i + 1} trading candles
-                  </option>
-                ))}
-              </select>
-              <FieldDescription>
-                Open and Close use this exact candle. Barrier outcomes always
-                use the frozen T+{ready!.config.n_steps} window.
-              </FieldDescription>
-            </Field>
-            <div role="group" aria-label="Target-hit statistics">
+              </p>
               <p>
-                {targetSummary!.label}:{" "}
-                {busy && !progress.completed
-                  ? "Waiting for stock results…"
-                  : targetSummary!.text}
+                Frozen period: {ready!.config.from}–{ready!.config.to}; T+
+                {ready!.config.n_steps}. Catalog{" "}
+                {ready!.catalog_hash.slice(0, 20)}…
+                {ready!.config.take_profit_pct != null && (
+                  <>
+                    {" "}
+                    · Frozen TP: {pct(ready!.config.take_profit_pct)}
+                    {ready!.config.stop_loss_pct != null && (
+                      <> · SL: {pct(ready!.config.stop_loss_pct)}</>
+                    )}
+                  </>
+                )}
               </p>
-            </div>
-            <p>
-              Counts cover all processed signals, across every result page. A
-              positive final Close without a target touch counts as a win, but
-              never as a target hit. With SL active, TP exit rate counts only TP
-              outcomes before SL; a shared-candle touch remains an SL exit.
-              Incomplete windows are excluded from the evaluated denominator;
-              failed stocks remain in coverage counts.
-            </p>
-            <p>Scroll horizontally to compare all columns.</p>
-            <div
-              className="study-table-scroll"
-              role="region"
-              aria-label="Evaluation comparison"
-              tabIndex={0}
-            >
-              <table>
-                <caption>
-                  Signal-study comparison from the same reference Close
-                </caption>
-                <thead>
-                  <tr>
-                    <th>Evaluation</th>
-                    <th>Signals</th>
-                    <th>Evaluated</th>
-                    <th>Incomplete</th>
-                    <th>Win / loss / flat</th>
-                    <th>Win rate</th>
-                    <th>Average return</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {comparison.map(({ label, metrics: m }) => (
-                    <tr key={label}>
-                      <th scope="row">{label}</th>
-                      <td>{m.signals}</td>
-                      <td>{m.evaluated}</td>
-                      <td>{m.missing}</td>
-                      <td>
-                        {m.wins}/{m.losses}/{m.flats}
-                      </td>
-                      <td>{pct(m.win_rate)}</td>
-                      <td>{pct(m.mean_return_pct)}</td>
-                    </tr>
+              <Field className="study-fields">
+                <FieldLabel htmlFor="study-detail-step">
+                  Compare exact horizon
+                </FieldLabel>
+                <select
+                  id="study-detail-step"
+                  value={resultStep}
+                  onChange={(e) => setDetailStep(Number(e.target.value))}
+                >
+                  {Array.from({ length: ready!.config.n_steps }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>
+                      T+{i + 1} trading candles
+                    </option>
                   ))}
-                </tbody>
-              </table>
-            </div>
-            <p>
-              Win rate = positive outcomes / evaluated signals; flats stay in
-              the denominator. Incomplete outcomes and failed stocks are
-              excluded. Average return includes losses and flats. Win rate can
-              include positive unhit time exits. These are independent signal
-              statistics, not combined portfolio profit.
-            </p>
-            {!progress.swing.signals && !busy && (
-              <p role="status">
-                No matching signals were found in the processed stocks. Review
-                the rule and signal search dates.
+                </select>
+                <FieldDescription>
+                  Open and Close use this exact candle. Barrier outcomes always
+                  use the frozen T+{ready!.config.n_steps} window.
+                </FieldDescription>
+              </Field>
+              <div role="group" aria-label="Target-hit statistics">
+                <p>
+                  {targetSummary!.label}:{" "}
+                  {busy && !progress.completed
+                    ? "Waiting for stock results…"
+                    : targetSummary!.text}
+                </p>
+              </div>
+              <p>
+                Counts cover all processed signals, across every result page. A
+                positive final Close without a target touch counts as a win, but
+                never as a target hit. With SL active, TP exit rate counts only
+                TP outcomes before SL; a shared-candle touch remains an SL exit.
+                Incomplete windows are excluded from the evaluated denominator;
+                failed stocks remain in coverage counts.
               </p>
-            )}
+              <p>Scroll horizontally to compare all columns.</p>
+              <div
+                className="study-table-scroll"
+                role="region"
+                aria-label="Evaluation comparison"
+                tabIndex={0}
+              >
+                <table>
+                  <caption>
+                    Signal-study comparison from the same reference Close
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th>Evaluation</th>
+                      <th>Signals</th>
+                      <th>Evaluated</th>
+                      <th>Incomplete</th>
+                      <th>Win / loss / flat</th>
+                      <th>Win rate</th>
+                      <th>Average return</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparison.map(({ label, metrics: m }) => (
+                      <tr key={label}>
+                        <th scope="row">{label}</th>
+                        <td>{m.signals}</td>
+                        <td>{m.evaluated}</td>
+                        <td>{m.missing}</td>
+                        <td>
+                          {m.wins}/{m.losses}/{m.flats}
+                        </td>
+                        <td>{pct(m.win_rate)}</td>
+                        <td>{pct(m.mean_return_pct)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p>
+                Win rate = positive outcomes / evaluated signals; flats stay in
+                the denominator. Incomplete outcomes and failed stocks are
+                excluded. Average return includes losses and flats. Win rate can
+                include positive unhit time exits. These are independent signal
+                statistics, not combined portfolio profit.
+              </p>
+              {!progress.swing.signals && !busy && (
+                <p role="status">
+                  No matching signals were found in the processed stocks. Review
+                  the rule and signal search dates.
+                </p>
+              )}
               <section
                 className="study-comparison"
                 aria-label="Compare historical studies"
@@ -1011,10 +1011,11 @@ export function SignalStudyPanel({
                           <tr>
                             <th scope="row">TP / SL</th>
                             <td>
-                              {periodComparison.context.config.take_profit_pct ??
-                                "Off"}{" "}
+                              {periodComparison.context.config
+                                .take_profit_pct ?? "Off"}{" "}
                               /{" "}
-                              {periodComparison.context.config.stop_loss_pct ?? "Off"}
+                              {periodComparison.context.config.stop_loss_pct ??
+                                "Off"}
                             </td>
                             <td>
                               {ready!.config.take_profit_pct ?? "Off"} /{" "}
@@ -1046,7 +1047,9 @@ export function SignalStudyPanel({
                           </tr>
                           <tr>
                             <th scope="row">Mean return</th>
-                            <td>{pct(periodComparison.metrics.mean_return_pct)}</td>
+                            <td>
+                              {pct(periodComparison.metrics.mean_return_pct)}
+                            </td>
                             <td>{pct(selectedMetrics!.mean_return_pct)}</td>
                           </tr>
                         </tbody>
@@ -1064,394 +1067,393 @@ export function SignalStudyPanel({
                 )}
               </section>
 
-            {!!(
-              progress.failures.some((f) => f.retryable) ||
-              progress.failedBatches.length
-            ) && (
-              <Button
-                disabled={
-                  busy ||
-                  closed ||
-                  frozenSelection.current !== selectionSignature
-                }
-                variant="outline"
-                onClick={() => void start(true)}
-              >
-                Retry failed stocks
-              </Button>
-            )}
-            {frozenSelection.current !== selectionSignature && (
-              <p role="status">
+              {!!(
+                progress.failures.some((f) => f.retryable) ||
+                progress.failedBatches.length
+              ) && (
+                <Button
+                  disabled={
+                    busy ||
+                    closed ||
+                    frozenSelection.current !== selectionSignature
+                  }
+                  variant="outline"
+                  onClick={() => void start(true)}
+                >
+                  Retry failed stocks
+                </Button>
+              )}
+              {frozenSelection.current !== selectionSignature && (
+                <p role="status">
                   Settings changed. Start a new study to apply them; the
                   displayed result still uses its frozen context.
+                </p>
+              )}
+              <div className="study-actions">
+                <Button
+                  variant="outline"
+                  disabled={busy || !targetSummary!.available}
+                  onClick={() =>
+                    downloadCsv("signal-study-target-hits.csv", [
+                      [
+                        "study_id",
+                        "metric",
+                        "target_hits",
+                        "evaluated",
+                        "incomplete",
+                        "signals",
+                        "rate_pct",
+                        "completed_stocks",
+                        "total_stocks",
+                        "window_candles",
+                        "take_profit_pct",
+                        "stop_loss_pct",
+                        "policy_version",
+                        "coverage",
+                      ],
+                      [
+                        ready!.id,
+                        targetSummary!.label,
+                        progress.swing.target_hits,
+                        progress.swing.evaluated,
+                        progress.swing.missing,
+                        progress.swing.signals,
+                        targetSummary!.rate,
+                        progress.completed,
+                        ready!.total,
+                        ready!.config.n_steps,
+                        ready!.config.take_profit_pct,
+                        ready!.config.stop_loss_pct,
+                        ready!.policy_version,
+                        progress.completed === ready!.total
+                          ? "complete"
+                          : "partial",
+                      ],
+                    ])
+                  }
+                >
+                  Export target-hit summary CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => void exportEvents()}
+                >
+                  Export signal details CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    downloadCsv("signal-study-horizons.csv", [
+                      [
+                        "step",
+                        "basis",
+                        "evaluated",
+                        "missing",
+                        "wins",
+                        "losses",
+                        "flats",
+                        "win_rate_pct",
+                        "mean_return_pct",
+                      ],
+                      ...progress.horizons.map((h) => [
+                        h.step,
+                        h.basis,
+                        h.evaluated,
+                        h.missing,
+                        h.wins,
+                        h.losses,
+                        h.flats,
+                        h.win_rate,
+                        h.mean_return_pct,
+                      ]),
+                    ])
+                  }
+                >
+                  Export all horizons CSV
+                </Button>
+              </div>
+              <p>
+                High is historical potential, not an obtainable sale price.
+                Same-candle TP/SL assumes SL first. No broker orders, fees, or
+                cash allocation are simulated in this mode.
               </p>
-            )}
-            <div className="study-actions">
-              <Button
-                variant="outline"
-                disabled={busy || !targetSummary!.available}
-                onClick={() =>
-                  downloadCsv("signal-study-target-hits.csv", [
-                    [
-                      "study_id",
-                      "metric",
-                      "target_hits",
-                      "evaluated",
-                      "incomplete",
-                      "signals",
-                      "rate_pct",
-                      "completed_stocks",
-                      "total_stocks",
-                      "window_candles",
-                      "take_profit_pct",
-                      "stop_loss_pct",
-                      "policy_version",
-                      "coverage",
-                    ],
-                    [
-                      ready!.id,
-                      targetSummary!.label,
-                      progress.swing.target_hits,
-                      progress.swing.evaluated,
-                      progress.swing.missing,
-                      progress.swing.signals,
-                      targetSummary!.rate,
-                      progress.completed,
-                      ready!.total,
-                      ready!.config.n_steps,
-                      ready!.config.take_profit_pct,
-                      ready!.config.stop_loss_pct,
-                      ready!.policy_version,
-                      progress.completed === ready!.total
-                        ? "complete"
-                        : "partial",
-                    ],
-                  ])
-                }
-              >
-                Export target-hit summary CSV
-              </Button>
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => void exportEvents()}
-              >
-                Export signal details CSV
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  downloadCsv("signal-study-horizons.csv", [
-                    [
-                      "step",
-                      "basis",
-                      "evaluated",
-                      "missing",
-                      "wins",
-                      "losses",
-                      "flats",
-                      "win_rate_pct",
-                      "mean_return_pct",
-                    ],
-                    ...progress.horizons.map((h) => [
-                      h.step,
-                      h.basis,
-                      h.evaluated,
-                      h.missing,
-                      h.wins,
-                      h.losses,
-                      h.flats,
-                      h.win_rate,
-                      h.mean_return_pct,
-                    ]),
-                  ])
-                }
-              >
-                Export all horizons CSV
-              </Button>
-            </div>
-            <p>
-              High is historical potential, not an obtainable sale price.
-              Same-candle TP/SL assumes SL first. No broker orders, fees, or
-              cash allocation are simulated in this mode.
-            </p>
-            <div className="study-table-scroll">
-              <table>
-                <caption>All signal outcomes by horizon</caption>
-                <thead>
-                  <tr>
-                    <th>Horizon</th>
-                    <th>Basis</th>
-                    <th>Evaluated</th>
-                    <th>Missing</th>
-                    <th>Win / loss / flat</th>
-                    <th>Win rate</th>
-                    <th>Mean return</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {progress.horizons
-                    .slice(horizonPage * 30, (horizonPage + 1) * 30)
-                    .map((h) => (
-                      <tr key={h.step + h.basis}>
-                        <td>T+{h.step}</td>
-                        <td>{h.basis}</td>
-                        <td>{h.evaluated}</td>
-                        <td>{h.missing}</td>
-                        <td>
-                          {h.wins}/{h.losses}/{h.flats}
-                        </td>
-                        <td>{pct(h.win_rate)}</td>
-                        <td>{pct(h.mean_return_pct)}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="study-actions">
-              <Button
-                variant="ghost"
-                disabled={!horizonPage}
-                onClick={() => setHorizonPage((p) => p - 1)}
-              >
-                Previous horizons
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={(horizonPage + 1) * 30 >= progress.horizons.length}
-                onClick={() => setHorizonPage((p) => p + 1)}
-              >
-                Next horizons
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  downloadCsv("signal-study-coverage.csv", [
-                    [
-                      "study_id",
-                      "catalog_hash",
-                      "rule_hash",
-                      "market",
-                      "currency",
-                      "total",
-                      "completed",
-                      "failed",
-                      "remaining",
-                      "status",
-                    ],
-                    [
-                      ready!.id,
-                      ready!.catalog_hash,
-                      ready!.definition_hash,
-                      ready!.market,
-                      ready!.currency,
-                      ready!.total,
-                      progress.completed,
-                      progress.failures.length,
-                      progress.remaining,
-                      progress.completed === ready!.total
-                        ? "complete"
-                        : "partial",
-                    ],
-                    ["symbol", "error_code", "retryable", "batch"],
-                    ...progress.failures.map((f) => [
-                      f.symbol,
-                      f.code,
-                      f.retryable,
-                      f.batch,
-                    ]),
-                    ["unresolved_batches", ...progress.pendingBatches],
-                  ])
-                }
-              >
-                Export coverage CSV
-              </Button>
-            </div>
-            <details>
-              <summary>By stock and signal day (window outcomes)</summary>
-              {[progress.bySymbol, progress.byDay].map((items, i) => (
-                <div key={i} className="study-table-scroll">
-                  <table>
-                    <caption>{i ? "By signal day" : "By stock"}</caption>
-                    <thead>
-                      <tr>
-                        <th>{i ? "Day" : "Symbol"}</th>
-                        <th>Signals</th>
-                        <th>Evaluated</th>
-                        <th>Missing</th>
-                        <th>Win rate</th>
-                        <th>Average return</th>
-                        {ready!.config.take_profit_pct != null && (
-                          <th>{targetSummary!.label}</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {summaries(items).map((r) => (
-                        <tr key={r.key}>
-                          <td>{r.key}</td>
-                          <td>{r.signals}</td>
-                          <td>{r.evaluated}</td>
-                          <td>{r.missing}</td>
-                          <td>{pct(r.win_rate)}</td>
-                          <td>{pct(r.mean_return_pct)}</td>
-                          {ready!.config.take_profit_pct != null && (
-                            <td>{targetHitSummary(r, ready!.config).text}</td>
-                          )}
+              <div className="study-table-scroll">
+                <table>
+                  <caption>All signal outcomes by horizon</caption>
+                  <thead>
+                    <tr>
+                      <th>Horizon</th>
+                      <th>Basis</th>
+                      <th>Evaluated</th>
+                      <th>Missing</th>
+                      <th>Win / loss / flat</th>
+                      <th>Win rate</th>
+                      <th>Mean return</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {progress.horizons
+                      .slice(horizonPage * 30, (horizonPage + 1) * 30)
+                      .map((h) => (
+                        <tr key={h.step + h.basis}>
+                          <td>T+{h.step}</td>
+                          <td>{h.basis}</td>
+                          <td>{h.evaluated}</td>
+                          <td>{h.missing}</td>
+                          <td>
+                            {h.wins}/{h.losses}/{h.flats}
+                          </td>
+                          <td>{pct(h.win_rate)}</td>
+                          <td>{pct(h.mean_return_pct)}</td>
                         </tr>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-              <Button
-                variant="ghost"
-                disabled={groupPage === 0}
-                onClick={() => setGroupPage((p) => p - 1)}
-              >
-                Previous summary
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={
-                  (groupPage + 1) * 25 >=
-                  Math.max(progress.bySymbol.length, progress.byDay.length)
-                }
-                onClick={() => setGroupPage((p) => p + 1)}
-              >
-                Next summary
-              </Button>
-            </details>
-            <div
-              className="study-table-scroll"
-              role="region"
-              aria-label="Individual signal outcomes"
-              tabIndex={0}
-            >
-              <table>
-                <caption>
-                  Signal details — exact T+{resultStep} and window outcomes;{" "}
-
-                  {total} signals
-                </caption>
-                <thead>
-                  <tr>
-                    <th>Stock</th>
-                    <th>Signal candle</th>
-                    <th>Direction</th>
-                    <th>Reference close</th>
-                    <th>Exact candle (UTC)</th>
-                    <th>Open return</th>
-                    <th>High return</th>
-                    <th>Close return</th>
-                    <th>Window outcome / first hit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((e) => (
-                    <tr key={e.symbol + e.timestamp}>
-                      <td>{e.symbol}</td>
-                      <td>{e.timestamp.slice(0, 10)}</td>
-                      <td>{e.signal_type}</td>
-                      <td>{e.reference_price}</td>
-                      <td>
-                        {e.outcomes.find((o) => o.step === resultStep)
-                          ?.timestamp ?? "Incomplete"}
-                      </td>
-                      {e.outcomes
-                        .filter((o) => o.step === resultStep)
-                        .map((o) => (
-                          <td key={o.basis}>
-                            {pct(o.return_pct)}
-                            <small>
-                              {o.price == null
-                                ? "Incomplete"
-                                : `price ${o.price}`}
-                            </small>
-                          </td>
-                        ))}
-                      <td>
-                        {outcomeDescription(
-                          e.swing,
-                          ready!.config.take_profit_pct != null ||
-                            ready!.config.stop_loss_pct != null,
-                        )
-                          .split(" · ")
-                          .map((part, i) =>
-                            i === 0 ? (
-                              <span key={i}>{part}</span>
-                            ) : (
-                              <small key={i}>{part}</small>
-                            ),
-                          )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="study-actions">
-              <Button
-                variant="ghost"
-                disabled={page === 0}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous signals
-              </Button>
-              <span>Page {page + 1}</span>
-              <Button
-                variant="ghost"
-                disabled={(page + 1) * 50 >= total}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next signals
-              </Button>
-            </div>
-            {!!progress.failures.length && (
+                  </tbody>
+                </table>
+              </div>
+              <div className="study-actions">
+                <Button
+                  variant="ghost"
+                  disabled={!horizonPage}
+                  onClick={() => setHorizonPage((p) => p - 1)}
+                >
+                  Previous horizons
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={(horizonPage + 1) * 30 >= progress.horizons.length}
+                  onClick={() => setHorizonPage((p) => p + 1)}
+                >
+                  Next horizons
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    downloadCsv("signal-study-coverage.csv", [
+                      [
+                        "study_id",
+                        "catalog_hash",
+                        "rule_hash",
+                        "market",
+                        "currency",
+                        "total",
+                        "completed",
+                        "failed",
+                        "remaining",
+                        "status",
+                      ],
+                      [
+                        ready!.id,
+                        ready!.catalog_hash,
+                        ready!.definition_hash,
+                        ready!.market,
+                        ready!.currency,
+                        ready!.total,
+                        progress.completed,
+                        progress.failures.length,
+                        progress.remaining,
+                        progress.completed === ready!.total
+                          ? "complete"
+                          : "partial",
+                      ],
+                      ["symbol", "error_code", "retryable", "batch"],
+                      ...progress.failures.map((f) => [
+                        f.symbol,
+                        f.code,
+                        f.retryable,
+                        f.batch,
+                      ]),
+                      ["unresolved_batches", ...progress.pendingBatches],
+                    ])
+                  }
+                >
+                  Export coverage CSV
+                </Button>
+              </div>
               <details>
-                <summary>
-                  Provider and history failures ({progress.failures.length})
-                </summary>
-                <ul>
-                  {progress.failures.slice(0, 100).map((f) => (
-                    <li key={f.symbol}>
-                      {f.symbol}: {f.code}{" "}
-                      {f.retryable
-                        ? "(retry available)"
-                        : "(insufficient history)"}
-                    </li>
-                  ))}
-                </ul>
-                {progress.failures.length > 100 && (
-                  <p>
-                    First 100 failures shown. Coverage counts include all
-                    failures.
-                  </p>
-                )}
+                <summary>By stock and signal day (window outcomes)</summary>
+                {[progress.bySymbol, progress.byDay].map((items, i) => (
+                  <div key={i} className="study-table-scroll">
+                    <table>
+                      <caption>{i ? "By signal day" : "By stock"}</caption>
+                      <thead>
+                        <tr>
+                          <th>{i ? "Day" : "Symbol"}</th>
+                          <th>Signals</th>
+                          <th>Evaluated</th>
+                          <th>Missing</th>
+                          <th>Win rate</th>
+                          <th>Average return</th>
+                          {ready!.config.take_profit_pct != null && (
+                            <th>{targetSummary!.label}</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summaries(items).map((r) => (
+                          <tr key={r.key}>
+                            <td>{r.key}</td>
+                            <td>{r.signals}</td>
+                            <td>{r.evaluated}</td>
+                            <td>{r.missing}</td>
+                            <td>{pct(r.win_rate)}</td>
+                            <td>{pct(r.mean_return_pct)}</td>
+                            {ready!.config.take_profit_pct != null && (
+                              <td>{targetHitSummary(r, ready!.config).text}</td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+                <Button
+                  variant="ghost"
+                  disabled={groupPage === 0}
+                  onClick={() => setGroupPage((p) => p - 1)}
+                >
+                  Previous summary
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={
+                    (groupPage + 1) * 25 >=
+                    Math.max(progress.bySymbol.length, progress.byDay.length)
+                  }
+                  onClick={() => setGroupPage((p) => p + 1)}
+                >
+                  Next summary
+                </Button>
               </details>
-            )}
-            <details>
-              <summary>Measured stages for this run (milliseconds)</summary>
-              <pre>{JSON.stringify(progress.timings, null, 2)}</pre>
-              <p>
-                Decoded candle bytes:{" "}
-                {progress.traffic.decoded_candle_bytes.toLocaleString()} ·
-                Feature candidate JSON bytes:{" "}
-                {progress.traffic.candidate_json_bytes.toLocaleString()}.
+              <div
+                className="study-table-scroll"
+                role="region"
+                aria-label="Individual signal outcomes"
+                tabIndex={0}
+              >
+                <table>
+                  <caption>
+                    Signal details — exact T+{resultStep} and window outcomes;{" "}
+                    {total} signals
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th>Stock</th>
+                      <th>Signal candle</th>
+                      <th>Direction</th>
+                      <th>Reference close</th>
+                      <th>Exact candle (UTC)</th>
+                      <th>Open return</th>
+                      <th>High return</th>
+                      <th>Close return</th>
+                      <th>Window outcome / first hit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((e) => (
+                      <tr key={e.symbol + e.timestamp}>
+                        <td>{e.symbol}</td>
+                        <td>{e.timestamp.slice(0, 10)}</td>
+                        <td>{e.signal_type}</td>
+                        <td>{e.reference_price}</td>
+                        <td>
+                          {e.outcomes.find((o) => o.step === resultStep)
+                            ?.timestamp ?? "Incomplete"}
+                        </td>
+                        {e.outcomes
+                          .filter((o) => o.step === resultStep)
+                          .map((o) => (
+                            <td key={o.basis}>
+                              {pct(o.return_pct)}
+                              <small>
+                                {o.price == null
+                                  ? "Incomplete"
+                                  : `price ${o.price}`}
+                              </small>
+                            </td>
+                          ))}
+                        <td>
+                          {outcomeDescription(
+                            e.swing,
+                            ready!.config.take_profit_pct != null ||
+                              ready!.config.stop_loss_pct != null,
+                          )
+                            .split(" · ")
+                            .map((part, i) =>
+                              i === 0 ? (
+                                <span key={i}>{part}</span>
+                              ) : (
+                                <small key={i}>{part}</small>
+                              ),
+                            )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="study-actions">
+                <Button
+                  variant="ghost"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  Previous signals
+                </Button>
+                <span>Page {page + 1}</span>
+                <Button
+                  variant="ghost"
+                  disabled={(page + 1) * 50 >= total}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next signals
+                </Button>
+              </div>
+              {!!progress.failures.length && (
+                <details>
+                  <summary>
+                    Provider and history failures ({progress.failures.length})
+                  </summary>
+                  <ul>
+                    {progress.failures.slice(0, 100).map((f) => (
+                      <li key={f.symbol}>
+                        {f.symbol}: {f.code}{" "}
+                        {f.retryable
+                          ? "(retry available)"
+                          : "(insufficient history)"}
+                      </li>
+                    ))}
+                  </ul>
+                  {progress.failures.length > 100 && (
+                    <p>
+                      First 100 failures shown. Coverage counts include all
+                      failures.
+                    </p>
+                  )}
+                </details>
+              )}
+              <details>
+                <summary>Measured stages for this run (milliseconds)</summary>
+                <pre>{JSON.stringify(progress.timings, null, 2)}</pre>
+                <p>
+                  Decoded candle bytes:{" "}
+                  {progress.traffic.decoded_candle_bytes.toLocaleString()} ·
+                  Feature candidate JSON bytes:{" "}
+                  {progress.traffic.candidate_json_bytes.toLocaleString()}.
                   Excludes HTTP headers, grant/context metadata, and
                   compression.
-              </p>
-              <Button variant="outline" onClick={exportPerformance}>
-                Export measured stages JSON
-              </Button>
-              <p>
-                Client elapsed time includes requests and waiting; it is not
-                server CPU time or a production benchmark.
-              </p>
-            </details>
-          </>
-        )}
-      </section>
+                </p>
+                <Button variant="outline" onClick={exportPerformance}>
+                  Export measured stages JSON
+                </Button>
+                <p>
+                  Client elapsed time includes requests and waiting; it is not
+                  server CPU time or a production benchmark.
+                </p>
+              </details>
+            </>
+          )}
+        </section>
         {!progress && !busy && (
           <aside className="pen-study-guide" aria-label="Understand the study">
             <header className="study-guide-heading">
