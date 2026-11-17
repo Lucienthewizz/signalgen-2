@@ -2,12 +2,44 @@
 // synthetic account/catalog/provider/private decisions. No cloud traffic.
 // prettier-ignore
 async(page)=>{
- const origin=new URL(page.url()).origin,user={id:"11111111-1111-4111-8111-111111111119",email:"study@example.test",full_name:"Signal study QA",role:"user",status:"active"};
+ const pageURL=new URL(page.url()),origin=pageURL.origin,workerHint=pageURL.searchParams.get("workers")==="1"?1:4,candleCount=Number(pageURL.searchParams.get("candles")||250),operandCount=Number(pageURL.searchParams.get("operands")||3),user={id:"11111111-1111-4111-8111-111111111119",email:"study@example.test",full_name:"Signal study QA",role:"user",status:"active"};
  const errors=[],reports=[];page.on("pageerror",e=>errors.push(e.message));
  await page.emulateMedia({reducedMotion:"reduce"});
  await page.addInitScript(()=>{sessionStorage.setItem("signalgen.access-token","synthetic-study-only");sessionStorage.setItem("signalgen.app-session","synthetic-session");sessionStorage.setItem("signalgen.app-session-origin","same-origin")});
- let frozen,partial=true,prepares=[],scored=[],counter=0,hold=false,release,entered,etaProbe=false;
+ let frozen,partial=true,prepares=[],scored=[],counter=0,hold=false,release,entered,etaProbe=false,canonicalCapture=null;
  const snapshots=new Map();
+ await page.addInitScript(workerHint => {
+  const key="signalgen-study-worker-stats";
+  const aggregate=JSON.parse(localStorage.getItem(key)||'{"created":0,"active":0,"peakActive":0,"submitted":0,"completed":0,"terminated":0,"pageHides":0}');
+  aggregate.active=0;aggregate.runs=(aggregate.runs||0)+1;
+  const stats = {created:0,active:0,peakActive:0,submitted:0,completed:0,terminated:0,live:0,peakLive:0};
+  window.__signalStudyWorkerStats = {stats,aggregate};
+  window.addEventListener("pagehide",()=>{aggregate.pageHides++;localStorage.setItem(key,JSON.stringify(aggregate))});
+  try { Object.defineProperty(navigator,"hardwareConcurrency",{configurable:true,get:()=>workerHint}); } catch {}
+  try { Object.defineProperty(navigator,"deviceMemory",{configurable:true,get:()=>8}); } catch {}
+  const NativeWorker = window.Worker;
+  window.Worker = class extends NativeWorker {
+   constructor(...args) {
+    super(...args);
+    if (!String(args[0]).includes("signal-study.worker")) return;
+    stats.created++;stats.live++;stats.peakLive=Math.max(stats.peakLive,stats.live);aggregate.created++;localStorage.setItem(key,JSON.stringify(aggregate));
+    const pending = new Set();
+    const postMessage = this.postMessage.bind(this);
+    this.postMessage = (message, ...rest) => {
+     if (message?.type === "features") {
+      pending.add(message.jobId);stats.active++;stats.submitted++;aggregate.active++;aggregate.submitted++;aggregate.peakActive=Math.max(aggregate.peakActive,aggregate.active);localStorage.setItem(key,JSON.stringify(aggregate));
+      stats.peakActive=Math.max(stats.peakActive,stats.active);
+     }
+     return postMessage(message, ...rest);
+    };
+    this.addEventListener("message", event => {
+     if (pending.delete(event.data?.jobId)) { stats.active--;stats.completed++;aggregate.active=Math.max(0,aggregate.active-1);aggregate.completed++;localStorage.setItem(key,JSON.stringify(aggregate)); }
+    });
+    const terminate=this.terminate.bind(this);
+    this.terminate=()=>{if(stats.live>0)stats.live--;stats.terminated++;aggregate.terminated++;localStorage.setItem(key,JSON.stringify(aggregate));return terminate()};
+   }
+  };
+ }, workerHint);
  await page.route("**/*",async route=>{
   const request=route.request(),url=new URL(request.url()),p=url.pathname,method=request.method();
   if(url.origin!==origin)return route.abort();
@@ -34,10 +66,11 @@ async(page)=>{
    for(let i=index*10;i<Math.min((index+1)*10,23);i++){
     const symbol="TEST"+String(i).padStart(2,"0");if(request.postDataJSON().retry_symbols&&!request.postDataJSON().retry_symbols.includes(symbol))continue;stocks.push(symbol);
     if(partial&&i===3){failures.push({symbol,code:"PROVIDER_UNAVAILABLE",retryable:true});continue}
-    const candles=Array.from({length:50},(_,i)=>({timestamp:new Date(Date.UTC(2026,0,1+i)).toISOString(),open:100+i,high:110+i,low:90+i,close:101+i,volume:1000}));
+    const candles=Array.from({length:candleCount},(_,i)=>({timestamp:new Date(Date.UTC(2026,0,1+i)).toISOString(),open:100+i,high:110+i,low:90+i,close:101+i,volume:1000}));
     const backtest={...frozen.config,mode:"rule",rule_id:frozen.rule_id,study_id:frozen.id,definition_hash:frozen.definition_hash},data={schema_version:"ohlcv-multi-1",purpose:"backtest",market:frozen.market,currency:frozen.currency,timeframe:"1d",timezone:"UTC",backtest,series:[{symbol,timezone:"UTC",candles}]};
     const raw=JSON.stringify(data),bytes=new TextEncoder().encode(raw),hash=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),x=>x.toString(16).padStart(2,"0")).join("");
-    const manifest={dataset_id:symbol,version:"v1",purpose:"backtest",market:frozen.market,currency:frozen.currency,timeframe:"1d",symbols:[symbol],backtest,decoded_bytes:bytes.length,checksum:"sha256:"+hash,required_operands:["PRICE"]};snapshots.set(symbol,{raw,manifest});manifests.push(manifest);
+    const required_operands=["PRICE","EMA9","EMA20","RSI14","EMA20_PREV"].slice(0,operandCount);
+    const manifest={dataset_id:symbol,version:"v1",purpose:"backtest",market:frozen.market,currency:frozen.currency,timeframe:"1d",symbols:[symbol],backtest,candle_count:candles.length,decoded_bytes:bytes.length,checksum:"sha256:"+hash,required_operands};snapshots.set(symbol,{raw,manifest});manifests.push(manifest);
    }return respond({index,stocks,manifests,failures});
   }
   if(p==="/api/v1/backtests/studies/study-qa"&&method==="DELETE")return route.fulfill({status:204});
@@ -94,12 +127,12 @@ async(page)=>{
    await page.getByLabel("Stock source",{exact:true}).selectOption(market);
    await page.getByLabel("Screening rule",{exact:true}).selectOption("qa-rule");
    await page.getByLabel("From (daily session, SGT)",{exact:true}).fill("2026-01-20");await page.getByLabel("To (inclusive, SGT)",{exact:true}).fill("2026-01-23");
-   await page.getByRole("button",{name:"Start signal study",exact:true}).click();
+   const runStarted=performance.now();await page.getByRole("button",{name:"Start signal study",exact:true}).click();
    await page.getByText("Partial result. Failed or remaining stocks are not counted as successfully evaluated.",{exact:true}).waitFor({timeout:30000});
    if(frozen.market!==market)throw Error("Entire-catalog market selection incorrect");
    if(JSON.stringify(prepares)!=="[0,1,2]"||new Set(scored).size!==22)throw Error("Full market batch coverage incorrect");
    partial=false;await page.getByRole("button",{name:"Retry failed stocks",exact:true}).click();
-   await page.getByText("Completed the frozen catalog. Review data-quality limits before interpreting results.",{exact:true}).waitFor({timeout:30000});
+   await page.getByText("Completed the frozen catalog. Review data-quality limits before interpreting results.",{exact:true}).waitFor({timeout:30000});const runElapsedMs=performance.now()-runStarted;
    if(scored.length!==23||new Set(scored).size!==23||JSON.stringify(prepares)!=="[0,1,2,0]")throw Error("Retry duplicated stocks");
    await page.getByRole("button",{name:"Keep result for comparison",exact:true}).click();
    if(await page.getByRole("region",{name:"Compare historical studies",exact:true}).locator("tbody tr").count()!==9)throw Error("Study comparison metrics missing");
@@ -109,7 +142,20 @@ async(page)=>{
    await page.getByRole("button",{name:"Next signals",exact:true}).click();
    await page.waitForFunction(()=>Array.from(document.querySelectorAll("table")).find(t=>t.caption?.textContent.includes("Signal details"))?.tBodies[0].rows.length===42);
    const download=page.waitForEvent("download");await page.getByRole("button",{name:"Export signal details CSV",exact:true}).click();const csvFile=await download;if(csvFile.suggestedFilename()!=="signal-study-events.csv")throw Error("CSV download failed");let csv="";for await(const chunk of await csvFile.createReadStream())csv+=chunk.toString("utf8");if(csv.trim().split("\r\n").length!==921)throw Error("CSV omitted individual signal horizons");
-   await page.getByText("Measured stages for this run (milliseconds)",{exact:true}).click();const performanceFile=page.waitForEvent("download");await page.getByRole("button",{name:"Export measured stages JSON",exact:true}).click();let perf="";for await(const chunk of await(await performanceFile).createReadStream())perf+=chunk.toString("utf8");const measured=JSON.parse(perf);if(!measured.stages.startup_ms||!measured.stages.features_ms||!measured.stages.react_render_ms||!measured.traffic.decoded_candle_bytes)throw Error("Performance stages incomplete");reports.push({width,forcedTheme:theme,...measured});
+   if(!canonicalCapture){
+    canonicalCapture=await page.evaluate(async({owner,run})=>{
+     const digest=async value=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(JSON.stringify(value)))),x=>x.toString(16).padStart(2,"0")).join("");
+     const db=await new Promise((resolve,reject)=>{const r=indexedDB.open("signalgen-study-temporary-1",2);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
+     const records=await new Promise((resolve,reject)=>{const tx=db.transaction("batches","readonly"),out=[];const req=tx.objectStore("batches").openCursor(IDBKeyRange.bound(`${owner}\0${run}\0`,`${owner}\0${run}\0\uffff`));req.onsuccess=()=>{if(req.result){const v=req.result.value;out.push({symbol:v.symbol,events:v.events});req.result.continue()}else resolve(out.sort((a,b)=>a.symbol.localeCompare(b.symbol)))};tx.onerror=()=>reject(tx.error)});
+     const meta=await new Promise((resolve,reject)=>{const tx=db.transaction("sizes","readonly"),req=tx.objectStore("sizes").get(`meta:${owner}\0${run}\0`);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+     db.close();
+     const canonical={meta,records},mutation=structuredClone(canonical);mutation.records[0].events[0][0]+=":mutated";
+     const hash=await digest(canonical),mutationHash=await digest(mutation);if(hash===mutationHash)throw Error("Canonical mutation probe did not change hash");
+     return {canonical,hash,mutationHash};
+    },{owner:user.id,run:"study-qa"});
+    canonicalCapture.csvCells=csv.split(/\r?\n/);
+   }
+   await page.getByText("Measured stages for this run (milliseconds)",{exact:true}).click();const performanceFile=page.waitForEvent("download");await page.getByRole("button",{name:"Export measured stages JSON",exact:true}).click();let perf="";for await(const chunk of await(await performanceFile).createReadStream())perf+=chunk.toString("utf8");   const measured=JSON.parse(perf);if(!measured.stages.startup_ms||!measured.stages.features_ms||!measured.stages.react_render_ms||!measured.traffic.decoded_candle_bytes)throw Error("Performance stages incomplete");reports.push({width,forcedTheme:theme,run_elapsed_ms:runElapsedMs,...measured});
    const quota=await page.evaluate(async owner=>{
     const s=await import("/src/analysis/signal-study-storage.ts"),before=await s.studyEventPage(owner,"study-qa"),encode=TextEncoder.prototype.encode;
     try{TextEncoder.prototype.encode=()=>({length:s.STUDY_STORAGE_LIMIT+1});await s.storeStudySymbol(owner,"study-qa","QUOTA",{events:[]},new AbortController().signal);return false}catch(e){if(!String(e).includes("128 MiB"))throw e}finally{TextEncoder.prototype.encode=encode}
@@ -148,6 +194,8 @@ async(page)=>{
  await page.goto(origin+"/#app/overview");
  const left=await page.evaluate(async owner=>(await(await import("/src/analysis/signal-study-storage.ts")).studyEventPage(owner,"study-qa")).total,user.id);if(left!==0)throw Error("Navigation retained temporary study details");
  if(errors.length)throw Error(errors.join("; "));
+ const workerStats=await page.evaluate(()=>({...window.__signalStudyWorkerStats,aggregate:{...window.__signalStudyWorkerStats.aggregate}})),expectsPool=candleCount*operandCount*10>=10000;
+ if(workerStats.stats.completed!==workerStats.stats.submitted||workerHint>1&&expectsPool&&(workerStats.stats.created<2||workerStats.stats.peakActive<2))throw Error("Adaptive worker overlap was not observed");
  await page.evaluate(()=>document.body.setAttribute("data-signalgen-study-tests","complete"));
- return {synthetic:true,stocks:23,batches:3,signalEvents:92,realWasm:true,indexedDB:true,quotaRollback:true,widths:[1440,390],forcedThemes:["dark","light"],reports};
+ return {synthetic:true,stocks:23,batches:3,signalEvents:92,realWasm:true,indexedDB:true,quotaRollback:true,workerHint,candleCount,operandCount,expectsPool,adaptiveWorkers:workerStats,canonical:canonicalCapture,widths:[1440,390],forcedThemes:["dark","light"],reports};
 }
