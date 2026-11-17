@@ -390,6 +390,18 @@ export async function runSignalStudy(
           .filter((f) => !seen.has(f.symbol))
           .map((f) => ({ ...f, batch: batchIndex })),
       );
+      const pipelined = input.purpose === "screen";
+      let stopped = false;
+      let pipelineError: unknown;
+      const inFlight: Promise<unknown>[] = [];
+      const checkWork = () => {
+        check(signal, revision);
+        if (pipelined && stopped) throw pipelineError;
+      };
+      const stop = (error: unknown) => {
+        if (!stopped) pipelineError = error;
+        stopped = true;
+      };
       try {
         // Content and grants do not depend on WASM output, so fetch them for
         // the whole batch up front (at most PREFETCH_LIMIT requests at once).
@@ -397,69 +409,111 @@ export async function runSignalStudy(
         const prefetched = prefetchBatch(
           batch.manifests.filter((m) => !seen.has(m.symbols[0])),
           async (manifest) => {
-            const data = await timed("transfer_ms", () =>
-              verifiedContent(manifest, context, signal),
-            );
-            const grant = await timed("grant_ms", () =>
-              admitted(() => api.createStudyGrant(manifest, context, signal)),
-            );
-            return { data, grant };
+            try {
+              checkWork();
+              const data = await timed("transfer_ms", () =>
+                verifiedContent(manifest, context, signal),
+              );
+              const grant = await timed("grant_ms", () =>
+                admitted(() => {
+                  checkWork();
+                  return api.createStudyGrant(manifest, context, signal);
+                }),
+              );
+              return { data, grant };
+            } catch (error) {
+              stop(error);
+              throw error;
+            }
           },
         );
-        for (const { manifest, result: ready } of prefetched) {
-          const symbol = manifest.symbols[0];
-          check(signal, revision);
-          const { data, grant } = await ready;
-          check(signal, revision);
-          progress.traffic.decoded_candle_bytes += manifest.decoded_bytes;
-          const features = await timed("features_ms", () =>
-            engine.features(
-              data.series,
-              manifest.required_operands ?? [],
-              signal,
-            ),
-          );
-          check(signal, revision);
-          if (
-            features.length !== 1 ||
-            features[0].engine_version !== context.engine_version ||
-            features[0].feature_schema_version !== "screener-features-1" ||
-            features[0].candidates.length !==
-              data.series[0].candles.length - 19 ||
-            features[0].candidates.some((c) => c.symbol !== symbol)
-          )
-            throw Error(
-              "Study feature history/version is incompatible. Update backend and WASM together.",
+        inFlight.push(...prefetched.map((job) => job.result));
+        let featureTail: Promise<unknown> = Promise.resolve();
+        const score = async ({
+          manifest,
+          result: ready,
+        }: (typeof prefetched)[number]) => {
+          try {
+            const symbol = manifest.symbols[0];
+            checkWork();
+            const { data, grant } = await ready;
+            checkWork();
+            progress.traffic.decoded_candle_bytes += manifest.decoded_bytes;
+            // Keep one WASM call active while earlier symbols wait for scoring.
+            const computing = featureTail.then(() => {
+              checkWork();
+              return timed("features_ms", () =>
+                engine.features(
+                  data.series,
+                  manifest.required_operands ?? [],
+                  signal,
+                ),
+              );
+            });
+            featureTail = computing.then(
+              () => {},
+              () => {},
             );
-          progress.traffic.candidate_json_bytes += new TextEncoder().encode(
-            JSON.stringify(features[0].candidates),
-          ).length;
-          const decisions = await timed("scoring_ms", () =>
-            admitted(() =>
-              api.backtestSignals(
-                grant.id,
-                features[0].candidates,
-                signal,
-                STUDY_POLICY,
-                input.purpose,
-              ),
-            ),
-          );
-          check(signal, revision);
-          if (decisions.policy_version !== STUDY_POLICY)
-            throw Error("Private study scoring contract mismatch.");
-          const allowed = new Set(
-            features[0].candidates.map((c) => c.timestamp),
-          );
-          if (
-            decisions.entries.some(
-              (e) =>
-                e.symbol !== symbol ||
-                !allowed.has(e.timestamp) ||
-                !["BUY", "SELL"].includes(e.signal_type),
+            const features = await computing;
+            check(signal, revision);
+            if (
+              features.length !== 1 ||
+              features[0].engine_version !== context.engine_version ||
+              features[0].feature_schema_version !== "screener-features-1" ||
+              features[0].candidates.length !==
+                data.series[0].candles.length - 19 ||
+              features[0].candidates.some((c) => c.symbol !== symbol)
             )
-          )
-            throw Error("Server returned a signal outside the snapshot.");
+              throw Error(
+                "Study feature history/version is incompatible. Update backend and WASM together.",
+              );
+            progress.traffic.candidate_json_bytes += new TextEncoder().encode(
+              JSON.stringify(features[0].candidates),
+            ).length;
+            const decisions = await timed("scoring_ms", () =>
+              admitted(() => {
+                checkWork();
+                return api.backtestSignals(
+                  grant.id,
+                  features[0].candidates,
+                  signal,
+                  STUDY_POLICY,
+                  input.purpose,
+                );
+              }),
+            );
+            check(signal, revision);
+            if (decisions.policy_version !== STUDY_POLICY)
+              throw Error("Private study scoring contract mismatch.");
+            const allowed = new Set(
+              features[0].candidates.map((c) => c.timestamp),
+            );
+            if (
+              decisions.entries.some(
+                (e) =>
+                  e.symbol !== symbol ||
+                  !allowed.has(e.timestamp) ||
+                  !["BUY", "SELL"].includes(e.signal_type),
+              )
+            )
+              throw Error("Server returned a signal outside the snapshot.");
+            return { data, decisions };
+          } catch (error) {
+            stop(error);
+            throw error;
+          }
+        };
+        // At most four scoring jobs run within the current ten-stock batch.
+        // Commit in catalog order; a later success never skips an earlier error.
+        const scored = pipelined ? prefetchBatch(prefetched, score) : undefined;
+        if (scored) inFlight.push(...scored.map((job) => job.result));
+        for (let i = 0; i < prefetched.length; i++) {
+          const { manifest } = prefetched[i];
+          const symbol = manifest.symbols[0];
+          const { data, decisions } = await (scored
+            ? scored[i].result
+            : score(prefetched[i]));
+          check(signal, revision);
           const result: StudyResult =
             input.purpose === "screen"
               ? {
@@ -530,11 +584,15 @@ export async function runSignalStudy(
         );
         publish();
       } catch (e) {
+        stop(e);
         if (!progress.failedBatches.includes(batchIndex))
           progress.failedBatches.push(batchIndex);
         publish();
         throw e;
       } finally {
+        stopped = true;
+        // Drain queued content/grant/compute/scoring work before releasing handles.
+        if (pipelined) await Promise.allSettled(inFlight);
         if (session.getIdentityRevision() === revision)
           await api
             .releaseStudyBatch(context.id, batchIndex, input.purpose)
