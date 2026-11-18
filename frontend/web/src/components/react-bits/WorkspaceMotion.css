@@ -74,7 +74,7 @@
 .study-comparison {
   border-block: 1px solid var(--line);
   margin-block: 24px;
-  padding-block: 20px;
+  padding: 20px;
 }
 .study-comparison h3 {
   margin: 0 0 8px;
@@ -178,9 +178,7 @@
 }
 .backtest-config > form > .backtest-actions,
 .study-config-actions {
-  position: sticky;
-  bottom: 12px;
-  z-index: 5;
+  position: static;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 12px;

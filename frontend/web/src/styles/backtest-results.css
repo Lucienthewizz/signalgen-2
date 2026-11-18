@@ -1,0 +1,108 @@
+/* Results use the panel width; long dates and prices wrap without truncation. */
+.pen-workbench :is(.backtest-panel, .signal-study-panel) {
+  --result-positive: #69e69c;
+  --result-negative: #db6b76;
+}
+.pen-workbench
+  :is(.backtest-panel, .signal-study-panel)
+  [data-value-tone="positive"] {
+  color: var(--result-positive);
+}
+.pen-workbench
+  :is(.backtest-panel, .signal-study-panel)
+  [data-value-tone="negative"] {
+  color: var(--result-negative);
+}
+.pen-workbench
+  :is(.backtest-table-scroll, .study-table-scroll, .study-comparison__scroll)
+  table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+}
+.pen-workbench
+  :is(.backtest-table-scroll, .study-table-scroll, .study-comparison__scroll)
+  :is(th, td) {
+  padding: 9px 6px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.pen-workbench .backtest-panel [data-slot="field-group"].analysis-table-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+.pen-workbench .analysis-table-tools > [data-slot="field"] {
+  flex: none;
+  min-height: 0;
+  gap: 8px;
+}
+.pen-workbench .study-comparison {
+  padding: 20px;
+}
+@media (max-width: 600px) {
+  .pen-workbench
+    .backtest-panel
+    [data-slot="field-group"].analysis-table-tools {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pen-workbench
+    :is(.backtest-horizon-table, .backtest-trades-table, .study-signal-table) {
+    display: block;
+  }
+  .pen-workbench
+    :is(.backtest-horizon-table, .backtest-trades-table, .study-signal-table)
+    thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .pen-workbench
+    :is(.backtest-horizon-table, .backtest-trades-table, .study-signal-table)
+    tbody {
+    display: block;
+  }
+  .pen-workbench
+    :is(.backtest-horizon-table, .backtest-trades-table, .study-signal-table)
+    tbody
+    tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-bottom: 1px solid var(--line);
+  }
+  .pen-workbench
+    :is(.backtest-horizon-table, .backtest-trades-table, .study-signal-table)
+    tbody
+    :is(th, td) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0;
+    padding: 10px;
+    border: 0;
+    text-align: left;
+  }
+  .pen-workbench
+    :is(.backtest-horizon-table, .backtest-trades-table, .study-signal-table)
+    [data-label]::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+}
+
+@media (max-width: 600px) {
+  .pen-workbench
+    :is(.backtest-horizon-table, .backtest-trades-table, .study-signal-table)
+    caption {
+    display: block;
+    width: 100%;
+  }
+}
