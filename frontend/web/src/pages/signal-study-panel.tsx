@@ -474,7 +474,7 @@ export function SignalStudyPanel({
       }
     >
       <div
-        className={`pen-study-layout ${progress || busy ? "has-results" : ""}`}
+        className={`pen-study-layout ${progress && !busy ? "has-results" : ""}`}
       >
         <section className="signal-study-panel" aria-labelledby="study-heading">
           <header className="study-config-heading">
@@ -1244,7 +1244,7 @@ export function SignalStudyPanel({
             </>
           )}
         </section>
-        {!progress && !busy && (
+        {(!progress || busy) && (
           <aside className="pen-study-guide" aria-label="Understand the study">
             <header className="study-guide-heading">
               <SlidersHorizontal aria-hidden="true" />
