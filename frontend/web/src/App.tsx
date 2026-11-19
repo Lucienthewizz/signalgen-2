@@ -65,6 +65,8 @@ function currentRoute(): Route {
     return "reset-password";
   }
   const route = location.hash.slice(1).split("&")[0];
+  // Keep Backtesting mounted across its setup/results subroutes.
+  if (route === "app/backtest/results") return "app/backtest";
   if (route === "app/admin") return "app/operator";
   if (
     [

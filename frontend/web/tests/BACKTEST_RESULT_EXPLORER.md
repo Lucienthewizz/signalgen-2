@@ -1,5 +1,20 @@
 # Backtesting result explorer
 
+Setup and processing remain at `/#app/backtest`, with the same form width and
+study guide before, during and after a run. **View results** becomes available
+when processing stops. It opens `/#app/backtest/results&mode=study&run=…` or the
+equivalent `mode=portfolio` address. Completion does not navigate automatically.
+The result page contains the report without the configuration form.
+
+**Back to setup** and browser Back/Forward preserve the current mode, settings
+and result while this Backtesting session stays mounted. Navigation does not
+start another computation. Saved portfolio results can restore from the
+current account's local history after refresh; cloud-only results can still
+be opened through history. Study details retain their existing temporary
+lifecycle: leaving Backtesting or refreshing ends the open study view. An
+expired or mismatched result URL offers a return to setup instead of displaying
+a different result.
+
 Both **Analyse every signal** and **Portfolio simulation** include:
 
 - Best/worst stock and mean return, with the population named in each label.
@@ -48,6 +63,9 @@ origin and `SIGNALGEN_TEST_OUTPUT` for test screenshots/PDFs (default:
 The browser test reuses the existing synthetic account/API fixtures, with real
 React, Go/WASM and IndexedDB. It checks widths 390, 1218 and 1456; heatmap
 pagination; positive/negative values; details and Escape/focus return; section
-navigation; full-report record counts; PDF generation; empty results; missing
+navigation; setup/result URLs and Back/Forward; retained settings; stable study
+form dimensions; inline holding-period help and aligned period inputs;
+local portfolio restoration; expired study URLs; full-report record counts;
+PDF generation; empty results; missing
 local records; missing future candles; partial failures; and stopped runs.
 These fixtures do not measure all-market backend throughput or provider latency.

@@ -1,3 +1,8 @@
+import {
+  BacktestResultPage,
+  BacktestResultUnavailable,
+} from "@/components/backtest-result-page";
+import { backtestResultHash } from "@/lib/backtest-route";
 import { StudyResultExplorer } from "@/components/study-result-explorer";
 import { signalRecord, type ResultRecord } from "@/analysis/result-explorer";
 import "@/styles/backtest-results.css";
@@ -58,10 +63,12 @@ export function SignalStudyPanel({
   authenticated,
   backendOnline,
   userId,
+  resultRun,
 }: {
   authenticated: boolean;
   backendOnline: boolean;
   userId?: string;
+  resultRun?: string;
 }) {
   const [screeningSelection] = useState(() => {
     try {
@@ -123,7 +130,7 @@ export function SignalStudyPanel({
   const [horizonPage, setHorizonPage] = useState(0);
   useEffect(() => {
     setDetail(null);
-  }, [userId, progress?.context.id]);
+  }, [userId, progress?.context.id, resultRun]);
   const recovery = useStudyRecovery(
     authenticated ? userId : undefined,
     "backtest",
@@ -302,6 +309,7 @@ export function SignalStudyPanel({
       );
       return;
     }
+    if (resultRun !== undefined) location.hash = "app/backtest";
     const controller = new AbortController();
     operation.current = controller;
     const owner = userId,
@@ -468,11 +476,21 @@ export function SignalStudyPanel({
   }
   if (!authenticated || !userId)
     return <p role="status">Sign in to analyse historical signals.</p>;
+  const resultPage = resultRun !== undefined;
+  if (resultPage && (!progress || progress.context.id !== resultRun))
+    return (
+      <BacktestResultPage mode="study">
+        <BacktestResultUnavailable>
+          This study is no longer open in this Backtesting session. Return to
+          setup and run it again to view its results.
+        </BacktestResultUnavailable>
+      </BacktestResultPage>
+    );
   const ready = progress?.context;
   const selectedMetrics = progress?.swing;
   const summaries = (items: Array<StudyMetrics & { key: string }>) =>
     items.slice(groupPage * 25, groupPage * 25 + 25);
-  return (
+  const content = (
     <Profiler
       id="signal-study"
       onRender={(_id, _phase, duration) =>
@@ -480,7 +498,7 @@ export function SignalStudyPanel({
       }
     >
       <div
-        className={`pen-study-layout ${progress && !busy ? "has-results" : ""}`}
+        className={resultPage ? "backtest-study-results" : "pen-study-layout"}
       >
         <section className="signal-study-panel" aria-labelledby="study-heading">
           <header className="study-config-heading">
@@ -496,261 +514,306 @@ export function SignalStudyPanel({
             </div>
             <Badge variant="outline">Daily candles</Badge>
           </header>
-          <Stepper
-            stage={busy ? 1 : progress ? 2 : 0}
-            partial={
-              !!progress && progress.completed !== progress.context.total
-            }
-          />
-          <form
-            onInvalidCapture={(event) => {
-              const details = (event.target as HTMLElement).closest("details");
-              if (details) details.open = true;
-            }}
-            onSubmit={(e: FormEvent) => {
-              e.preventDefault();
-              void start();
-            }}
-          >
-            <fieldset disabled={busy} className="study-fields">
-              <legend className="sr-only">Historical study settings</legend>
-              <FieldSet className="study-settings-section">
-                <FieldLegend>Source &amp; rule</FieldLegend>
-                <FieldGroup className="study-form-grid">
-                  <Field>
-                    <FieldLabel htmlFor="study-source">Stock source</FieldLabel>
-                    <select
-                      id="study-source"
-                      aria-label="Stock source"
-                      value={source}
-                      onChange={(e) => setSource(e.target.value)}
-                    >
-                      <option value="IDX">Entire IDX catalog · IDR</option>
-                      <option value="US">Entire US catalog · USD</option>
-                      <option value="universe" disabled={!universes.length}>
-                        My stock universe
-                      </option>
-                    </select>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="study-rule">Screening rule</FieldLabel>
-                    <select
-                      id="study-rule"
-                      aria-label="Screening rule"
-                      required
-                      value={rule}
-                      onChange={(e) => setRule(e.target.value)}
-                    >
-                      <option value="default-scalping-v1">
-                        Default Scalping
-                      </option>
-                      {rules
-                        .filter((r) => r.id !== "default-scalping-v1")
-                        .map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name} ·{" "}
-                            {r.definition?.signal_type ?? "System rule"}
+          {!resultPage && (
+            <>
+              <Stepper
+                stage={busy ? 1 : progress ? 2 : 0}
+                partial={
+                  !!progress && progress.completed !== progress.context.total
+                }
+              />
+              <form
+                onInvalidCapture={(event) => {
+                  const details = (event.target as HTMLElement).closest(
+                    "details",
+                  );
+                  if (details) details.open = true;
+                }}
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  void start();
+                }}
+              >
+                <fieldset disabled={busy} className="study-fields">
+                  <legend className="sr-only">Historical study settings</legend>
+                  <FieldSet className="study-settings-section">
+                    <FieldLegend>Source &amp; rule</FieldLegend>
+                    <FieldGroup className="study-form-grid">
+                      <Field>
+                        <FieldLabel htmlFor="study-source">
+                          Stock source
+                        </FieldLabel>
+                        <select
+                          id="study-source"
+                          aria-label="Stock source"
+                          value={source}
+                          onChange={(e) => setSource(e.target.value)}
+                        >
+                          <option value="IDX">Entire IDX catalog · IDR</option>
+                          <option value="US">Entire US catalog · USD</option>
+                          <option value="universe" disabled={!universes.length}>
+                            My stock universe
                           </option>
-                        ))}
-                    </select>
-                  </Field>
-                  {source === "universe" && (
-                    <Field className="study-universe-field">
-                      <FieldLabel htmlFor="study-universe">
-                        Stock universe
-                      </FieldLabel>
-                      <select
-                        id="study-universe"
-                        aria-label="Stock universe"
-                        required
-                        value={universe}
-                        onChange={(e) => setUniverse(e.target.value)}
-                      >
-                        {universes.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name}
+                        </select>
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="study-rule">
+                          Screening rule
+                        </FieldLabel>
+                        <select
+                          id="study-rule"
+                          aria-label="Screening rule"
+                          required
+                          value={rule}
+                          onChange={(e) => setRule(e.target.value)}
+                        >
+                          <option value="default-scalping-v1">
+                            Default Scalping
                           </option>
-                        ))}
-                      </select>
-                    </Field>
-                  )}
-                </FieldGroup>
-              </FieldSet>
-              <FieldSet className="study-settings-section">
-                <FieldLegend>Test period</FieldLegend>
-                <FieldGroup className="study-form-grid">
-                  <Field>
-                    <FieldLabel htmlFor="study-from">
-                      From (daily session, SGT)
-                    </FieldLabel>
-                    <DateInput
-                      id="study-from"
-                      required
-                      type="date"
-                      value={config.from}
-                      onValueChange={(value) =>
-                        setConfig({ ...config, from: value })
-                      }
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="study-to">
-                      To (inclusive, SGT)
-                    </FieldLabel>
-                    <DateInput
-                      id="study-to"
-                      required
-                      type="date"
-                      value={config.to}
-                      onValueChange={(value) =>
-                        setConfig({ ...config, to: value })
-                      }
-                    />
-                  </Field>
-                  <Field className="study-horizon-field">
-                    <div className="study-horizon-label">
-                      <FieldLabel htmlFor="study-horizon">
-                        Trading candles after signal
-                      </FieldLabel>
-                      <span id="study-horizon-help">
-                        (1–100 completed daily candles, not calendar days)
-                      </span>
-                    </div>
-                    <Input
-                      id="study-horizon"
-                      aria-describedby="study-horizon-help"
-                      required
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={config.n_steps}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          n_steps: Number(e.target.value),
-                        })
-                      }
-                    />
-                    <ElasticSlider
-                      value={config.n_steps}
-                      label="Trading candles slider"
-                      onChange={(value) =>
-                        setConfig({ ...config, n_steps: value })
-                      }
-                    />
-                  </Field>
-                </FieldGroup>
-              </FieldSet>
-              <details className="run-advanced">
-                <summary>
-                  Take profit &amp; stop loss{" "}
-                  <small>
-                    {config.take_profit_pct
-                      ? `TP ${config.take_profit_pct}%`
-                      : "No take profit"}{" "}
-                    ·{" "}
-                    {config.stop_loss_pct
-                      ? `SL ${config.stop_loss_pct}%`
-                      : "No stop loss"}
-                  </small>
-                </summary>
-                <FieldSet className="study-settings-section">
-                  <FieldLegend className="sr-only">
-                    Take profit &amp; stop loss
-                  </FieldLegend>
-                  <FieldGroup className="study-form-grid">
-                    <Field data-study-target="profit">
-                      <FieldLabel htmlFor="study-tp">
-                        Take profit % (optional)
-                      </FieldLabel>
-                      <Input
-                        id="study-tp"
-                        type="number"
-                        min="0.01"
-                        max="99.99"
-                        step="any"
-                        value={config.take_profit_pct ?? ""}
-                        onChange={(e) =>
-                          setConfig({
-                            ...config,
-                            take_profit_pct: e.target.value
-                              ? Number(e.target.value)
-                              : undefined,
-                          })
-                        }
-                      />
-                    </Field>
-                    <Field data-study-target="loss">
-                      <FieldLabel htmlFor="study-sl">
-                        Stop loss % (optional)
-                      </FieldLabel>
-                      <Input
-                        id="study-sl"
-                        type="number"
-                        min="0.01"
-                        max="99.99"
-                        step="any"
-                        value={config.stop_loss_pct ?? ""}
-                        onChange={(e) =>
-                          setConfig({
-                            ...config,
-                            stop_loss_pct: e.target.value
-                              ? Number(e.target.value)
-                              : undefined,
-                          })
-                        }
-                      />
-                    </Field>
-                  </FieldGroup>
-                  <p className="study-settings-note">
-                    Leave a target empty to skip it. If both are touched in the
-                    same candle, stop loss comes first.
-                  </p>
-                </FieldSet>
-              </details>
-            </fieldset>
-            <div className="study-actions study-config-actions">
-              <Button
-                type="submit"
-                disabled={busy || !backendOnline || recovery.blocked}
+                          {rules
+                            .filter((r) => r.id !== "default-scalping-v1")
+                            .map((r) => (
+                              <option key={r.id} value={r.id}>
+                                {r.name} ·{" "}
+                                {r.definition?.signal_type ?? "System rule"}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
+                      {source === "universe" && (
+                        <Field className="study-universe-field">
+                          <FieldLabel htmlFor="study-universe">
+                            Stock universe
+                          </FieldLabel>
+                          <select
+                            id="study-universe"
+                            aria-label="Stock universe"
+                            required
+                            value={universe}
+                            onChange={(e) => setUniverse(e.target.value)}
+                          >
+                            {universes.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                      )}
+                    </FieldGroup>
+                  </FieldSet>
+                  <FieldSet className="study-settings-section">
+                    <FieldLegend>Test period</FieldLegend>
+                    <FieldGroup className="study-form-grid">
+                      <Field>
+                        <FieldLabel htmlFor="study-from">
+                          From (daily session, SGT)
+                        </FieldLabel>
+                        <DateInput
+                          id="study-from"
+                          required
+                          type="date"
+                          value={config.from}
+                          onValueChange={(value) =>
+                            setConfig({ ...config, from: value })
+                          }
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="study-to">
+                          To (inclusive, SGT)
+                        </FieldLabel>
+                        <DateInput
+                          id="study-to"
+                          required
+                          type="date"
+                          value={config.to}
+                          onValueChange={(value) =>
+                            setConfig({ ...config, to: value })
+                          }
+                        />
+                      </Field>
+                      <Field className="study-horizon-field">
+                        <div className="study-horizon-label">
+                          <FieldLabel htmlFor="study-horizon">
+                            Trading candles after signal
+                          </FieldLabel>
+                          <span id="study-horizon-help">
+                            (1–100 completed daily candles, not calendar days)
+                          </span>
+                        </div>
+                        <Input
+                          id="study-horizon"
+                          aria-describedby="study-horizon-help"
+                          required
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={config.n_steps}
+                          onChange={(e) =>
+                            setConfig({
+                              ...config,
+                              n_steps: Number(e.target.value),
+                            })
+                          }
+                        />
+                        <ElasticSlider
+                          value={config.n_steps}
+                          label="Trading candles slider"
+                          onChange={(value) =>
+                            setConfig({ ...config, n_steps: value })
+                          }
+                        />
+                      </Field>
+                    </FieldGroup>
+                  </FieldSet>
+                  <details className="run-advanced">
+                    <summary>
+                      Take profit &amp; stop loss{" "}
+                      <small>
+                        {config.take_profit_pct
+                          ? `TP ${config.take_profit_pct}%`
+                          : "No take profit"}{" "}
+                        ·{" "}
+                        {config.stop_loss_pct
+                          ? `SL ${config.stop_loss_pct}%`
+                          : "No stop loss"}
+                      </small>
+                    </summary>
+                    <FieldSet className="study-settings-section">
+                      <FieldLegend className="sr-only">
+                        Take profit &amp; stop loss
+                      </FieldLegend>
+                      <FieldGroup className="study-form-grid">
+                        <Field data-study-target="profit">
+                          <FieldLabel htmlFor="study-tp">
+                            Take profit % (optional)
+                          </FieldLabel>
+                          <Input
+                            id="study-tp"
+                            type="number"
+                            min="0.01"
+                            max="99.99"
+                            step="any"
+                            value={config.take_profit_pct ?? ""}
+                            onChange={(e) =>
+                              setConfig({
+                                ...config,
+                                take_profit_pct: e.target.value
+                                  ? Number(e.target.value)
+                                  : undefined,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field data-study-target="loss">
+                          <FieldLabel htmlFor="study-sl">
+                            Stop loss % (optional)
+                          </FieldLabel>
+                          <Input
+                            id="study-sl"
+                            type="number"
+                            min="0.01"
+                            max="99.99"
+                            step="any"
+                            value={config.stop_loss_pct ?? ""}
+                            onChange={(e) =>
+                              setConfig({
+                                ...config,
+                                stop_loss_pct: e.target.value
+                                  ? Number(e.target.value)
+                                  : undefined,
+                              })
+                            }
+                          />
+                        </Field>
+                      </FieldGroup>
+                      <p className="study-settings-note">
+                        Leave a target empty to skip it. If both are touched in
+                        the same candle, stop loss comes first.
+                      </p>
+                    </FieldSet>
+                  </details>
+                </fieldset>
+                <div className="study-actions study-config-actions">
+                  <Button
+                    type="submit"
+                    disabled={busy || !backendOnline || recovery.blocked}
+                  >
+                    <Play data-icon="inline-start" />
+                    Start signal study
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!busy}
+                    onClick={cancel}
+                  >
+                    <Square data-icon="inline-start" />
+                    Stop study
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => setReload((n) => n + 1)}
+                  >
+                    <RefreshCw data-icon="inline-start" />
+                    Reload selections
+                  </Button>
+                </div>
+              </form>
+              {optionsError && <p role="status">{optionsError}</p>}
+              {!backendOnline && (
+                <p role="status">
+                  Backend unavailable. Existing results remain visible;
+                  reconnect before starting.
+                </p>
+              )}
+              <div
+                className="backtest-run-feedback"
+                aria-label="Study progress"
               >
-                <Play data-icon="inline-start" />
-                Start signal study
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!busy}
-                onClick={cancel}
-              >
-                <Square data-icon="inline-start" />
-                Stop study
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy}
-                onClick={() => setReload((n) => n + 1)}
-              >
-                <RefreshCw data-icon="inline-start" />
-                Reload selections
-              </Button>
-            </div>
-          </form>
-          {optionsError && <p role="status">{optionsError}</p>}
-          {!backendOnline && (
-            <p role="status">
-              Backend unavailable. Existing results remain visible; reconnect
-              before starting.
-            </p>
+                <p role="status" aria-live="polite" aria-atomic="true">
+                  {message ||
+                    "Ready to analyse. Run the study, then choose View results."}
+                </p>
+                {!busy && <StudyRecovery recovery={recovery} />}
+                {error && !recovery.previous && <p role="alert">{error}</p>}
+                {busy && <StudyEstimate progress={progress} />}
+                {progress && (
+                  <>
+                    <progress
+                      aria-label="Catalog study progress"
+                      max={progress.context.total}
+                      value={progress.completed}
+                    />
+                    <p>
+                      {progress.completed}/{progress.context.total} stocks
+                      processed · {progress.failures.length} failed ·{" "}
+                      {progress.remaining} remaining
+                    </p>
+                  </>
+                )}
+                <Button
+                  disabled={busy || !progress}
+                  onClick={() => {
+                    if (progress)
+                      location.hash = backtestResultHash(
+                        "study",
+                        progress.context.id,
+                      );
+                  }}
+                >
+                  View results
+                </Button>
+              </div>
+            </>
           )}
-          <p role="status" aria-live="polite" aria-atomic="true">
-            {message}
-          </p>
-          {!busy && <StudyRecovery recovery={recovery} />}
-          {error && !recovery.previous && <p role="alert">{error}</p>}
-          {busy && <StudyEstimate progress={progress} />}
-          {progress && (
+          {resultPage && error && !recovery.previous && (
+            <p role="alert">{error}</p>
+          )}
+          {resultPage && progress && (
             <>
               <progress
                 aria-label="Catalog study progress"
@@ -1271,7 +1334,7 @@ export function SignalStudyPanel({
             </>
           )}
         </section>
-        {(!progress || busy) && (
+        {!resultPage && (
           <aside className="pen-study-guide" aria-label="Understand the study">
             <header className="study-guide-heading">
               <SlidersHorizontal aria-hidden="true" />
@@ -1312,5 +1375,10 @@ export function SignalStudyPanel({
         )}
       </div>
     </Profiler>
+  );
+  return resultPage ? (
+    <BacktestResultPage mode="study">{content}</BacktestResultPage>
+  ) : (
+    content
   );
 }

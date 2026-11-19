@@ -1,5 +1,14 @@
 import ElasticSlider from "@/components/react-bits/ElasticSlider";
 import Stepper from "@/components/react-bits/Stepper";
+import {
+  BacktestResultPage,
+  BacktestResultUnavailable,
+} from "@/components/backtest-result-page";
+import {
+  backtestResultHash,
+  readBacktestRoute,
+  type BacktestMode,
+} from "@/lib/backtest-route";
 import type { AccountState } from "@/types";
 import { BacktestPreview } from "./backtest-preview";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -31,6 +40,7 @@ import { uploadArchive } from "@/analysis/backtest-sync";
 import { parseBacktestEntries } from "@/analysis/backtest-presentation";
 import {
   saveBacktestArchive,
+  loadBacktestArchive,
   type BacktestArchive,
 } from "@/analysis/backtest-history";
 import {
@@ -75,7 +85,31 @@ export function WorkspaceBacktestPanel(props: {
   backendOnline: boolean;
   userId?: string;
 }) {
-  const [mode, setMode] = useState<"study" | "portfolio">("study");
+  const [route, setRoute] = useState(() => readBacktestRoute(location.hash));
+  const [mode, setMode] = useState<BacktestMode>(() =>
+    route.page === "results" ? route.mode : "study",
+  );
+  useEffect(() => {
+    const navigate = () => {
+      const next = readBacktestRoute(location.hash);
+      if (next.page === "results") setMode(next.mode);
+      setRoute(next);
+    };
+    addEventListener("hashchange", navigate);
+    addEventListener("popstate", navigate);
+    return () => {
+      removeEventListener("hashchange", navigate);
+      removeEventListener("popstate", navigate);
+    };
+  }, []);
+  useEffect(() => {
+    if (route.page === "setup") {
+      document
+        .getElementById("workspace-route-heading")
+        ?.focus({ preventScroll: true });
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [route.page]);
   if (props.authenticated && !props.account)
     return <p role="status">Checking historical analysis access…</p>;
   if (!props.account?.features.includes("backtest"))
@@ -87,26 +121,38 @@ export function WorkspaceBacktestPanel(props: {
     );
   return (
     <>
-      <div className="study-actions" role="group" aria-label="Backtesting mode">
-        <Button
-          variant={mode === "study" ? "default" : "outline"}
-          aria-pressed={mode === "study"}
-          onClick={() => setMode("study")}
+      {route.page === "setup" && (
+        <div
+          className="study-actions"
+          role="group"
+          aria-label="Backtesting mode"
         >
-          Analyse every signal
-        </Button>
-        <Button
-          variant={mode === "portfolio" ? "default" : "outline"}
-          aria-pressed={mode === "portfolio"}
-          onClick={() => setMode("portfolio")}
-        >
-          Portfolio simulation
-        </Button>
-      </div>
+          <Button
+            variant={mode === "study" ? "default" : "outline"}
+            aria-pressed={mode === "study"}
+            onClick={() => setMode("study")}
+          >
+            Analyse every signal
+          </Button>
+          <Button
+            variant={mode === "portfolio" ? "default" : "outline"}
+            aria-pressed={mode === "portfolio"}
+            onClick={() => setMode("portfolio")}
+          >
+            Portfolio simulation
+          </Button>
+        </div>
+      )}
       {mode === "study" ? (
-        <SignalStudyPanel {...props} />
+        <SignalStudyPanel
+          {...props}
+          resultRun={route.page === "results" ? route.run : undefined}
+        />
       ) : (
-        <PortfolioBacktestPanel {...props} />
+        <PortfolioBacktestPanel
+          {...props}
+          resultRun={route.page === "results" ? route.run : undefined}
+        />
       )}
     </>
   );
@@ -115,10 +161,12 @@ function PortfolioBacktestPanel({
   authenticated,
   backendOnline,
   userId,
+  resultRun,
 }: {
   authenticated: boolean;
   backendOnline: boolean;
   userId?: string;
+  resultRun?: string;
 }) {
   const [config, setConfig] = useState(initialConfig);
   const [rules, setRules] = useState<RuleResource[]>([]);
@@ -147,6 +195,8 @@ function PortfolioBacktestPanel({
     null,
   );
   const [historyMessage, setHistoryMessage] = useState("");
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState("");
   const [bulk, setBulk] = useState("");
   const [bulkError, setBulkError] = useState("");
   const bulkRef = useRef<HTMLTextAreaElement>(null);
@@ -284,6 +334,43 @@ function PortfolioBacktestPanel({
       controller.abort();
     };
   }, [authenticated, userId, reload]);
+
+  useEffect(() => {
+    if (
+      resultRun === undefined ||
+      !owner ||
+      busy ||
+      (result && resultId === resultRun)
+    )
+      return;
+    const controller = new AbortController();
+    const active = () =>
+      !controller.signal.aborted &&
+      session.getIdentityRevision() === owner.revision &&
+      !!session.getToken();
+    setRestoring(true);
+    setRestoreError("");
+    void loadBacktestArchive(owner.id, resultRun, controller.signal, active)
+      .then((archive) => {
+        if (!active()) return;
+        setResult(archive.result);
+        setResultId(archive.id);
+        setReportCurrency(archive.currency);
+        setReportTitle(archive.title);
+        setReportSource(archive.source);
+        setArchived(true);
+      })
+      .catch(() => {
+        if (active())
+          setRestoreError(
+            "This result is not available in this browser. Return to setup to open it from history or run another simulation.",
+          );
+      })
+      .finally(() => {
+        if (active()) setRestoring(false);
+      });
+    return () => controller.abort();
+  }, [resultRun, owner?.id, owner?.revision, busy, resultId, result]);
 
   let validationMessage = "";
   try {
@@ -537,6 +624,40 @@ function PortfolioBacktestPanel({
         </div>
       </section>
     );
+  if (resultRun !== undefined)
+    return (
+      <BacktestResultPage mode="portfolio">
+        {result && resultId === resultRun ? (
+          <>
+            {historyMessage && <p role="status">{historyMessage}</p>}
+            {busy && (
+              <p role="status">
+                A new run is processing. This report is from the previous
+                completed run.
+              </p>
+            )}
+            <BacktestResults
+              key={resultId}
+              result={result}
+              currency={reportCurrency}
+              title={reportTitle}
+              source={reportSource}
+              archived={archived}
+              onClose={() => {
+                location.hash = "app/backtest";
+              }}
+            />
+          </>
+        ) : restoring ? (
+          <p role="status">Loading saved result…</p>
+        ) : (
+          <BacktestResultUnavailable>
+            {restoreError ||
+              "No result is available at this address. Return to setup to run or open a saved simulation."}
+          </BacktestResultUnavailable>
+        )}
+      </BacktestResultPage>
+    );
   return (
     <div className="backtest-workspace">
       {(!backendOnline || loadError) && (
@@ -672,7 +793,7 @@ function PortfolioBacktestPanel({
               </fieldset>
               <fieldset className="backtest-config-section">
                 <legend>Test period</legend>
-                <FieldGroup className="backtest-fields">
+                <FieldGroup className="backtest-fields backtest-period-fields">
                   <Field className="backtest-field">
                     <FieldLabel htmlFor="bt-from">From date (SGT)</FieldLabel>
                     <DateInput
@@ -698,10 +819,17 @@ function PortfolioBacktestPanel({
                   </Field>
                   <Field className="backtest-field">
                     <FieldLabel htmlFor="bt-horizon">
-                      Holding period (candles)
+                      Holding period (candles){" "}
+                      <span
+                        id="bt-horizon-help"
+                        className="backtest-horizon-hint"
+                      >
+                        (1–100 completed daily candles, not calendar days)
+                      </span>
                     </FieldLabel>
                     <Input
                       id="bt-horizon"
+                      aria-label="Holding period (candles)"
                       aria-describedby="bt-horizon-help"
                       aria-invalid={
                         !Number.isInteger(config.n_steps) ||
@@ -723,9 +851,6 @@ function PortfolioBacktestPanel({
                       label="Holding period slider"
                       onChange={(value) => update("n_steps", value)}
                     />
-                    <FieldDescription id="bt-horizon-help">
-                      1–100 completed daily candles, not calendar days.
-                    </FieldDescription>
                   </Field>
                 </FieldGroup>
               </fieldset>
@@ -1099,15 +1224,14 @@ function PortfolioBacktestPanel({
         </p>
       )}
       {result && (
-        <BacktestResults
-          key={resultId}
-          result={result}
-          currency={reportCurrency}
-          title={reportTitle}
-          source={reportSource}
-          archived={archived}
-          onClose={() => setResult(null)}
-        />
+        <Button
+          disabled={busy}
+          onClick={() => {
+            location.hash = backtestResultHash("portfolio", resultId);
+          }}
+        >
+          View results
+        </Button>
       )}
       {owner && (
         <BacktestHistoryPanel
@@ -1125,6 +1249,7 @@ function PortfolioBacktestPanel({
             setHistoryMessage("");
             setError("");
             setStage("");
+            location.hash = backtestResultHash("portfolio", archive.id);
           }}
         />
       )}

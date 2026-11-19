@@ -16,8 +16,16 @@ const browser = await chromium.launch({
 });
 const shared = String.raw`
  const explorer = page.getByRole('region', {name:'Result insights and tools'});
+ let setupSnapshot;
+ async function captureSetup(study) {
+  const ids=study?['study-source','study-rule','study-from','study-to','study-horizon']:['bt-mode','bt-universe','bt-rule','bt-from','bt-to','bt-horizon'];
+  return page.evaluate(ids=>ids.map(id=>[id,document.getElementById(id)?.value]),ids);
+ }
  async function inspect(width, study=false) {
   await explorer.waitFor();
+  const computesBefore=study?prepares.length:prepares;
+  if(!page.url().includes('#app/backtest/results&mode='))throw Error('Result did not get a dedicated URL');
+  if(await page.locator('.backtest-config,.study-fields').count())throw Error('Configuration leaked into result page');
   await explorer.locator('summary').click();
   if(study) {
    await explorer.getByRole('button',{name:'Load all saved signals',exact:true}).click();
@@ -51,6 +59,17 @@ const shared = String.raw`
   if(!await report.locator('svg polyline').count())throw Error('Report chart missing');
   await report.pdf({path:output+'/'+(study?'study':'portfolio')+'-'+width+'.pdf',format:'A4',printBackground:true});
   await report.close();
+  await page.getByRole('link',{name:'Back to setup',exact:true}).click();
+  if(await explorer.count())throw Error('Results leaked into setup page');
+  if(JSON.stringify(await captureSetup(study))!==JSON.stringify(setupSnapshot))throw Error('Returning to setup changed configuration');
+  await page.goBack();await explorer.waitFor();
+  await page.goForward();await page.getByRole('button',{name:'View results',exact:true}).click();await explorer.waitFor();
+  if(study){
+   const count=await page.evaluate(async owner=>(await (await import('/src/analysis/signal-study-storage.ts')).studyEventPage(owner,'study-qa')).total,user.id);
+   if(count!==92)throw Error('Navigating between setup and results cleared study records');
+  }
+  if(!study&&width===1218){await page.reload();await explorer.waitFor();}
+  if((study?prepares.length:prepares)!==computesBefore)throw Error('Result navigation started another computation');
   console.log('PASS',study?'study':'portfolio',width,'insights, heatmap, keyboard, details, full PDF report');
  }
 `;
@@ -78,10 +97,13 @@ try {
       name === "backtest"
         ? String.raw`
    for(const width of [1218,1456,390]){
-    await page.setViewportSize({width,height:852});mode='healthy';await ready();await dates();
-    await page.getByRole('button',{name:'Run backtest',exact:true}).click();await result();await inspect(width);
+    await page.setViewportSize({width,height:852});mode='healthy';await ready();await dates();setupSnapshot=await captureSetup(false);
+    const hint=page.locator('#bt-horizon-help');if(!await hint.evaluate(el=>el.parentElement.htmlFor==='bt-horizon'))throw Error('Holding period hint is not inline with the label');
+    if(width>1100){const boxes=await Promise.all(['bt-from','bt-to','bt-horizon'].map(id=>page.locator('#'+id).boundingBox()));if(Math.max(...boxes.map(b=>b.y))-Math.min(...boxes.map(b=>b.y))>1)throw Error('Period inputs are misaligned');}
+    await page.locator('.backtest-period-fields').screenshot({path:output+'/holding-period-'+width+'.png'});
+    await page.getByRole('button',{name:'Run backtest',exact:true}).click();await page.getByRole('button',{name:'View results',exact:true}).click();await result();await inspect(width);
    }
-   mode='no-signals';await ready();await dates();await page.getByRole('button',{name:'Run backtest',exact:true}).click();await result();
+   mode='no-signals';await ready();await dates();await page.getByRole('button',{name:'Run backtest',exact:true}).click();await page.getByRole('button',{name:'View results',exact:true}).click();await result();
    await explorer.locator('summary').click();await explorer.getByText('No records in this scope.',{exact:true}).waitFor();
    console.log('PASS portfolio empty results');
   `
@@ -95,9 +117,24 @@ try {
    }
    partial=false;
    for(const width of [1218,1456,390]){
-    await page.setViewportSize({width,height:852});await configure();
-    await page.getByRole('button',{name:'Start signal study',exact:true}).click();
+    await page.setViewportSize({width,height:852});await configure();await page.evaluate(()=>document.fonts.ready);setupSnapshot=await captureSetup(true);
+    const before=await page.locator('.pen-study-layout > .signal-study-panel').boundingBox();
+    hold=true;const preparing=new Promise(r=>entered=r);
+    await page.getByRole('button',{name:'Start signal study',exact:true}).click();await preparing;
+    const during=await page.locator('.pen-study-layout > .signal-study-panel').boundingBox();
+    if(Math.abs(before.width-during.width)>1||Math.abs(before.height-during.height)>2)throw Error('Study setup changed size during processing '+JSON.stringify({before,during}));
+    await page.locator('.backtest-run-feedback').screenshot({path:output+'/study-processing-'+width+'.png'});
+    hold=false;release?.();
     await page.getByText('Completed the frozen catalog. Review data-quality limits before interpreting results.',{exact:true}).waitFor({timeout:60000});
+    const after=await page.locator('.pen-study-layout > .signal-study-panel').boundingBox();
+    if(Math.abs(before.width-after.width)>1||Math.abs(before.height-after.height)>2)throw Error('Study setup changed size on completion '+JSON.stringify({before,after}));
+    const feedback = page.locator('.backtest-run-feedback');
+    const feedbackWidth = (await feedback.boundingBox()).width;
+    const viewWidth = (await page.getByRole('button',{name:'View results',exact:true}).boundingBox()).width;
+    if(Math.abs(feedbackWidth-viewWidth)>1)throw Error('View results does not fill the card content width');
+    await page.locator('.pen-study-layout').screenshot({path:output+'/study-setup-'+width+'.png'});
+    await page.getByRole('button',{name:'View results',exact:true}).click();
+    await page.screenshot({path:output+'/study-result-page-'+width+'.png'});
     await explorer.locator('[data-coverage="Complete"]').waitFor();await inspect(width,true);
    }
    await page.evaluate(async owner => (await import('/src/analysis/signal-study-storage.ts')).clearStudyOwner(owner), user.id);
@@ -106,20 +143,31 @@ try {
    console.log('PASS missing local data cannot produce a complete report');
    partial=false;await configure();await page.getByLabel('Trading candles after signal',{exact:false}).fill('100');
    await page.getByRole('button',{name:'Start signal study',exact:true}).click();
+   await page.getByRole('button',{name:'View results',exact:true}).click();
    await explorer.locator('[data-coverage="Partial"]').waitFor({timeout:60000});
    if(!await explorer.getByRole('status').textContent().then(t=>t.includes('signals lack future data')))throw Error('Missing future-data coverage');
    console.log('PASS missing future data coverage');
    partial=true;await configure();await page.getByRole('button',{name:'Start signal study',exact:true}).click();
+   await page.getByRole('button',{name:'View results',exact:true}).click();
    await explorer.locator('[data-coverage="Partial"]').waitFor({timeout:60000});
    if(!await explorer.getByRole('status').textContent().then(t=>t.includes('1 failed')))throw Error('Missing failed-stock coverage');
-   console.log('PASS partial coverage');
+   await page.getByRole('link',{name:'Back to setup',exact:true}).click();
+   await page.getByLabel('From (daily session, SGT)',{exact:true}).fill('2026-01-21');
+   await page.getByRole('button',{name:'View results',exact:true}).click();
+   if(!await page.getByRole('button',{name:'Retry failed stocks',exact:true}).isDisabled())throw Error('Changed setup allowed retry of frozen result');
+   await page.getByRole('status').filter({hasText:'Settings changed.'}).waitFor();
+   console.log('PASS partial coverage and frozen result safeguards');
    partial=false;hold=true;await configure();
    const waiting=new Promise(r=>entered=r);
    await page.getByRole('button',{name:'Start signal study',exact:true}).click();await waiting;
-   await explorer.locator('[data-coverage="Processing"]').waitFor();
-   if(!await explorer.getByRole('button',{name:'Export PDF',exact:true}).isDisabled())throw Error('Processing export enabled');
+   if(await explorer.count()||!await page.getByRole('button',{name:'View results',exact:true}).isDisabled())throw Error('Processing results should remain on setup');
    await page.getByRole('button',{name:'Stop study',exact:true}).click();release?.();hold=false;
+   await page.getByRole('button',{name:'View results',exact:true}).click();
    await explorer.locator('[data-coverage="Stopped"]').waitFor();console.log('PASS processing and stopped coverage');
+   await page.reload();await page.getByRole('heading',{name:'Result unavailable',exact:true}).waitFor();
+   if(await explorer.count())throw Error('Reload showed a different study at the old URL');
+   await page.getByRole('link',{name:'Back to setup',exact:true}).click();
+   await page.getByLabel('Stock source',{exact:true}).waitFor();console.log('PASS expired study URL recovery');
   `;
     await eval(
       "(" +
