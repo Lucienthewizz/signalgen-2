@@ -50,6 +50,11 @@ services:
       - backend/.env
     environment:
       SIGNALGEN_GO_API_ADDR: :8080
+      SIGNALGEN_REDIS_URL: redis://market-cache:6379/0
+    depends_on:
+      market-cache:
+        condition: service_started
+    networks: [default, market-cache]
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -59,6 +64,30 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  market-cache:
+    image: redis:7.4-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
+    command: [redis-server, --maxmemory, 64mb, --maxmemory-policy, allkeys-lru, --save, "", --appendonly, "no"]
+    # Disposable public-price cache: no published port and no archive volume.
+    networks: [market-cache]
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  market-cache:
+    internal: true
 
 volumes:
   signalgen-backend-data:

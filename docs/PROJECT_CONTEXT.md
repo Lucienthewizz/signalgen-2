@@ -7,6 +7,12 @@ backend Go/Gin dan Supabase Postgres. Scope target bukan bukti semua fitur seles
 status terverifikasi berada di [backend progress](backend/BACKEND_PROGRESS.md) dan
 [laporan asis](ASIS_2026_10_07.md).
 
+Pembaruan infrastruktur 19 November 2026: cache OHLCV Redis bersifat opsional,
+di belakang cache RAM yang sudah dibatasi. Redis memakai TTL interval dan versi
+arsip, tidak menyimpan izin/sesi/rule privat, serta dapat dilewati ketika gagal.
+Arsip historis tetap terpisah; perubahan ini tidak memigrasikan candle ke
+PostgreSQL. [Konfigurasi dan batas Redis](backend/REDIS_MARKET_CACHE.md).
+
 Keputusan implementasi 5 Oktober 2026: pengguna memilih **Model A** untuk alur
 aktif. Client Go/WASM menghitung indikator, server menjalankan private decision
 melalui WebSocket. Model B tetap bahan eksperimen, bukan jalur produk kedua.

@@ -19,6 +19,7 @@ type CacheOptions struct {
 	MaxEntries   int
 	MaxCandles   int
 	MaxInFlight  int
+	Shared       SharedCache
 }
 
 func DefaultCacheOptions() CacheOptions {
@@ -156,23 +157,34 @@ func (provider *CachedProvider) fetch(key string, flight *providerFlight, upstre
 	ctx, cancel := context.WithTimeout(context.Background(), provider.options.FetchTimeout)
 	defer cancel()
 	instruments := []universe.Instrument{instrument}
-	series, err := ReadCandles(ctx, upstream, instruments, outputSize, timeframe)
-	if err == nil {
-		err = ValidateSeries(series, instruments, outputSize)
+	policy, _ := Policy(timeframe)
+	ttl := min(provider.options.TTL, policy.CacheTTL)
+	entry, hit := provider.readShared(ctx, key, ttl, func(series Series) error {
+		return ValidateSeries([]Series{series}, instruments, outputSize)
+	})
+	var err error
+	if !hit {
+		var series []Series
+		series, err = ReadCandles(ctx, upstream, instruments, outputSize, timeframe)
+		if err == nil {
+			err = ValidateSeries(series, instruments, outputSize)
+		}
+		if err == nil {
+			entry = cachedSeries{series: series[0], expiresAt: provider.now().Add(ttl)}
+			provider.writeShared(ctx, key, entry)
+		}
 	}
 	provider.mu.Lock()
 	defer provider.mu.Unlock()
 	if err == nil {
-		flight.series = cloneSeries(series[0])
+		flight.series = cloneSeries(entry.series)
 		provider.pruneExpiredLocked()
 		count := len(flight.series.Candles)
 		if count <= provider.options.MaxCandles {
 			for len(provider.entries) >= provider.options.MaxEntries || provider.candles+count > provider.options.MaxCandles {
 				provider.evictOldestLocked()
 			}
-			policy, _ := Policy(timeframe)
-			ttl := min(provider.options.TTL, policy.CacheTTL)
-			provider.entries[key] = cachedSeries{series: cloneSeries(flight.series), expiresAt: provider.now().Add(ttl)}
+			provider.entries[key] = cachedSeries{series: cloneSeries(flight.series), expiresAt: entry.expiresAt}
 			provider.candles += count
 		}
 	}

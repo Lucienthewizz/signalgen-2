@@ -4,6 +4,11 @@
 
 Versi 2.6 · 10 November 2026 · Produk: aplikasi web multi-user dengan Supabase Postgres. Kebutuhan dan hasil pengujian aktual dibedakan; lihat [bahan asis 4 November](ASIS_2026_11_04.md).
 
+Keputusan pengguna 19 November 2026: tambahkan Redis sebagai cache bersama
+OHLCV, dengan batas memori/TTL dan fallback ke provider. Akses akun tetap
+diperiksa server pada setiap alur; Redis bukan arsip utama atau bukti target
+performa sudah tercapai. [Detail implementasi](backend/REDIS_MARKET_CACHE.md).
+
 Keputusan implementasi 5 Oktober 2026: alur screening aktif memakai **Model A**
 (indikator di Go/WASM client, private decision di Go server melalui WebSocket).
 Model B hanya pembanding penelitian. Benchmark dan persetujuan pembimbing tidak

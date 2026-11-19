@@ -91,7 +91,21 @@ func main() {
 	}
 	// Public OHLCV is shared briefly; private dataset handles remain owner-bound.
 	// Identical instrument fetches reuse one bounded upstream request.
-	provider, err := marketdata.NewCachedProvider(upstreamProvider, marketdata.DefaultCacheOptions())
+	cacheOptions := marketdata.DefaultCacheOptions()
+	var redisCache *marketdata.RedisCache
+	if redisURL := os.Getenv("SIGNALGEN_REDIS_URL"); redisURL != "" {
+		// Isolate different provider/deployment configurations in a shared Redis.
+		scope := environment("SIGNALGEN_REDIS_NAMESPACE", "signalgen") + "\x00" +
+			environment("SIGNALGEN_MARKET_DATA_MODE", "yahoo") + "\x00" + yahooFinanceBaseURL + "\x00" + os.Getenv("SIGNALGEN_IDX_HISTORY_DIR")
+		redisCache, err = marketdata.NewRedisCache(redisURL, scope)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer redisCache.Close()
+		cacheOptions.Shared = redisCache
+		operationalLogger.Info("shared market-data cache configured", "cache", "redis")
+	}
+	provider, err := marketdata.NewCachedProvider(upstreamProvider, cacheOptions)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -181,6 +195,10 @@ func main() {
 		defer close(telemetryDone)
 		traffic.RunSummaries(shutdownContext, time.Minute, screeningMetrics.LogSummary, func() {
 			platformdb.LogPoolSummary(operationalLogger, database)
+			if redisCache != nil {
+				hits, misses, failures := redisCache.Stats()
+				operationalLogger.Info("redis_market_cache_summary", "hits", hits, "misses", misses, "failures", failures)
+			}
 		})
 	}()
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

@@ -90,6 +90,11 @@ docker compose up --build -d
 docker compose ps
 ```
 
+The default Compose setup also starts a private Redis cache for public candle
+data, capped at 64 MiB. Account checks and historical archives remain separate;
+Redis outages fall back to the existing RAM/provider path. See
+[Redis setup and Railway configuration](docs/backend/REDIS_MARKET_CACHE.md).
+
 The backend exposes:
 
 - REST/API status: `http://127.0.0.1:8080/api`

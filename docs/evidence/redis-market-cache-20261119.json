@@ -1,0 +1,46 @@
+{
+  "date": "2026-11-19",
+  "branch": "feature/backend-redis-cache",
+  "scope": "Optional shared public-OHLCV Redis cache; no database migration or authorization cache",
+  "source_sha256": {
+    "backend/cmd/api/main.go": "f68d35b0ed2b3a9e912c53b57320601d8b293f83b9bb2d53d02b0166d722ac06",
+    "backend/go.mod": "58f824ddece7fb9da6d946c09bdd5d4b68f7e71414024666390d1d43881505d3",
+    "backend/go.sum": "06d8941a9f3dbd6480536f884d87d7d4d0348413fcf70afbb6c5469835872595",
+    "backend/internal/marketdata/cache.go": "31dd2b1498398ccf40729a3575def5a467efdfa8c0ca2f8c3954852696ea6dfd",
+    "backend/internal/marketdata/history_cache.go": "7a80c4f030a37532ad685a693aa514b17249f5517ba9a105b72fa963e493f3c2",
+    "backend/internal/marketdata/shared_cache.go": "0bc32aa26cdc28e1055b547ce49e654e4f331bf655b7edb8bc922fa278f1380a",
+    "backend/internal/marketdata/redis_cache.go": "2920a27b1380b17e9917e900d82fe2684e705bfd4e6722287c6092cd5aca4e5d",
+    "backend/internal/marketdata/shared_cache_test.go": "8fb45c900c08a02c66a9feff85445cec679fe85febe5fd42177579dae6785bda",
+    "backend/internal/marketdata/redis_cache_test.go": "0133b4d454e0014ef5b5f22a9744cf666cc86a67677f7f9e5d97dc6ba1306ec2",
+    "docker-compose.yml": "6da142259dde322dd10e8a2cf73a2c5b8c14c88a19dddc29ced25b7f655562dc"
+  },
+  "redis": {
+    "version": "7.4.12",
+    "image_digest": "sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe",
+    "maxmemory_bytes": 67108864,
+    "eviction": "allkeys-lru",
+    "published_ports": [],
+    "persistence": "disabled"
+  },
+  "checks": {
+    "go_test_race_all": "passed: go test -race -count=1 -timeout 180s ./... with disposable SIGNALGEN_TEST_REDIS_URL",
+    "go_vet_all": "passed",
+    "redis_integration_host": "passed",
+    "redis_integration_private_container_network": "passed; real Redis plus synthetic OHLCV provider; two CachedProvider instances reuse data",
+    "compose_config": "passed",
+    "api_health_http": 200,
+    "api_readiness_http": 200,
+    "redis_container_health": "healthy",
+    "running_api_binary_matches_build": true,
+    "api_binary_sha256": "0f2f65c1efde3a52753e2e3c6a5b70fe2569cb27ca912a9d1d74d275a8d364d4",
+    "unrelated_dashboard_brief_unchanged": true,
+    "temporary_candidate_and_test_redis_removed": true
+  },
+  "limitations": [
+    "Authenticated browser/provider smoke and end-to-end latency comparison were not run.",
+    "Optional PostgreSQL/WASM integration modes were not enabled for this run.",
+    "Local activation replaces only the rebuilt API binary in the prior local runtime image; full production Dockerfile was not rebuilt.",
+    "Cross-process simultaneous cold misses are not distributed-singleflight or globally rate-limited.",
+    "The prior stopped API container remains available for rollback; no archive or user-data volume was deleted."
+  ]
+}

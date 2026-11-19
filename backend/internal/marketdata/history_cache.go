@@ -69,23 +69,34 @@ func (provider *CachedProvider) DailyHistory(ctx context.Context, instrument uni
 func (provider *CachedProvider) fetchHistory(key string, flight *providerFlight, upstream HistoryProvider, instrument universe.Instrument, from, to time.Time) {
 	ctx, cancel := context.WithTimeout(context.Background(), provider.options.FetchTimeout)
 	defer cancel()
-	result, err := upstream.DailyHistory(ctx, instrument, from, to)
-	if err == nil {
-		err = ValidateHistory(result.Series, instrument.Symbol, from, to)
+	entry, hit := provider.readShared(ctx, key, provider.options.TTL, func(series Series) error {
+		return ValidateHistory(series, instrument.Symbol, from, to)
+	})
+	var err error
+	if !hit {
+		var result History
+		result, err = upstream.DailyHistory(ctx, instrument, from, to)
+		if err == nil {
+			err = ValidateHistory(result.Series, instrument.Symbol, from, to)
+		}
+		if err == nil {
+			entry = cachedSeries{series: result.Series, history: result, expiresAt: provider.now().Add(provider.options.TTL)}
+			entry.history.Series = Series{}
+			provider.writeShared(ctx, key, entry)
+		}
 	}
 	provider.mu.Lock()
 	defer provider.mu.Unlock()
 	if err == nil {
-		flight.series = cloneSeries(result.Series)
-		result.Series = Series{}
-		flight.history = result
+		flight.series = cloneSeries(entry.series)
+		flight.history = entry.history
 		provider.pruneExpiredLocked()
 		count := len(flight.series.Candles)
 		if count <= provider.options.MaxCandles {
 			for len(provider.entries) >= provider.options.MaxEntries || provider.candles+count > provider.options.MaxCandles {
 				provider.evictOldestLocked()
 			}
-			provider.entries[key] = cachedSeries{series: cloneSeries(flight.series), history: result, expiresAt: provider.now().Add(provider.options.TTL)}
+			provider.entries[key] = cachedSeries{series: cloneSeries(flight.series), history: entry.history, expiresAt: entry.expiresAt}
 			provider.candles += count
 		}
 	}
