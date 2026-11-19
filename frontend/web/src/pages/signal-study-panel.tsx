@@ -1,4 +1,6 @@
+import "@/styles/backtest-results.css";
 import { StudyRecovery, useStudyRecovery } from "@/components/study-recovery";
+import { backtestValueTone } from "@/analysis/backtest-presentation";
 import ElasticSlider from "@/components/react-bits/ElasticSlider";
 import Stepper from "@/components/react-bits/Stepper";
 import { Profiler, useEffect, useRef, useState, type FormEvent } from "react";
@@ -499,7 +501,7 @@ export function SignalStudyPanel({
       }
     >
       <div
-        className={`pen-study-layout ${progress || busy ? "has-results" : ""}`}
+        className={`pen-study-layout ${progress && !busy ? "has-results" : ""}`}
       >
         <section className="signal-study-panel" aria-labelledby="study-heading">
           <header className="study-config-heading">
@@ -1047,10 +1049,20 @@ export function SignalStudyPanel({
                           </tr>
                           <tr>
                             <th scope="row">Mean return</th>
-                            <td>
+                            <td
+                              data-value-tone={backtestValueTone(
+                                periodComparison.metrics.mean_return_pct,
+                              )}
+                            >
                               {pct(periodComparison.metrics.mean_return_pct)}
                             </td>
-                            <td>{pct(selectedMetrics!.mean_return_pct)}</td>
+                            <td
+                              data-value-tone={backtestValueTone(
+                                selectedMetrics!.mean_return_pct,
+                              )}
+                            >
+                              {pct(selectedMetrics!.mean_return_pct)}
+                            </td>
                           </tr>
                         </tbody>
                       </table>
@@ -1205,7 +1217,13 @@ export function SignalStudyPanel({
                             {h.wins}/{h.losses}/{h.flats}
                           </td>
                           <td>{pct(h.win_rate)}</td>
-                          <td>{pct(h.mean_return_pct)}</td>
+                          <td
+                            data-value-tone={backtestValueTone(
+                              h.mean_return_pct,
+                            )}
+                          >
+                            {pct(h.mean_return_pct)}
+                          </td>
                         </tr>
                       ))}
                   </tbody>
@@ -1331,7 +1349,7 @@ export function SignalStudyPanel({
                 aria-label="Individual signal outcomes"
                 tabIndex={0}
               >
-                <table>
+                <table className="study-signal-table">
                   <caption>
                     Signal details — exact T+{resultStep} and window outcomes;{" "}
                     {total} signals
@@ -1352,18 +1370,26 @@ export function SignalStudyPanel({
                   <tbody>
                     {rows.map((e) => (
                       <tr key={e.symbol + e.timestamp}>
-                        <td>{e.symbol}</td>
-                        <td>{e.timestamp.slice(0, 10)}</td>
-                        <td>{e.signal_type}</td>
-                        <td>{e.reference_price}</td>
-                        <td>
+                        <td data-label="Stock">{e.symbol}</td>
+                        <td data-label="Signal candle">
+                          {e.timestamp.slice(0, 10)}
+                        </td>
+                        <td data-label="Direction">{e.signal_type}</td>
+                        <td data-label="Reference close">
+                          {e.reference_price}
+                        </td>
+                        <td data-label="Evaluation candle">
                           {e.outcomes.find((o) => o.step === resultStep)
                             ?.timestamp ?? "Incomplete"}
                         </td>
                         {e.outcomes
                           .filter((o) => o.step === resultStep)
                           .map((o) => (
-                            <td key={o.basis}>
+                            <td
+                              key={o.basis}
+                              data-label={`${o.basis} return`}
+                              data-value-tone={backtestValueTone(o.return_pct)}
+                            >
                               {pct(o.return_pct)}
                               <small>
                                 {o.price == null
@@ -1372,7 +1398,12 @@ export function SignalStudyPanel({
                               </small>
                             </td>
                           ))}
-                        <td>
+                        <td
+                          data-label="Swing"
+                          data-value-tone={backtestValueTone(
+                            e.swing.return_pct,
+                          )}
+                        >
                           {outcomeDescription(
                             e.swing,
                             ready!.config.take_profit_pct != null ||
@@ -1454,7 +1485,7 @@ export function SignalStudyPanel({
             </>
           )}
         </section>
-        {!progress && !busy && (
+        {(!progress || busy) && (
           <aside className="pen-study-guide" aria-label="Understand the study">
             <header className="study-guide-heading">
               <SlidersHorizontal aria-hidden="true" />

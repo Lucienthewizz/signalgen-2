@@ -1,3 +1,4 @@
+import "@/styles/backtest-results.css";
 import { useRef, useEffect, useState, useMemo } from "react";
 import { singaporeDateTime } from "@/lib/calendar";
 import { Input } from "@/components/ui/input";
@@ -229,7 +230,7 @@ export function BacktestResults({
         role="region"
         aria-label="Holding period comparison"
       >
-        <table>
+        <table className="backtest-horizon-table">
           <caption>Holding period analysis · all horizons</caption>
           <thead>
             <tr>
@@ -258,7 +259,7 @@ export function BacktestResults({
                   key={h.step}
                   data-selected={h.step === selectedHorizon.step || undefined}
                 >
-                  <th scope="row">
+                  <th scope="row" data-label="Horizon">
                     <Button
                       variant="ghost"
                       aria-pressed={h.step === selectedHorizon.step}
@@ -267,10 +268,11 @@ export function BacktestResults({
                       {h.label}
                     </Button>
                   </th>
-                  <td>
+                  <td data-label="Closed / open">
                     {h.metrics.closed_trades} / {h.metrics.open_trades}
                   </td>
                   <td
+                    data-label="Return"
                     data-value-tone={backtestValueTone(
                       h.metrics.total_return_pct,
                     )}
@@ -278,19 +280,26 @@ export function BacktestResults({
                     {percent(h.metrics.total_return_pct)}
                   </td>
                   <td
+                    data-label="Realized P&L"
                     data-value-tone={backtestValueTone(h.metrics.net_pl_cash)}
                   >
                     {money(h.metrics.net_pl_cash)}
                   </td>
                   <td
+                    data-label="Unrealized P&L"
                     data-value-tone={backtestValueTone(h.metrics.unrealized_pl)}
                   >
                     {money(h.metrics.unrealized_pl)}
                   </td>
-                  <td>{percent(h.metrics.max_drawdown_pct)}</td>
-                  <td>{percent(h.metrics.win_rate)}</td>
-                  <td>{number(h.metrics.profit_factor)}</td>
+                  <td data-label="Max drawdown">
+                    {percent(h.metrics.max_drawdown_pct)}
+                  </td>
+                  <td data-label="Win rate">{percent(h.metrics.win_rate)}</td>
+                  <td data-label="Profit factor">
+                    {number(h.metrics.profit_factor)}
+                  </td>
                   <td
+                    data-label="Expectancy"
                     data-value-tone={backtestValueTone(
                       h.metrics.expectancy_cash,
                     )}
@@ -483,7 +492,7 @@ export function BacktestResults({
             role="region"
             aria-label="Backtest trades"
           >
-            <table>
+            <table className="backtest-trades-table">
               <caption>Trades · {selectedHorizon.label}</caption>
               <thead>
                 <tr>
@@ -510,20 +519,29 @@ export function BacktestResults({
                   .slice(currentPage * 25, (currentPage + 1) * 25)
                   .map((trade, i) => (
                     <tr key={`${trade.symbol}:${trade.signal_time}:${i}`}>
-                      <th scope="row">{trade.symbol}</th>
-                      <td>{dateLabel(trade.signal_time)}</td>
-                      <td>{dateLabel(trade.entry_time)}</td>
-                      <td>
+                      <th scope="row" data-label="Stock">
+                        {trade.symbol}
+                      </th>
+                      <td data-label="Signal (SGT)">
+                        {dateLabel(trade.signal_time)}
+                      </td>
+                      <td data-label="Entry (SGT)">
+                        {dateLabel(trade.entry_time)}
+                      </td>
+                      <td data-label="Exit (SGT)">
                         {trade.exit_time ? dateLabel(trade.exit_time) : "—"}
                       </td>
-                      <td>{number(trade.quantity, 6)}</td>
-                      <td>{money(trade.entry_price)}</td>
-                      <td>
+                      <td data-label="Quantity">{number(trade.quantity, 6)}</td>
+                      <td data-label="Entry price">
+                        {money(trade.entry_price)}
+                      </td>
+                      <td data-label="Exit price">
                         {trade.exit_price === null
                           ? "—"
                           : money(trade.exit_price)}
                       </td>
                       <td
+                        data-label="P&L"
                         data-value-tone={backtestValueTone(
                           trade.status === "open"
                             ? trade.unrealized_pl
@@ -536,10 +554,13 @@ export function BacktestResults({
                             : trade.net_pl,
                         )}
                       </td>
-                      <td data-value-tone={backtestValueTone(trade.return_pct)}>
+                      <td
+                        data-label="Return"
+                        data-value-tone={backtestValueTone(trade.return_pct)}
+                      >
                         {number(trade.return_pct)}%
                       </td>
-                      <td>
+                      <td data-label="Status">
                         {trade.status === "open"
                           ? "Open · unrealized"
                           : "Closed"}
