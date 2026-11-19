@@ -38,6 +38,11 @@ func (r *Runner) Collect(ctx context.Context, o Options) (Run, error) {
 		return Run{}, err
 	}
 	defer unlock()
+	// Database work counts toward the one-second request spacing. Do not add
+	// another second after every transaction during a full-catalog import.
+	local := *r
+	local.Source = &pacedHistory{source: r.Source, delay: o.Delay}
+	r = &local
 	if o.Now.IsZero() {
 		o.Now = time.Now()
 	}
@@ -81,7 +86,11 @@ func (r *Runner) Collect(ctx context.Context, o Options) (Run, error) {
 	}
 	if existing == 0 && o.Scope == "production" {
 		var bytes, candles int64
-		for _, item := range items[:min(3, len(items))] {
+		probes, probeErr := r.Store.Catalog(ctx, o.Market, "smoke")
+		if probeErr != nil {
+			return stop(probeErr)
+		}
+		for _, item := range probes {
 			h, _, fetchErr := r.fetch(ctx, item, from, to, o.Delay)
 			if fetchErr != nil {
 				return stop(fmt.Errorf("capacity sample %s: %s", item.Symbol, sourceCode(fetchErr)))
@@ -90,9 +99,6 @@ func (r *Runner) Collect(ctx context.Context, o Options) (Run, error) {
 			raw, _ := json.Marshal(h.Series.Candles)
 			bytes += int64(len(raw)) * 2
 			candles += int64(len(h.Series.Candles))
-			if err = wait(ctx, o.Delay); err != nil {
-				return stop(err)
-			}
 		}
 		var catalogTotal int64
 		if err = r.Store.DB.QueryRow(ctx, `select count(*) from signalgen.stock_catalog s where active and provider='yahoo_finance' and exchange in ('XIDX','XNAS','XNYS') and not exists(select 1 from signalgen.market_candles c where c.symbol=s.symbol and c.scope='production' and c.valid_to is null)`).Scan(&catalogTotal); err != nil {
@@ -178,9 +184,6 @@ func (r *Runner) Collect(ctx context.Context, o Options) (Run, error) {
 		if o.Progress != nil {
 			o.Progress(run, item.Symbol, status)
 		}
-		if err = wait(ctx, o.Delay); err != nil {
-			return stop(err)
-		}
 	}
 	run, err = r.Store.Publish(ctx, run)
 	if err != nil {
@@ -263,5 +266,9 @@ func merge(old, new marketdata.History) marketdata.History {
 	}
 	sort.Slice(new.Series.Candles, func(i, j int) bool { return new.Series.Candles[i].Timestamp < new.Series.Candles[j].Timestamp })
 	new.Series.QualityWarnings = append(new.Series.QualityWarnings, "Includes validated local IDX bootstrap; overlap refreshed from Yahoo.")
+	for _, warning := range old.Series.QualityWarnings {
+		new.Series.QualityWarnings = append(new.Series.QualityWarnings, "Local bootstrap provenance: "+warning)
+	}
+	new.Series.QualityWarnings = append(new.Series.QualityWarnings, "Skipped-row counters cover the refreshed Yahoo segment; missing local historical dates are not independently verified.")
 	return new
 }

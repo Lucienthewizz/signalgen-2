@@ -31,6 +31,18 @@ activated by this report. See [configuration/rollback](../backend/RAILWAY_DEPLOY
 - Workflow action SHAs verified against the official action repositories.
   Actionlint v1.7.12 passed; outer guard boundary tests passed. Railway config
   fields checked against the official JSON schema.
+- Real manual collector preflight passed on commit
+  `a0d63c6fe84610e31f37de77fdae013762cd50aa`: IDX run
+  `17c1b30a-e610-43af-a932-be08211c2651` and US run
+  `4771feac-a19a-4c60-a00c-6dc088b91c0d`, three successful tickers and 195
+  inserted candles each. Total 390 smoke candles; no production publication.
+  [Full non-secret report](market-manual-preflight-20261119.json).
+- The initial manual attempt caught an empty Yahoo default URL before any
+  candle collection. The constructor now supplies/validates an HTTP(S) origin
+  before consuming a smoke event. A regression test covers this startup path.
+- [Workflow-only PR #2](https://github.com/Lucienthewizz/signalgen-2/pull/2)
+  contains four scheduler/guard files and no backend merge. Both activation
+  variables are explicitly false; repository Actions are enabled.
 
 ## Awaiting runtime evidence
 
@@ -40,7 +52,7 @@ activated by this report. See [configuration/rollback](../backend/RAILWAY_DEPLOY
 | Cloud API health, login, HTTPS/WSS | Not run |
 | Three-month IDX/US bootstrap | No complete coverage report yet |
 | Database size after bootstrap | Not measured; estimates cannot replace actual size |
-| Manual Yahoo collector smoke | Pending |
+| Manual Yahoo collector smoke | Passed, six real instruments, 390 candles; does not count as automatic proof |
 | Automatic schedule event 1 | No run ID yet |
 | Automatic schedule event 2 | No run ID yet |
 | Automatic schedule event 3 | No run ID yet |
@@ -60,5 +72,23 @@ from commits. No user data or subscription changes are part of this deployment.
 
 ## Final checks and publication
 
-Updated after the final verification and push. Pending runtime checks above
-must not be reported as passed merely because source/tests exist.
+- All 17 migrations plus three schema/policy scripts passed from a fresh
+  PostgreSQL 17 database with password authentication. Restricted-role archive
+  race tests passed, including three-success/six-failure/one-hour boundaries.
+  These scheduled-event fixtures are not live GitHub scheduler proof.
+- Full Go race regression and vet passed on the delivery source; contract
+  suites are included. Targeted real Redis integration also passed.
+- Final native API image passed `/health`, `/ready` and Docker's own healthcheck
+  with `PORT=18081` instead of 8080. Both allowed 5174 origins returned matching
+  CORS headers; localhost:5175 was rejected with 403. This is a local container
+  using the cloud database, not Railway HTTPS/WSS evidence.
+- Initial GitHub Backend CI reached the archive test and exposed a fixture
+  authentication mismatch (local trust versus CI SCRAM). Fixtures now set
+  their own isolated role password rather than inheriting the admin password;
+  the equivalent password-authenticated local test passed. Follow-up CI status
+  must be checked before calling the remote pipeline green.
+- Feature and checkpoint branches pushed and SHA verified. Workflow-only PR
+  remains open and unmerged. No main merge or automatic schedule activation.
+
+Pending runtime checks above must not be reported as passed merely because
+source/tests exist.

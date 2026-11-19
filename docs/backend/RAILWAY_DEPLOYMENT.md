@@ -86,6 +86,12 @@ API. Failed refreshes retain old candles with a warning rather than becoming a
 fresh successful result. Short history and missing archive are distinct from
 valid `No match`.
 
+Three months does not guarantee 100 or 200 daily candles per instrument. Rules
+with longer warmup and backtests outside the archived window must return an
+explicit availability/insufficient-history error. The preserved local archive
+remains available for longer historical comparisons; this deployment does not
+silently download five years or pretend three months covers a one-year study.
+
 An interrupted run preserves staged results and status for inspection. A new
 run uses a new external ID; it does not silently label a cancelled run complete.
 Completed external IDs are idempotent. Reusing an ID with different dates or a

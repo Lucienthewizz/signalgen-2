@@ -3,6 +3,7 @@ package marketarchive
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/Lucienthewizz/signalgen-2/backend/core"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/marketdata"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
@@ -35,11 +36,15 @@ func TestPostgresArchiveRevisionRLSAndSmoke(t *testing.T) {
 	if _, err = admin.Exec(ctx, `truncate signalgen.market_smoke_events,signalgen.market_smoke_tests,signalgen.market_publications,signalgen.market_sync_items,signalgen.market_candles,signalgen.market_sync_runs restart identity`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = admin.Exec(ctx, `alter role signalgen_market_writer login;alter role signalgen_api login`); err != nil {
+	// Disposable database only. CI requires SCRAM authentication, unlike the
+	// original local trust fixture; never inherit the administrator password.
+	const fixturePassword = "signalgen_archive_fixture_only"
+	if _, err = admin.Exec(ctx, `alter role signalgen_market_writer login password 'signalgen_archive_fixture_only';alter role signalgen_api login password 'signalgen_archive_fixture_only'`); err != nil {
 		t.Fatal(err)
 	}
 	writerConfig := config.Copy()
 	writerConfig.ConnConfig.User = "signalgen_market_writer"
+	writerConfig.ConnConfig.Password = fixturePassword
 	writerConfig.MaxConns = 4
 	writer, err := pgxpool.NewWithConfig(ctx, writerConfig)
 	if err != nil {
@@ -48,6 +53,7 @@ func TestPostgresArchiveRevisionRLSAndSmoke(t *testing.T) {
 	defer writer.Close()
 	apiConfig := config.Copy()
 	apiConfig.ConnConfig.User = "signalgen_api"
+	apiConfig.ConnConfig.Password = fixturePassword
 	api, err := pgxpool.NewWithConfig(ctx, apiConfig)
 	if err != nil {
 		t.Fatal(err)
@@ -180,5 +186,85 @@ func TestPostgresArchiveRevisionRLSAndSmoke(t *testing.T) {
 	state, err = store.FinishSmokeEvent(ctx, armed.ID, "automatic-1", nil, false)
 	if err != nil || state.Attempts != 1 || state.Successes != 0 {
 		t.Fatal("schedule evidence", state, err)
+	}
+	// These are isolated fixtures, not evidence of real GitHub scheduled runs.
+	for _, fixture := range []struct{ symbol, exchange, currency string }{{"BBRI.JK", "XIDX", "IDR"}, {"TLKM.JK", "XIDX", "IDR"}, {"AAPL", "XNAS", "USD"}, {"MSFT", "XNAS", "USD"}, {"NVDA", "XNAS", "USD"}} {
+		if _, err = admin.Exec(ctx, `insert into signalgen.stock_catalog(symbol,provider,provider_symbol,name,exchange,currency,active) values($1,'yahoo_finance',$1,'Fixture',$2,$3,true) on conflict(symbol) do nothing`, fixture.symbol, fixture.exchange, fixture.currency); err != nil {
+			t.Fatal(err)
+		}
+	}
+	passing, err := store.ArmSmoke(ctx, armed.DeploymentRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for attempt := 1; attempt <= 3; attempt++ {
+		external := fmt.Sprintf("fixture-automatic-success-%d", attempt)
+		if _, execute, err = store.BeginSmokeEvent(ctx, passing.ID, passing.DeploymentRef, external, "schedule"); err != nil || !execute {
+			t.Fatal(err)
+		}
+		completed := []Run{}
+		for _, market := range []string{"IDX", "US"} {
+			catalog, err := store.Catalog(ctx, market, "smoke")
+			if err != nil {
+				t.Fatal(err)
+			}
+			run, err := store.Begin(ctx, "smoke", market, external, "schedule", from, to, catalog)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, item := range catalog {
+				data := history
+				data.Series.Symbol = item.Symbol
+				if err = store.Stage(ctx, run, item, data, 1, nil); err != nil {
+					t.Fatal(err)
+				}
+			}
+			run, err = store.Publish(ctx, run)
+			if err != nil {
+				t.Fatal(err)
+			}
+			completed = append(completed, run)
+		}
+		state, err = store.FinishSmokeEvent(ctx, passing.ID, external, completed, true)
+		if err != nil || state.Successes != attempt {
+			t.Fatal(state, err)
+		}
+	}
+	if state.State != "passed" || !state.Disable {
+		t.Fatal("three successes did not close test", state)
+	}
+	if _, _, err = store.BeginSmokeEvent(ctx, passing.ID, passing.DeploymentRef, "fourth", "schedule"); !errors.Is(err, ErrSmokeClosed) {
+		t.Fatal("fourth success allowed", err)
+	}
+	failing, err := store.ArmSmoke(ctx, armed.DeploymentRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for attempt := 1; attempt <= 6; attempt++ {
+		external := fmt.Sprintf("fixture-automatic-failure-%d", attempt)
+		if _, execute, err = store.BeginSmokeEvent(ctx, failing.ID, failing.DeploymentRef, external, "schedule"); err != nil || !execute {
+			t.Fatal(err)
+		}
+		state, err = store.FinishSmokeEvent(ctx, failing.ID, external, nil, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if state.Attempts != 6 || state.State != "failed" || !state.Disable {
+		t.Fatal("six-attempt guard failed", state)
+	}
+	if _, _, err = store.BeginSmokeEvent(ctx, failing.ID, failing.DeploymentRef, "seventh", "schedule"); !errors.Is(err, ErrSmokeClosed) {
+		t.Fatal("seventh attempt allowed", err)
+	}
+	expired, err := store.ArmSmoke(ctx, armed.DeploymentRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = admin.Exec(ctx, `update signalgen.market_smoke_tests set armed_at=armed_at-interval '2 hours',expires_at=expires_at-interval '2 hours' where id=$1`, expired.ID); err != nil {
+		t.Fatal(err)
+	}
+	state, _, err = store.BeginSmokeEvent(ctx, expired.ID, expired.DeploymentRef, "late", "schedule")
+	if !errors.Is(err, ErrSmokeClosed) || state.State != "expired" {
+		t.Fatal("one-hour guard failed", state, err)
 	}
 }

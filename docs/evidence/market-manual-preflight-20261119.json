@@ -1,0 +1,49 @@
+{
+  "scope": "smoke",
+  "trigger": "manual",
+  "success": true,
+  "external_id": "local-manual-preflight-v2-20261119",
+  "finished_at": "2026-11-19T13:46:14.857814Z",
+  "runs": [
+    {
+      "id": "17c1b30a-e610-43af-a932-be08211c2651",
+      "revision": 1,
+      "scope": "smoke",
+      "market": "IDX",
+      "external_id": "local-manual-preflight-v2-20261119",
+      "trigger": "manual",
+      "from": "2026-08-20T01:00:00+08:00",
+      "to_exclusive": "2026-11-20T01:00:00+08:00",
+      "status": "published",
+      "total": 3,
+      "successful": 3,
+      "failed": 0,
+      "inserted": 195,
+      "changed": 0,
+      "unchanged": 0,
+      "started_at": "2026-11-19T21:45:46.32352+08:00",
+      "finished_at": "2026-11-19T21:46:00.07469+08:00"
+    },
+    {
+      "id": "4771feac-a19a-4c60-a00c-6dc088b91c0d",
+      "revision": 2,
+      "scope": "smoke",
+      "market": "US",
+      "external_id": "local-manual-preflight-v2-20261119",
+      "trigger": "manual",
+      "from": "2026-08-19T12:00:00+08:00",
+      "to_exclusive": "2026-11-19T13:00:00+08:00",
+      "status": "published",
+      "total": 3,
+      "successful": 3,
+      "failed": 0,
+      "inserted": 195,
+      "changed": 0,
+      "unchanged": 0,
+      "started_at": "2026-11-19T21:46:03.121901+08:00",
+      "finished_at": "2026-11-19T21:46:13.536275+08:00"
+    }
+  ],
+  "automatic_successes": 0,
+  "deployment_ref": "a0d63c6fe84610e31f37de77fdae013762cd50aa"
+}

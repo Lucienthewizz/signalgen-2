@@ -96,8 +96,21 @@ func (s *Store) FinishSmokeEvent(ctx context.Context, id, eventID string, runs [
 	}
 	defer tx.Rollback(context.Background())
 	var event string
-	err = tx.QueryRow(ctx, `update signalgen.market_smoke_events set finished_at=clock_timestamp(),success=$3,runs=$4 where test_id=$1 and event_id=$2 and finished_at is null returning trigger`, id, eventID, success, raw).Scan(&event)
+	err = tx.QueryRow(ctx, `select trigger from signalgen.market_smoke_events where test_id=$1 and event_id=$2 and finished_at is null for update`, id, eventID).Scan(&event)
 	if err != nil {
+		return Smoke{}, err
+	}
+	if success {
+		ids := []string{runs[0].ID, runs[1].ID}
+		var completed int
+		err = tx.QueryRow(ctx, `select count(distinct r.market) from signalgen.market_sync_runs r where r.id=any($1::uuid[]) and r.scope='smoke' and r.external_id=$2 and r.trigger=$3 and r.status='published' and r.total=3 and r.successful=3 and r.failed=0
+and not exists(select 1 from signalgen.market_sync_items i where i.run_id=r.id and (i.status<>'success' or i.symbol<>all(array['BBCA.JK','BBRI.JK','TLKM.JK','AAPL','MSFT','NVDA'])))`, ids, eventID, event).Scan(&completed)
+		if err != nil {
+			return Smoke{}, err
+		}
+		success = completed == 2
+	}
+	if _, err = tx.Exec(ctx, `update signalgen.market_smoke_events set finished_at=clock_timestamp(),success=$3,runs=$4 where test_id=$1 and event_id=$2`, id, eventID, success, raw); err != nil {
 		return Smoke{}, err
 	}
 	if event == "schedule" && success {

@@ -191,7 +191,11 @@ func historySource(baseURL string) (*marketdata.YahooFinance, error) {
 	if err != nil || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Scheme != "https" && parsed.Scheme != "http" {
 		return nil, fmt.Errorf("Yahoo base URL must be an HTTP(S) origin without credentials, query or fragment")
 	}
-	return marketdata.NewYahooFinance(baseURL, nil)
+	source, err := marketdata.NewYahooFinance(baseURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	return source.WithoutRetry(), nil
 }
 
 func writerReady(ctx context.Context, db *pgxpool.Pool) error {

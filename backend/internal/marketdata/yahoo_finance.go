@@ -24,9 +24,18 @@ var (
 // YahooFinance reads the same public Yahoo Finance chart data commonly used
 // by yfinance, but keeps SignalGen's active backend entirely in Go.
 type YahooFinance struct {
-	baseURL string
-	client  *http.Client
-	now     func() time.Time
+	baseURL       string
+	client        *http.Client
+	now           func() time.Time
+	singleAttempt bool
+}
+
+// WithoutRetry gives a scheduled collector sole ownership of pacing/backoff.
+// Interactive API requests retain the existing short, bounded retry behavior.
+func (provider *YahooFinance) WithoutRetry() *YahooFinance {
+	copy := *provider
+	copy.singleAttempt = true
+	return &copy
 }
 
 func NewYahooFinance(baseURL string, client *http.Client) (*YahooFinance, error) {
@@ -132,7 +141,11 @@ const maxYahooResponseBytes = 4 << 20
 func (provider *YahooFinance) fetchChart(ctx context.Context, endpoint string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	for attempt := 0; attempt < 2; attempt++ {
+	attempts := 2
+	if provider.singleAttempt {
+		attempts = 1
+	}
+	for attempt := 0; attempt < attempts; attempt++ {
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
 			return nil, ErrUnavailable
@@ -154,7 +167,7 @@ func (provider *YahooFinance) fetchChart(ctx context.Context, endpoint string) (
 			delay, retry = retryDelay(response.Header.Get("Retry-After"), retry)
 			_ = response.Body.Close()
 		}
-		if !retry || attempt == 1 {
+		if !retry || attempt == attempts-1 {
 			if requestErr == nil {
 				return nil, &HTTPError{Status: response.StatusCode, RetryAfter: delay}
 			}
