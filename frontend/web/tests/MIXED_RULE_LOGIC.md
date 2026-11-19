@@ -5,9 +5,10 @@ last condition has no connector. AND is evaluated before OR; the expression belo
 the editor shows the grouping, for example `1 OR (2 AND 3)`. Arbitrary parentheses
 and nested groups are not part of this change.
 
-Default logic applies to connectors without an override. Individual selectors
-can override it. Removing a condition keeps the preceding connector and
-removes a trailing connector. Existing rules without overrides retain their
+The editor exposes only per-condition connectors. New rules start with AND.
+Existing rules inherit their stored AND/OR until a connector is changed; the
+legacy top-level field remains in the API for compatibility. Removing a condition
+keeps the preceding connector and removes a trailing connector. Existing rules without overrides retain their
 original AND/OR behavior. Preview, Screener and captured journal evidence describe
 mixed matches without claiming every individual condition passed.
 
@@ -30,7 +31,8 @@ as before; the client does not decide whether a rule matched.
 - `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chromium node scripts/test-mixed-rule-logic.mjs`.
   Uses synthetic accounts/API responses only: three-condition mixed rule, draft
   restore, save/reopen, preview, deletion, keyboard Select focus and 1218/390px
-  layouts. Does not write to a user's real account.
+  layouts, full-width centered connectors, compact edit dialog and legacy OR
+  preservation. Does not write to a user's real account.
 - Core truth tables cover `A OR (B AND C)`, `(A AND B) OR C`, legacy AND/OR,
   connector validation/serialization, short-circuit behavior and private screening
   and backtest decisions. Rule-store tests cover persistence/versioned hash changes.

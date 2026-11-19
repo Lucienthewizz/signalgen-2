@@ -741,32 +741,10 @@ export function ServerRulesPanel({
                     automatic order.
                   </FieldDescription>
                 </Field>
-                <Field>
-                  <FieldLabel htmlFor="rule-logic">Default logic</FieldLabel>
-                  <Select
-                    value={definition.logic}
-                    onValueChange={(value) =>
-                      setDefinition((current) => ({
-                        ...current,
-                        logic: (value as "AND" | "OR") || "AND",
-                      }))
-                    }
-                  >
-                    <SelectTrigger id="rule-logic">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="AND">AND</SelectItem>
-                        <SelectItem value="OR">OR</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  <FieldDescription>
-                    Default for connectors you have not changed below.
-                  </FieldDescription>
-                </Field>
-                <Field data-invalid={submitted && !!validation.cooldown}>
+                <Field
+                  className="rule-cooldown-field"
+                  data-invalid={submitted && !!validation.cooldown}
+                >
                   <FieldLabel htmlFor="rule-cooldown">
                     Cooldown (seconds)
                   </FieldLabel>
@@ -1005,7 +983,10 @@ export function ServerRulesPanel({
                       )}
                       {index < definition.conditions.length - 1 && (
                         <div className="rule-condition-connector">
-                          <FieldLabel htmlFor={`condition-logic-${index}`}>
+                          <FieldLabel
+                            className="sr-only"
+                            htmlFor={`condition-logic-${index}`}
+                          >
                             Join condition {index + 1} to {index + 2}
                           </FieldLabel>
                           <Select
