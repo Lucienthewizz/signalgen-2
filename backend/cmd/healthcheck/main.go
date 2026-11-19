@@ -6,12 +6,14 @@ import (
 	"os"
 
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/platform/healthcheck"
+	platformhttp "github.com/Lucienthewizz/signalgen-2/backend/internal/platform/http"
 )
 
 func main() {
-	url := os.Getenv("SIGNALGEN_HEALTHCHECK_URL")
-	if url == "" {
-		url = "http://127.0.0.1:8080/ready"
+	url, err := platformhttp.ReadinessURL(os.Getenv("SIGNALGEN_HEALTHCHECK_URL"), os.Getenv("SIGNALGEN_GO_API_ADDR"), os.Getenv("PORT"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 	client := &http.Client{Timeout: healthcheck.ProbeTimeout}
 	if err := check(client, url); err != nil {

@@ -13,6 +13,14 @@ arsip, tidak menyimpan izin/sesi/rule privat, serta dapat dilewati ketika gagal.
 Arsip historis tetap terpisah; perubahan ini tidak memigrasikan candle ke
 PostgreSQL. [Konfigurasi dan batas Redis](backend/REDIS_MARKET_CACHE.md).
 
+Tahap deployment 19 November: mode opsional `postgres_archive` membaca candle
+harian IDX/AS dari arsip Supabase tiga bulan; intraday tetap Yahoo/cache.
+Ini tahap terpisah dari penambahan Redis. Sesi/rule/indikator dan protokol
+Model A tidak berubah. Checkpoint `a652063`; branch kerja
+`feature/backend-railway-deploy`. [Panduan Railway dan scheduler](backend/RAILWAY_DEPLOYMENT.md)
+serta [bukti aktual](evidence/railway-deployment-20261119.md) membedakan kode,
+migration cloud, bootstrap dan eksekusi otomatis yang benar-benar teruji.
+
 Keputusan implementasi 5 Oktober 2026: pengguna memilih **Model A** untuk alur
 aktif. Client Go/WASM menghitung indikator, server menjalankan private decision
 melalui WebSocket. Model B tetap bahan eksperimen, bukan jalur produk kedua.

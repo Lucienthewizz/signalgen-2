@@ -9,6 +9,14 @@ OHLCV, dengan batas memori/TTL dan fallback ke provider. Akses akun tetap
 diperiksa server pada setiap alur; Redis bukan arsip utama atau bukti target
 performa sudah tercapai. [Detail implementasi](backend/REDIS_MARKET_CACHE.md).
 
+Tahap deployment 19 November: Railway Free untuk satu API dan Redis privat;
+arsip harian IDX/AS tiga bulan di Supabase dengan batas kapasitas, revisi
+transaksional dan role penulis terpisah. Scheduler GitHub Actions wajib dibuktikan
+melalui tiga pemicu otomatis lima menit sebelum jadwal harian diaktifkan.
+Arsip lokal lima tahun tetap disimpan. Target ini tidak menjanjikan 24/7 atau
+data semua ticker selalu tersedia. [Konfigurasi dan rollback](backend/RAILWAY_DEPLOYMENT.md);
+[status pengujian/deployment](evidence/railway-deployment-20261119.md).
+
 Keputusan implementasi 5 Oktober 2026: alur screening aktif memakai **Model A**
 (indikator di Go/WASM client, private decision di Go server melalui WebSocket).
 Model B hanya pembanding penelitian. Benchmark dan persetujuan pembimbing tidak

@@ -26,6 +26,10 @@ type ArchiveProvider struct {
 	warnings  []string
 }
 
+// Window exposes only validated archive bounds for a one-time cloud bootstrap.
+// The directory and its five-year files remain read-only.
+func (provider *ArchiveProvider) Window() (time.Time, time.Time) { return provider.from, provider.to }
+
 var _ marketdata.Provider = (*ArchiveProvider)(nil)
 
 // NewArchiveProvider validates metadata at startup without downloading anything

@@ -58,6 +58,9 @@ jobs:
       - name: Test read-only demo preflight
         run: node --test backend/scripts/demo_preflight.test.mjs
 
+      - name: Verify scheduler outer guard
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
       - name: Run backend tests
         working-directory: backend
         run: go test -race ./...
@@ -73,6 +76,12 @@ jobs:
       - name: Run Go static analysis
         working-directory: backend
         run: go vet ./...
+
+      - name: Verify market archive revisions and restricted writer
+        working-directory: backend
+        env:
+          SIGNALGEN_ARCHIVE_TEST_PG_URL: ${{ env.SIGNALGEN_TEST_PG_URL }}
+        run: go test -race ./internal/marketarchive -count=1
 
       - name: Scan Go dependency vulnerabilities
         working-directory: backend

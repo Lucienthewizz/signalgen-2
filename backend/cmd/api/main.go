@@ -42,7 +42,10 @@ func main() {
 	publishableKey := requiredEnvironment("SUPABASE_PUBLISHABLE_KEY")
 	databaseURL := requiredEnvironment("SUPABASE_DB_URL")
 	yahooFinanceBaseURL := environment("YAHOO_FINANCE_BASE_URL", "https://query1.finance.yahoo.com")
-	address := environment("SIGNALGEN_GO_API_ADDR", ":8080")
+	address, err := platformhttp.ListenAddress(os.Getenv("SIGNALGEN_GO_API_ADDR"), os.Getenv("PORT"))
+	if err != nil {
+		log.Fatal(err)
+	}
 	allowedOrigins := commaSeparatedEnvironment("SIGNALGEN_CORS_ORIGINS")
 	passwordResetRedirectURL := environment("SIGNALGEN_PASSWORD_RESET_REDIRECT_URL", "http://127.0.0.1:5174/?view=reset-password")
 	maxActiveSessions := positiveIntegerEnvironment("SIGNALGEN_MAX_ACTIVE_SESSIONS", 1)
@@ -84,7 +87,7 @@ func main() {
 	universeStore := universe.NewPostgresRepository(database)
 	upstreamProvider, err := configuredMarketProvider(
 		environment("SIGNALGEN_MARKET_DATA_MODE", "yahoo"),
-		os.Getenv("SIGNALGEN_IDX_HISTORY_DIR"), yahooFinanceBaseURL,
+		os.Getenv("SIGNALGEN_IDX_HISTORY_DIR"), yahooFinanceBaseURL, database,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -134,6 +137,9 @@ func main() {
 	portfolioStore := &portfolio.PostgresStore{DB: database}
 	// Midtrans checkout is enabled only when a Server Key is configured.
 	readinessChecks := []apihttp.ReadinessChecker{platformdb.PostgresReadiness{Pool: database}, platformdb.RuntimePrivileges{Pool: database}, datasets, portfolioStore}
+	if archive, ok := upstreamProvider.(interface{ Ready(context.Context) error }); ok {
+		readinessChecks = append(readinessChecks, archive)
+	}
 	var paymentOptions []apihttp.ServerOption
 	if gateway := payments.NewMidtrans(os.Getenv("MIDTRANS_SERVER_KEY"), os.Getenv("MIDTRANS_IS_PRODUCTION") == "true"); gateway != nil {
 		paymentStore := &payments.PostgresStore{DB: database}
