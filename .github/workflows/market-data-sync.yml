@@ -1,0 +1,56 @@
+name: Daily market archive
+
+on:
+  schedule:
+    - cron: '17 12 * * 1-5'
+    - cron: '37 2 * * 2-6'
+  workflow_dispatch:
+    inputs:
+      market:
+        type: choice
+        options: [IDX, US]
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    # Enable only after bootstrap coverage and three automatic smoke events pass.
+    if: vars.SIGNALGEN_DAILY_ARCHIVE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    concurrency:
+      group: market-production-${{ inputs.market || (github.event.schedule == '17 12 * * 1-5' && 'IDX' || 'US') }}
+      cancel-in-progress: false
+    env:
+      DEPLOY_REF: ${{ vars.SIGNALGEN_DEPLOY_REF }}
+      MARKET: ${{ inputs.market || (github.event.schedule == '17 12 * * 1-5' && 'IDX' || 'US') }}
+    steps:
+      - name: Validate pinned deployment
+        shell: bash
+        run: '[[ "$DEPLOY_REF" =~ ^[a-f0-9]{40}$ ]]'
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.DEPLOY_REF }}
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Collect and publish
+        working-directory: backend
+        env:
+          SIGNALGEN_MARKET_WRITER_URL: ${{ secrets.SIGNALGEN_MARKET_WRITER_URL }}
+          EVENT: ${{ github.event_name == 'schedule' && 'schedule' || 'manual' }}
+        run: >-
+          go run ./cmd/syncmarket -scope production -market "$MARKET"
+          -event "$EVENT" -external-id "${GITHUB_RUN_ID}"
+          -report ../market-coverage.json
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: always()
+        with:
+          name: market-${{ env.MARKET }}-${{ github.run_id }}
+          path: market-coverage.json
+          if-no-files-found: warn
+          retention-days: 7
