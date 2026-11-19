@@ -84,7 +84,7 @@ func TestPostgresArchiveRevisionRLSAndSmoke(t *testing.T) {
 	if first.Inserted != 25 || first.Changed != 0 {
 		t.Fatalf("first %+v", first)
 	}
-	live, _ := marketdata.NewYahooFinance("", nil)
+	live, _ := marketdata.NewYahooFinance("https://query1.finance.yahoo.com", nil)
 	provider, _ := NewProvider(api, live)
 	if err = provider.Ready(ctx); err != nil {
 		t.Fatal(err)

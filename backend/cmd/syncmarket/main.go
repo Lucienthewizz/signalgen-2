@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -98,6 +99,10 @@ func run() error {
 	if *external == "" {
 		return fmt.Errorf("external-id is required")
 	}
+	live, err := historySource(os.Getenv("YAHOO_FINANCE_BASE_URL"))
+	if err != nil {
+		return err
+	}
 	var smoke marketarchive.Smoke
 	if *scope == "smoke" {
 		var unlock func()
@@ -121,10 +126,6 @@ func run() error {
 		var finish context.CancelFunc
 		ctx, finish = context.WithDeadline(ctx, smoke.Expires)
 		defer finish()
-	}
-	live, err := marketdata.NewYahooFinance("", nil)
-	if err != nil {
-		return err
 	}
 	runner := marketarchive.Runner{Store: store, Source: live}
 	options := marketarchive.Options{Scope: *scope, ExternalID: *external, Trigger: *event, Delay: *pace, Now: time.Now().UTC()}
@@ -180,6 +181,17 @@ func run() error {
 		return fmt.Errorf("collection is partial or failed; inspect coverage report")
 	}
 	return nil
+}
+
+func historySource(baseURL string) (*marketdata.YahooFinance, error) {
+	if baseURL == "" {
+		baseURL = "https://query1.finance.yahoo.com"
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return nil, fmt.Errorf("Yahoo base URL must be an HTTP(S) origin without credentials, query or fragment")
+	}
+	return marketdata.NewYahooFinance(baseURL, nil)
 }
 
 func writerReady(ctx context.Context, db *pgxpool.Pool) error {
