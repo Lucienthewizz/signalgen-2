@@ -24,6 +24,7 @@
     "format": "prettier --write src vite.config.ts index.html",
     "format:check": "prettier --check src vite.config.ts index.html",
     "test:backtest": "node scripts/test-browser.mjs --backtest",
+    "test:result-explorer": "node scripts/test-result-explorer.mjs",
     "test:admin": "node scripts/test-browser.mjs --admin"
   },
   "dependencies": {

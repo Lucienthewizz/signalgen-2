@@ -1,3 +1,5 @@
+import { StudyResultExplorer } from "@/components/study-result-explorer";
+import { signalRecord, type ResultRecord } from "@/analysis/result-explorer";
 import "@/styles/backtest-results.css";
 import { StudyRecovery, useStudyRecovery } from "@/components/study-recovery";
 import { backtestValueTone } from "@/analysis/backtest-presentation";
@@ -106,6 +108,7 @@ export function SignalStudyPanel({
   useEffect(() => {
     setComparison(null);
   }, [userId]);
+  const [detail, setDetail] = useState<ResultRecord | null>(null);
   const [progress, setProgress] = useState<StudyProgress | null>(null),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
@@ -118,6 +121,9 @@ export function SignalStudyPanel({
     [total, setTotal] = useState(0),
     [groupPage, setGroupPage] = useState(0);
   const [horizonPage, setHorizonPage] = useState(0);
+  useEffect(() => {
+    setDetail(null);
+  }, [userId, progress?.context.id]);
   const recovery = useStudyRecovery(
     authenticated ? userId : undefined,
     "backtest",
@@ -761,12 +767,21 @@ export function SignalStudyPanel({
                 {ready!.config.n_steps}. Catalog{" "}
                 {ready!.catalog_hash.slice(0, 20)}…
               </p>
-              <p>
+              <p id="study-result-summary">
                 Signals: {selectedMetrics!.signals} · Evaluated swing:{" "}
                 {selectedMetrics!.evaluated} · Missing future data:{" "}
                 {selectedMetrics!.missing} · Win rate:{" "}
                 {pct(selectedMetrics!.win_rate)}
               </p>
+              <StudyResultExplorer
+                progress={progress}
+                userId={userId}
+                busy={busy}
+                closed={closed}
+                rows={rows}
+                selected={detail}
+                onSelect={setDetail}
+              />
               <section
                 className="study-comparison"
                 aria-label="Compare historical studies"
@@ -986,7 +1001,9 @@ export function SignalStudyPanel({
               </p>
               <div className="study-table-scroll">
                 <table>
-                  <caption>All signal outcomes by horizon</caption>
+                  <caption id="study-result-horizons">
+                    All signal outcomes by horizon
+                  </caption>
                   <thead>
                     <tr>
                       <th>Horizon</th>
@@ -1082,7 +1099,7 @@ export function SignalStudyPanel({
                   Export coverage CSV
                 </Button>
               </div>
-              <details>
+              <details id="study-result-stocks">
                 <summary>By stock and signal day (swing outcomes)</summary>
                 {[progress.bySymbol, progress.byDay].map((items, i) => (
                   <div key={i} className="study-table-scroll">
@@ -1130,7 +1147,7 @@ export function SignalStudyPanel({
                 </Button>
               </details>
               <div className="study-table-scroll">
-                <table className="study-signal-table">
+                <table id="study-result-signals" className="study-signal-table">
                   <caption>
                     Signal details — T+{ready!.config.n_steps} and swing;{" "}
                     {total} signals
@@ -1176,6 +1193,16 @@ export function SignalStudyPanel({
                           )}
                         >
                           {e.swing.status} · {pct(e.swing.return_pct)}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label={`View ${e.symbol} signal details`}
+                            onClick={() =>
+                              setDetail(signalRecord(e, ready!.currency))
+                            }
+                          >
+                            Details
+                          </Button>
                         </td>
                       </tr>
                     ))}

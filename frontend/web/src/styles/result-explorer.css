@@ -1,0 +1,110 @@
+.result-explorer {
+  display: grid;
+  gap: 16px;
+  margin-block: 20px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.result-explorer__status,
+.result-explorer__nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 12px;
+}
+.result-explorer [data-coverage="Complete"] {
+  color: var(--green);
+}
+.result-explorer :is([data-coverage="Partial"], [data-coverage="Stopped"]) {
+  color: var(--warning);
+}
+.result-explorer__insights,
+.result-explorer__detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+.result-explorer__insights div,
+.result-explorer__detail div {
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+  padding-block: 8px;
+}
+.result-explorer__insights dt,
+.result-explorer__detail dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.result-explorer__insights dd,
+.result-explorer__detail dd {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.result-explorer summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 44px;
+  align-content: center;
+}
+.result-explorer__heatmap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+  gap: 8px;
+  margin-block: 16px;
+}
+.result-explorer__heatmap button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.result-explorer__heatmap button[data-value-tone="positive"] {
+  background: var(--accent-surface);
+  color: var(--green);
+  border-color: var(--accent-border);
+}
+.result-explorer__heatmap button[data-value-tone="negative"] {
+  background: var(--danger-surface);
+  color: var(--danger-text);
+  border-color: var(--danger-border);
+}
+.result-explorer__heatmap button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.result-explorer__nav button {
+  min-height: 44px;
+}
+#bt-result-summary,
+#bt-result-chart,
+#bt-result-stocks,
+#bt-result-trades,
+#study-result-summary,
+#study-result-horizons,
+#study-result-stocks,
+#study-result-signals {
+  scroll-margin-top: 90px;
+}
+@media (max-width: 600px) {
+  .result-explorer {
+    padding: 16px;
+  }
+  .result-explorer__detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,3 +1,5 @@
+import { ResultExplorer } from "@/components/result-explorer";
+import { portfolioRecord, type ResultRecord } from "@/analysis/result-explorer";
 import "@/styles/backtest-results.css";
 import { useRef, useEffect, useState, useMemo } from "react";
 import { singaporeDateTime } from "@/lib/calendar";
@@ -56,6 +58,7 @@ export function BacktestResults({
   archived: boolean;
   onClose: () => void;
 }) {
+  const [detail, setDetail] = useState<ResultRecord | null>(null);
   const [horizonIndex, setHorizonIndex] = useState(result.horizons.length - 1);
   const [page, setPage] = useState(0);
   const [horizonPage, setHorizonPage] = useState(
@@ -108,7 +111,37 @@ export function BacktestResults({
         }).format(value);
   const percent = (value: number | null) =>
     value === null ? "—" : `${number(value)}%`;
+  const explorerRecords = useMemo(
+    () =>
+      selectedHorizon.trades.map((t) =>
+        portfolioRecord(t, currency, selectedHorizon.step),
+      ),
+    [selectedHorizon, currency],
+  );
+  const ranked = selectedHorizon.by_symbol
+    .filter((s) => s.closed_trades > 0 && s.avg_return_pct !== null)
+    .sort((a, b) => b.avg_return_pct! - a.avg_return_pct!);
+  const insightRows: [string, string][] = [
+    [
+      "Best stock · average closed return",
+      ranked.length
+        ? `${ranked[0].symbol} · ${percent(ranked[0].avg_return_pct)}`
+        : "No closed trades",
+    ],
+    [
+      "Worst stock · average closed return",
+      ranked.length
+        ? `${ranked.at(-1)!.symbol} · ${percent(ranked.at(-1)!.avg_return_pct)}`
+        : "No closed trades",
+    ],
+    ["Average closed return", percent(selectedHorizon.metrics.avg_return_pct)],
+    [
+      "Open / skipped entries",
+      `${selectedHorizon.metrics.open_trades} / ${selectedHorizon.skipped.length}`,
+    ],
+  ];
   function selectHorizon(index: number) {
+    setDetail(null);
     setHorizonIndex(index);
     setPage(0);
     setEquityPage(0);
@@ -161,6 +194,38 @@ export function BacktestResults({
           </Select>
         </Field>
       </div>
+      <ResultExplorer
+        status="Complete"
+        coverage={`Completed simulation for ${selectedHorizon.by_symbol.length} stocks in the selected source; ${result.warnings.length} source notices. Open trades remain unrealized.`}
+        insights={insightRows}
+        records={explorerRecords}
+        scope={`${selectedHorizon.label} · all accepted trades, including open positions; independent holdings per horizon`}
+        sections={[
+          { label: "Summary", id: "bt-result-summary" },
+          { label: "Chart", id: "bt-result-chart" },
+          { label: "By stock", id: "bt-result-stocks" },
+          { label: "Trades", id: "bt-result-trades" },
+        ]}
+        selected={detail}
+        onSelect={setDetail}
+        onReport={async () => ({
+          title: `Signalgen · ${title}`,
+          description: `Portfolio simulation · ${selectedHorizon.label} · ${result.config.from}–${result.config.to} · ${currency}. Capital ${result.config.initial_capital}; sizing ${result.config.position_sizing} ${result.config.position_size}; commission ${result.config.commission_pct}%; slippage ${result.config.slippage_pct}%. Notices: ${result.warnings.join("; ") || "None supplied"}`,
+          status:
+            "Completed for the selected source; open positions remain unrealized.",
+          metrics: [
+            ...insightRows,
+            ["Realized P&L", money(selectedHorizon.metrics.net_pl_cash)],
+            ["Total return", percent(selectedHorizon.metrics.total_return_pct)],
+          ],
+          records: explorerRecords,
+          curve: selectedHorizon.equity_curve.map((p) => ({
+            label: p.timestamp.slice(0, 10) || "Start",
+            value: p.equity,
+          })),
+          chartTitle: `Equity (${currency}) · ${selectedHorizon.label}`,
+        })}
+      />
       <div className="backtest-actions">
         <Button
           variant="outline"
@@ -332,7 +397,7 @@ export function BacktestResults({
           </Button>
         </div>
       )}
-      <dl className="backtest-metrics">
+      <dl id="bt-result-summary" className="backtest-metrics">
         {[
           ["Final equity", money(selectedHorizon.metrics.final_equity)],
           ["Realized P&L", money(selectedHorizon.metrics.net_pl_cash)],
@@ -382,16 +447,19 @@ export function BacktestResults({
           </div>
         ))}
       </dl>
-      <EquityChart
-        key={selectedHorizon.step}
-        horizon={selectedHorizon}
-        currency={currency}
-      />
+      <div id="bt-result-chart">
+        <EquityChart
+          key={selectedHorizon.step}
+          horizon={selectedHorizon}
+          currency={currency}
+        />
+      </div>
       <div
         className="backtest-table-scroll"
         tabIndex={0}
         role="region"
         aria-label="Results by stock"
+        id="bt-result-stocks"
       >
         <table>
           <caption>
@@ -492,7 +560,7 @@ export function BacktestResults({
             role="region"
             aria-label="Backtest trades"
           >
-            <table className="backtest-trades-table">
+            <table id="bt-result-trades" className="backtest-trades-table">
               <caption>Trades · {selectedHorizon.label}</caption>
               <thead>
                 <tr>
@@ -564,6 +632,22 @@ export function BacktestResults({
                         {trade.status === "open"
                           ? "Open · unrealized"
                           : "Closed"}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`View ${trade.symbol} trade details`}
+                          onClick={() =>
+                            setDetail(
+                              portfolioRecord(
+                                trade,
+                                currency,
+                                selectedHorizon.step,
+                              ),
+                            )
+                          }
+                        >
+                          Details
+                        </Button>
                       </td>
                     </tr>
                   ))}
