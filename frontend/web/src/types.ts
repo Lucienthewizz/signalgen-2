@@ -122,6 +122,7 @@ export type RuleCondition = {
   left: string;
   op: "<" | "<=" | ">" | ">=" | "CROSS_UP" | "CROSS_DOWN";
   right: string | number;
+  next_logic?: "AND" | "OR";
 };
 
 export type UserRuleDefinition = {

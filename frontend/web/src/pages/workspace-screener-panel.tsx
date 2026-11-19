@@ -1,3 +1,9 @@
+import {
+  conditionLogic,
+  ruleLogic,
+  ruleMatchLabel,
+  ruleSummary as ruleDefinitionSummary,
+} from "@/lib/rule-workflow";
 import AnimatedContent from "@/components/react-bits/AnimatedContent";
 import AnimatedList from "@/components/react-bits/AnimatedList";
 import Stepper from "@/components/react-bits/Stepper";
@@ -946,10 +952,9 @@ function LatestScreenerPanel({
                   </Badge>
                   {conditions.length > 0 && (
                     <Badge variant="outline" className="screener-match-mode">
-                      Match{" "}
-                      {selectedRule?.definition?.logic === "OR" ? "any" : "all"}{" "}
-                      {conditions.length}{" "}
-                      {conditions.length === 1 ? "condition" : "conditions"}
+                      {ruleLogic(selectedRule?.definition) === "MIXED"
+                        ? ruleMatchLabel(selectedRule?.definition)
+                        : `Match ${ruleLogic(selectedRule?.definition) === "OR" ? "any" : "all"} ${conditions.length} ${conditions.length === 1 ? "condition" : "conditions"}`}
                     </Badge>
                   )}
                   {conditions.length > 0 && (
@@ -979,6 +984,17 @@ function LatestScreenerPanel({
                               {operatorSymbols[condition.op]}
                             </span>
                             {conditionSummary(condition)}
+                            {selectedRule?.definition &&
+                              index <
+                                selectedRule.definition.conditions.length -
+                                  1 && (
+                                <strong>
+                                  {conditionLogic(
+                                    selectedRule.definition,
+                                    index,
+                                  )}
+                                </strong>
+                              )}
                           </li>
                         ),
                       )}
@@ -1352,7 +1368,7 @@ function LatestScreenerPanel({
                 <p>
                   {decisionReasons(
                     detailRow.decision.reason_codes,
-                    evidenceRule?.definition?.logic,
+                    ruleLogic(evidenceRule?.definition),
                   )}
                 </p>
                 <div className="stock-detail__evidence">
@@ -1362,6 +1378,9 @@ function LatestScreenerPanel({
                       ? `· rule version ${evidenceRule.version}`
                       : ""}
                   </h4>
+                  {evidenceRule?.definition && (
+                    <p>{ruleDefinitionSummary(evidenceRule.definition)}</p>
+                  )}
                   {evidenceRule?.definition ? (
                     <ul>
                       {evidenceRule.definition.conditions.map(
@@ -1834,7 +1853,7 @@ function LatestScreenerPanel({
                       <TableCell data-label="Reason">
                         {decisionReasons(
                           row.decision.reason_codes,
-                          evidenceRule?.definition?.logic,
+                          ruleLogic(evidenceRule?.definition),
                         )}
                         <Button
                           variant="link"

@@ -129,11 +129,15 @@ export function validatedRuleDraft(value: unknown): RuleDraft | null {
     return null;
   if (
     !d.conditions.every(
-      (c) =>
+      (c, index) =>
         c &&
+        (index < d.conditions.length - 1 || c.next_logic === undefined) &&
         typeof c.left === "string" &&
         isIndicator(c.left) &&
         ["<", "<=", ">", ">=", "CROSS_UP", "CROSS_DOWN"].includes(c.op) &&
+        (c.next_logic === undefined ||
+          c.next_logic === "AND" ||
+          c.next_logic === "OR") &&
         (typeof c.right === "number"
           ? Number.isFinite(c.right)
           : typeof c.right === "string" && c.right.length <= 100),
@@ -158,6 +162,7 @@ export function validatedRuleDraft(value: unknown): RuleDraft | null {
         left: c.left,
         op: c.op,
         right: c.right,
+        ...(c.next_logic ? { next_logic: c.next_logic } : {}),
       })),
     },
     editingId: draft.editingId,

@@ -120,3 +120,19 @@ test("unavailable, malformed, oversized and expired storage degrade safely", () 
     assert.equal(load({ getItem: () => raw }).readRuleDraft("a"), null);
   }
 });
+test("mixed rule connectors survive account-scoped draft restoration", () => {
+  const storage = load(),
+    value = draft();
+  value.definition.conditions = [
+    { left: "PRICE", op: ">", right: 10, next_logic: "OR" },
+    { left: "EMA9", op: ">", right: "EMA20", next_logic: "AND" },
+    { left: "RSI14", op: ">", right: 50 },
+  ];
+  assert.equal(storage.saveRuleDraft("mixed-owner", value), true);
+  const restored = load().readRuleDraft("mixed-owner");
+  assert.equal(restored.definition.conditions[0].next_logic, "OR");
+  assert.equal(restored.definition.conditions[1].next_logic, "AND");
+  assert.equal(load().readRuleDraft("other-mixed-owner"), null);
+  value.definition.conditions[0].next_logic = "XOR";
+  assert.equal(storage.validatedRuleDraft(value), null);
+});

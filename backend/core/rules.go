@@ -8,6 +8,8 @@ type Condition struct {
 	Left  string      `json:"left"`
 	Op    string      `json:"op"`
 	Right interface{} `json:"right"`
+	// NextLogic joins this condition to the next. Empty inherits RuleSnapshot.Logic.
+	NextLogic string `json:"next_logic,omitempty"`
 }
 
 // RuleSnapshot merepresentasikan konfigurasi aturan screening yang dibuat oleh pengguna.

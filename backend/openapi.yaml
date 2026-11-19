@@ -3128,6 +3128,10 @@ components:
           oneOf:
             - {type: string}
             - {type: number}
+        next_logic:
+          type: string
+          enum: [AND, OR]
+          description: Connector to the next condition. Omit on the last condition. Missing connectors inherit the rule logic. AND is evaluated before OR.
     UserRuleDefinition:
       type: object
       additionalProperties: false

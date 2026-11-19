@@ -24,7 +24,12 @@ import {
 } from "@/lib/workspace-feedback";
 import { marketCandleDate, marketTimezone } from "@/lib/data-freshness";
 import { formatStockPrice } from "@/lib/stock-market";
-import { conditionSummary } from "@/lib/rule-workflow";
+import {
+  conditionSummary,
+  ruleLogic,
+  ruleMatchLabel,
+  ruleSummary,
+} from "@/lib/rule-workflow";
 
 export function JournalScreeningVerification({
   draft,
@@ -153,17 +158,16 @@ export function JournalScreeningVerification({
             <p className="journal-verification-reason">
               {decisionReasons(
                 row.decision.reason_codes,
-                draft.ruleSnapshot?.definition?.logic,
+                ruleLogic(draft.ruleSnapshot?.definition),
               )}
             </p>
             {conditions?.length ? (
               <>
                 <h4>
                   Condition evidence ·{" "}
-                  {draft.ruleSnapshot?.definition?.logic === "OR"
-                    ? "Match any"
-                    : "Match all"}
+                  {ruleMatchLabel(draft.ruleSnapshot?.definition)}
                 </h4>
+                <p>{ruleSummary(draft.ruleSnapshot?.definition)}</p>
                 <Table>
                   <TableHeader>
                     <TableRow>

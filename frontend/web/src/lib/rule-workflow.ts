@@ -111,10 +111,73 @@ export function conditionSummary(condition: RuleCondition) {
   return `${indicatorLabel(condition.left)} ${operatorLabels[condition.op] ?? condition.op} ${right}`;
 }
 
+export function conditionLogic(definition: UserRuleDefinition, index: number) {
+  return definition.conditions[index]?.next_logic ?? definition.logic;
+}
+
+export function ruleLogic(
+  definition?: UserRuleDefinition,
+): "AND" | "OR" | "MIXED" | undefined {
+  if (!definition) return undefined;
+  const connectors = definition.conditions
+    .slice(0, -1)
+    .map((_, index) => conditionLogic(definition, index));
+  if (!connectors.length) return definition.logic;
+  return connectors.every((value) => value === connectors[0])
+    ? connectors[0]
+    : "MIXED";
+}
+
+export function ruleMatchLabel(definition?: UserRuleDefinition) {
+  const logic = ruleLogic(definition);
+  return logic === "MIXED"
+    ? "Mixed AND / OR"
+    : logic === "OR"
+      ? "Match any condition"
+      : "Match all conditions";
+}
+
+export function ruleExpression(
+  definition: UserRuleDefinition,
+  numbered = false,
+) {
+  const groups: string[][] = [[]];
+  definition.conditions.forEach((condition, index) => {
+    groups[groups.length - 1].push(
+      numbered ? String(index + 1) : conditionSummary(condition),
+    );
+    if (
+      index < definition.conditions.length - 1 &&
+      conditionLogic(definition, index) === "OR"
+    )
+      groups.push([]);
+  });
+  return groups
+    .map((group) => (group.length > 1 ? `(${group.join(" AND ")})` : group[0]))
+    .join(" OR ");
+}
+
 export function ruleSummary(definition?: UserRuleDefinition) {
   if (!definition?.conditions.length)
     return "Add a condition to describe this screen.";
-  return `${definition.signal_type || "BUY"} when ${definition.logic === "OR" ? "any" : "all"} of these daily conditions match: ${definition.conditions.map(conditionSummary).join(definition.logic === "OR" ? "; or " : "; and ")}.`;
+  const logic = ruleLogic(definition);
+  if (logic === "MIXED")
+    return `${definition.signal_type || "BUY"} when ${ruleExpression(definition)}. AND is evaluated before OR.`;
+  return `${definition.signal_type || "BUY"} when ${logic === "OR" ? "any" : "all"} of these daily conditions match: ${definition.conditions.map(conditionSummary).join(logic === "OR" ? "; or " : "; and ")}.`;
+}
+
+// Removing a row keeps the preceding connector and removes any dangling connector.
+export function removeRuleCondition(
+  definition: UserRuleDefinition,
+  index: number,
+) {
+  return definition.conditions
+    .filter((_, conditionIndex) => conditionIndex !== index)
+    .map((condition, conditionIndex, rows) => {
+      if (conditionIndex < rows.length - 1) return condition;
+      const { next_logic: _next, ...last } = condition;
+      return last;
+    });
 }
 
 export function validateRule(definition: UserRuleDefinition) {
@@ -129,7 +192,18 @@ export function validateRule(definition: UserRuleDefinition) {
     definition.cooldown_sec > 86400
       ? "Use whole seconds from 0 to 86,400."
       : "";
-  const conditions = definition.conditions.map((condition) => {
+  const conditions = definition.conditions.map((condition, index) => {
+    if (
+      condition.next_logic !== undefined &&
+      condition.next_logic !== "AND" &&
+      condition.next_logic !== "OR"
+    )
+      return "Choose AND or OR between conditions.";
+    if (
+      index === definition.conditions.length - 1 &&
+      condition.next_logic !== undefined
+    )
+      return "The last condition cannot have a connector.";
     if (!isIndicator(condition.left) || !(condition.op in operatorLabels))
       return "Choose a supported indicator and comparison.";
     if (typeof condition.right === "string") {

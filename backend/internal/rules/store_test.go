@@ -123,3 +123,27 @@ func TestRuleCreateEnforcesPerUserLimit(t *testing.T) {
 		t.Fatalf("limit error = %v, want ErrLimit", err)
 	}
 }
+
+func TestMixedConditionConnectorsPersistAndChangeHash(t *testing.T) {
+	store, accounts := testStore(t)
+	_, _ = accounts.EnsureProfile(context.Background(), "mixed-owner", "mixed@example.test")
+	definition := validDefinition("Mixed conditions")
+	definition.Conditions = []core.Condition{
+		{Left: "PRICE", Op: ">", Right: 10.0, NextLogic: "OR"},
+		{Left: "EMA9", Op: ">", Right: "EMA20", NextLogic: "AND"},
+		{Left: "RSI14", Op: ">", Right: 50.0},
+	}
+	created, err := store.Create(context.Background(), "mixed-owner", definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Get(context.Background(), "mixed-owner", created.ID)
+	if err != nil || loaded.Definition.Conditions[0].NextLogic != "OR" || loaded.Definition.Conditions[1].NextLogic != "AND" {
+		t.Fatalf("connectors lost: %+v %v", loaded, err)
+	}
+	definition.Conditions[0].NextLogic = "AND"
+	updated, err := store.Update(context.Background(), "mixed-owner", created.ID, created.Version, definition)
+	if err != nil || updated.DefinitionHash == created.DefinitionHash {
+		t.Fatalf("connector change not versioned: %+v %v", updated, err)
+	}
+}

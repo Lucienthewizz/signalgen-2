@@ -1,3 +1,4 @@
+import "@/styles/rule-connectors.css";
 import AnimatedContent from "@/components/react-bits/AnimatedContent";
 import SwipeRow from "@/components/react-bits/SwipeRow";
 import AnimatedList from "@/components/react-bits/AnimatedList";
@@ -47,6 +48,10 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   conditionSummary,
+  conditionLogic,
+  ruleMatchLabel,
+  ruleExpression,
+  removeRuleCondition,
   operatorLabels,
   operatorSymbols,
   rulePresets,
@@ -463,16 +468,19 @@ export function ServerRulesPanel({
               <h4>{definition.name.trim() || "Untitled rule"}</h4>
               <div className="rule-preview__meta">
                 <Badge>{definition.signal_type}</Badge>
-                <span>
-                  {definition.logic === "OR"
-                    ? "Match any condition"
-                    : "Match all conditions"}
-                </span>
+                <span>{ruleMatchLabel(definition)}</span>
                 <span>Daily · {definition.cooldown_sec}s cooldown</span>
               </div>
               <ol className="rule-preview__conditions">
                 {definition.conditions.map((condition, index) => (
-                  <li key={index}>{conditionSummary(condition)}</li>
+                  <li key={index}>
+                    {conditionSummary(condition)}
+                    {index < definition.conditions.length - 1 && (
+                      <strong className="rule-preview__connector">
+                        {conditionLogic(definition, index)}
+                      </strong>
+                    )}
+                  </li>
                 ))}
               </ol>
               {!definition.conditions.length && (
@@ -734,7 +742,7 @@ export function ServerRulesPanel({
                   </FieldDescription>
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="rule-logic">Rule logic</FieldLabel>
+                  <FieldLabel htmlFor="rule-logic">Default logic</FieldLabel>
                   <Select
                     value={definition.logic}
                     onValueChange={(value) =>
@@ -749,17 +757,13 @@ export function ServerRulesPanel({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        <SelectItem value="AND">
-                          AND (All conditions met)
-                        </SelectItem>
-                        <SelectItem value="OR">
-                          OR (Any condition met)
-                        </SelectItem>
+                        <SelectItem value="AND">AND</SelectItem>
+                        <SelectItem value="OR">OR</SelectItem>
                       </SelectGroup>
                     </SelectContent>
                   </Select>
                   <FieldDescription>
-                    Combine conditions using AND or OR.
+                    Default for connectors you have not changed below.
                   </FieldDescription>
                 </Field>
                 <Field data-invalid={submitted && !!validation.cooldown}>
@@ -810,7 +814,7 @@ export function ServerRulesPanel({
                   </p>
                 </div>
                 <Badge variant="outline">
-                  {definition.logic} logic · {definition.signal_type} signal
+                  {ruleMatchLabel(definition)} · {definition.signal_type} signal
                 </Badge>
               </div>
               {definition.conditions.length === 0 ? (
@@ -987,9 +991,7 @@ export function ServerRulesPanel({
                           onClick={() =>
                             setDefinition((current) => ({
                               ...current,
-                              conditions: current.conditions.filter(
-                                (_, conditionIndex) => conditionIndex !== index,
-                              ),
+                              conditions: removeRuleCondition(current, index),
                             }))
                           }
                         >
@@ -1001,8 +1003,41 @@ export function ServerRulesPanel({
                           {validation.conditions[index]}
                         </FieldError>
                       )}
+                      {index < definition.conditions.length - 1 && (
+                        <div className="rule-condition-connector">
+                          <FieldLabel htmlFor={`condition-logic-${index}`}>
+                            Join condition {index + 1} to {index + 2}
+                          </FieldLabel>
+                          <Select
+                            value={conditionLogic(definition, index)}
+                            onValueChange={(value) => {
+                              if (value === "AND" || value === "OR")
+                                setCondition(index, { next_logic: value });
+                            }}
+                          >
+                            <SelectTrigger
+                              id={`condition-logic-${index}`}
+                              aria-label={`Logic after condition ${index + 1}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent alignItemWithTrigger={false}>
+                              <SelectGroup>
+                                <SelectItem value="AND">AND</SelectItem>
+                                <SelectItem value="OR">OR</SelectItem>
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                   ))}
+                  {definition.conditions.length > 1 && (
+                    <p className="rule-condition-expression">
+                      {ruleExpression(definition, true)}
+                      <span>AND is evaluated before OR.</span>
+                    </p>
+                  )}
                 </div>
               )}
               {definition.conditions.length > 0 && (

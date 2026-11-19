@@ -47,3 +47,59 @@ test("signal status distinguishes BUY, SELL, rejected and cooldown", () => {
   assert.equal(status.screeningStatus({ ...decision, matched: false }), "rejected");
   assert.equal(status.screeningStatus({ ...decision, matched: false, reason_codes: ["COOLDOWN_ACTIVE"] }), "cooldown");
 });
+test("mixed connectors make AND precedence explicit and preserve old rule wording", () => {
+  const definition = {
+    ...workflow.rulePresets[5].definition,
+    conditions: [
+      { left: "PRICE", op: ">", right: 10, next_logic: "OR" },
+      { left: "EMA9", op: ">", right: "EMA20", next_logic: "AND" },
+      { left: "RSI14", op: ">", right: 50 },
+    ],
+  };
+  assert.equal(workflow.validateRule(definition).valid, true);
+  assert.equal(workflow.ruleLogic(definition), "MIXED");
+  assert.equal(workflow.ruleExpression(definition, true), "1 OR (2 AND 3)");
+  assert.match(
+    workflow.ruleSummary(definition),
+    /Close price is above 10 OR \(EMA 9.* AND RSI 14.*\)/,
+  );
+  assert.equal(
+    workflow.ruleLogic({
+      ...definition,
+      conditions: definition.conditions.map(({ next_logic, ...c }) => c),
+    }),
+    "AND",
+  );
+  assert.equal(
+    workflow.ruleLogic({
+      ...definition,
+      conditions: definition.conditions.map(({ next_logic, ...c }) => c),
+      logic: "OR",
+    }),
+    "OR",
+  );
+  assert.equal(
+    workflow.validateRule({
+      ...definition,
+      conditions: [
+        { ...definition.conditions[0], next_logic: "XOR" },
+        ...definition.conditions.slice(1),
+      ],
+    }).valid,
+    false,
+  );
+  assert.equal(
+    workflow.validateRule({
+      ...definition,
+      conditions: [definition.conditions[0]],
+    }).valid,
+    false,
+  );
+  const removed = workflow.removeRuleCondition(definition, 2);
+  assert.equal(removed[0].next_logic, "OR");
+  assert.equal(removed[1].next_logic, undefined);
+  assert.equal(
+    workflow.validateRule({ ...definition, conditions: removed }).valid,
+    true,
+  );
+});

@@ -198,7 +198,10 @@ export function decisionLabel(
     : "Matched";
 }
 
-export function decisionReasons(reasons: string[], logic?: "AND" | "OR") {
+export function decisionReasons(
+  reasons: string[],
+  logic?: "AND" | "OR" | "MIXED",
+) {
   if (!reasons.length) return "No decision reason was provided.";
   return reasons
     .map((reason) => {
