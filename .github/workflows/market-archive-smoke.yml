@@ -1,0 +1,78 @@
+name: Five-minute market scheduler proof
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write # Only this bounded smoke workflow may disable itself.
+
+concurrency:
+  group: market-archive-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: vars.SIGNALGEN_SMOKE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      DEPLOY_REF: ${{ vars.SIGNALGEN_DEPLOY_REF }}
+      SMOKE_ID: ${{ vars.SIGNALGEN_SMOKE_ID }}
+      SMOKE_ARMED_AT: ${{ vars.SIGNALGEN_SMOKE_ARMED_AT }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Validate pinned deployment
+        run: '[[ "$DEPLOY_REF" =~ ^[a-f0-9]{40}$ ]]'
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.DEPLOY_REF }}
+          persist-credentials: false
+      - name: Enforce one-hour and six-event outer guard
+        id: guard
+        run: python3 .github/scripts/market-smoke-guard.py
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        if: steps.guard.outputs.collect == 'true'
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Execute the real collector for both markets
+        if: steps.guard.outputs.collect == 'true'
+        working-directory: backend
+        env:
+          SIGNALGEN_MARKET_WRITER_URL: ${{ secrets.SIGNALGEN_MARKET_WRITER_URL }}
+          EVENT: ${{ github.event_name == 'schedule' && 'schedule' || 'manual' }}
+        run: >-
+          go run ./cmd/syncmarket -scope smoke -market both -deadline 6m
+          -event "$EVENT" -external-id "$GITHUB_RUN_ID"
+          -smoke-id "$SMOKE_ID" -deployment-ref "$DEPLOY_REF"
+          -report ../market-smoke.json
+      - name: Read test budget and disable completed or expired workflow
+        if: always()
+        working-directory: backend
+        env:
+          SIGNALGEN_MARKET_WRITER_URL: ${{ secrets.SIGNALGEN_MARKET_WRITER_URL }}
+          OUTER_DISABLE: ${{ steps.guard.outputs.disable }}
+        shell: bash
+        run: |
+          disable="$OUTER_DISABLE"
+          if go run ./cmd/syncmarket -smoke-status -smoke-id "$SMOKE_ID" -deadline 30s -report ../market-smoke-state.json; then
+            if python3 -c 'import json,sys; sys.exit(0 if json.load(open("../market-smoke-state.json")).get("disable_workflow") else 1)'; then
+              disable=true
+            fi
+          fi
+          if [[ "$disable" == true ]]; then
+            gh api --method PUT "repos/$GITHUB_REPOSITORY/actions/workflows/market-archive-smoke.yml/disable"
+          fi
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: always()
+        with:
+          name: scheduler-proof-${{ github.run_id }}
+          path: |
+            market-smoke.json
+            market-smoke-state.json
+            market-smoke-guard.json
+          if-no-files-found: warn
+          retention-days: 7
