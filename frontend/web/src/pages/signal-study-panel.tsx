@@ -33,7 +33,15 @@ import {
   CheckCheck,
   Info,
 } from "lucide-react";
-import { runSignalStudy, type StudyProgress } from "@/analysis/signal-study";
+import {
+  runSignalStudy,
+  studyCanRetry,
+  type StudyProgress,
+} from "@/analysis/signal-study";
+import {
+  StudyRunIssues,
+  StudyRunSummary,
+} from "@/components/study-run-summary";
 import {
   clearStudyOwner,
   studyEventPage,
@@ -139,6 +147,7 @@ export function SignalStudyPanel({
   const operation = useRef<AbortController | null>(null),
     current = useRef<StudyProgress | null>(null),
     ownerRef = useRef(userId);
+  const runClock = useRef({ started: 0, priorElapsed: 0, contextId: "" });
   const frozenSelection = useRef("");
   const selectionSignature = JSON.stringify({ source, rule, universe, config });
   ownerRef.current = userId;
@@ -183,6 +192,8 @@ export function SignalStudyPanel({
       study: progress?.context,
       completed: progress?.completed,
       failed: progress?.failures.length,
+      remaining: progress?.remaining,
+      elapsed_ms: progress?.elapsedMs,
       traffic: progress?.traffic,
       stages,
       limits:
@@ -206,8 +217,19 @@ export function SignalStudyPanel({
     setMessage(
       "Stopped. Completed results remain available; this is not a complete-market result.",
     );
-    if (current.current)
+    if (current.current) {
+      if (current.current.context.id === runClock.current.contextId) {
+        current.current = {
+          ...current.current,
+          elapsedMs:
+            runClock.current.priorElapsed +
+            performance.now() -
+            runClock.current.started,
+        };
+        setProgress(current.current);
+      }
       void discardContext(current.current.context.id).catch(() => {});
+    }
   };
   useEffect(() => {
     const controller = new AbortController();
@@ -302,7 +324,13 @@ export function SignalStudyPanel({
     };
   }, [progress?.completed, progress?.context.id, userId, page]);
   async function start(retry = false) {
-    if (operation.current || !userId || recovery.blocked) return;
+    if (operation.current || !userId || recovery.blocked || !backendOnline)
+      return;
+    if (
+      retry &&
+      (closed || !current.current || !studyCanRetry(current.current))
+    )
+      return;
     if (retry && frozenSelection.current !== selectionSignature) {
       setError(
         "Settings changed. Start a new study; retry cannot change the frozen rule, market or dates.",
@@ -312,6 +340,11 @@ export function SignalStudyPanel({
     if (resultRun !== undefined) location.hash = "app/backtest";
     const controller = new AbortController();
     operation.current = controller;
+    runClock.current = {
+      started: performance.now(),
+      priorElapsed: retry ? (current.current?.elapsedMs ?? 0) : 0,
+      contextId: retry ? (current.current?.context.id ?? "") : "",
+    };
     const owner = userId,
       revision = session.getIdentityRevision();
     setBusy(true);
@@ -353,6 +386,7 @@ export function SignalStudyPanel({
         controller.signal,
         (p) => {
           if (active()) {
+            runClock.current.contextId = p.context.id;
             current.current = p;
             sessionStorage.setItem(contextKey, p.context.id);
             setProgress(p);
@@ -372,7 +406,7 @@ export function SignalStudyPanel({
             ? "Completed the frozen catalog. Review data-quality limits before interpreting results."
             : "Partial result. Failed or remaining stocks are not counted as successfully evaluated.",
         );
-        if (result.completed === result.context.total)
+        if (!studyCanRetry(result))
           await discardContext(result.context.id).catch(() => {});
       }
     } catch (e) {
@@ -788,11 +822,15 @@ export function SignalStudyPanel({
                       max={progress.context.total}
                       value={progress.completed}
                     />
-                    <p>
-                      {progress.completed}/{progress.context.total} stocks
-                      processed · {progress.failures.length} failed ·{" "}
-                      {progress.remaining} remaining
-                    </p>
+                    {!busy && (
+                      <StudyRunSummary
+                        elapsedMs={progress.elapsedMs}
+                        completed={progress.completed}
+                        failed={progress.failures.length}
+                        remaining={progress.remaining}
+                        total={progress.context.total}
+                      />
+                    )}
                   </>
                 )}
                 <Button
@@ -815,21 +853,33 @@ export function SignalStudyPanel({
           )}
           {resultPage && progress && (
             <>
-              <progress
-                aria-label="Catalog study progress"
-                max={ready!.total}
-                value={progress.completed}
+              <StudyRunSummary
+                elapsedMs={progress.elapsedMs}
+                completed={progress.completed}
+                failed={progress.failures.length}
+                remaining={progress.remaining}
+                total={progress.context.total}
               />
               <p>
-                {progress.completed}/{ready!.total} stocks processed ·{" "}
-                {progress.failures.length} failed · {progress.remaining}{" "}
-                remaining · {ready!.market}/{ready!.currency}
-              </p>
-              <p>
-                Frozen period: {ready!.config.from}–{ready!.config.to}; T+
+                {ready!.market}/{ready!.currency} · {ready!.config.from}–
+                {ready!.config.to} · T+
                 {ready!.config.n_steps}. Catalog{" "}
                 {ready!.catalog_hash.slice(0, 20)}…
               </p>
+              <StudyRunIssues
+                progress={progress}
+                onRetry={
+                  !closed && studyCanRetry(progress)
+                    ? () => void start(true)
+                    : undefined
+                }
+                retryDisabled={
+                  busy ||
+                  !backendOnline ||
+                  recovery.blocked ||
+                  frozenSelection.current !== selectionSignature
+                }
+              />
               <p id="study-result-summary">
                 Signals: {selectedMetrics!.signals} · Evaluated swing:{" "}
                 {selectedMetrics!.evaluated} · Missing future data:{" "}
@@ -995,22 +1045,6 @@ export function SignalStudyPanel({
                   </>
                 )}
               </section>
-              {!!(
-                progress.failures.some((f) => f.retryable) ||
-                progress.failedBatches.length
-              ) && (
-                <Button
-                  disabled={
-                    busy ||
-                    closed ||
-                    frozenSelection.current !== selectionSignature
-                  }
-                  variant="outline"
-                  onClick={() => void start(true)}
-                >
-                  Retry failed stocks
-                </Button>
-              )}
               {frozenSelection.current !== selectionSignature && (
                 <p role="status">
                   Settings changed. Start a new study to apply them; the
@@ -1289,29 +1323,6 @@ export function SignalStudyPanel({
                   Next signals
                 </Button>
               </div>
-              {!!progress.failures.length && (
-                <details>
-                  <summary>
-                    Provider and history failures ({progress.failures.length})
-                  </summary>
-                  <ul>
-                    {progress.failures.slice(0, 100).map((f) => (
-                      <li key={f.symbol}>
-                        {f.symbol}: {f.code}{" "}
-                        {f.retryable
-                          ? "(retry available)"
-                          : "(insufficient history)"}
-                      </li>
-                    ))}
-                  </ul>
-                  {progress.failures.length > 100 && (
-                    <p>
-                      First 100 failures shown. Coverage counts include all
-                      failures.
-                    </p>
-                  )}
-                </details>
-              )}
               <details>
                 <summary>Measured stages for this run (milliseconds)</summary>
                 <pre>{JSON.stringify(progress.timings, null, 2)}</pre>

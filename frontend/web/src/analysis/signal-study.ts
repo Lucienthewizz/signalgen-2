@@ -17,6 +17,7 @@ import type { BacktestDataset } from "./backtest-types";
 
 export type StudyProgress = {
   waitingUntil?: number;
+  elapsedMs?: number;
   context: StudyContext;
   completed: number;
   remaining: number;
@@ -47,6 +48,14 @@ export type StudyProgress = {
     storage_ms: number;
   };
 };
+
+export function studyCanRetry(progress: StudyProgress): boolean {
+  return !!(
+    progress.pendingBatches.length ||
+    progress.failedBatches.length ||
+    progress.failures.some((failure) => failure.retryable)
+  );
+}
 
 // Retry only explicit admission refusals, never uncertain writes or permission
 // errors. A long catalog must respect the server's rate limit, not flood it.
@@ -218,6 +227,8 @@ export async function runSignalStudy(
       ]
     : Array.from({ length: context.batches }, (_, i) => i);
   const publish = () => {
+    progress.elapsedMs =
+      (previous?.elapsedMs ?? 0) + performance.now() - accessStart;
     progress.completed = seen.size;
     progress.processed = [...seen];
     progress.remaining =
@@ -505,9 +516,9 @@ export async function runSignalStudy(
             .catch(() => {});
       }
     }
-    publish();
-    return progress;
   } finally {
     engine.dispose();
+    publish();
   }
+  return progress;
 }

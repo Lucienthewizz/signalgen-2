@@ -76,7 +76,7 @@ async(page)=>{
   const targetColors=await page.locator('[data-study-target] [data-slot="field-label"]').evaluateAll(items=>items.map(item=>getComputedStyle(item).color.match(/\d+/g).map(Number)));
   if(targetColors.length!==2||targetColors[0][1]<=targetColors[0][0]||targetColors[1][0]<=targetColors[1][1])throw Error("Take profit/stop loss semantic colors missing");
   const arrow=await source.evaluate(el=>{const s=getComputedStyle(el);return{appearance:s.appearance,padding:parseFloat(s.paddingRight),image:s.backgroundImage}});
-  if(arrow.appearance!=="none"||arrow.padding<40||arrow.image==="none")throw Error("Dropdown arrow spacing incorrect");
+  if(arrow.appearance!=="none"||arrow.padding<40||arrow.image==="none")throw Error("Dropdown arrow spacing incorrect at "+width+"px: "+JSON.stringify(arrow));
   await source.focus();await page.keyboard.press("Tab");if(!await page.getByLabel("Screening rule",{exact:true}).evaluate(el=>el===document.activeElement))throw Error("Source/rule keyboard order incorrect");
   await source.selectOption("universe");await page.getByLabel("Stock universe",{exact:true}).selectOption("qa-universe");
   await source.selectOption("IDX");if(await page.getByLabel("Stock universe",{exact:true}).count())throw Error("Universe field should be conditional");
@@ -98,27 +98,35 @@ async(page)=>{
    await page.getByText("Partial result. Failed or remaining stocks are not counted as successfully evaluated.",{exact:true}).waitFor({timeout:30000});
    if(frozen.market!==market)throw Error("Entire-catalog market selection incorrect");
    if(JSON.stringify(prepares)!=="[0,1,2]"||new Set(scored).size!==22)throw Error("Full market batch coverage incorrect");
+   const summary=page.getByLabel("Run summary",{exact:true});
+   await summary.getByText("22 / 23",{exact:true}).waitFor();
+   await page.getByRole("button",{name:"View results",exact:true}).click();
+   await page.getByText("Processing issues (1 failed stock)",{exact:true}).waitFor();
    partial=false;await page.getByRole("button",{name:"Retry failed stocks",exact:true}).click();
    await page.getByText("Completed the frozen catalog. Review data-quality limits before interpreting results.",{exact:true}).waitFor({timeout:30000});
    if(scored.length!==23||new Set(scored).size!==23||JSON.stringify(prepares)!=="[0,1,2,0]")throw Error("Retry duplicated stocks");
+   await summary.getByText("23 / 23",{exact:true}).waitFor();
+   if(await page.locator(".run-stepper [aria-current=step]").innerText().then(t=>!t.includes("Results")))throw Error("Completed step missing");
+   await page.getByRole("button",{name:"View results",exact:true}).click();
    await page.getByRole("button",{name:"Keep result for comparison",exact:true}).click();
    if(await page.getByRole("region",{name:"Compare historical studies",exact:true}).locator("tbody tr").count()!==9)throw Error("Study comparison metrics missing");
-   if(await page.locator(".run-stepper [aria-current=step]").innerText().then(t=>!t.includes("Results")))throw Error("Completed step missing");
    const details=page.locator("table").filter({has:page.locator("caption",{hasText:"Signal details"})});
    if(await details.locator("tbody tr").count()!==50)throw Error("Signal page is not bounded at 50");
    await page.getByRole("button",{name:"Next signals",exact:true}).click();
    await page.waitForFunction(()=>Array.from(document.querySelectorAll("table")).find(t=>t.caption?.textContent.includes("Signal details"))?.tBodies[0].rows.length===42);
    const download=page.waitForEvent("download");await page.getByRole("button",{name:"Export signal details CSV",exact:true}).click();const csvFile=await download;if(csvFile.suggestedFilename()!=="signal-study-events.csv")throw Error("CSV download failed");let csv="";for await(const chunk of await csvFile.createReadStream())csv+=chunk.toString("utf8");if(csv.trim().split("\r\n").length!==921)throw Error("CSV omitted individual signal horizons");
-   await page.getByText("Measured stages for this run (milliseconds)",{exact:true}).click();const performanceFile=page.waitForEvent("download");await page.getByRole("button",{name:"Export measured stages JSON",exact:true}).click();let perf="";for await(const chunk of await(await performanceFile).createReadStream())perf+=chunk.toString("utf8");const measured=JSON.parse(perf);if(!measured.stages.startup_ms||!measured.stages.features_ms||!measured.stages.react_render_ms||!measured.traffic.decoded_candle_bytes)throw Error("Performance stages incomplete");reports.push({width,forcedTheme:theme,...measured});
+   await page.getByText("Measured stages for this run (milliseconds)",{exact:true}).click();const performanceFile=page.waitForEvent("download");await page.getByRole("button",{name:"Export measured stages JSON",exact:true}).click();let perf="";for await(const chunk of await(await performanceFile).createReadStream())perf+=chunk.toString("utf8");const measured=JSON.parse(perf);if(!measured.stages.startup_ms||!measured.stages.features_ms||!measured.stages.react_render_ms||!measured.traffic.decoded_candle_bytes||!(measured.elapsed_ms>0)||measured.remaining!==0)throw Error("Performance stages incomplete");reports.push({width,forcedTheme:theme,...measured});
    const quota=await page.evaluate(async owner=>{
     const s=await import("/src/analysis/signal-study-storage.ts"),before=await s.studyEventPage(owner,"study-qa"),encode=TextEncoder.prototype.encode;
     try{TextEncoder.prototype.encode=()=>({length:s.STUDY_STORAGE_LIMIT+1});await s.storeStudySymbol(owner,"study-qa","QUOTA",{events:[]},new AbortController().signal);return false}catch(e){if(!String(e).includes("128 MiB"))throw e}finally{TextEncoder.prototype.encode=encode}
     const after=await s.studyEventPage(owner,"study-qa");return before.total===92&&after.total===92;
    },user.id);if(!quota)throw Error("Quota destroyed completed rows");
    if(width===1440&&theme==="dark"){
+    await page.getByRole("link",{name:"Back to setup",exact:true}).click();
     await page.getByLabel("From (daily session, SGT)",{exact:true}).fill("2026-01-21");
     await page.getByRole("button",{name:"Start signal study",exact:true}).click();
     await page.getByText("Completed the frozen catalog. Review data-quality limits before interpreting results.",{exact:true}).waitFor({timeout:30000});
+    await page.getByRole("button",{name:"View results",exact:true}).click();
     const comparison=page.getByRole("region",{name:"Compare historical studies",exact:true});
     const period=comparison.getByRole("row",{name:/^Period /});
     if(!(await period.innerText()).includes("2026-01-20")||!(await period.innerText()).includes("2026-01-21"))throw Error("Comparison did not retain the previous period");
@@ -130,7 +138,7 @@ async(page)=>{
   }
  }
  // Stop during provider preparation; a late response must never publish rows.
- hold=true;partial=false;await page.reload();await page.getByLabel("Stock source",{exact:true}).waitFor();
+ hold=true;partial=false;await page.goto(origin+"/#app/backtest");await page.reload();await page.getByLabel("Stock source",{exact:true}).waitFor();
  const started=new Promise(r=>entered=r);await page.getByRole("button",{name:"Start signal study",exact:true}).click();await started;
  await page.getByLabel("Estimated study completion",{exact:true}).waitFor();
  if(!await page.getByLabel("Estimated study completion",{exact:true}).innerText().then(t=>t.includes("Estimating completion")))throw Error("Study ETA should wait for measured processing speed");

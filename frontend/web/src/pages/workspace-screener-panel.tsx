@@ -7,6 +7,7 @@ import {
 import AnimatedContent from "@/components/react-bits/AnimatedContent";
 import AnimatedList from "@/components/react-bits/AnimatedList";
 import Stepper from "@/components/react-bits/Stepper";
+import { StudyRunSummary } from "@/components/study-run-summary";
 import { MarketScreenPanel } from "./market-screen-panel";
 import { tierAccess } from "@/lib/tier-access";
 import { SINGAPORE_TIME_ZONE } from "@/lib/calendar";
@@ -1633,6 +1634,16 @@ function LatestScreenerPanel({
                 </Button>
               </div>
             </div>
+            <StudyRunSummary
+              elapsedMs={run.metrics?.total_ms}
+              completed={run.rows.length}
+              failed={0}
+              remaining={Math.max(
+                0,
+                run.manifest.symbols.length - run.rows.length,
+              )}
+              total={run.manifest.symbols.length}
+            />
             <div className="analysis-results-toolbar">
               <div className="analysis-performance">
                 <Button
