@@ -44,7 +44,12 @@ export function MarketScreenPanel({
     rows: [],
     total: 0,
   });
-  const recovery = useStudyRecovery(userId, "screen", backendOnline);
+  const recovery = useStudyRecovery(
+    userId,
+    "screen",
+    backendOnline,
+    progress?.context.id,
+  );
   const operation = useRef<AbortController | null>(null),
     current = useRef<StudyProgress | null>(null);
   const runClock = useRef({ started: 0, priorElapsed: 0, contextId: "" });

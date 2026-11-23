@@ -143,6 +143,7 @@ export function SignalStudyPanel({
     authenticated ? userId : undefined,
     "backtest",
     backendOnline,
+    progress?.context.id,
   );
   const operation = useRef<AbortController | null>(null),
     current = useRef<StudyProgress | null>(null),

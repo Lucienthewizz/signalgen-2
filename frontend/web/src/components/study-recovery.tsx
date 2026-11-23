@@ -8,6 +8,7 @@ export function useStudyRecovery(
   userId: string | undefined,
   purpose: "screen" | "backtest",
   online: boolean,
+  localRunId?: string,
 ) {
   const [previous, setPrevious] = useState<StudyContext | null>(null);
   const [checking, setChecking] = useState(true);
@@ -52,14 +53,15 @@ export function useStudyRecovery(
       generation.current++;
     };
   }, [userId, online, refresh]);
+  const otherRun = previous?.id === localRunId ? null : previous;
   async function cancel() {
-    if (!previous || checking) return;
+    if (!otherRun || checking) return;
     const ticket = ++generation.current;
     const revision = session.getIdentityRevision();
     setChecking(true);
     setError("");
     try {
-      await api.cancelStudy(previous.id, false, purpose).catch((e) => {
+      await api.cancelStudy(otherRun.id, false, purpose).catch((e) => {
         if (!(e instanceof ApiError) || e.status !== 404) throw e;
       });
       if (
@@ -82,12 +84,12 @@ export function useStudyRecovery(
     }
   }
   return {
-    previous,
+    previous: otherRun,
     checking,
     error,
     refresh,
     cancel,
-    blocked: checking || !!previous || !!error,
+    blocked: checking || !!otherRun || !!error,
   };
 }
 

@@ -7,13 +7,14 @@ async(page)=>{
  await page.emulateMedia({reducedMotion:"reduce"});
  await page.addInitScript(()=>{sessionStorage.setItem("signalgen.access-token","synthetic-study-only");sessionStorage.setItem("signalgen.app-session","synthetic-session");sessionStorage.setItem("signalgen.app-session-origin","same-origin")});
  let frozen,partial=true,prepares=[],scored=[],counter=0,hold=false,release,entered,etaProbe=false;
+ let backendUnavailable=false,reportOwnRun=false;
  const snapshots=new Map();
  await page.route("**/*",async route=>{
   const request=route.request(),url=new URL(request.url()),p=url.pathname,method=request.method();
   if(url.origin!==origin)return route.abort();
   if(!p.startsWith("/api/")&&p!=="/api"&&p!=="/ready")return route.continue();
   const respond=(json,status=200)=>route.fulfill({json,status,headers:{"X-Request-ID":"qa-study-"+(++counter)}});
-  if(p==="/api"||p==="/ready")return respond({status:"ready",name:"Synthetic study API"});
+  if(p==="/api"||p==="/ready")return backendUnavailable?respond({error:{code:"API_UNAVAILABLE",message:"Temporarily unavailable"}},503):respond({status:"ready",name:"Synthetic study API"});
   if(p==="/api/auth/me")return respond(user);
   if(p==="/api/v1/account/me")return respond({user,features:["screener","backtest"],session:{id:"qa",expires_at:"2027-11-01T00:00:00Z"},device:{installation_id:"qa",current:true}});
   if(p==="/api/v1/rules")return respond({items:[{id:"qa-rule",name:"QA every signal",version:1,owner_type:"user",definition_hash:"sha256:rule",definition:{name:"QA every signal",logic:"AND",signal_type:"BUY",cooldown_sec:0,conditions:[{left:"PRICE",op:">",right:0}]}}]});
@@ -21,7 +22,7 @@ async(page)=>{
   if(p==="/api/v1/subscription")return respond({subscription:null});
   if(p==="/api/v1/workspace")return respond({items:[]});
   if(p.startsWith("/api/v1/workspace/")){const b=request.postDataJSON();return respond({...b,version:b.version+1})}
-  if(p==="/api/v1/backtests/studies"&&method==="GET")return respond({items:[]});
+  if(p==="/api/v1/backtests/studies"&&method==="GET")return respond({items:reportOwnRun&&frozen?[frozen]:[]});
   if(p==="/api/v1/backtests/studies"){
    const b=request.postDataJSON();frozen={id:"study-qa",engine_version:"core-0.5.0",rule_schema_version:"signal-baseline-1",schema_version:"signal-study-1",policy_version:"signal-close-independent-1",market:b.market,currency:b.market==="US"?"USD":"IDR",config:b.config,rule_id:b.rule_id,definition_hash:"sha256:rule",catalog_hash:"sha256:qa-frozen-catalog",total:23,batch_size:10,batches:3,expires_at:"2027-11-01T00:00:00Z"};return respond(frozen,201);
   }
@@ -102,6 +103,20 @@ async(page)=>{
    await summary.getByText("22 / 23",{exact:true}).waitFor();
    await page.getByRole("button",{name:"View results",exact:true}).click();
    await page.getByText("Processing issues (1 failed stock)",{exact:true}).waitFor();
+   if(width===1440&&theme==="dark"){
+    const retry=page.getByRole("button",{name:"Retry failed stocks",exact:true});
+    backendUnavailable=true;
+    await page.waitForFunction(()=>document.querySelector(".workspace-connection")?.dataset.state==="offline");
+    if(!await retry.isDisabled())throw Error("Retry was available while offline");
+    reportOwnRun=true;
+    const recovered=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/v1/backtests/studies"&&response.request().method()==="GET");
+    backendUnavailable=false;
+    const activeRuns=await (await recovered).json();
+    if(activeRuns.items[0]?.id!==frozen.id)throw Error("Recovery fixture did not expose this run");
+    await page.waitForFunction(()=>[...document.querySelectorAll("button")].some(button=>button.textContent.trim()==="Retry failed stocks"&&!button.disabled));
+    await summary.getByText("22 / 23",{exact:true}).waitFor();
+    reportOwnRun=false;
+   }
    partial=false;await page.getByRole("button",{name:"Retry failed stocks",exact:true}).click();
    await page.getByText("Completed the frozen catalog. Review data-quality limits before interpreting results.",{exact:true}).waitFor({timeout:30000});
    if(scored.length!==23||new Set(scored).size!==23||JSON.stringify(prepares)!=="[0,1,2,0]")throw Error("Retry duplicated stocks");
