@@ -74,9 +74,9 @@ func GetBaselineRuleDefinition() BaselineRuleDefinition {
 func RunSignals(request RunRequest) (RunResult, error) {
 	features, err := ComputeFeatures(FeatureRequest{
 		Operands: RequiredOperands(request.Rule),
-		Purpose: request.Purpose,
-		Symbol:  request.Symbol,
-		Candles: request.Candles,
+		Purpose:  request.Purpose,
+		Symbol:   request.Symbol,
+		Candles:  request.Candles,
 	})
 	if err != nil {
 		return RunResult{}, err
@@ -392,7 +392,13 @@ func ValidateRule(rule RuleSnapshot) error {
 	if len(rule.Conditions) == 0 || len(rule.Conditions) > 20 {
 		return fmt.Errorf("rule must contain 1 to 20 conditions")
 	}
-	for _, condition := range rule.Conditions {
+	for index, condition := range rule.Conditions {
+		if condition.NextLogic != "" && condition.NextLogic != "AND" && condition.NextLogic != "OR" {
+			return fmt.Errorf("condition %d next_logic must be AND or OR", index+1)
+		}
+		if index == len(rule.Conditions)-1 && condition.NextLogic != "" {
+			return fmt.Errorf("the last condition cannot have next_logic")
+		}
 		if !IsIndicatorOperand(condition.Left) {
 			return fmt.Errorf("unsupported left operand %q", condition.Left)
 		}
@@ -476,35 +482,33 @@ func extractNumericThreshold(raw interface{}) (float64, bool, error) {
 	}
 }
 
-// evaluateRule mengevaluasi seluruh kondisi dalam aturan terhadap nilai kandidat saat ini dan sebelumnya:
-// - Logika "OR": Mengembalikan true jika ada MINIMAL SATU kondisi yang cocok (short-circuit).
-// - Logika "AND": Mengembalikan true HANYA JIKA SEMUA kondisi cocok (gagal jika ada satu kondisi false).
+// evaluateRule evaluates AND groups separated by OR. A missing connector inherits
+// the rule-wide logic, preserving legacy snapshots and their short-circuit order.
 func evaluateRule(rule RuleSnapshot, values map[string]float64, prevValues map[string]float64) (bool, error) {
 	if len(rule.Conditions) == 0 {
 		return false, fmt.Errorf("rule must contain at least one condition")
 	}
-	if rule.Logic == "OR" {
-		for _, condition := range rule.Conditions {
+	groupMatched := true
+	for index, condition := range rule.Conditions {
+		if groupMatched {
 			matched, err := evaluateCondition(condition, values, prevValues)
 			if err != nil {
 				return false, err
 			}
-			if matched {
+			groupMatched = matched
+		}
+		logic := condition.NextLogic
+		if logic == "" {
+			logic = rule.Logic
+		}
+		if index == len(rule.Conditions)-1 || logic == "OR" {
+			if groupMatched {
 				return true, nil
 			}
-		}
-		return false, nil
-	}
-	for _, condition := range rule.Conditions {
-		matched, err := evaluateCondition(condition, values, prevValues)
-		if err != nil {
-			return false, err
-		}
-		if !matched {
-			return false, nil
+			groupMatched = true
 		}
 	}
-	return true, nil
+	return false, nil
 }
 
 // evaluateCondition mengevaluasi perbandingan satu kondisi individual (misal: PRICE > EMA9 atau EMA9 CROSS_UP EMA20).
