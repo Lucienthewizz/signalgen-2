@@ -269,7 +269,7 @@ console.log(
     : tiersOnly
       ? "PASS: guided Free onboarding, plan navigation, access recovery and responsive tier checks. Synthetic fixtures only."
       : journalExplorerOnly
-        ? "PASS: Journal search/filter/sort, SGT dates, snapshot details, safe filtered CSV, bounded paging and desktop/mobile dark/light layout. Synthetic account/API fixtures only."
+        ? "PASS: Journal filters, SGT dates, snapshot details, paging, responsive layout, BUY/SELL recording, realized P&L and CSV exports. Synthetic account/API fixtures only."
         : authOnly
           ? "PASS: Google PKCE login, session handoff, disabled provider and invalid callbacks; desktop/mobile dark/light. Synthetic fixtures only."
           : performanceOnly

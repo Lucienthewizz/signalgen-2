@@ -63,9 +63,12 @@ async(page)=>{
   await page.getByLabel("Screening rule",{exact:true}).selectOption("qa-rule");
   await page.getByLabel("Signal date from",{exact:true}).fill("2026-01-20");await page.getByLabel("Signal date to (inclusive)",{exact:true}).fill("2026-01-23");
   await page.getByRole("button",{name:"Start screening",exact:true}).click();
-  await page.getByRole("status").filter({hasText:"Partial results. Completed signals are available below."}).waitFor({timeout:30000});
+  await page.getByRole("status").filter({hasText:"Run finished with data issues."}).waitFor({timeout:30000});
   const summary=page.getByLabel("Run summary",{exact:true});
   await summary.getByText("22 / 23",{exact:true}).waitFor();
+  const checked=await page.getByLabel("Stocks checked by screening",{exact:true}).evaluate(bar=>[bar.value,bar.max]);
+  if(JSON.stringify(checked)!=="[23,23]")throw Error("Failed stock should count as checked");
+  await summary.getByText("Could not evaluate",{exact:true}).waitFor();
   if(!/^\d+(?:\.\d+)? s$/.test(await summary.locator("dd").first().innerText()))throw Error("Elapsed time missing");
   if(JSON.stringify(prepares)!=="[0,1,2]"||new Set(scored).size!==22)throw Error("Coverage exceeded/omitted batches");
   await page.getByText("Processing issues (1 failed stock)",{exact:true}).click();
@@ -84,12 +87,13 @@ async(page)=>{
  hold=true;prepares=[];scored=[];const started=new Promise(r=>entered=r);
  await page.getByRole("button",{name:"Start screening",exact:true}).click();await started;
  await page.getByRole("button",{name:"Stop screening",exact:true}).click();release?.();hold=false;
+ await page.getByText("Run stopped. Available results are kept.",{exact:true}).waitFor();
  await page.waitForTimeout(300);if(scored.length)throw Error("Stopped response was scored");
 
  noSignals=true;
  await page.getByLabel("Stock source",{exact:true}).selectOption("qa-universe");
  await page.getByRole("button",{name:"Start screening",exact:true}).click();
- await page.waitForFunction(()=>Array.from(document.querySelectorAll('.signal-study-panel [role="status"]')).some(el=>el.textContent.includes("Selection complete")),{},{timeout:30000});
+ await page.waitForFunction(()=>Array.from(document.querySelectorAll('.signal-study-panel [role="status"]')).some(el=>el.textContent.includes("Run complete. All stocks evaluated.")),{},{timeout:30000});
  await page.getByText("No matches in the processed stocks for this rule and date range.",{exact:true}).waitFor();
  if(frozen.source!=="universe"||frozen.universe_id!=="qa-universe")throw Error("Owned universe scope was lost");
  denied=true;await page.getByRole("button",{name:"Start screening",exact:true}).click();

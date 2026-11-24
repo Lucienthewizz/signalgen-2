@@ -1,4 +1,4 @@
-// Synthetic archive only; never contact a real provider or account.
+// Synthetic journal and portfolio API; no real account writes.
 async (page) => {
   const origin = new URL(page.url()).origin;
   const user = {
@@ -39,6 +39,8 @@ async (page) => {
     },
   }));
   const errors = [];
+  const trades = [];
+  let allowTradeWrites = false;
   page.on("pageerror", (e) => errors.push(e.message));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(() => {
@@ -52,8 +54,19 @@ async (page) => {
       p = u.pathname;
     if (u.origin !== origin) return route.abort();
     if (!p.startsWith("/api") && p !== "/ready") return route.continue();
+    if (allowTradeWrites && p.startsWith("/api/v1/portfolio/transactions/") && req.method() === "PUT") {
+      const { version, data } = req.postDataJSON();
+      const id = p.split("/").at(-1);
+      if (version !== 0 || trades.some((trade) => trade.id === id))
+        throw Error("New transaction is duplicated or has an invalid version");
+      const trade = { id, version: 1, data };
+      trades.push(trade);
+      return route.fulfill({ json: trade, status: 201 });
+    }
     if (!["GET", "OPTIONS"].includes(req.method()))
       throw Error("Read-only explorer attempted a write");
+    if (p === "/api/v1/portfolio/transactions")
+      return route.fulfill({ json: { items: trades } });
     const body =
       p === "/api/auth/me"
         ? user
@@ -62,7 +75,13 @@ async (page) => {
           : p === "/api" || p === "/ready"
             ? { status: "ready", version: "test" }
             : p === "/api/v1/portfolio"
-              ? {transaction_count:0,positions:[],totals:[]}
+              ? {
+                  transaction_count: trades.length,
+                  positions: [],
+                  totals: trades.length === 2 ? [
+                    { market: "IDX", currency: "IDR", book: "Screening journal", cost_basis: "0", realized_pnl: "985", fees: "15" },
+                  ] : [],
+                }
             : p === "/api/v1/journal/screenings"
               ? { schema_version: "screening-journal-1", items }
               : p === "/api/v1/subscription"
@@ -212,6 +231,53 @@ async (page) => {
   await page
     .getByText("No results match these filters", { exact: true })
     .waitFor();
+
+  allowTradeWrites = true;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator("#journal-search").fill("QA03");
+  await page.getByRole("button", { name: "Record QA03 trade", exact: true }).click();
+  const tradeForm = page.getByRole("dialog", { name: "Record transaction", exact: true });
+  await tradeForm.waitFor();
+  const field = (label) => tradeForm.getByLabel(label, { exact: true });
+  if ((await field("Stock symbol").inputValue()) !== "QA03.JK" ||
+      (await field("Executed price (IDR)").inputValue()) !== "100" ||
+      trades.length) throw Error("Screening trade did not open a prefilled draft");
+  await tradeForm.getByRole("button", { name: "Cancel", exact: true }).click();
+  await tradeForm.waitFor({ state: "hidden" });
+  if (trades.length) throw Error("Cancel recorded a transaction");
+
+  const portfolio = page.getByRole("region", { name: "Portfolio performance", exact: true });
+  for (const [side, price, fee, date] of [
+    ["BUY", "105", "10", "2026-11-10"],
+    ["SELL", "115", "5", "2026-11-11"],
+  ]) {
+    await page.getByRole("button", { name: "Record QA03 trade", exact: true }).click();
+    if (side === "SELL") {
+      await tradeForm.getByRole("combobox", { name: "Transaction side", exact: true }).click();
+      await page.getByRole("option", { name: "SELL · close shares", exact: true }).click();
+    }
+    await field("Executed price (IDR)").fill(price);
+    await field("Fee (IDR)").fill(fee);
+    await field("Execution date (SGT)").fill(date);
+    await field("Execution time (SGT)").fill("10:00:00");
+    await tradeForm.getByRole("button", { name: "Save transaction", exact: true }).click();
+    await tradeForm.waitFor({ state: "hidden" });
+    await portfolio.getByRole("button", { name: side === "BUY" ? "Transactions (1)" : "Transactions (2)", exact: true }).waitFor();
+    const data = trades.at(-1)?.data;
+    if (data?.symbol !== "QA03.JK" || data.side !== side || data.quantity !== "100" ||
+        data.price !== price || data.fee !== fee || data.executed_at !== date + "T02:00:00.000Z")
+      throw Error("Journal transaction request did not preserve execution values");
+    if (side === "BUY") await portfolio.getByText("No realized P&L yet", { exact: true }).waitFor();
+  }
+  await portfolio.locator(".journal-portfolio__value").filter({ hasText: /985/ }).waitFor();
+  await portfolio.getByRole("button", { name: /Trade 1.*QA03.*985/ }).waitFor();
+  const tradeCsv = page.waitForEvent("download");
+  await portfolio.getByRole("button", { name: "Export transactions CSV", exact: true }).click();
+  let exported = "";
+  for await (const chunk of await (await tradeCsv).createReadStream()) exported += chunk.toString();
+  for (const side of ["BUY", "SELL"])
+    if (!exported.includes(`"QA03.JK","IDX","IDR","Screening journal","${side}"`))
+      throw Error("Trade CSV omitted the " + side + " transaction");
   if (errors.length) throw Error(errors.join("; "));
   await page.evaluate(() =>
     document.body.setAttribute(
@@ -219,4 +285,4 @@ async (page) => {
       "complete",
     ),
   );
-};
+}

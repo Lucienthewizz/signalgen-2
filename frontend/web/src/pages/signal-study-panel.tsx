@@ -35,12 +35,14 @@ import {
 } from "lucide-react";
 import {
   runSignalStudy,
+  shouldShowStudyProgress,
   studyCanRetry,
   type StudyProgress,
 } from "@/analysis/signal-study";
 import {
   StudyRunIssues,
   StudyRunSummary,
+  studyOutcomeMessage,
 } from "@/components/study-run-summary";
 import {
   clearStudyOwner,
@@ -215,9 +217,7 @@ export function SignalStudyPanel({
     operation.current?.abort();
     setClosed(true);
     setBusy(false);
-    setMessage(
-      "Stopped. Completed results remain available; this is not a complete-market result.",
-    );
+    setMessage("Run stopped. Available results are kept.");
     if (current.current) {
       if (current.current.context.id === runClock.current.contextId) {
         current.current = {
@@ -307,7 +307,7 @@ export function SignalStudyPanel({
     };
   }, [userId]);
   useEffect(() => {
-    if (!progress || !userId) return;
+    if (!progress || !userId || resultRun !== progress.context.id) return;
     let active = true;
     const id = progress.context.id;
     void studyEventPage(userId, id, page)
@@ -323,7 +323,7 @@ export function SignalStudyPanel({
     return () => {
       active = false;
     };
-  }, [progress?.completed, progress?.context.id, userId, page]);
+  }, [progress?.completed, progress?.context.id, resultRun, userId, page]);
   async function start(retry = false) {
     if (operation.current || !userId || recovery.blocked || !backendOnline)
       return;
@@ -351,6 +351,7 @@ export function SignalStudyPanel({
     setBusy(true);
     setError("");
     setMessage("Checking access and preparing historical batches…");
+    let visible: StudyProgress | null = null;
     const active = () =>
       operation.current === controller &&
       !controller.signal.aborted &&
@@ -387,26 +388,28 @@ export function SignalStudyPanel({
         controller.signal,
         (p) => {
           if (active()) {
-            runClock.current.contextId = p.context.id;
+            if (runClock.current.contextId !== p.context.id) {
+              runClock.current.contextId = p.context.id;
+              sessionStorage.setItem(contextKey, p.context.id);
+            }
             current.current = p;
-            sessionStorage.setItem(contextKey, p.context.id);
-            setProgress(p);
-            setMessage(
-              p.waitingUntil
-                ? `Server rate limit. Waiting until ${new Date(p.waitingUntil).toLocaleTimeString("en-GB", { timeZone: SINGAPORE_TIME_ZONE })} SGT before retrying; Stop remains available.`
-                : `Processed ${p.completed}/${p.context.total} stocks; ${p.failures.length} failed, ${p.failedBatches.length} interrupted batches.`,
-            );
+            if (shouldShowStudyProgress(visible, p)) {
+              visible = p;
+              setProgress(p);
+              setMessage(
+                p.waitingUntil
+                  ? `Server rate limit. Retrying at ${new Date(p.waitingUntil).toLocaleTimeString("en-GB", { timeZone: SINGAPORE_TIME_ZONE })} SGT.`
+                  : "Evaluating stocks…",
+              );
+            }
           }
         },
         retry ? (current.current ?? undefined) : undefined,
         recordSample,
       );
       if (active()) {
-        setMessage(
-          result.completed === result.context.total
-            ? "Completed the frozen catalog. Review data-quality limits before interpreting results."
-            : "Partial result. Failed or remaining stocks are not counted as successfully evaluated.",
-        );
+        setProgress(result);
+        setMessage(studyOutcomeMessage(result));
         if (!studyCanRetry(result))
           await discardContext(result.context.id).catch(() => {});
       }
@@ -414,8 +417,15 @@ export function SignalStudyPanel({
       if (active() && e instanceof ApiError && e.code === "STUDY_CAPACITY")
         void recovery.refresh(true);
       if (active()) {
-        if (e instanceof ApiError && e.code === "STUDY_CAPACITY")
-          setMessage("Resolve the previous run status before starting.");
+        const latest = current.current;
+        setProgress(latest);
+        setMessage(
+          e instanceof ApiError && e.code === "STUDY_CAPACITY"
+            ? "Resolve the previous run status before starting."
+            : latest
+              ? "Run interrupted. Available results are kept."
+              : "Signal study could not start.",
+        );
         setError(
           e instanceof ApiError && e.code === "STUDY_CAPACITY"
             ? ""
@@ -554,7 +564,7 @@ export function SignalStudyPanel({
               <Stepper
                 stage={busy ? 1 : progress ? 2 : 0}
                 partial={
-                  !!progress && progress.completed !== progress.context.total
+                  !!(progress?.remaining || progress?.failedBatches.length)
                 }
               />
               <form
@@ -806,7 +816,7 @@ export function SignalStudyPanel({
                 </p>
               )}
               <div
-                className="backtest-run-feedback"
+                className="backtest-run-feedback study-run-feedback"
                 aria-label="Study progress"
               >
                 <p role="status" aria-live="polite" aria-atomic="true">
@@ -819,19 +829,17 @@ export function SignalStudyPanel({
                 {progress && (
                   <>
                     <progress
-                      aria-label="Catalog study progress"
+                      aria-label="Stocks checked by backtest"
                       max={progress.context.total}
-                      value={progress.completed}
+                      value={progress.context.total - progress.remaining}
                     />
-                    {!busy && (
-                      <StudyRunSummary
-                        elapsedMs={progress.elapsedMs}
-                        completed={progress.completed}
-                        failed={progress.failures.length}
-                        remaining={progress.remaining}
-                        total={progress.context.total}
-                      />
-                    )}
+                    <StudyRunSummary
+                      elapsedMs={progress.elapsedMs}
+                      completed={progress.completed}
+                      failed={progress.failures.length}
+                      remaining={progress.remaining}
+                      total={progress.context.total}
+                    />
                   </>
                 )}
                 <Button
@@ -854,33 +862,36 @@ export function SignalStudyPanel({
           )}
           {resultPage && progress && (
             <>
-              <StudyRunSummary
-                elapsedMs={progress.elapsedMs}
-                completed={progress.completed}
-                failed={progress.failures.length}
-                remaining={progress.remaining}
-                total={progress.context.total}
-              />
+              <div className="study-run-feedback" aria-label="Study status">
+                <p role="status">{message || studyOutcomeMessage(progress)}</p>
+                <StudyRunSummary
+                  elapsedMs={progress.elapsedMs}
+                  completed={progress.completed}
+                  failed={progress.failures.length}
+                  remaining={progress.remaining}
+                  total={progress.context.total}
+                />
+                <StudyRunIssues
+                  progress={progress}
+                  onRetry={
+                    !closed && studyCanRetry(progress)
+                      ? () => void start(true)
+                      : undefined
+                  }
+                  retryDisabled={
+                    busy ||
+                    !backendOnline ||
+                    recovery.blocked ||
+                    frozenSelection.current !== selectionSignature
+                  }
+                />
+              </div>
               <p>
                 {ready!.market}/{ready!.currency} · {ready!.config.from}–
                 {ready!.config.to} · T+
                 {ready!.config.n_steps}. Catalog{" "}
                 {ready!.catalog_hash.slice(0, 20)}…
               </p>
-              <StudyRunIssues
-                progress={progress}
-                onRetry={
-                  !closed && studyCanRetry(progress)
-                    ? () => void start(true)
-                    : undefined
-                }
-                retryDisabled={
-                  busy ||
-                  !backendOnline ||
-                  recovery.blocked ||
-                  frozenSelection.current !== selectionSignature
-                }
-              />
               <p id="study-result-summary">
                 Signals: {selectedMetrics!.signals} · Evaluated swing:{" "}
                 {selectedMetrics!.evaluated} · Missing future data:{" "}

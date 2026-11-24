@@ -57,6 +57,20 @@ export function studyCanRetry(progress: StudyProgress): boolean {
   );
 }
 
+export function shouldShowStudyProgress(
+  visible: StudyProgress | null,
+  latest: StudyProgress,
+): boolean {
+  // Publish each batch, and keep slow batches responsive without redrawing per stock.
+  return (
+    !visible ||
+    visible.pendingBatches.length !== latest.pendingBatches.length ||
+    visible.failedBatches.length !== latest.failedBatches.length ||
+    visible.waitingUntil !== latest.waitingUntil ||
+    (latest.elapsedMs ?? 0) - (visible.elapsedMs ?? 0) >= 500
+  );
+}
+
 // Retry only explicit admission refusals, never uncertain writes or permission
 // errors. A long catalog must respect the server's rate limit, not flood it.
 export async function studyRateLimited<T>(
@@ -270,8 +284,10 @@ export async function runSignalStudy(
         publish();
       });
     } finally {
-      delete progress.waitingUntil;
-      publish();
+      if (progress.waitingUntil !== undefined) {
+        delete progress.waitingUntil;
+        publish();
+      }
     }
   };
   publish();

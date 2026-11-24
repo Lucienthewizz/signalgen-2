@@ -4,10 +4,12 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError } from "@/api/client";
 import {
   runSignalStudy,
+  shouldShowStudyProgress,
   studyCanRetry,
   type StudyProgress,
 } from "@/analysis/signal-study";
 import {
+  studyOutcomeMessage,
   StudyRunIssues,
   StudyRunSummary,
 } from "@/components/study-run-summary";
@@ -37,6 +39,7 @@ export function MarketScreenPanel({
   const [to, setTo] = useState(from),
     [busy, setBusy] = useState(false),
     [closed, setClosed] = useState(false),
+    [stopped, setStopped] = useState(false),
     [error, setError] = useState("");
   const [progress, setProgress] = useState<StudyProgress | null>(null),
     [page, setPage] = useState(0);
@@ -118,6 +121,8 @@ export function MarketScreenPanel({
     };
     setBusy(true);
     setError("");
+    setStopped(false);
+    let visible: StudyProgress | null = null;
     try {
       if (!retry) {
         if (previous)
@@ -151,7 +156,10 @@ export function MarketScreenPanel({
           if (!controller.signal.aborted) {
             runClock.current.contextId = p.context.id;
             current.current = p;
-            setProgress(p);
+            if (shouldShowStudyProgress(visible, p)) {
+              visible = p;
+              setProgress(p);
+            }
           }
         },
         retry ? previous! : undefined,
@@ -165,6 +173,7 @@ export function MarketScreenPanel({
         }
       }
     } catch (e) {
+      if (!controller.signal.aborted) setProgress(current.current);
       if (e instanceof ApiError && e.code === "STUDY_CAPACITY")
         void recovery.refresh(true);
       if (
@@ -192,6 +201,7 @@ export function MarketScreenPanel({
   function stop() {
     operation.current?.abort();
     setClosed(true);
+    setStopped(true);
     if (current.current) {
       if (current.current.context.id === runClock.current.contextId) {
         current.current = {
@@ -208,8 +218,6 @@ export function MarketScreenPanel({
         .catch(() => {});
     }
   }
-  const complete =
-    progress && !busy && progress.completed === progress.context.total;
   const canRetry = progress && !closed && studyCanRetry(progress);
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -237,7 +245,7 @@ export function MarketScreenPanel({
       <form onSubmit={submit}>
         <Stepper
           stage={busy ? 1 : progress ? 2 : 0}
-          partial={!!progress && progress.completed !== progress.context.total}
+          partial={!!(progress?.remaining || progress?.failedBatches.length)}
         />
         <fieldset disabled={busy} className="study-fields">
           <legend>Screening settings</legend>
@@ -330,29 +338,33 @@ export function MarketScreenPanel({
         {optionsError}
         {!backendOnline ? " Reconnect to start screening." : ""}
       </p>
-      <p role="status">
-        {progress
-          ? busy
-            ? `${progress.completed}/${progress.context.total} stocks processed. Screening…`
-            : complete
-              ? "Selection complete."
-              : "Partial results. Completed signals are available below."
-          : busy
-            ? "Checking access and preparing data…"
-            : recovery.blocked
-              ? "Resolve the previous run status before starting."
-              : "Ready to screen."}
-      </p>
-      {!busy && <StudyRecovery recovery={recovery} />}
-      {error && !recovery.previous && <p role="alert">{error}</p>}
-      {progress && (
-        <>
-          <progress
-            aria-label="Screening progress"
-            max={progress.context.total}
-            value={progress.completed}
-          />
-          {!busy && (
+      <div className="study-run-feedback" aria-label="Screening status">
+        <p role="status">
+          {stopped
+            ? "Run stopped. Available results are kept."
+            : busy
+              ? progress?.waitingUntil
+                ? "Waiting for the server rate limit to reset…"
+                : progress
+                  ? "Screening stocks…"
+                  : "Checking access and preparing data…"
+              : progress
+                ? studyOutcomeMessage(progress)
+                : recovery.blocked
+                  ? "Resolve the previous run status before starting."
+                  : error
+                    ? "Screening could not start."
+                    : "Ready to screen."}
+        </p>
+        {!busy && <StudyRecovery recovery={recovery} />}
+        {error && !recovery.previous && <p role="alert">{error}</p>}
+        {progress && (
+          <>
+            <progress
+              aria-label="Stocks checked by screening"
+              max={progress.context.total}
+              value={progress.context.total - progress.remaining}
+            />
             <StudyRunSummary
               elapsedMs={progress.elapsedMs}
               completed={progress.completed}
@@ -360,7 +372,28 @@ export function MarketScreenPanel({
               remaining={progress.remaining}
               total={progress.context.total}
             />
-          )}
+            {!busy && (
+              <StudyRunIssues
+                progress={progress}
+                onRetry={canRetry ? () => void start(true) : undefined}
+                retryDisabled={
+                  !backendOnline ||
+                  recovery.blocked ||
+                  frozenSelection.current !== selection
+                }
+              />
+            )}
+            {!busy && canRetry && frozenSelection.current !== selection && (
+              <p>
+                Settings changed. Restore the original selection to retry, or
+                start a new run.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+      {progress && (
+        <>
           <p>
             Frozen screening period: {progress.context.config.from} to{" "}
             {progress.context.config.to} · Rule:{" "}
@@ -371,23 +404,6 @@ export function MarketScreenPanel({
             {result.total} signals found. These results contain matching stocks
             and dates; returns are evaluated separately in Backtest.
           </p>
-          {!busy && (
-            <StudyRunIssues
-              progress={progress}
-              onRetry={canRetry ? () => void start(true) : undefined}
-              retryDisabled={
-                !backendOnline ||
-                recovery.blocked ||
-                frozenSelection.current !== selection
-              }
-            />
-          )}
-          {!busy && canRetry && frozenSelection.current !== selection && (
-            <p>
-              Settings changed. Restore the original selection to retry, or
-              start a new run.
-            </p>
-          )}
           <div
             className="study-table-scroll"
             role="region"

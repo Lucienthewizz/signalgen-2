@@ -52,7 +52,7 @@ async(page)=>{
  });
  // Empty configuration layout, keyboard order and conditional universe selection.
  for(const width of [1440,1218,390]){
-  await page.setViewportSize({width,height:1000});await page.goto(origin+"/#app/backtest");await page.reload();
+  await page.setViewportSize({width,height:1000});await page.goto(origin+"/#app/backtest");await page.reload({waitUntil:"domcontentloaded"});
   const source=page.getByLabel("Stock source",{exact:true});await source.waitFor({timeout:20000});
   await page.evaluate(async()=>{await document.fonts.ready;await Promise.all(document.getAnimations().filter(a=>a.effect?.getComputedTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})))});
   await page.locator("details.run-advanced > summary").click();
@@ -88,7 +88,7 @@ async(page)=>{
  for(const width of [1440,390]){
   for(const theme of ["dark","light"]){
    partial=true;prepares=[];scored=[];
-   await page.setViewportSize({width,height:1000});await page.goto(origin+"/#app/backtest");await page.reload();
+   await page.setViewportSize({width,height:1000});await page.goto(origin+"/#app/backtest");await page.reload({waitUntil:"domcontentloaded"});
    await page.getByLabel("Stock source",{exact:true}).waitFor({timeout:20000});
    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
    const market=width===1440&&theme==="dark"?"IDX":"US";
@@ -96,11 +96,13 @@ async(page)=>{
    await page.getByLabel("Screening rule",{exact:true}).selectOption("qa-rule");
    await page.getByLabel("From (daily session, SGT)",{exact:true}).fill("2026-01-20");await page.getByLabel("To (inclusive, SGT)",{exact:true}).fill("2026-01-23");
    await page.getByRole("button",{name:"Start signal study",exact:true}).click();
-   await page.getByText("Partial result. Failed or remaining stocks are not counted as successfully evaluated.",{exact:true}).waitFor({timeout:30000});
+   await page.getByText("Run finished with data issues.",{exact:true}).waitFor({timeout:30000});
    if(frozen.market!==market)throw Error("Entire-catalog market selection incorrect");
    if(JSON.stringify(prepares)!=="[0,1,2]"||new Set(scored).size!==22)throw Error("Full market batch coverage incorrect");
    const summary=page.getByLabel("Run summary",{exact:true});
    await summary.getByText("22 / 23",{exact:true}).waitFor();
+   const checked=await page.getByLabel("Stocks checked by backtest",{exact:true}).evaluate(bar=>[bar.value,bar.max]);
+   if(JSON.stringify(checked)!=="[23,23]")throw Error("Failed stock should count as checked");
    await page.getByRole("button",{name:"View results",exact:true}).click();
    await page.getByText("Processing issues (1 failed stock)",{exact:true}).waitFor();
    if(width===1440&&theme==="dark"){
@@ -118,7 +120,7 @@ async(page)=>{
     reportOwnRun=false;
    }
    partial=false;await page.getByRole("button",{name:"Retry failed stocks",exact:true}).click();
-   await page.getByText("Completed the frozen catalog. Review data-quality limits before interpreting results.",{exact:true}).waitFor({timeout:30000});
+   await page.getByText("Run complete. All stocks evaluated.",{exact:true}).waitFor({timeout:30000});
    if(scored.length!==23||new Set(scored).size!==23||JSON.stringify(prepares)!=="[0,1,2,0]")throw Error("Retry duplicated stocks");
    await summary.getByText("23 / 23",{exact:true}).waitFor();
    if(await page.locator(".run-stepper [aria-current=step]").innerText().then(t=>!t.includes("Results")))throw Error("Completed step missing");
@@ -140,7 +142,7 @@ async(page)=>{
     await page.getByRole("link",{name:"Back to setup",exact:true}).click();
     await page.getByLabel("From (daily session, SGT)",{exact:true}).fill("2026-01-21");
     await page.getByRole("button",{name:"Start signal study",exact:true}).click();
-    await page.getByText("Completed the frozen catalog. Review data-quality limits before interpreting results.",{exact:true}).waitFor({timeout:30000});
+    await page.getByText("Run complete. All stocks evaluated.",{exact:true}).waitFor({timeout:30000});
     await page.getByRole("button",{name:"View results",exact:true}).click();
     const comparison=page.getByRole("region",{name:"Compare historical studies",exact:true});
     const period=comparison.getByRole("row",{name:/^Period /});
@@ -153,13 +155,13 @@ async(page)=>{
   }
  }
  // Stop during provider preparation; a late response must never publish rows.
- hold=true;partial=false;await page.goto(origin+"/#app/backtest");await page.reload();await page.getByLabel("Stock source",{exact:true}).waitFor();
+ hold=true;partial=false;await page.goto(origin+"/#app/backtest");await page.reload({waitUntil:"domcontentloaded"});await page.getByLabel("Stock source",{exact:true}).waitFor();
  const started=new Promise(r=>entered=r);await page.getByRole("button",{name:"Start signal study",exact:true}).click();await started;
  await page.getByLabel("Estimated study completion",{exact:true}).waitFor();
  if(!await page.getByLabel("Estimated study completion",{exact:true}).innerText().then(t=>t.includes("Estimating completion")))throw Error("Study ETA should wait for measured processing speed");
  await page.getByLabel("Estimated study completion",{exact:true}).screenshot({path:"output/playwright/study-estimate-processing.png"});
  const count=scored.length;await page.getByRole("button",{name:"Stop study",exact:true}).click();release?.();hold=false;
- await page.getByText("Stopped. Completed results remain available; this is not a complete-market result.",{exact:true}).waitFor();await page.waitForTimeout(300);if(scored.length!==count)throw Error("Late canceled response was scored");
+ await page.getByText("Run stopped. Available results are kept.",{exact:true}).waitFor();await page.waitForTimeout(300);if(scored.length!==count)throw Error("Late canceled response was scored");
  if(await page.getByLabel("Estimated study completion",{exact:true}).count())throw Error("Stopped study retained a running ETA");
  // Measured throughput produces an SGT completion time after the first batch.
  etaProbe=true;hold=true;
@@ -167,7 +169,7 @@ async(page)=>{
  await page.waitForFunction(()=>document.querySelector('.study-estimate')?.textContent.includes('Estimated finish')&&document.querySelector('.study-estimate')?.textContent.includes('SGT'));
  await page.getByLabel("Estimated study completion",{exact:true}).screenshot({path:"output/playwright/study-estimate-measured.png"});
  await page.getByRole("button",{name:"Stop study",exact:true}).click();release?.();hold=false;etaProbe=false;
- await page.getByText("Stopped. Completed results remain available; this is not a complete-market result.",{exact:true}).waitFor();
+ await page.getByText("Run stopped. Available results are kept.",{exact:true}).waitFor();
  await page.goto(origin+"/#app/overview");
  const left=await page.evaluate(async owner=>(await(await import("/src/analysis/signal-study-storage.ts")).studyEventPage(owner,"study-qa")).total,user.id);if(left!==0)throw Error("Navigation retained temporary study details");
  if(errors.length)throw Error(errors.join("; "));

@@ -23,6 +23,23 @@
   color: var(--muted);
   overflow-wrap: anywhere;
 }
+.study-run-feedback {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  min-block-size: 144px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.study-run-feedback > [role="status"] {
+  color: var(--text);
+  font-weight: 600;
+}
+.study-run-feedback > progress {
+  margin: 0;
+}
 .study-run-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -159,7 +176,12 @@
   color: var(--text);
   font: inherit;
 }
-.demo-workbench .signal-study-panel .study-fields select {
+.demo-workbench .signal-study-panel .study-fields select,
+html[data-typography="workspace"]
+  .pen-workbench
+  .signal-study-panel
+  .study-fields
+  select:not(:disabled) {
   appearance: none;
   -webkit-appearance: none;
   padding-inline: 14px 42px;
@@ -170,7 +192,12 @@
   background-size: 16px 16px;
 }
 @media (forced-colors: active) {
-  .demo-workbench .signal-study-panel .study-fields select {
+  .demo-workbench .signal-study-panel .study-fields select,
+  html[data-typography="workspace"]
+    .pen-workbench
+    .signal-study-panel
+    .study-fields
+    select:not(:disabled) {
     appearance: auto;
     -webkit-appearance: auto;
     background-image: none;

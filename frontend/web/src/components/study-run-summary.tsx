@@ -8,6 +8,14 @@ function elapsedTime(ms?: number) {
   return `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
 }
 
+export function studyOutcomeMessage(progress: StudyProgress): string {
+  if (progress.remaining || progress.failedBatches.length)
+    return "Run interrupted. Available results are kept.";
+  if (progress.failures.length || progress.swing.missing)
+    return "Run finished with data issues.";
+  return "Run complete. All stocks evaluated.";
+}
+
 export function StudyRunSummary({
   elapsedMs,
   completed,
@@ -28,13 +36,13 @@ export function StudyRunSummary({
         <dd>{elapsedTime(elapsedMs)}</dd>
       </div>
       <div>
-        <dt>Stocks processed</dt>
+        <dt>Stocks evaluated</dt>
         <dd>
           {completed.toLocaleString()} / {total.toLocaleString()}
         </dd>
       </div>
       <div>
-        <dt>Failed</dt>
+        <dt>Could not evaluate</dt>
         <dd data-failed={failed > 0 || undefined}>{failed.toLocaleString()}</dd>
       </div>
       <div>
@@ -48,6 +56,7 @@ export function StudyRunSummary({
 const failureReasons: Record<string, string> = {
   HISTORY_INSUFFICIENT: "Insufficient daily candle history",
   INSUFFICIENT_HISTORY: "Insufficient daily candle history",
+  INSUFFICIENT_CANDLES: "Insufficient daily candle history",
   PROVIDER_UNAVAILABLE: "Market data provider unavailable",
   RATE_LIMITED: "Market data request limited",
 };
