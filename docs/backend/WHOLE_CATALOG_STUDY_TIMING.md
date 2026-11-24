@@ -94,3 +94,50 @@ SIGNALGEN_REAL_CATALOG_DIR=/private/dir SIGNALGEN_REAL_RATE_LIMIT=60 \
 SIGNALGEN_REAL_RTT=50ms SIGNALGEN_REAL_PREFETCH=4 \
   go test ./internal/api/tests/ -run TestStudyRealCatalogTiming -v -count=1 -timeout 30m
 ```
+
+## Paired screening and backtest, 24 November 2026
+
+The test froze the active application IDX catalog at 962 stocks. It used
+one daily signal session (13 November 2026), the BUY rule
+`Close > 1000000 OR (Close > 1 AND Close < 1000000)`, and T+3 for the
+signal study. The local Yahoo archive contained usable history files for 919
+stocks. The API evaluated 918 stocks and reported 43 provider failures and
+one stock with insufficient candles. Both modes found 917 signals. All 917
+had usable T+3 candles for the swing outcome. Repeated runs returned the same
+signal and backtest outcome checksums.
+
+| Mode | Empty process cache | Repeat in same process | Archive reads per run |
+| --- | ---: | ---: | ---: |
+| Screening | 724 ms | 573 ms | 962 |
+| Signal backtest | 577 ms | 549 ms | 962 |
+
+The default history cache held at most 64 entries and 32,000 candles. All four
+runs called the archive for every stock. An empty process cache refers to the
+application's in-memory cache. The operating system file cache was uncontrolled.
+
+The measured path includes native Go computation and loopback HTTP against the
+frozen archive. Live Yahoo requests, deployed network latency, production auth
+and persistence, and the browser Worker, WASM, and IndexedDB are outside this
+measurement. Stage times are cumulative and can overlap during prefetch. Use
+`wall_ms` for the elapsed time.
+
+Run from the repository root with the frozen daily archive, its matching
+962-stock catalog, and a populated Go module cache. The pinned ARM64 Go
+image must be available locally in the `orbstack` Docker context. Point
+`SCREEN_OUT` to a new or empty directory outside the checkout.
+
+```sh
+SCREEN_PROFILE=paired \
+  SCREEN_STORE=/path/to/frozen-idx-archive \
+  SCREEN_CATALOG=/path/to/catalog.json \
+  SCREEN_OUT=/path/to/benchmark-output \
+  SCREEN_REPORT_SHA256=cdbe70196ec4d2570332c6fef3b5cd81a2cba54b3ba707b56f5b5adccca8e32d \
+  GOMODCACHE_HOST=/path/to/go/pkg/mod \
+  python3 -I backend/scripts/profile_screen_catalog.py
+```
+
+The catalog SHA-256 for this run is
+`716ff1f2d1bd2beaacd9b98b7abecf3d2f11dfce26535826944d57ab5c760a78`.
+Use the corresponding report hash if collecting a different snapshot.
+The runner writes `comparison.json` with the input hashes, coverage, route
+statuses, per-stage timings, and output checksums.

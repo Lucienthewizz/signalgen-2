@@ -1,6 +1,7 @@
 package apitests
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,6 +28,7 @@ import (
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/dataset"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/marketdata"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/ratelimit"
+	"github.com/Lucienthewizz/signalgen-2/backend/internal/rules"
 	"github.com/Lucienthewizz/signalgen-2/backend/internal/universe"
 )
 
@@ -45,6 +48,34 @@ type screenEvent struct {
 	Price     float64 `json:"reference_price"`
 }
 
+type measuredArchive struct {
+	marketdata.Provider
+	reads *atomic.Int64
+}
+
+func (p measuredArchive) Snapshot(ctx context.Context) (string, marketdata.Provider, error) {
+	if archive, ok := p.Provider.(marketdata.SnapshotProvider); ok {
+		revision, view, err := archive.Snapshot(ctx)
+		if err != nil {
+			return "", nil, err
+		}
+		return revision, measuredArchive{Provider: view, reads: p.reads}, nil
+	}
+	return "fixed-idx-archive", p, nil
+}
+
+func (p measuredArchive) DailyHistory(ctx context.Context, instrument universe.Instrument, from, to time.Time) (marketdata.History, error) {
+	p.reads.Add(1)
+	return p.Provider.(marketdata.HistoryProvider).DailyHistory(ctx, instrument, from, to)
+}
+
+func (p measuredArchive) Source() marketdata.Source {
+	if source, ok := p.Provider.(interface{ Source() marketdata.Source }); ok {
+		return source.Source()
+	}
+	return marketdata.Source{Provider: "yahoo_finance"}
+}
+
 type screenRoute struct {
 	Count     int            `json:"count"`
 	Statuses  map[string]int `json:"statuses"`
@@ -55,6 +86,7 @@ type screenRoute struct {
 
 type screenRun struct {
 	Run            int                     `json:"run"`
+	ArchiveReads   int64                   `json:"archive_read_attempts"`
 	WallMS         float64                 `json:"wall_ms"`
 	StageMS        map[string]float64      `json:"stage_ms"`
 	Routes         map[string]*screenRoute `json:"routes"`
@@ -64,17 +96,21 @@ type screenRun struct {
 	Failed         int                     `json:"failed"`
 	FailureCodes   map[string]int          `json:"failure_codes"`
 	Signals        int                     `json:"signals"`
+	SwingEvaluated int                     `json:"swing_evaluated,omitempty"`
+	MissingFuture  int                     `json:"missing_future,omitempty"`
+	OutcomesSHA256 string                  `json:"backtest_outcomes_sha256,omitempty"`
 	CandidateBytes int                     `json:"candidate_json_bytes"`
 	OracleSHA256   string                  `json:"oracle_sha256"`
 }
 
-// TestScreenRealCatalogTiming replays a whole-market purpose=screen scan the way
+// TestScreenRealCatalogTiming replays a whole-market scan or signal study the way
 // runSignalStudy does (prepare batch of 10 -> prefetch content+grant -> per
 // symbol features then private scoring -> release) against a pinned, read-only
-// idx_store copy through collection.NewRoutedStoreProvider and the real HTTP
+// IDX archive and the real HTTP
 // routes. Scope: native Go features, synthetic owner/session, in-process
 // loopback API. It does NOT measure the browser Worker/WASM/IndexedDB path.
-// Opt in with SIGNALGEN_SCREEN_STORE (store root) and SIGNALGEN_SCREEN_CATALOG.
+// Use SIGNALGEN_SCREEN_STORE and SIGNALGEN_SCREEN_CATALOG to opt in.
+// SIGNALGEN_SCREEN_PURPOSE=backtest also evaluates each signal through T+3.
 func TestScreenRealCatalogTiming(t *testing.T) {
 	storeRoot, catalogPath := os.Getenv("SIGNALGEN_SCREEN_STORE"), os.Getenv("SIGNALGEN_SCREEN_CATALOG")
 	if storeRoot == "" || catalogPath == "" {
@@ -82,6 +118,10 @@ func TestScreenRealCatalogTiming(t *testing.T) {
 	}
 	from, to := envOr("SIGNALGEN_SCREEN_FROM", "2026-11-13"), envOr("SIGNALGEN_SCREEN_TO", "2026-11-13")
 	ruleID := envOr("SIGNALGEN_SCREEN_RULE", core.BaselineRuleID)
+	purpose := envOr("SIGNALGEN_SCREEN_PURPOSE", "screen")
+	if purpose != "screen" && purpose != "backtest" {
+		t.Fatal("benchmark purpose must be screen or backtest")
+	}
 	runs, _ := strconv.Atoi(envOr("SIGNALGEN_SCREEN_RUNS", "1"))
 	prefetch, _ := strconv.Atoi(envOr("SIGNALGEN_SCREEN_PREFETCH", "4")) // browser PREFETCH_LIMIT
 	rtt, _ := time.ParseDuration(envOr("SIGNALGEN_SCREEN_RTT", "0s"))
@@ -112,12 +152,24 @@ func TestScreenRealCatalogTiming(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	routed, err := collection.NewRoutedStoreProvider(storeRoot, live)
-	if err != nil {
+	var archive marketdata.Provider
+	if _, err := os.Stat(filepath.Join(storeRoot, "report.json")); err == nil {
+		archive, err = collection.NewArchiveProvider(storeRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+	} else if os.IsNotExist(err) {
+		archive, err = collection.NewRoutedStoreProvider(storeRoot, live)
+		if err != nil {
+			t.Fatal(err)
+		}
+	} else {
 		t.Fatal(err)
 	}
 	// Same bounded shared cache as cmd/api; run 1 is cold, later runs may hit it.
-	provider, err := marketdata.NewCachedProvider(routed, marketdata.DefaultCacheOptions())
+	var reads atomic.Int64
+	cacheOptions := marketdata.DefaultCacheOptions()
+	provider, err := marketdata.NewCachedProvider(measuredArchive{Provider: archive, reads: &reads}, cacheOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +181,24 @@ func TestScreenRealCatalogTiming(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := api.NewServer(studyLoadIdentity{}, studyLoadSessions{}, &fakeAccess{features: []string{access.FeatureScreener}}, store, newConcurrentGrantsStore(), api.WithUniverseStore(catalog), api.WithRateLimiter(limiter))
+	options := []api.ServerOption{api.WithUniverseStore(catalog), api.WithRateLimiter(limiter)}
+	if ruleID == "qa-mixed-and-or" {
+		rule := core.RuleSnapshot{
+			Name: "QA - Mixed AND OR", Logic: "AND", SignalType: "BUY",
+			Conditions: []core.Condition{
+				{Left: "PRICE", Op: ">", Right: 1000000.0, NextLogic: "OR"},
+				{Left: "PRICE", Op: ">", Right: 1.0, NextLogic: "AND"},
+				{Left: "PRICE", Op: "<", Right: 1000000.0},
+			},
+		}
+		raw, err := json.Marshal(rule)
+		if err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256(raw)
+		options = append(options, api.WithRuleStore(timingRuleStore{rule: rules.Rule{ID: ruleID, EngineVersion: core.EngineVersion, SchemaVersion: core.SchemaVersion, DefinitionHash: "sha256:" + hex.EncodeToString(digest[:]), Definition: rule}}))
+	}
+	server, err := api.NewServer(studyLoadIdentity{}, studyLoadSessions{}, &fakeAccess{features: []string{access.FeatureScreener, access.FeatureBacktest}}, store, newConcurrentGrantsStore(), options...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,26 +218,29 @@ func TestScreenRealCatalogTiming(t *testing.T) {
 
 	var results []screenRun
 	for run := 1; run <= max(runs, 1); run++ {
-		result, outcomes := screenOnce(t, client, ruleID, from, to, prefetch, run)
+		before := reads.Load()
+		result, outcomes := screenOnce(t, client, purpose, ruleID, from, to, prefetch, run)
+		result.ArchiveReads = reads.Load() - before
 		results = append(results, result)
-		if len(results) > 1 && result.OracleSHA256 != results[0].OracleSHA256 {
-			t.Fatalf("run %d oracle %s differs from run 1 %s", run, result.OracleSHA256, results[0].OracleSHA256)
+		if run > 1 && (result.OracleSHA256 != results[0].OracleSHA256 || result.OutcomesSHA256 != results[0].OutcomesSHA256) {
+			t.Fatalf("run %d results changed across repeated runs", run)
 		}
 		if out := os.Getenv("SIGNALGEN_SCREEN_ORACLE_OUT"); out != "" && run == 1 {
 			writeJSON(t, out, outcomes)
 		}
-		t.Logf("run=%d wall=%.0fms total=%d evaluated=%d with_signals=%d failed=%d codes=%v signals=%d oracle=%s stages=%v",
-			run, result.WallMS, result.Total, result.Evaluated, result.WithSignals, result.Failed, result.FailureCodes, result.Signals, result.OracleSHA256, result.StageMS)
+		t.Logf("run=%d purpose=%s wall=%.0fms total=%d evaluated=%d failed=%d codes=%v signals=%d archive_reads=%d oracle=%s stages=%v",
+			run, purpose, result.WallMS, result.Total, result.Evaluated, result.Failed, result.FailureCodes, result.Signals, result.ArchiveReads, result.OracleSHA256, result.StageMS)
 	}
 	if out := os.Getenv("SIGNALGEN_SCREEN_OUT"); out != "" {
 		writeJSON(t, out, map[string]any{
 			"harness": "native-go-http (not browser/WASM/IDB)", "store_root": filepath.Base(storeRoot),
-			"from": from, "to": to, "rule_id": ruleID, "prefetch": prefetch, "rtt": rtt.String(), "runs": results,
+			"from": from, "to": to, "rule_id": ruleID, "purpose": purpose, "prefetch": prefetch, "rtt": rtt.String(),
+			"cache_max_entries": cacheOptions.MaxEntries, "cache_max_candles": cacheOptions.MaxCandles, "runs": results,
 		})
 	}
 }
 
-func screenOnce(t *testing.T, client *studyHTTPClient, ruleID, from, to string, prefetch, run int) (screenRun, []screenOutcome) {
+func screenOnce(t *testing.T, client *studyHTTPClient, purpose, ruleID, from, to string, prefetch, run int) (screenRun, []screenOutcome) {
 	owner, session := fmt.Sprintf("synthetic-screen-%d", run), "synthetic-session"
 	result := screenRun{Run: run, StageMS: map[string]float64{}, Routes: map[string]*screenRoute{}, FailureCodes: map[string]int{}}
 	var mu sync.Mutex
@@ -200,9 +272,13 @@ func screenOnce(t *testing.T, client *studyHTTPClient, ruleID, from, to string, 
 		}
 	}
 	start := time.Now()
-	payload, _ := json.Marshal(studies.StudyInput{Source: "market", Market: "IDX", RuleID: ruleID, Config: core.SignalStudyConfig{From: from, To: to, NSteps: 1}})
+	contextPath, scoringPath, steps := "/api/v1/screener/scans", "/api/v1/screener/signals", 1
+	if purpose == "backtest" {
+		contextPath, scoringPath, steps = "/api/v1/backtests/studies", "/api/v1/backtests/signals", 3
+	}
+	payload, _ := json.Marshal(studies.StudyInput{Source: "market", Market: "IDX", RuleID: ruleID, Config: core.SignalStudyConfig{From: from, To: to, NSteps: steps}})
 	t0 := time.Now()
-	res := call("create", "POST", "/api/v1/screener/scans", payload)
+	res := call("create", "POST", contextPath, payload)
 	stage("create", t0)
 	if res.status != 201 {
 		t.Fatalf("create: %d %s", res.status, res.body)
@@ -212,8 +288,10 @@ func screenOnce(t *testing.T, client *studyHTTPClient, ruleID, from, to string, 
 		t.Fatal(err)
 	}
 	result.Total = study.Total
-	scanPath := "/api/v1/screener/scans/" + study.ID
+	scanPath := contextPath + "/" + study.ID
 	var outcomes []screenOutcome
+	outcomeDigest := sha256.New()
+	outcomeEncoder := json.NewEncoder(outcomeDigest)
 	for batchIndex := 0; batchIndex < study.Batches; batchIndex++ {
 		batchPath := fmt.Sprintf("%s/batches/%d/prepare", scanPath, batchIndex)
 		t0 = time.Now()
@@ -244,7 +322,7 @@ func screenOnce(t *testing.T, client *studyHTTPClient, ruleID, from, to string, 
 			if res.status != 200 || json.Unmarshal(res.body, &body) != nil || len(body.Series) != 1 {
 				return fetched{err: fmt.Errorf("content %s: %d", manifest.Symbols[0], res.status)}
 			}
-			grantInput, _ := json.Marshal(compute.IssueInput{Purpose: "screen", DatasetID: manifest.DatasetID, DatasetVersion: manifest.Version, DatasetChecksum: manifest.Checksum, RuleID: study.RuleID, DefinitionHash: study.DefinitionHash, EngineVersion: study.EngineVersion, SchemaVersion: study.RuleSchemaVersion})
+			grantInput, _ := json.Marshal(compute.IssueInput{Purpose: purpose, DatasetID: manifest.DatasetID, DatasetVersion: manifest.Version, DatasetChecksum: manifest.Checksum, RuleID: study.RuleID, DefinitionHash: study.DefinitionHash, EngineVersion: study.EngineVersion, SchemaVersion: study.RuleSchemaVersion})
 			t0 = time.Now()
 			res = call("grant", "POST", "/api/v1/compute-grants", grantInput)
 			stage("grant", t0)
@@ -279,11 +357,24 @@ func screenOnce(t *testing.T, client *studyHTTPClient, ruleID, from, to string, 
 			signalInput, _ := json.Marshal(backtest.SignalInput{ComputeGrantID: got.grant.ID, FeatureSchemaVersion: core.FeatureSchemaVersion, PolicyVersion: core.SignalStudyPolicy, Candidates: local.Candidates})
 			result.CandidateBytes += len(signalInput)
 			t0 = time.Now()
-			res = call("scoring", "POST", "/api/v1/screener/signals", signalInput)
+			res = call("scoring", "POST", scoringPath, signalInput)
 			stage("scoring", t0)
 			var decided backtest.SignalResult
 			if res.status != 200 || json.Unmarshal(res.body, &decided) != nil {
 				t.Fatalf("signals %s: %d %s", symbol, res.status, res.body)
+			}
+			if purpose == "backtest" {
+				t0 = time.Now()
+				simulated, err := core.RunSignalStudy(core.SignalStudyRequest{SchemaVersion: core.SignalStudySchema, Config: study.Config, Series: got.series, Entries: decided.Entries})
+				stage("study_native", t0)
+				if err != nil {
+					t.Fatalf("study %s: %v", symbol, err)
+				}
+				result.SwingEvaluated += simulated.Swing.Evaluated
+				result.MissingFuture += simulated.Swing.Missing
+				if err := outcomeEncoder.Encode(simulated.Events); err != nil {
+					t.Fatal(err)
+				}
 			}
 			outcome := screenOutcome{Symbol: symbol, Status: "evaluated"}
 			for _, entry := range decided.Entries {
@@ -308,6 +399,9 @@ func screenOnce(t *testing.T, client *studyHTTPClient, ruleID, from, to string, 
 	}
 	call("cancel", "DELETE", scanPath, nil)
 	result.WallMS = float64(time.Since(start).Microseconds()) / 1000
+	if purpose == "backtest" {
+		result.OutcomesSHA256 = hex.EncodeToString(outcomeDigest.Sum(nil))
+	}
 
 	sort.Slice(outcomes, func(i, j int) bool { return outcomes[i].Symbol < outcomes[j].Symbol })
 	for i, o := range outcomes {

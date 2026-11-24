@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Bounded offline profile of a whole-market purpose=screen scan.
+"""Bounded offline profile of a whole-market screen or signal study.
 
 Builds and runs TestScreenRealCatalogTiming (native Go HTTP harness; it does
-not measure browser Worker/WASM/IndexedDB) against a pinned, read-only idx_store
+not measure browser Worker/WASM/IndexedDB) against a pinned, read-only IDX archive
 copy. Target code only runs in containers with no network, a read-only root,
 read-only source/deps/archive mounts, a size-capped tmpfs as the only writable
 path, a non-root user, all capabilities dropped and CPU/RAM/PID/file/wall caps.
@@ -10,9 +10,10 @@ Artifacts leave the container as a tar on stdout and are promoted by this
 script only if they are allowlisted regular files within byte limits.
 
 Usage, from the repository root:
-  SCREEN_STORE=<store root whose current.json names one generation>
+  SCREEN_STORE=<store with a pinned generation or a completed flat collection>
   SCREEN_CATALOG=<962-item catalog.json> SCREEN_OUT=<new or empty dir outside the repo>
   [SCREEN_REPORT_SHA256=<expected report.json sha256>] [GOMODCACHE_HOST=~/go/pkg/mod]
+  [SCREEN_PROFILE=paired]
   python3 -I backend/scripts/profile_screen_catalog.py
 Never point SCREEN_STORE at a live store the scheduler is updating.
 """
@@ -105,16 +106,26 @@ def main():
         sys.exit("run from the repository root")
     if out.is_relative_to(repo) or (out.exists() and any(out.iterdir())):
         sys.exit("SCREEN_OUT must be a new or empty directory outside the repository")
-    generation = json.loads((store / "current.json").read_text())["generation"]
-    if "/" in generation or not generation.startswith("generation-"):
+    mode = os.environ.get("SCREEN_PROFILE", "screen")
+    if mode not in ("screen", "paired"):
+        sys.exit("SCREEN_PROFILE must be screen or paired")
+    pointer = store / "current.json"
+    generation = json.loads(pointer.read_text())["generation"] if pointer.is_file() else None
+    if generation is not None and ("/" in generation or not generation.startswith("generation-")):
         sys.exit("invalid generation pointer")
-    report_sha = hashlib.sha256((store / generation / "report.json").read_bytes()).hexdigest()
+    report_path = (store / generation if generation else store) / "report.json"
+    report_bytes = report_path.read_bytes()
+    report_sha = hashlib.sha256(report_bytes).hexdigest()
+    catalog_sha = hashlib.sha256(catalog.read_bytes()).hexdigest()
+    report = json.loads(report_bytes)
+    if generation is None and report["catalog_sha256"] != catalog_sha:
+        sys.exit("flat archive and benchmark catalog have different hashes")
     expected = os.environ.get("SCREEN_REPORT_SHA256")
     if expected and report_sha != expected:
         sys.exit(f"report.json sha256 {report_sha} does not match pin")
     mods = Path(os.environ.get("GOMODCACHE_HOST", Path.home() / "go/pkg/mod")).resolve()
     tag = secrets.token_hex(4)
-    print(f"generation={generation} report_sha256={report_sha}", flush=True)
+    print(f"generation={generation or 'flat'} report_sha256={report_sha}", flush=True)
 
     name = f"sg-screen-build-{tag}"
     build = docker_argv(name, [(repo / "backend", "/src"), (mods, "/gomod")],
@@ -130,10 +141,17 @@ def main():
     binary.chmod(0o555)
 
     failed = False
-    for scenario, start, end, runs, rtt in SCENARIOS:
+    scenarios = [(name, start, end, runs, rtt, "screen", "default-scalping-v1")
+                 for name, start, end, runs, rtt in SCENARIOS]
+    if mode == "paired":
+        scenarios = [(purpose, "2026-11-13", "2026-11-13", 2, "0s", purpose, "qa-mixed-and-or")
+                     for purpose in ("screen", "backtest")]
+    timings = {}
+    for scenario, start, end, runs, rtt, purpose, rule in scenarios:
         name = f"sg-screen-{scenario}-{tag}"
         env = {"SIGNALGEN_SCREEN_STORE": "/store", "SIGNALGEN_SCREEN_CATALOG": "/catalog.json", "SIGNALGEN_SCREEN_EXPECT_TOTAL": "962",
                "SIGNALGEN_SCREEN_FROM": start, "SIGNALGEN_SCREEN_TO": end, "SIGNALGEN_SCREEN_RUNS": str(runs), "SIGNALGEN_SCREEN_RTT": rtt,
+               "SIGNALGEN_SCREEN_PURPOSE": purpose, "SIGNALGEN_SCREEN_RULE": rule,
                "SIGNALGEN_SCREEN_OUT": "/scratch/timing.json", "SIGNALGEN_SCREEN_ORACLE_OUT": "/scratch/oracle.json"}
         command = ["sh", "-c", f"timeout {RUN_SECONDS} /apitests.test -test.run '^TestScreenRealCatalogTiming$' -test.v -test.timeout 25m "
                    "-test.cpuprofile /scratch/cpu.pprof >/scratch/log.txt 2>&1; s=$?; "
@@ -144,7 +162,16 @@ def main():
         for line in (out / scenario / "log.txt").read_text().splitlines():
             if "run=" in line or line.startswith(("PASS", "FAIL", "---")):
                 print(f"{scenario}: {line.strip()}", flush=True)
+        if code == 0:
+            timings[scenario] = json.loads((out / scenario / "timing.json").read_text())
         failed |= code != 0
+    if mode == "paired" and not failed:
+        counts = {status: sum(row["status"] == status for row in report["entries"])
+                  for status in ("success", "failed", "pending")}
+        with (out / "comparison.json").open("x") as f:
+            json.dump({"base": "native Go over loopback HTTP and frozen IDX archive",
+                       "catalog_sha256": catalog_sha, "report_sha256": report_sha,
+                       "archive_coverage": counts, "profiles": timings}, f, indent=2)
     sys.exit(1 if failed else 0)
 
 
